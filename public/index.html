@@ -1,0 +1,3143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>感应器选型软件 · Symtek Automation China</title>
+  <style>
+    /* ===== CSS 变量 ===== */
+    :root {
+      --brand: #1e40af;
+      --brand-mid: #3b82f6;
+      --brand-lt: #dbeafe;
+      --c-customer: #0d9488;
+      --c-customer-lt: #ccfbf1;
+      --c-process: #7c3aed;
+      --c-process-lt: #ede9fe;
+      --c-machine: #ea580c;
+      --c-machine-lt: #fed7aa;
+      --c-sensor: #0284c7;
+      --c-sensor-lt: #e0f2fe;
+      --bg: #fafafa;
+      --bg2: #f4f4f5;
+      --surface: #ffffff;
+      --surface2: #fefefe;
+      --border: #e4e4e7;
+      --border2: #d4d4d8;
+      --text: #18181b;
+      --text-sec: #3f3f46;
+      --text-muted: #71717a;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+      --sidebar-w: 260px;
+      --list-w: 280px;
+    }
+
+    /* ===== 暗色模式 ===== */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #18181b;
+        --bg2: #27272a;
+        --surface: #27272a;
+        --surface2: #1f1f23;
+        --border: #3f3f46;
+        --border2: #52525b;
+        --text: #fafafa;
+        --text-sec: #d4d4d8;
+        --text-muted: #a1a1aa;
+      }
+    }
+
+    /* ===== 全局样式 ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    button { cursor: pointer; }
+    input, textarea, select { font-family: inherit; }
+
+
+    /* ===== 顶栏 ===== */
+    .topbar {
+      height: 60px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .topbar-logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--brand);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .topbar-search {
+      flex: 1;
+      max-width: 500px;
+      position: relative;
+    }
+    .topbar-search input {
+      width: 100%;
+      height: 38px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      padding: 0 40px 0 38px;
+      font-size: 13.5px;
+      outline: none;
+      color: var(--text);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .topbar-search input:focus {
+      border-color: var(--brand-mid);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .1);
+    }
+    .topbar-search input::placeholder { color: var(--text-muted); }
+    .topbar-search-icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+    }
+
+    .topbar-nav {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+    .topbar-nav-item {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      color: var(--text-sec);
+      transition: background .12s, color .12s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .topbar-nav-item:hover {
+      background: var(--bg2);
+      color: var(--text);
+    }
+    .topbar-nav-item.active {
+      background: var(--bg2);
+      color: var(--brand);
+    }
+
+    /* ===== 首页 ===== */
+    .home-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px 32px;
+    }
+    .home-hero {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+    .home-hero h1 {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .home-hero p {
+      font-size: 15px;
+      color: var(--text-sec);
+    }
+    .home-modules {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .module-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .module-card:hover {
+      border-color: var(--border2);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .module-card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .module-card-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .module-card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .module-card p {
+      font-size: 13px;
+      color: var(--text-sec);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .module-card-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .module-card-stats div {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* ===== 视图容器 ===== */
+    .view {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .view.active { display: flex; }
+
+    /* ===== 面包屑 ===== */
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .breadcrumb span { cursor: pointer; }
+    .breadcrumb span:hover { color: var(--text-sec); }
+    .breadcrumb svg { flex-shrink: 0; }
+
+    /* ===== 详情区样式 ===== */
+    .detail-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .detail-module-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .detail-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .detail-badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .detail-desc {
+      font-size: 13.5px;
+      color: var(--text-sec);
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+    .detail-tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 18px;
+    }
+    .detail-tab {
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sec);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color .12s, border-color .12s;
+    }
+    .detail-tab:hover {
+      color: var(--text);
+    }
+    .detail-tab.active {
+      color: var(--tab-color, var(--brand));
+      border-bottom-color: var(--tab-color, var(--brand));
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* ===== 页面结构 ===== */
+    .page-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .page-header {
+      padding: 0 24px;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .page-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-header-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .page-header h2 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    /* ===== 三栏布局 ===== */
+    .three-col {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    .list-panel {
+      width: var(--list-w);
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .list-panel-top {
+      padding: 12px 14px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .list-panel-top input {
+      width: 100%;
+      height: 30px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      padding: 0 10px;
+      font-size: 12.5px;
+      outline: none;
+      color: var(--text);
+      transition: border-color .15s;
+    }
+    .list-panel-top input:focus {
+      border-color: var(--accent-color, var(--brand-mid));
+    }
+    .list-panel-top input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* ===== 分类区块 ===== */
+    .list-category {
+      border-bottom: 1px solid var(--border);
+    }
+    .list-category:last-child {
+      border-bottom: none;
+    }
+    .list-category-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--surface);
+      color: var(--text-sec);
+      transition: background .1s, color .1s;
+      border: none;
+      text-align: left;
+    }
+    .list-category-btn:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+    .list-category-btn.open {
+      color: var(--cat-color, var(--brand));
+    }
+    .list-category-btn .cat-icon {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cat-color, var(--border2));
+      flex-shrink: 0;
+    }
+    .list-category-btn .cat-count {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--bg2);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .list-category-items {
+      display: none;
+      flex-direction: column;
+    }
+    .list-category.open .list-category-items {
+      display: flex;
+    }
+    .list-item {
+      padding: 10px 14px 10px 28px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text-sec);
+      border-left: 3px solid transparent;
+      background: transparent;
+      transition: background .1s, color .1s, border-color .1s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .list-item:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+    .list-item.active {
+      background: var(--bg);
+      color: var(--text);
+      border-left-color: var(--cat-color, var(--brand));
+      font-weight: 600;
+    }
+
+    /* ===== 详情面板 ===== */
+    .detail-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .detail-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+    }
+    .detail-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .detail-empty svg {
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+
+    /* ===== 卡片组件 ===== */
+    .section-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .section-card-header {
+      padding: 12px 16px;
+      background: var(--bg2);
+      border-bottom: 1.5px solid var(--border);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .section-card-body {
+      padding: 16px;
+    }
+
+    /* ===== 芯片列表 ===== */
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text-sec);
+      font-weight: 500;
+    }
+
+    /* ===== 标签列表 ===== */
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tag {
+      padding: 5px 11px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .tag.primary {
+      background: var(--brand-lt);
+      color: var(--brand);
+    }
+
+    /* ===== 表格 ===== */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .data-table thead {
+      background: var(--bg2);
+    }
+    .data-table th {
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 700;
+      color: var(--text-sec);
+      border-bottom: 1.5px solid var(--border);
+    }
+    .data-table td {
+      padding: 12px 12px;
+      color: var(--text-sec);
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .model-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .model-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--bg2);
+      color: var(--text-muted);
+    }
+    .kv-table {
+      width: 100%;
+      font-size: 12.5px;
+    }
+    .kv-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .kv-table td:first-child {
+      font-weight: 600;
+      color: var(--text);
+      width: 35%;
+    }
+    .kv-table td:last-child {
+      color: var(--text-sec);
+    }
+    .kv-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ===== 提醒列表 ===== */
+    .notice-list {
+      list-style: none;
+      font-size: 13px;
+      color: var(--text-sec);
+      line-height: 1.8;
+    }
+    .notice-list li {
+      padding-left: 18px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+    .notice-list li::before {
+      content: '•';
+      position: absolute;
+      left: 6px;
+      color: var(--text-muted);
+    }
+
+    /* ===== 警告框 ===== */
+    .alert {
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      line-height: 1.6;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .alert-icon {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .alert.info {
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+    .alert.warn {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    /* ===== 文件预览 ===== */
+    .file-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+    }
+    .file-preview-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: var(--bg2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .file-preview .fp-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sec);
+    }
+    .file-preview .fp-locked {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      font-weight: 600;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: none;
+    }
+    .file-preview.locked {
+      position: relative;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .file-preview.locked::after {
+      content: '仅供预览';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 32px;
+      color: rgba(0,0,0,0.03);
+      font-weight: 700;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 1;
+    }
+
+    /* ===== 搜索结果 ===== */
+    .search-result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .search-result-item:hover {
+      border-color: var(--border2);
+      box-shadow: var(--shadow-sm);
+    }
+    .sri-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sri-tag {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .sri-title {
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+    .sri-sub {
+      font-size: 12px;
+      color: var(--text-sec);
+      margin-top: 2px;
+    }
+    .sri-arrow {
+      margin-left: auto;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ===== 搜索高亮 ===== */
+    mark {
+      background: #fef08a;
+      color: #713f12;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+
+    /* ===== 动画 ===== */
+    .fade-in {
+      animation: fadeIn .18s ease forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== 滚动条 ===== */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ===== Sensor 状态点 ===== */
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .status-dot.in-use { background: #22c55e; }
+    .status-dot.alt { background: #f59e0b; }
+
+    /* ===== Sensor 型号字典 ===== */
+    .sensor-catalog-page {
+      flex: 1;
+      min-width: 0;
+      overflow-y: auto;
+      padding: 22px 24px 28px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--c-sensor-lt) 45%, transparent) 0, transparent 150px),
+        var(--bg);
+    }
+    .sensor-catalog-overview {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      border: 1px solid color-mix(in srgb, var(--c-sensor) 20%, var(--border));
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .sensor-catalog-kicker {
+      margin-bottom: 5px;
+      color: var(--c-sensor);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .sensor-catalog-title {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: -.02em;
+    }
+    .sensor-catalog-copy {
+      max-width: 720px;
+      margin-top: 5px;
+      color: var(--text-muted);
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+    .sensor-catalog-stats {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .sensor-stat {
+      min-width: 82px;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--bg);
+      text-align: center;
+    }
+    .sensor-stat-value {
+      display: block;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 750;
+      line-height: 1;
+    }
+    .sensor-stat-label {
+      display: block;
+      margin-top: 5px;
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 650;
+    }
+    .sensor-catalog-card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .sensor-catalog-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .sensor-status-filters {
+      display: inline-flex;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg2);
+    }
+    .sensor-filter-btn {
+      min-width: 92px;
+      padding: 6px 11px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .14s, color .14s, box-shadow .14s;
+    }
+    .sensor-filter-btn:hover { color: var(--text); }
+    .sensor-filter-btn.active {
+      background: var(--surface);
+      color: var(--c-sensor);
+      box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+    }
+    .sensor-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .sensor-search-input {
+      width: min(310px, 28vw);
+      height: 32px;
+      padding: 0 11px;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      outline: none;
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12.5px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .sensor-search-input:focus {
+      border-color: var(--c-sensor);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-sensor) 12%, transparent);
+    }
+    .sensor-table-scroll { overflow-x: auto; }
+    .sensor-catalog-table {
+      min-width: 1180px;
+      table-layout: fixed;
+    }
+    .sensor-catalog-table th {
+      color: var(--text-muted);
+      font-size: 11px;
+      letter-spacing: .04em;
+      text-transform: none;
+    }
+    .sensor-catalog-table td {
+      color: var(--text-sec);
+      font-size: 12.5px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .sensor-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .sensor-status-badge.current {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .sensor-status-badge.alternative {
+      background: #fef3c7;
+      color: #a16207;
+    }
+    .sensor-type-badge {
+      display: inline-flex;
+      padding: 4px 8px;
+      border: 1px solid color-mix(in srgb, var(--c-sensor) 24%, var(--border));
+      border-radius: 6px;
+      background: var(--c-sensor-lt);
+      color: var(--c-sensor);
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .sensor-model-cell strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .sensor-model-cell span {
+      display: block;
+      margin-top: 2px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .sensor-catalog-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      color: var(--text-muted);
+      font-size: 11.5px;
+    }
+    .sensor-empty-state {
+      padding: 42px 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    .sensor-modal { max-width: 760px; }
+    .sensor-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 14px;
+    }
+    .sensor-form-grid .full-row { grid-column: 1 / -1; }
+
+    @media (max-width: 980px) {
+      .sensor-catalog-overview,
+      .sensor-catalog-toolbar { align-items: stretch; flex-direction: column; }
+      .sensor-catalog-stats { align-self: flex-start; }
+      .sensor-toolbar-actions { width: 100%; margin-left: 0; }
+      .sensor-search-input { width: 100%; }
+    }
+
+    @media (max-width: 640px) {
+      .sensor-catalog-page { padding: 14px; }
+      .sensor-catalog-stats { width: 100%; }
+      .sensor-stat { flex: 1; min-width: 0; }
+      .sensor-toolbar-actions { align-items: stretch; flex-direction: column; }
+      .sensor-form-grid { grid-template-columns: 1fr; }
+      .sensor-form-grid .full-row { grid-column: auto; }
+    }
+
+    /* ===== CRUD 工具栏 ===== */
+    .crud-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .crud-toolbar-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 13px;
+      border-radius: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: opacity .12s, box-shadow .12s;
+    }
+    .btn:hover { opacity: .88; }
+    .btn-primary {
+      background: var(--accent-color, var(--brand));
+      color: #fff;
+      box-shadow: 0 1px 6px rgba(0,0,0,.15);
+    }
+    .btn-ghost {
+      background: var(--bg2);
+      color: var(--text-sec);
+      border: 1px solid var(--border);
+    }
+    .btn-danger {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+    .btn-sm {
+      padding: 4px 9px;
+      font-size: 11.5px;
+      border-radius: 5px;
+    }
+
+    /* ===== CRUD 列表 ===== */
+    .crud-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .crud-item {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .crud-item:hover {
+      border-color: var(--border2);
+      box-shadow: var(--shadow-sm);
+    }
+    .crud-item-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .crud-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .crud-item-desc {
+      font-size: 12px;
+      color: var(--text-sec);
+      line-height: 1.6;
+    }
+    .crud-item-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
+    .crud-item-actions {
+      display: flex;
+      gap: 5px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .crud-type-badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: var(--accent-color, var(--brand));
+      color: #fff;
+      opacity: 0.85;
+    }
+
+    /* ===== 时间轴样式 ===== */
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 24px;
+    }
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -26px;
+      top: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 3px solid var(--accent-color, var(--brand));
+      z-index: 1;
+    }
+    .timeline-date {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-color, var(--brand));
+      background: var(--bg2);
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .timeline-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .timeline-desc {
+      font-size: 12.5px;
+    }
+
+    /* ===== 数据表格样式 ===== */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--surface);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .data-table thead {
+      background: var(--bg2);
+      border-bottom: 2px solid var(--border);
+    }
+    .data-table th {
+      text-align: left;
+      padding: 12px 16px;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .data-table tbody tr:last-child {
+      border-bottom: none;
+    }
+    .data-table tbody tr:hover {
+      background: var(--bg2);
+    }
+    .data-table td {
+      padding: 14px 16px;
+      color: var(--text);
+      vertical-align: top;
+    }
+    .data-table .btn {
+      margin: 0 2px;
+    }
+      color: var(--text-sec);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .timeline-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .timeline-status.resolved {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .timeline-status.processing {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .timeline-status.pending {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .timeline-actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 5px;
+    }
+
+    /* ===== 模态框 ===== */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,.4);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.2);
+    }
+    .modal-header {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-sec);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--brand-mid);
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    .confirm-modal .modal {
+      max-width: 400px;
+    }
+    .confirm-msg {
+      font-size: 14px;
+      color: var(--text-sec);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    /* ===== 搜索过滤器 ===== */
+    .search-filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text-sec);
+      cursor: pointer;
+      transition: all .12s;
+    }
+    .filter-btn:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+    .filter-btn.active {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="topbar-logo-icon">S</div>
+      <span>感应器选型软件 · Symtek Automation China</span>
+    </div>
+    <div class="topbar-search">
+      <svg class="topbar-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="搜索型号、机型、客户、制程..." onkeypress="if(event.key==='Enter')doSearch(this.value.trim())">
+    </div>
+    <div class="topbar-nav">
+      <button class="topbar-nav-item active" onclick="showView('home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
+        </svg>
+        首页
+      </button>
+      <button class="topbar-nav-item" onclick="showView('customer')">客户</button>
+      <button class="topbar-nav-item" onclick="showView('process')">制程</button>
+      <button class="topbar-nav-item" onclick="showView('machine')">机型结构</button>
+      <button class="topbar-nav-item" onclick="showView('sensor')">Sensor 选型</button>
+    </div>
+  </div>
+
+  <!-- 首页 -->
+  <div class="view active" id="view-home">
+    <div class="home-view">
+      <div class="home-hero">
+        <h1>Symtek 感应器选型知识库</h1>
+        <p>PCB自动化设备感应器选型、配置与维护的统一参考平台</p>
+      </div>
+      <div class="home-modules">
+        <div class="module-card" onclick="showView('customer')" style="--card-color: var(--c-customer)">
+          <div class="module-card-header">
+            <div class="module-card-icon" style="background: var(--c-customer-lt); color: var(--c-customer)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              </svg>
+            </div>
+            <h3>客户管理</h3>
+          </div>
+          <p>各客户感应器通用要求、制程注意事项、选用标准及配置 SOP 文档</p>
+          <div class="module-card-stats">
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>15 家客户</div>
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>3 大区域</div>
+          </div>
+        </div>
+        <div class="module-card" onclick="showView('process')" style="--card-color: var(--c-process)">
+          <div class="module-card-header">
+            <div class="module-card-icon" style="background: var(--c-process-lt); color: var(--c-process)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+              </svg>
+            </div>
+            <h3>制程管理</h3>
+          </div>
+          <p>PCB制程特性、感应器选用标准及制程报告文档库</p>
+          <div class="module-card-stats">
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>11 项制程</div>
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>工艺标准</div>
+          </div>
+        </div>
+        <div class="module-card" onclick="showView('machine')" style="--card-color: var(--c-machine)">
+          <div class="module-card-header">
+            <div class="module-card-icon" style="background: var(--c-machine-lt); color: var(--c-machine)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+              </svg>
+            </div>
+            <h3>机型结构</h3>
+          </div>
+          <p>各机型感应器安装位置、注意事项及配置标准的结构化知识</p>
+          <div class="module-card-stats">
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>14 种机型</div>
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>4 大类别</div>
+          </div>
+        </div>
+        <div class="module-card" onclick="showView('sensor')" style="--card-color: var(--c-sensor)">
+          <div class="module-card-header">
+            <div class="module-card-icon" style="background: var(--c-sensor-lt); color: var(--c-sensor)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/>
+              </svg>
+            </div>
+            <h3>Sensor 选型</h3>
+          </div>
+          <p>各类感应器型号清单、规格参数、特性注意及适用场景参考</p>
+          <div class="module-card-stats">
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>8 大类型</div>
+            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/></svg>现用+备选</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 搜索视图 -->
+  <div class="view" id="view-search">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-header-dot" style="background: var(--brand)"></div>
+          <h2 id="searchTitle">搜索结果</h2>
+        </div>
+      </div>
+      <div class="detail-content">
+        <div class="search-filters" id="searchFilters"></div>
+        <div id="searchResults"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 客户视图 -->
+  <div class="view" id="view-customer">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-header-dot" style="background: var(--c-customer)"></div>
+          <h2>客户管理</h2>
+        </div>
+      </div>
+      <div class="three-col">
+        <div class="list-panel">
+          <div class="list-panel-top">
+            <input type="text" placeholder="搜索客户..." oninput="filterList(this, 'customer')">
+          </div>
+          <div class="list-category open">
+            <button class="list-category-btn open" style="--cat-color: #0d9488" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              华东区域
+              <span class="cat-count">5</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="庆鼎" onclick="selectCustomer('庆鼎', '华东')">庆鼎</div>
+              <div class="list-item" data-search="健鼎" onclick="selectCustomer('健鼎', '华东')">健鼎</div>
+              <div class="list-item" data-search="沪士" onclick="selectCustomer('沪士', '华东')">沪士</div>
+              <div class="list-item" data-search="胜宏" onclick="selectCustomer('胜宏', '华东')">胜宏</div>
+              <div class="list-item" data-search="景旺" onclick="selectCustomer('景旺', '华东')">景旺</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #0d9488" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              华南区域
+              <span class="cat-count">5</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="宏恒胜" onclick="selectCustomer('宏恒胜', '华南')">宏恒胜</div>
+              <div class="list-item" data-search="崇达" onclick="selectCustomer('崇达', '华南')">崇达</div>
+              <div class="list-item" data-search="深南" onclick="selectCustomer('深南', '华南')">深南</div>
+              <div class="list-item" data-search="兴森" onclick="selectCustomer('兴森', '华南')">兴森</div>
+              <div class="list-item" data-search="博敏" onclick="selectCustomer('博敏', '华南')">博敏</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #0d9488" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              SAT
+              <span class="cat-count">5</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="维信" onclick="selectCustomer('维信', 'SAT')">维信</div>
+              <div class="list-item" data-search="依顿" onclick="selectCustomer('依顿', 'SAT')">依顿</div>
+              <div class="list-item" data-search="奥士康" onclick="selectCustomer('奥士康', 'SAT')">奥士康</div>
+              <div class="list-item" data-search="华通" onclick="selectCustomer('华通', 'SAT')">华通</div>
+              <div class="list-item" data-search="定颖" onclick="selectCustomer('定颖', 'SAT')">定颖</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-empty" id="customer-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            选择客户查看详细信息
+          </div>
+          <div class="detail-content" id="customer-content" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制程视图 -->
+  <div class="view" id="view-process">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-header-dot" style="background: var(--c-process)"></div>
+          <h2>制程管理</h2>
+        </div>
+      </div>
+      <div class="three-col">
+        <div class="list-panel">
+          <div class="list-panel-top">
+            <input type="text" placeholder="搜索制程..." oninput="filterList(this, 'process')">
+          </div>
+          <div class="list-category open">
+            <button class="list-category-btn open" style="--cat-color: #7c3aed" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              制程介绍
+              <span class="cat-count">1</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="制程报告" onclick="selectProcess('制程报告', '制程介绍')">制程报告</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #7c3aed" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              内层制程
+              <span class="cat-count">7</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="DES显影" onclick="selectProcess('DES显影', '内层制程')">DES显影</div>
+              <div class="list-item" data-search="AOI检测" onclick="selectProcess('AOI检测', '内层制程')">AOI检测</div>
+              <div class="list-item" data-search="棕化" onclick="selectProcess('棕化', '内层制程')">棕化</div>
+              <div class="list-item" data-search="压合" onclick="selectProcess('压合', '内层制程')">压合</div>
+              <div class="list-item" data-search="钻孔" onclick="selectProcess('钻孔', '内层制程')">钻孔</div>
+              <div class="list-item" data-search="PTH沉铜" onclick="selectProcess('PTH沉铜', '内层制程')">PTH沉铜</div>
+              <div class="list-item" data-search="板电" onclick="selectProcess('板电', '内层制程')">板电</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #7c3aed" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              外层制程
+              <span class="cat-count">4</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="外层前处理" onclick="selectProcess('外层前处理', '外层制程')">外层前处理</div>
+              <div class="list-item" data-search="图形电镀" onclick="selectProcess('图形电镀', '外层制程')">图形电镀</div>
+              <div class="list-item" data-search="防焊" onclick="selectProcess('防焊', '外层制程')">防焊</div>
+              <div class="list-item" data-search="成型" onclick="selectProcess('成型', '外层制程')">成型</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-empty" id="process-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+            </svg>
+            选择制程查看详细信息
+          </div>
+          <div class="detail-content" id="process-content" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 机型视图 -->
+  <div class="view" id="view-machine">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-header-dot" style="background: var(--c-machine)"></div>
+          <h2>机型结构</h2>
+        </div>
+      </div>
+      <div class="three-col">
+        <div class="list-panel">
+          <div class="list-panel-top">
+            <input type="text" placeholder="搜索机型..." oninput="filterList(this, 'machine')">
+          </div>
+          <div class="list-category open">
+            <button class="list-category-btn open" style="--cat-color: #ea580c" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              中间段
+              <span class="cat-count">4</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="中间六轴机" onclick="selectMachine('中间六轴机', '中间段')">中间六轴机</div>
+              <div class="list-item" data-search="中间翻板机" onclick="selectMachine('中间翻板机', '中间段')">中间翻板机</div>
+              <div class="list-item" data-search="中间输送机" onclick="selectMachine('中间输送机', '中间段')">中间输送机</div>
+              <div class="list-item" data-search="龙门式传送机" onclick="selectMachine('龙门式传送机', '中间段')">龙门式传送机</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #ea580c" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              常规投收板机
+              <span class="cat-count">5</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="单边投板机" onclick="selectMachine('单边投板机', '常规投收板机')">单边投板机</div>
+              <div class="list-item" data-search="单边收板机" onclick="selectMachine('单边收板机', '常规投收板机')">单边收板机</div>
+              <div class="list-item" data-search="双边投板机" onclick="selectMachine('双边投板机', '常规投收板机')">双边投板机</div>
+              <div class="list-item" data-search="双边收板机" onclick="selectMachine('双边收板机', '常规投收板机')">双边收板机</div>
+              <div class="list-item" data-search="盒装投板机" onclick="selectMachine('盒装投板机', '常规投收板机')">盒装投板机</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #ea580c" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              特殊机型
+              <span class="cat-count">2</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="AOI专用机" onclick="selectMachine('AOI专用机', '特殊机型')">AOI专用机</div>
+              <div class="list-item" data-search="压合专用机" onclick="selectMachine('压合专用机', '特殊机型')">压合专用机</div>
+            </div>
+          </div>
+          <div class="list-category">
+            <button class="list-category-btn" style="--cat-color: #ea580c" onclick="toggleCat(this)">
+              <div class="cat-icon"></div>
+              通用结构
+              <span class="cat-count">3</span>
+            </button>
+            <div class="list-category-items">
+              <div class="list-item" data-search="标准输送段" onclick="selectMachine('标准输送段', '通用结构')">标准输送段</div>
+              <div class="list-item" data-search="六轴机械手" onclick="selectMachine('六轴机械手', '通用结构')">六轴机械手</div>
+              <div class="list-item" data-search="台车系统" onclick="selectMachine('台车系统', '通用结构')">台车系统</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-empty" id="machine-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+            选择机型查看详细信息
+          </div>
+          <div class="detail-content" id="machine-content" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sensor 视图 -->
+  <div class="view" id="view-sensor">
+    <div class="page-wrap">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-header-dot" style="background: var(--c-sensor)"></div>
+          <h2>Sensor 选型</h2>
+        </div>
+      </div>
+      <div class="sensor-catalog-page">
+        <section class="sensor-catalog-overview" aria-labelledby="sensorCatalogTitle">
+          <div>
+            <div class="sensor-catalog-kicker">Sensor dictionary</div>
+            <h3 class="sensor-catalog-title" id="sensorCatalogTitle">型号字典</h3>
+            <p class="sensor-catalog-copy">漫反射、对照式等作为受控类型字典维护；规格参数、特性与注意、适用场景集中在同一张表中。</p>
+          </div>
+          <div class="sensor-catalog-stats" aria-label="型号统计">
+            <div class="sensor-stat">
+              <span class="sensor-stat-value" id="sensorCurrentCount">0</span>
+              <span class="sensor-stat-label">现用型号</span>
+            </div>
+            <div class="sensor-stat">
+              <span class="sensor-stat-value" id="sensorAlternativeCount">0</span>
+              <span class="sensor-stat-label">备选型号</span>
+            </div>
+            <div class="sensor-stat">
+              <span class="sensor-stat-value" id="sensorTypeCount">0</span>
+              <span class="sensor-stat-label">类型字典</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="sensor-catalog-card" aria-label="Sensor 型号目录">
+          <div class="sensor-catalog-toolbar">
+            <div class="sensor-status-filters" role="group" aria-label="型号状态筛选">
+              <button class="sensor-filter-btn active" type="button" data-sensor-status="现用" onclick="setSensorCatalogStatus('现用')">现用型号</button>
+              <button class="sensor-filter-btn" type="button" data-sensor-status="备选" onclick="setSensorCatalogStatus('备选')">备选型号</button>
+              <button class="sensor-filter-btn" type="button" data-sensor-status="全部" onclick="setSensorCatalogStatus('全部')">全部</button>
+            </div>
+            <div class="sensor-toolbar-actions">
+              <input class="sensor-search-input" id="sensorCatalogSearch" type="search" placeholder="搜索类型、品牌、型号或场景..." oninput="filterSensorCatalog(this.value)">
+              <button class="btn btn-sm btn-primary" type="button" style="--accent-color:var(--c-sensor)" onclick="openAddSensorCatalog()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                新增型号
+              </button>
+            </div>
+          </div>
+          <div class="sensor-table-scroll" id="sensorCatalogTable">
+            <table class="data-table sensor-catalog-table">
+              <thead>
+                <tr>
+                  <th style="width:92px">状态</th>
+                  <th style="width:112px">感应器类型</th>
+                  <th style="width:178px">品牌 / 型号</th>
+                  <th style="width:220px">规格参数</th>
+                  <th style="width:250px">特性与注意</th>
+                  <th style="width:220px">适用场景</th>
+                  <th style="width:96px;text-align:center">操作</th>
+                </tr>
+              </thead>
+              <tbody id="sensorCatalogBody"></tbody>
+            </table>
+            <div class="sensor-empty-state" id="sensorCatalogEmpty" hidden>没有符合当前条件的型号</div>
+          </div>
+          <div class="sensor-catalog-footer" id="sensorCatalogSummary">正在加载型号数据...</div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sensor 型号编辑模态框 -->
+  <div class="modal-backdrop" id="sensorCatalogModal" onclick="closeSensorCatalogModal(event)">
+    <div class="modal sensor-modal">
+      <div class="modal-header" id="sensorCatalogModalTitle">新增 Sensor 型号</div>
+      <div class="sensor-form-grid">
+        <div class="form-group">
+          <label class="form-label" for="sensorCatalogStatus">状态 *</label>
+          <select class="form-select" id="sensorCatalogStatus">
+            <option value="现用">现用</option>
+            <option value="备选">备选</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sensorCatalogType">感应器类型 *</label>
+          <select class="form-select" id="sensorCatalogType"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sensorCatalogBrand">品牌</label>
+          <input type="text" class="form-input" id="sensorCatalogBrand" placeholder="例如 OMRON">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="sensorCatalogModel">型号 *</label>
+          <input type="text" class="form-input" id="sensorCatalogModel" placeholder="例如 E3Z-D61">
+        </div>
+        <div class="form-group full-row">
+          <label class="form-label" for="sensorCatalogSpec">规格参数</label>
+          <textarea class="form-textarea" id="sensorCatalogSpec" placeholder="检测距离、电压、输出方式、防护等级等"></textarea>
+        </div>
+        <div class="form-group full-row">
+          <label class="form-label" for="sensorCatalogFeature">特性与注意</label>
+          <textarea class="form-textarea" id="sensorCatalogFeature" placeholder="检测特性、安装限制、维护注意等"></textarea>
+        </div>
+        <div class="form-group full-row">
+          <label class="form-label" for="sensorCatalogScene">适用场景</label>
+          <textarea class="form-textarea" id="sensorCatalogScene" placeholder="例如 PCB 板检测、掉板检测、完板确认"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" onclick="closeSensorCatalogModal()">取消</button>
+        <button class="btn btn-primary" type="button" style="--accent-color:var(--c-sensor)" onclick="saveSensorCatalogItem()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRUD 编辑模态框 -->
+  <div class="modal-backdrop" id="crudModal" onclick="closeCrudModal(event)">
+    <div class="modal">
+      <div class="modal-header" id="crudModalTitle">新增条目</div>
+      <div class="form-group">
+        <label class="form-label">类型</label>
+        <select class="form-select" id="crudType"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">名称 *</label>
+        <input type="text" class="form-input" id="crudName" placeholder="输入名称">
+      </div>
+      <div class="form-group">
+        <label class="form-label">描述</label>
+        <textarea class="form-textarea" id="crudDesc" placeholder="输入描述"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <input type="text" class="form-input" id="crudNote" placeholder="输入备注">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeCrudModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveCrudItem()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认模态框 -->
+  <div class="modal-backdrop confirm-modal" id="confirmModal" onclick="closeConfirmModal(event)">
+    <div class="modal">
+      <div class="modal-header">确认删除</div>
+      <div class="confirm-msg" id="confirmMsg"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeConfirmModal()">取消</button>
+        <button class="btn btn-danger" id="confirmOkBtn">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 时间轴编辑模态框 -->
+  <div class="modal-backdrop" id="timelineModal" onclick="closeTimelineModal(event)">
+    <div class="modal">
+      <div class="modal-header" id="timelineModalTitle">新增反馈</div>
+      <div class="form-group">
+        <label class="form-label">日期 *</label>
+        <input type="date" class="form-input" id="timelineDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">问题标题 *</label>
+        <input type="text" class="form-input" id="timelineTitle" placeholder="简要描述问题">
+      </div>
+      <div class="form-group">
+        <label class="form-label">问题描述</label>
+        <textarea class="form-textarea" id="timelineDesc" placeholder="详细描述问题现象、原因分析等"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">处理措施</label>
+        <textarea class="form-textarea" id="timelineActions" placeholder="已采取的处理措施和效果"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">状态</label>
+        <select class="form-select" id="timelineStatus">
+          <option value="pending">待处理</option>
+          <option value="processing">处理中</option>
+          <option value="resolved">已解决</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeTimelineModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveTimelineItem()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== CRUD 数据存储 =====
+    // localStorage 持久化
+    const CRUD_STORAGE_KEY = 'symtek_crud_store';
+
+    function parseCrudStore(rawValue) {
+      if (!rawValue) return {};
+      try {
+        const parsed = JSON.parse(rawValue);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch (error) {
+        console.warn('CRUD 数据解析失败，已使用空数据恢复。', error);
+        return {};
+      }
+    }
+
+    const CRUD_STORE = parseCrudStore(localStorage.getItem(CRUD_STORAGE_KEY));
+
+    function persistCrudStore() {
+      localStorage.setItem(CRUD_STORAGE_KEY, JSON.stringify(CRUD_STORE));
+    }
+
+    function replaceCrudStore(nextStore) {
+      Object.keys(CRUD_STORE).forEach(key => delete CRUD_STORE[key]);
+      Object.assign(CRUD_STORE, nextStore);
+    }
+
+    // 默认数据（已扩展9种新类型）
+    const CRUD_DEFAULTS = {
+      'customer-req': (name) => [
+        { id: 1, type: '输送段', name: '漫反射传感器', desc: '板件有无检测，检测距离 ≤ 300mm，OMRON E3Z-D61 或同等级', note: '客户通用要求' },
+        { id: 2, type: '掉板检测', name: '对照式传感器（贯通型）', desc: '传送路径中段 + 末端双重设置，零容忍掉板要求', note: 'SICK WL12 系列' },
+        { id: 3, type: '真空吸附', name: '真空表头压力传感器', desc: '真空度设定值需大于 -60kPa，吸板响应时间 ≤ 0.3s', note: 'PISCO ZSE10' },
+        { id: 4, type: '位置确认', name: '近接式传感器', desc: '台车对接定位精度 ±0.5mm 以内，金属感应距离 5mm', note: 'OMRON E2E 系列' },
+      ],
+      'customer-proc': (name) => [
+        { id: 1, type: 'DES 制程', name: '板件传送检测', desc: '显影槽进出口需设漫反射传感器，确认板件到位后才启动药水喷淋', note: '防止空喷损耗' },
+        { id: 2, type: 'AOI 制程', name: '板件定位传感器', desc: '光纤式传感器定位精度要求 ≤ 0.1mm，避免扫描错位导致误判', note: 'Keyence FS 系列' },
+        { id: 3, type: '压合制程', name: '台车工位传感器', desc: '每工位近接式传感器确认台车锁紧，防止高温高压作业中位移', note: '重要安全要求' },
+        { id: 4, type: '防焊制程', name: '板件到位传感器', desc: '曝光前漫反射确认板件落位，避免空曝光消耗', note: '节能要求' },
+      ],
+      'customer-sensor': (name) => [
+        { id: 1, type: '输送段', name: '漫反射（OMRON E3Z-D61）板件有无检测', desc: '标准输送段板件检测', note: '' },
+        { id: 2, type: '输送段', name: '对照式（SICK WL12）掉板检测', desc: '零容忍掉板要求', note: '' },
+      ],
+      'customer-feedback': (name) => [
+        {
+          id: 1,
+          date: '2024-10-15',
+          title: '六轴机吸板失败率偏高',
+          desc: '客户反馈六轴机械手在快速运行时吸板失败率达 5%，影响产能。初步判断为真空表头响应时间不足，吸附确认信号延迟导致手臂提前动作。',
+          status: 'resolved',
+          actions: '已更换 PISCO ZSE10F 快速响应型真空表头，响应时间从 0.5s 缩短至 0.2s，失败率降至 0.5% 以下。'
+        },
+        {
+          id: 2,
+          date: '2024-09-22',
+          title: 'AOI 段板件定位偏移',
+          desc: '客户报告 AOI 检测时偶发板件定位偏移超过 0.2mm，导致误判率上升。现场检查发现光纤传感器镜头积灰严重。',
+          status: 'resolved',
+          actions: '清洁光纤镜头，调整灵敏度，增加每周定期清洁提醒。后续未再出现偏移超标情况。'
+        },
+      ],
+      'machine-conveyor': (name) => [
+        { id: 1, type: '进板检测', name: '漫反射传感器', desc: 'OMRON E3Z-D61，检测距离 50mm，安装于进板口上方 15mm', note: '板件前缘到位信号' },
+        { id: 2, type: '掉板检测', name: '对照式传感器（贯通型）', desc: 'SICK WL12-2B530，对射距离 ≤ 500mm，安装高度 = 板厚 + 2mm', note: '零容忍掉板要求' },
+        { id: 3, type: '出板检测', name: '漫反射传感器', desc: 'OMRON E3Z-D61，响应时间 ≤ 5ms，确认板件完全离开', note: '触发下一动作' },
+      ],
+      'machine-arm': (name) => [
+        { id: 1, type: '吸盘真空', name: '真空表头压力传感器', desc: 'PISCO ZSE10F，真空度设定 -70kPa，响应时间 ≤ 0.3s', note: '吸附成功才移动' },
+        { id: 2, type: '手臂位置', name: '近接式传感器', desc: 'OMRON E2E-X5ME1，感应距离 5mm，检测手臂原点位', note: '金属感应' },
+      ],
+      'machine-platform': (name) => [
+        { id: 1, type: '台车到位', name: '近接式传感器', desc: 'OMRON E2E-X5ME1，检测台车对接到位，定位精度 ±0.5mm', note: '多工位台车系统' },
+        { id: 2, type: '升降位置', name: '光电式传感器', desc: 'Keyence PZ-G61CP，检测升降机构上下限位', note: '防止碰撞' },
+      ],
+      'machine-notes': (name) => [
+        { id: 1, type: '安装注意', name: '传感器安装角度', desc: '漫反射传感器安装时需垂直被测面 ±15° 以内，避免镜面反射导致误检', note: '调试确认项' },
+        { id: 2, type: '环境注意', name: '防水防尘等级', desc: '湿制程区域（DES、电镀）传感器需选用 IP67 以上防护等级，定期用气枪清洁', note: '维护 SOP 要求' },
+        { id: 3, type: '调试注意', name: '灵敏度调节', desc: '传感器就位后需现场调整灵敏度旋钮至稳定检测，记录调节量存档', note: '调试记录表' },
+        { id: 4, type: '维保注意', name: '定期校验周期', desc: '每月检查传感器输出信号稳定性，每季度核查检测距离是否偏移', note: '维保计划' },
+      ],
+      'process-feat': (name) => [
+        { id: 1, type: '特性', name: '高温高湿环境', desc: '需选用耐高温传感器', note: '' },
+      ],
+      'process-sensor': (name) => [
+        { id: 1, type: '输送段', name: '漫反射型传感器', desc: 'OMRON E3Z-D61 或同等级，检测距离 ≤ 300mm', note: '板件有无检测' },
+        { id: 2, type: '掉板段', name: '对照式传感器（贯通型）', desc: 'SICK WL12 系列，零容忍掉板要求', note: '传送路径中段+末端' },
+        { id: 3, type: '完板段', name: '光纤式传感器', desc: 'Keyence FS 系列，定位精度 ≤ 0.1mm', note: 'AOI 段定位' },
+        { id: 4, type: '真空段', name: '真空表头压力传感器', desc: 'PISCO ZSE10，真空度 > -60kPa，响应 ≤ 0.3s', note: '六轴机吸板' },
+      ],
+      'sensor-model': (type) => {
+        const dataMap = {
+          '漫反射': [
+            { id: 1, type: 'OMRON', name: 'E3Z-D61', desc: '检测距离 0~300mm，12~24V DC，PNP/NPN 输出', note: 'IP67' },
+            { id: 2, type: 'SICK', name: 'WL12-2B530', desc: '检测距离 0~500mm，10~30V DC，PNP/NPN 输出', note: 'IP67' },
+            { id: 3, type: 'Keyence', name: 'PZ-G61CP', desc: '检测距离 0~200mm，12~24V DC，PNP 输出', note: 'IP67' },
+          ],
+          '对照式': [
+            { id: 1, type: 'OMRON', name: 'E3Z-T61', desc: '检测距离 0~10m，12~24V DC，PNP/NPN 输出', note: 'IP67' },
+            { id: 2, type: 'SICK', name: 'WS12-3D2430', desc: '检测距离 0~7m，10~30V DC，PNP 输出', note: 'IP67' },
+          ],
+          '近接式': [
+            { id: 1, type: 'OMRON', name: 'E2E-X5MF1', desc: '感应距离 5mm，12~24V DC，NPN-NO 输出', note: 'IP67' },
+            { id: 2, type: 'Autonics', name: 'PR12-4DN', desc: '感应距离 4mm，10~30V DC，NPN 输出', note: 'IP67' },
+          ],
+          '静电容式': [
+            { id: 1, type: 'OMRON', name: 'E2K-X4ME1', desc: '感应距离 4mm，12~24V DC，NPN-NO 输出', note: 'IP67' },
+          ],
+          '光纤式': [
+            { id: 1, type: 'OMRON', name: 'E3X-DA11-S', desc: '检测距离依光纤，12~24V DC，NPN/PNP 输出', note: 'IP67' },
+            { id: 2, type: 'Keyence', name: 'FS-V21R', desc: '检测距离依光纤，12~24V DC，NPN/PNP 输出', note: 'IP67' },
+          ],
+          '激光式': [
+            { id: 1, type: 'Keyence', name: 'LV-H62', desc: '检测距离 20~300mm，12~24V DC，NPN/PNP 输出', note: 'IP67' },
+          ],
+          '超声波式': [
+            { id: 1, type: 'SICK', name: 'UM30-213113', desc: '检测距离 30~300mm，10~30V DC，PNP 输出', note: 'IP67' },
+          ],
+          '压力传感器': [
+            { id: 1, type: 'PISCO', name: 'ZSE10', desc: '检测范围 -101~101kPa，12~24V DC，NPN/PNP 输出', note: 'IP40' },
+          ],
+        };
+        return dataMap[type] || [{ id: 1, type: '通用', name: '待补充', desc: '暂无数据', note: '-' }];
+      },
+      'sensor-feat': (type) => [
+        { id: 1, type: '特性', name: '高灵敏度', desc: '适用于低反射率物体', note: '' },
+      ],
+      'sensor-scene': (type) => [
+        { id: 1, type: '场景', name: 'PCB板检测', desc: '输送线板件有无检测', note: '' },
+      ],
+    };
+
+    // CRUD 列表类型配置（已扩展）
+    const CRUD_TYPE_OPTIONS = {
+      'customer-req': ['输送段','掉板检测','真空吸附','位置确认','AOI段','特殊要求'],
+      'customer-proc': ['DES 制程','AOI 制程','压合制程','防焊制程','开料制程','外层前处理','电镀制程','通用'],
+      'customer-sensor': ['输送段','掉板检测','AOI段','真空段','其他'],
+      'customer-feedback': ['问题反馈','改进建议','常见故障','其他'],
+      'machine-conveyor': ['进板检测','掉板检测','出板检测','定位检测','其他'],
+      'machine-arm': ['吸盘真空','手臂位置','抓取检测','其他'],
+      'machine-platform': ['台车到位','升降位置','锁紧检测','其他'],
+      'machine-notes': ['安装注意','环境注意','调试注意','维保注意','安全注意','其他'],
+      'process-feat': ['特性','要求','限制','其他'],
+      'process-sensor': ['输送段','掉板段','完板段','真空段','其他'],
+      'sensor-model': ['型号','规格','参数','其他'],
+      'sensor-feat': ['特性','优势','限制','其他'],
+      'sensor-scene': ['场景','应用','案例','其他'],
+    };
+
+    function getCrudKey(listId, entityName) {
+      return `${listId}:${entityName}`;
+    }
+
+    function getCrudData(listId, entityName) {
+      const key = getCrudKey(listId, entityName);
+      if (!CRUD_STORE[key]) {
+        const defaultFn = CRUD_DEFAULTS[listId];
+        CRUD_STORE[key] = defaultFn ? defaultFn(entityName).map(d => ({...d})) : [];
+      }
+      return CRUD_STORE[key];
+    }
+
+    // ===== CRUD 渲染 =====
+    function renderCrudList(listId, entityName, suffix) {
+      const items = getCrudData(listId, entityName);
+      const types = CRUD_TYPE_OPTIONS[listId] || [];
+      return `
+        <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
+        <div class="crud-toolbar">
+          <div class="crud-toolbar-title">${items.length} 条记录</div>
+          <button class="btn btn-sm btn-primary" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            新增
+          </button>
+        </div>
+        <div class="crud-list">
+          ${items.length === 0 ? '<div style="text-align:center;padding:30px 0;color:var(--text-muted);font-size:13px">暂无数据，点击上方"新增"按钮添加</div>' : items.map(item => `
+            <div class="crud-item">
+              <div class="crud-item-body">
+                <div class="crud-item-title">
+                  ${item.type ? `<span class="crud-type-badge">${item.type}</span>` : ''}
+                  ${item.name}
+                </div>
+                ${item.desc ? `<div class="crud-item-desc">${item.desc}</div>` : ''}
+                ${item.note ? `<div class="crud-item-meta">📌 ${item.note}</div>` : ''}
+              </div>
+              <div class="crud-item-actions">
+                <button class="btn btn-sm btn-ghost" onclick="openEditCrud('${listId}','${entityName}',${item.id})">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        </div>
+      `;
+    }
+
+    // ===== 表格渲染（用于客户通用要求和制程注意事项）=====
+    function renderCrudTable(listId, entityName, suffix) {
+      const items = getCrudData(listId, entityName);
+      const types = CRUD_TYPE_OPTIONS[listId] || [];
+      return `
+        <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
+        <div class="crud-toolbar">
+          <div class="crud-toolbar-title">${items.length} 条记录</div>
+          <button class="btn btn-sm btn-primary" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            新增
+          </button>
+        </div>
+        ${items.length === 0 ? '<div style="text-align:center;padding:30px 0;color:var(--text-muted);font-size:13px">暂无数据，点击上方"新增"按钮添加</div>' : `
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:120px">类型</th>
+                <th style="width:200px">名称</th>
+                <th>描述</th>
+                <th style="width:200px">备注</th>
+                <th style="width:100px;text-align:center">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr>
+                  <td><span class="crud-type-badge">${item.type || '-'}</span></td>
+                  <td style="font-weight:500">${item.name}</td>
+                  <td style="color:var(--text-muted);font-size:13px">${item.desc || '-'}</td>
+                  <td style="font-size:13px">${item.note || '-'}</td>
+                  <td style="text-align:center">
+                    <button class="btn btn-sm btn-ghost" onclick="openEditCrud('${listId}','${entityName}',${item.id})" title="编辑">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})" title="删除">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`}
+        </div>
+      `;
+    }
+
+    const CRUD_TABLE_LIST_IDS = new Set([
+      'customer-req', 'customer-proc', 'process-sensor',
+      'machine-conveyor', 'machine-arm', 'machine-platform', 'machine-notes',
+      'sensor-model'
+    ]);
+
+    function refreshCrudSection(listId, entityName) {
+      const root = Array.from(document.querySelectorAll('.crud-render-root')).find(el =>
+        el.dataset.crudListId === listId && el.dataset.crudEntity === entityName
+      );
+      if (!root) return;
+
+      if (listId === 'customer-feedback') {
+        root.outerHTML = renderTimeline(listId, entityName);
+      } else if (CRUD_TABLE_LIST_IDS.has(listId)) {
+        root.outerHTML = renderCrudTable(listId, entityName, '');
+      } else {
+        root.outerHTML = renderCrudList(listId, entityName, '');
+      }
+    }
+
+    window.addEventListener('storage', event => {
+      if (event.key !== CRUD_STORAGE_KEY) return;
+
+      replaceCrudStore(parseCrudStore(event.newValue));
+      const visibleSections = Array.from(document.querySelectorAll('.crud-render-root')).map(el => ({
+        listId: el.dataset.crudListId,
+        entityName: el.dataset.crudEntity,
+      }));
+      visibleSections.forEach(({ listId, entityName }) => {
+        if (listId && entityName) refreshCrudSection(listId, entityName);
+      });
+      if (document.getElementById('sensorCatalogBody')) renderSensorCatalog();
+    });
+
+    // ===== 时间轴渲染 =====
+    function renderTimeline(listId, entityName) {
+      const items = getCrudData(listId, entityName);
+      const statusMap = {
+        resolved: { label: '已解决', icon: '✓' },
+        processing: { label: '处理中', icon: '⟳' },
+        pending: { label: '待处理', icon: '!' },
+      };
+
+      // 按日期倒序排序（最新的在最上面）
+      const sortedItems = [...items].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+      return `
+        <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
+        <div class="crud-toolbar">
+          <div class="crud-toolbar-title">${items.length} 条记录</div>
+          <button class="btn btn-sm btn-primary" onclick="openAddTimeline('${listId}','${entityName}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            新增
+          </button>
+        </div>
+        ${items.length === 0 ? '<div style="text-align:center;padding:30px 0;color:var(--text-muted);font-size:13px">暂无反馈记录</div>' : `
+        <div class="timeline">
+          ${sortedItems.map(item => {
+            const st = statusMap[item.status] || statusMap.pending;
+            return `
+            <div class="timeline-item">
+              <div class="timeline-dot"></div>
+              <div class="timeline-date">${item.date || '未知日期'}</div>
+              <div class="timeline-title">${item.title || item.name || '无标题'}</div>
+              <div class="timeline-desc">${item.desc || ''}</div>
+              ${item.actions ? `<div class="timeline-desc"><strong>处理措施：</strong>${item.actions}</div>` : ''}
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="timeline-status ${item.status || 'pending'}">
+                  ${st.icon} ${st.label}
+                </span>
+                <div class="timeline-actions">
+                  <button class="btn btn-sm btn-ghost" onclick="openEditTimeline('${listId}','${entityName}',${item.id})">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="openDeleteTimeline('${listId}','${entityName}',${item.id})">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `}).join('')}
+        </div>`}
+        </div>
+      `;
+    }
+
+    // ===== CRUD 模态框 =====
+    let _crudState = {};
+
+    function openAddCrud(listId, entityName, suffix) {
+      _crudState = { mode: 'add', listId, entityName };
+      document.getElementById('crudModalTitle').textContent = '新增条目';
+      const types = CRUD_TYPE_OPTIONS[listId] || ['通用'];
+      document.getElementById('crudType').innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
+      document.getElementById('crudName').value = '';
+      document.getElementById('crudDesc').value = '';
+      document.getElementById('crudNote').value = '';
+      document.getElementById('crudModal').classList.add('open');
+      document.getElementById('crudName').focus();
+    }
+
+    function openEditCrud(listId, entityName, id) {
+      const items = getCrudData(listId, entityName);
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      _crudState = { mode: 'edit', listId, entityName, editId: id };
+      document.getElementById('crudModalTitle').textContent = '编辑条目';
+      const types = CRUD_TYPE_OPTIONS[listId] || ['通用'];
+      document.getElementById('crudType').innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
+      document.getElementById('crudType').value = item.type;
+      document.getElementById('crudName').value = item.name;
+      document.getElementById('crudDesc').value = item.desc;
+      document.getElementById('crudNote').value = item.note || '';
+      document.getElementById('crudModal').classList.add('open');
+      document.getElementById('crudName').focus();
+    }
+
+    function saveCrudItem() {
+      const { mode, listId, entityName, editId } = _crudState;
+      const name = document.getElementById('crudName').value.trim();
+      const desc = document.getElementById('crudDesc').value.trim();
+      if (!name) { document.getElementById('crudName').focus(); return; }
+      const type = document.getElementById('crudType').value;
+      const note = document.getElementById('crudNote').value.trim();
+      const items = getCrudData(listId, entityName);
+      if (mode === 'add') {
+        const newId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
+        items.push({ id: newId, type, name, desc, note });
+      } else {
+        const item = items.find(i => i.id === editId);
+        if (item) Object.assign(item, { type, name, desc, note });
+      }
+      persistCrudStore();
+      closeCrudModal();
+      refreshCrudSection(listId, entityName);
+    }
+
+    function closeCrudModal(e) {
+      if (e && e.target !== document.getElementById('crudModal')) return;
+      document.getElementById('crudModal').classList.remove('open');
+    }
+
+    // ===== 删除确认 =====
+    let _deleteState = {};
+
+    function openDeleteCrud(listId, entityName, id) {
+      const items = getCrudData(listId, entityName);
+      const item = items.find(i => i.id === id);
+      _deleteState = { listId, entityName, id };
+      document.getElementById('confirmMsg').textContent = `确定要删除「${item ? item.name : '该条目'}」吗？此操作无法撤销。`;
+      document.getElementById('confirmModal').classList.add('open');
+      document.getElementById('confirmOkBtn').onclick = () => {
+        const arr = getCrudData(listId, entityName);
+        const idx = arr.findIndex(i => i.id === id);
+        if (idx !== -1) arr.splice(idx, 1);
+        persistCrudStore();
+        closeConfirmModal();
+        refreshCrudSection(listId, entityName);
+      };
+    }
+
+    function closeConfirmModal(e) {
+      if (e && e.target !== document.getElementById('confirmModal')) return;
+      document.getElementById('confirmModal').classList.remove('open');
+    }
+
+    // Esc 关闭
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeCrudModal(); closeConfirmModal(); closeTimelineModal(); closeSensorCatalogModal();
+      }
+    });
+
+    // ===== 时间轴模态框 =====
+    let _timelineState = {};
+
+    function openAddTimeline(listId, entityName) {
+      _timelineState = { mode: 'add', listId, entityName };
+      document.getElementById('timelineModalTitle').textContent = '新增反馈';
+      document.getElementById('timelineDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('timelineTitle').value = '';
+      document.getElementById('timelineDesc').value = '';
+      document.getElementById('timelineActions').value = '';
+      document.getElementById('timelineStatus').value = 'pending';
+      document.getElementById('timelineModal').classList.add('open');
+      document.getElementById('timelineTitle').focus();
+    }
+
+    function openEditTimeline(listId, entityName, id) {
+      const items = getCrudData(listId, entityName);
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      _timelineState = { mode: 'edit', listId, entityName, editId: id };
+      document.getElementById('timelineModalTitle').textContent = '编辑反馈';
+      document.getElementById('timelineDate').value = item.date || '';
+      document.getElementById('timelineTitle').value = item.title || item.name || '';
+      document.getElementById('timelineDesc').value = item.desc || '';
+      document.getElementById('timelineActions').value = item.actions || '';
+      document.getElementById('timelineStatus').value = item.status || 'pending';
+      document.getElementById('timelineModal').classList.add('open');
+      document.getElementById('timelineTitle').focus();
+    }
+
+    function saveTimelineItem() {
+      const { mode, listId, entityName, editId } = _timelineState;
+      const date = document.getElementById('timelineDate').value.trim();
+      const title = document.getElementById('timelineTitle').value.trim();
+      const desc = document.getElementById('timelineDesc').value.trim();
+      const actions = document.getElementById('timelineActions').value.trim();
+      const status = document.getElementById('timelineStatus').value;
+      if (!date || !title) {
+        if (!date) document.getElementById('timelineDate').focus();
+        else document.getElementById('timelineTitle').focus();
+        return;
+      }
+      const items = getCrudData(listId, entityName);
+      if (mode === 'add') {
+        const newId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
+        items.push({ id: newId, date, title, desc, actions, status });
+      } else {
+        const item = items.find(i => i.id === editId);
+        if (item) Object.assign(item, { date, title, desc, actions, status });
+      }
+      persistCrudStore();
+      closeTimelineModal();
+      refreshCrudSection(listId, entityName);
+    }
+
+    function closeTimelineModal(e) {
+      if (e && e.target !== document.getElementById('timelineModal')) return;
+      document.getElementById('timelineModal').classList.remove('open');
+    }
+
+    function openDeleteTimeline(listId, entityName, id) {
+      const items = getCrudData(listId, entityName);
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      document.getElementById('confirmMsg').textContent = `确定要删除反馈「${item.title || item.name || '此项'}」吗？此操作无法撤销。`;
+      document.getElementById('confirmModal').classList.add('open');
+      document.getElementById('confirmOkBtn').onclick = () => {
+        const arr = getCrudData(listId, entityName);
+        const idx = arr.findIndex(i => i.id === id);
+        if (idx !== -1) arr.splice(idx, 1);
+        persistCrudStore();
+        closeConfirmModal();
+        refreshCrudSection(listId, entityName);
+      };
+    }
+
+    // ===== 静态数据 =====
+    const SENSOR_DATA = {
+      '漫反射': {
+        desc: '检测物体漫反射光量，适用于不透明物体的有无检测',
+        models: [
+          { model: 'OMRON E3Z-D61', brand: 'OMRON', range: '0~300mm', output: 'PNP/NPN', voltage: '12~24V DC', ip: 'IP67' },
+          { model: 'SICK WL12-2B530', brand: 'SICK', range: '0~500mm', output: 'PNP/NPN', voltage: '10~30V DC', ip: 'IP67' },
+          { model: 'Keyence PZ-G61CP', brand: 'Keyence', range: '0~200mm', output: 'PNP', voltage: '12~24V DC', ip: 'IP67' },
+        ],
+        scenes: ['PCB板检测', '输送线板件有无', '掉板检测', '完板确认'],
+        notes: '需注意被测物表面颜色/光泽对检测距离影响；PCB板反射率较低，建议选用高灵敏度型号'
+      },
+      '对照式': {
+        desc: '发射器与接收器相对安装，检测光束遮断，适合透明/半透明物体',
+        models: [
+          { model: 'OMRON E3Z-T61', brand: 'OMRON', range: '0~10m', output: 'PNP/NPN', voltage: '12~24V DC', ip: 'IP67' },
+          { model: 'SICK WS12-3D2430', brand: 'SICK', range: '0~7m', output: 'PNP', voltage: '10~30V DC', ip: 'IP67' },
+        ],
+        scenes: ['投板口检测', '宽度检测', '透明板检测'],
+        notes: '安装时注意发射器与接收器轴线对准；长距离时需注意光轴漂移'
+      },
+      '近接式': {
+        desc: '感应金属体接近，无接触检测，响应速度快',
+        models: [
+          { model: 'OMRON E2E-X5MF1', brand: 'OMRON', range: '5mm', output: 'NPN-NO', voltage: '12~24V DC', ip: 'IP67' },
+          { model: 'Autonics PR12-4DN', brand: 'Autonics', range: '4mm', output: 'NPN', voltage: '10~30V DC', ip: 'IP67' },
+        ],
+        scenes: ['气缸行程确认', '机械手臂位置', '台车定位'],
+        notes: '检测距离受被测金属材质影响（铁/铜/铝系数不同），需按实际情况校正'
+      },
+      '静电容式': {
+        desc: '可检测金属和非金属物体，对液体及粉粒体有效',
+        models: [
+          { model: 'OMRON E2K-X4ME1', brand: 'OMRON', range: '4mm', output: 'NPN-NO', voltage: '12~24V DC', ip: 'IP67' },
+        ],
+        scenes: ['盒装板件检测', '料位检测', '非金属部件有无'],
+        notes: '灵敏度需现场调整，注意周围环境湿度变化影响'
+      },
+      '光纤式': {
+        desc: '通过光纤传导光信号，可在狭窄空间安装',
+        models: [
+          { model: 'OMRON E3X-DA11-S', brand: 'OMRON', range: '依光纤', output: 'NPN/PNP', voltage: '12~24V DC', ip: 'IP67' },
+          { model: 'Keyence FS-V21R', brand: 'Keyence', range: '依光纤', output: 'NPN/PNP', voltage: '12~24V DC', ip: 'IP67' },
+        ],
+        scenes: ['狭小空间检测', '高精度定位', '小物体检测'],
+        notes: '光纤头需定期清洁，弯曲半径不得小于规格要求'
+      },
+      '激光式': {
+        desc: '激光束检测，精度高，检测距离远',
+        models: [
+          { model: 'Keyence LV-H62', brand: 'Keyence', range: '20~300mm', output: 'NPN/PNP', voltage: '12~24V DC', ip: 'IP67' },
+        ],
+        scenes: ['精密定位', '小目标检测', '高速检测'],
+        notes: '激光为2类激光产品，避免直视光束'
+      },
+      '超声波式': {
+        desc: '超声波检测，不受颜色影响，适合透明物体',
+        models: [
+          { model: 'SICK UM30-213113', brand: 'SICK', range: '30~300mm', output: 'PNP', voltage: '10~30V DC', ip: 'IP67' },
+        ],
+        scenes: ['透明物体检测', '液位检测', '料位检测'],
+        notes: '温度变化会影响检测精度，需补偿'
+      },
+      '压力传感器': {
+        desc: '检测气压或液压，用于真空吸附确认',
+        models: [
+          { model: 'PISCO ZSE10', brand: 'PISCO', range: '-101~101kPa', output: 'NPN/PNP', voltage: '12~24V DC', ip: 'IP40' },
+        ],
+        scenes: ['真空吸盘确认', '气缸压力监控', '泄漏检测'],
+        notes: '定期校验压力值，清理压力接口'
+      },
+    };
+
+    // ===== Sensor 型号字典与单表目录 =====
+    const SENSOR_CATALOG_LIST_ID = 'sensor-catalog';
+    const SENSOR_CATALOG_ENTITY = 'all';
+    const SENSOR_TYPE_DICTIONARY = Object.freeze(Object.keys(SENSOR_DATA));
+    const sensorCatalogState = { status: '现用', query: '' };
+    let sensorCatalogEditState = { mode: 'add', editId: null };
+
+    function getLegacySensorData(listId, sensorType) {
+      const stored = CRUD_STORE[getCrudKey(listId, sensorType)];
+      if (Array.isArray(stored)) return stored;
+      const defaultFn = CRUD_DEFAULTS[listId];
+      return defaultFn ? defaultFn(sensorType).map(item => ({ ...item })) : [];
+    }
+
+    function joinLegacySensorText(items) {
+      return items
+        .map(item => [item.name, item.desc, item.note].filter(Boolean).join('：'))
+        .filter(Boolean)
+        .join('；');
+    }
+
+    function createSensorCatalogDefaults() {
+      let nextId = 1;
+      return SENSOR_TYPE_DICTIONARY.flatMap(sensorType => {
+        const sensorInfo = SENSOR_DATA[sensorType];
+        const models = getLegacySensorData('sensor-model', sensorType);
+        const storedFeatures = CRUD_STORE[getCrudKey('sensor-feat', sensorType)];
+        const storedScenes = CRUD_STORE[getCrudKey('sensor-scene', sensorType)];
+        const featureText = Array.isArray(storedFeatures)
+          ? joinLegacySensorText(storedFeatures)
+          : [sensorInfo.desc, sensorInfo.notes].filter(Boolean).join('；');
+        const sceneText = Array.isArray(storedScenes)
+          ? joinLegacySensorText(storedScenes)
+          : sensorInfo.scenes.join('、');
+
+        return models.map((model, index) => ({
+          id: nextId++,
+          status: index === 0 ? '现用' : '备选',
+          sensorType,
+          brand: model.type || '',
+          model: model.name || '',
+          spec: [model.desc, model.note].filter(Boolean).join('；'),
+          feature: featureText,
+          scene: sceneText,
+        }));
+      });
+    }
+
+    function normalizeSensorCatalogItem(item, index) {
+      return {
+        id: Number.isFinite(Number(item.id)) ? Number(item.id) : index + 1,
+        status: item.status === '备选' ? '备选' : '现用',
+        sensorType: SENSOR_TYPE_DICTIONARY.includes(item.sensorType) ? item.sensorType : SENSOR_TYPE_DICTIONARY[0],
+        brand: String(item.brand || ''),
+        model: String(item.model || ''),
+        spec: String(item.spec || ''),
+        feature: String(item.feature || ''),
+        scene: String(item.scene || ''),
+      };
+    }
+
+    function getSensorCatalogData() {
+      const key = getCrudKey(SENSOR_CATALOG_LIST_ID, SENSOR_CATALOG_ENTITY);
+      if (!Array.isArray(CRUD_STORE[key])) {
+        CRUD_STORE[key] = createSensorCatalogDefaults();
+        persistCrudStore();
+      }
+      CRUD_STORE[key] = CRUD_STORE[key].map(normalizeSensorCatalogItem);
+      return CRUD_STORE[key];
+    }
+
+    function escapeSensorText(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function renderSensorCatalog() {
+      const body = document.getElementById('sensorCatalogBody');
+      if (!body) return;
+
+      const items = getSensorCatalogData();
+      const currentCount = items.filter(item => item.status === '现用').length;
+      const alternativeCount = items.filter(item => item.status === '备选').length;
+      document.getElementById('sensorCurrentCount').textContent = currentCount;
+      document.getElementById('sensorAlternativeCount').textContent = alternativeCount;
+      document.getElementById('sensorTypeCount').textContent = SENSOR_TYPE_DICTIONARY.length;
+
+      document.querySelectorAll('.sensor-filter-btn').forEach(button => {
+        const active = button.dataset.sensorStatus === sensorCatalogState.status;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+
+      const query = sensorCatalogState.query.trim().toLocaleLowerCase('zh-CN');
+      const filteredItems = items
+        .filter(item => sensorCatalogState.status === '全部' || item.status === sensorCatalogState.status)
+        .filter(item => !query || [item.status, item.sensorType, item.brand, item.model, item.spec, item.feature, item.scene]
+          .some(value => value.toLocaleLowerCase('zh-CN').includes(query)))
+        .sort((left, right) => {
+          const statusOrder = (left.status === '现用' ? 0 : 1) - (right.status === '现用' ? 0 : 1);
+          if (statusOrder) return statusOrder;
+          const typeOrder = SENSOR_TYPE_DICTIONARY.indexOf(left.sensorType) - SENSOR_TYPE_DICTIONARY.indexOf(right.sensorType);
+          return typeOrder || left.model.localeCompare(right.model, 'zh-CN');
+        });
+
+      body.innerHTML = filteredItems.map(item => {
+        const isCurrent = item.status === '现用';
+        return `
+          <tr>
+            <td>
+              <span class="sensor-status-badge ${isCurrent ? 'current' : 'alternative'}">
+                <span class="status-dot ${isCurrent ? 'in-use' : 'alt'}"></span>${escapeSensorText(item.status)}
+              </span>
+            </td>
+            <td><span class="sensor-type-badge">${escapeSensorText(item.sensorType)}</span></td>
+            <td class="sensor-model-cell">
+              <strong>${escapeSensorText(item.model) || '-'}</strong>
+              <span>${escapeSensorText(item.brand) || '未填写品牌'}</span>
+            </td>
+            <td>${escapeSensorText(item.spec) || '-'}</td>
+            <td>${escapeSensorText(item.feature) || '-'}</td>
+            <td>${escapeSensorText(item.scene) || '-'}</td>
+            <td style="text-align:center;white-space:nowrap">
+              <button class="btn btn-sm btn-ghost" type="button" onclick="openEditSensorCatalog(${item.id})" title="编辑型号" aria-label="编辑 ${escapeSensorText(item.model)}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button class="btn btn-sm btn-danger" type="button" onclick="openDeleteSensorCatalog(${item.id})" title="删除型号" aria-label="删除 ${escapeSensorText(item.model)}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+
+      const table = body.closest('table');
+      const empty = document.getElementById('sensorCatalogEmpty');
+      table.hidden = filteredItems.length === 0;
+      empty.hidden = filteredItems.length !== 0;
+      document.getElementById('sensorCatalogSummary').textContent =
+        `当前显示 ${filteredItems.length} 条，共 ${items.length} 条 · ${sensorCatalogState.status === '全部' ? '全部状态' : `${sensorCatalogState.status}型号`}`;
+    }
+
+    function setSensorCatalogStatus(status) {
+      if (!['现用', '备选', '全部'].includes(status)) return;
+      sensorCatalogState.status = status;
+      renderSensorCatalog();
+    }
+
+    function filterSensorCatalog(query) {
+      sensorCatalogState.query = query || '';
+      renderSensorCatalog();
+    }
+
+    function fillSensorCatalogTypeOptions(selectedType) {
+      const select = document.getElementById('sensorCatalogType');
+      select.innerHTML = SENSOR_TYPE_DICTIONARY
+        .map(type => `<option value="${escapeSensorText(type)}">${escapeSensorText(type)}</option>`)
+        .join('');
+      select.value = selectedType || SENSOR_TYPE_DICTIONARY[0];
+    }
+
+    function openAddSensorCatalog() {
+      sensorCatalogEditState = { mode: 'add', editId: null };
+      document.getElementById('sensorCatalogModalTitle').textContent = '新增 Sensor 型号';
+      document.getElementById('sensorCatalogStatus').value = sensorCatalogState.status === '备选' ? '备选' : '现用';
+      fillSensorCatalogTypeOptions();
+      document.getElementById('sensorCatalogBrand').value = '';
+      document.getElementById('sensorCatalogModel').value = '';
+      document.getElementById('sensorCatalogSpec').value = '';
+      document.getElementById('sensorCatalogFeature').value = '';
+      document.getElementById('sensorCatalogScene').value = '';
+      document.getElementById('sensorCatalogModal').classList.add('open');
+      document.getElementById('sensorCatalogModel').focus();
+    }
+
+    function openEditSensorCatalog(id) {
+      const item = getSensorCatalogData().find(entry => entry.id === id);
+      if (!item) return;
+      sensorCatalogEditState = { mode: 'edit', editId: id };
+      document.getElementById('sensorCatalogModalTitle').textContent = '编辑 Sensor 型号';
+      document.getElementById('sensorCatalogStatus').value = item.status;
+      fillSensorCatalogTypeOptions(item.sensorType);
+      document.getElementById('sensorCatalogBrand').value = item.brand;
+      document.getElementById('sensorCatalogModel').value = item.model;
+      document.getElementById('sensorCatalogSpec').value = item.spec;
+      document.getElementById('sensorCatalogFeature').value = item.feature;
+      document.getElementById('sensorCatalogScene').value = item.scene;
+      document.getElementById('sensorCatalogModal').classList.add('open');
+      document.getElementById('sensorCatalogModel').focus();
+    }
+
+    function saveSensorCatalogItem() {
+      const status = document.getElementById('sensorCatalogStatus').value;
+      const sensorType = document.getElementById('sensorCatalogType').value;
+      const brand = document.getElementById('sensorCatalogBrand').value.trim();
+      const model = document.getElementById('sensorCatalogModel').value.trim();
+      const spec = document.getElementById('sensorCatalogSpec').value.trim();
+      const feature = document.getElementById('sensorCatalogFeature').value.trim();
+      const scene = document.getElementById('sensorCatalogScene').value.trim();
+      if (!model) {
+        document.getElementById('sensorCatalogModel').focus();
+        return;
+      }
+      if (!SENSOR_TYPE_DICTIONARY.includes(sensorType) || !['现用', '备选'].includes(status)) return;
+
+      const items = getSensorCatalogData();
+      if (sensorCatalogEditState.mode === 'add') {
+        const nextId = items.length ? Math.max(...items.map(item => item.id)) + 1 : 1;
+        items.push({ id: nextId, status, sensorType, brand, model, spec, feature, scene });
+      } else {
+        const item = items.find(entry => entry.id === sensorCatalogEditState.editId);
+        if (item) Object.assign(item, { status, sensorType, brand, model, spec, feature, scene });
+      }
+
+      persistCrudStore();
+      closeSensorCatalogModal();
+      sensorCatalogState.status = status;
+      sensorCatalogState.query = '';
+      document.getElementById('sensorCatalogSearch').value = '';
+      renderSensorCatalog();
+    }
+
+    function closeSensorCatalogModal(event) {
+      if (event && event.target !== document.getElementById('sensorCatalogModal')) return;
+      document.getElementById('sensorCatalogModal').classList.remove('open');
+    }
+
+    function openDeleteSensorCatalog(id) {
+      const item = getSensorCatalogData().find(entry => entry.id === id);
+      if (!item) return;
+      document.getElementById('confirmMsg').textContent = `确定要删除型号「${item.brand ? `${item.brand} ` : ''}${item.model}」吗？此操作无法撤销。`;
+      document.getElementById('confirmModal').classList.add('open');
+      document.getElementById('confirmOkBtn').onclick = () => {
+        const items = getSensorCatalogData();
+        const index = items.findIndex(entry => entry.id === id);
+        if (index !== -1) items.splice(index, 1);
+        persistCrudStore();
+        closeConfirmModal();
+        renderSensorCatalog();
+      };
+    }
+
+    function openSensorType(sensorType, status = '全部') {
+      showView('sensor');
+      sensorCatalogState.status = ['现用', '备选'].includes(status) ? status : '全部';
+      sensorCatalogState.query = sensorType;
+      const searchInput = document.getElementById('sensorCatalogSearch');
+      if (searchInput) searchInput.value = sensorType;
+      renderSensorCatalog();
+    }
+
+    const PROCESS_DATA = {
+      '制程报告': {
+        files: [
+          { name: 'PCB制造全流程工艺规范_v3.2.pdf', size: '12.4 MB', note: '仅可预览，无下载权限' },
+          { name: '内层制程标准作业指导书_v2.8.pdf', size: '8.7 MB', note: '仅可预览，无下载权限' },
+          { name: '外层制程标准作业指导书_v2.6.pdf', size: '9.2 MB', note: '仅可预览，无下载权限' },
+        ]
+      },
+      'DES显影': {
+        desc: 'DES显影工艺是内层制程的关键环节，通过化学药水去除曝光后的干膜',
+        features: ['高温药水喷淋', '板件到位检测', '药水浓度监控', '传送速度控制'],
+        params: { '药水温度': '30±2℃', '喷淋压力': '0.15~0.25MPa', '传送速度': '1.2~1.8m/min', '检测距离': '50~300mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）进出口板件检测', '对照式（SICK WL12）掉板检测', '压力传感器（PISCO）药水压力监控']
+      },
+      'AOI检测': {
+        desc: 'AOI自动光学检测，用于内层线路缺陷检测',
+        features: ['高精度定位', '板件边缘检测', '传送同步控制', '检测结果记录'],
+        params: { '定位精度': '±0.1mm', '检测速度': '30~50秒/板', '分辨率': '10μm', '检测距离': '5~10mm' },
+        sensors: ['光纤式（Keyence FS-V21R）精密定位', '漫反射（OMRON E3Z-D61）板件到位', '近接式（OMRON E2E）夹具确认']
+      },
+      '棕化': {
+        desc: '内层棕化处理，增强铜面与树脂粘合力',
+        features: ['板件连续传送', '药水槽液位监控', '板件计数', '温度控制'],
+        params: { '药水温度': '35±3℃', '处理时间': '2~3分钟', '传送速度': '0.8~1.2m/min', '检测距离': '50~200mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）进出口检测', '超声波（SICK UM30）液位监控', '温度传感器药水温度']
+      },
+      '压合': {
+        desc: '多层板压合工艺，高温高压下将内层与半固化片粘合',
+        features: ['台车定位', '高温高压作业', '工位锁紧确认', '板件计数'],
+        params: { '压合温度': '170~180℃', '压合压力': '20~30kgf/cm²', '压合时间': '60~90分钟', '定位精度': '±0.5mm' },
+        sensors: ['近接式（OMRON E2E）台车定位', '近接式（Autonics PR12）工位锁紧', '温度传感器温度监控', '压力传感器（PISCO）压力监控']
+      },
+      '钻孔': {
+        desc: 'CNC钻孔工艺，精密钻孔连接各层线路',
+        features: ['板件定位', '钻头断刀检测', '吸尘确认', '板件计数'],
+        params: { '定位精度': '±0.05mm', '钻速': '50000~150000rpm', '进给速度': '0.5~3.0m/min', '检测距离': '2~5mm' },
+        sensors: ['光纤式（Keyence FS-V21R）板件精密定位', '激光式（Keyence LV-H62）钻头检测', '压力传感器吸尘确认']
+      },
+      'PTH沉铜': {
+        desc: 'PTH化学沉铜工艺，在孔壁沉积铜层实现层间导通',
+        features: ['板件连续传送', '药水槽液位', '板件计数', '传送速度控制'],
+        params: { '药水温度': '25±2℃', '沉铜厚度': '0.3~0.5μm', '传送速度': '0.6~1.0m/min', '检测距离': '50~300mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）进出口检测', '对照式（SICK WL12）掉板检测', '超声波（SICK UM30）液位监控']
+      },
+      '板电': {
+        desc: '板电电镀工艺，在孔壁和表面电镀铜层',
+        features: ['板件夹持', '电流监控', '板件计数', '时间控制'],
+        params: { '电镀电流': '15~25A', '电镀时间': '40~60分钟', '铜层厚度': '20~25μm', '检测距离': '50~200mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）板件到位', '近接式（OMRON E2E）夹具确认', '电流传感器电流监控']
+      },
+      '外层前处理': {
+        desc: '外层前处理工艺，清洁铜面并微粗化',
+        features: ['板件连续传送', '药水喷淋', '板件计数', '速度控制'],
+        params: { '药水温度': '28±2℃', '喷淋压力': '0.1~0.2MPa', '传送速度': '1.0~1.5m/min', '检测距离': '50~300mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）进出口检测', '对照式（SICK WL12）掉板检测', '压力传感器药水压力']
+      },
+      '图形电镀': {
+        desc: '图形电镀工艺，在干膜开窗区域电镀铜层',
+        features: ['板件夹持', '电流监控', '板件计数', '厚度控制'],
+        params: { '电镀电流': '20~30A', '电镀时间': '30~50分钟', '铜层厚度': '25~30μm', '检测距离': '50~200mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）板件到位', '近接式（OMRON E2E）夹具确认', '电流传感器电流监控']
+      },
+      '防焊': {
+        desc: '防焊油墨印刷与曝光固化工艺',
+        features: ['板件定位', '印刷压力', '曝光能量', '板件计数'],
+        params: { '印刷压力': '2~4kgf', '曝光能量': '100~150mJ/cm²', '固化温度': '150±5℃', '定位精度': '±0.2mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）板件到位检测', '近接式（OMRON E2E）定位销确认', '压力传感器印刷压力']
+      },
+      '成型': {
+        desc: 'CNC成型工艺，按外形尺寸裁切板件',
+        features: ['板件定位', '刀具监控', '吸尘确认', '板件计数'],
+        params: { '定位精度': '±0.1mm', '切削速度': '3000~8000rpm', '进给速度': '0.5~2.0m/min', '检测距离': '50~300mm' },
+        sensors: ['漫反射（OMRON E3Z-D61）板件到位', '激光式（Keyence LV-H62）刀具检测', '压力传感器吸尘确认']
+      },
+    };
+
+    const MACHINE_DATA = {
+      '中间六轴机': { desc: '六轴机械手，用于板件翻转、搬运等复杂动作', structures: [], notes: [], sensors: ['真空表头（PISCO ZSE10）吸盘确认', '近接式（OMRON E2E）原点/极限位', '光纤式（Keyence FS-V21R）板件检测'] },
+      '中间翻板机': { desc: '翻板机械手，180°翻转板件', structures: [], notes: [], sensors: ['真空表头（PISCO ZSE10）吸盘确认', '近接式（OMRON E2E）翻转到位', '漫反射（OMRON E3Z-D61）板件检测'] },
+      '中间输送机': { desc: '标准传送段，连接制程设备', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 2 进出口检测', '对照式（SICK WL12）掉板检测'] },
+      '龙门式传送机': { desc: '龙门结构传送机，用于大型设备间传送', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 4 多点检测', '对照式（SICK WL12）× 2 双重掉板检测', '近接式（OMRON E2E）龙门到位'] },
+      '单边投板机': { desc: '单边投板机，自动上板至生产线', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 3 料盒/抓手/投板口', '近接式（OMRON E2E）× 2 升降到位', '真空表头（PISCO ZSE10）吸盘确认'] },
+      '单边收板机': { desc: '单边收板机，自动下板至料盒', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 3 收板口/抓手/料盒', '近接式（OMRON E2E）× 2 升降到位', '真空表头（PISCO ZSE10）吸盘确认'] },
+      '双边投板机': { desc: '双边投板机，双侧同时投板提高产能', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 6 双侧各3点', '近接式（OMRON E2E）× 4 双侧升降', '真空表头（PISCO ZSE10）× 2 双侧吸盘'] },
+      '双边收板机': { desc: '双边收板机，双侧同时收板', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 6 双侧各3点', '近接式（OMRON E2E）× 4 双侧升降', '真空表头（PISCO ZSE10）× 2 双侧吸盘'] },
+      '盒装投板机': { desc: '盒装板件投板机，处理盒装料', structures: [], notes: [], sensors: ['静电容式（OMRON E2K）盒装检测', '漫反射（OMRON E3Z-D61）× 2 抓手/投板口', '近接式（OMRON E2E）× 2 升降到位'] },
+      'AOI专用机': { desc: 'AOI检测专用上下板机，高精度定位', structures: [], notes: [], sensors: ['光纤式（Keyence FS-V21R）× 4 精密定位', '漫反射（OMRON E3Z-D61）× 2 进出口', '近接式（OMRON E2E）× 4 夹具确认'] },
+      '压合专用机': { desc: '压合工艺专用台车系统', structures: [], notes: [], sensors: ['近接式（OMRON E2E）× 8 各工位台车到位', '近接式（Autonics PR12）× 4 锁紧确认', '漫反射（OMRON E3Z-D61）× 2 进出口'] },
+      '标准输送段': { desc: '通用标准传送段结构', structures: [], notes: [], sensors: ['漫反射（OMRON E3Z-D61）× 2 进出口', '对照式（SICK WL12）掉板检测'] },
+      '六轴机械手': { desc: '通用六轴机械手结构', structures: [], notes: [], sensors: ['真空表头（PISCO ZSE10）吸盘确认', '近接式（OMRON E2E）× 6 各轴原点/极限', '光纤式（Keyence FS-V21R）精密检测'] },
+      '台车系统': { desc: '通用台车传送系统', structures: [], notes: [], sensors: ['近接式（OMRON E2E）× 4 台车到位/锁紧', '漫反射（OMRON E3Z-D61）× 2 板件检测'] },
+    };
+
+    // ===== 工具函数 =====
+    function showView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById('view-' + name).classList.add('active');
+      document.querySelectorAll('.topbar-nav-item').forEach(b => b.classList.remove('active'));
+      const btn = Array.from(document.querySelectorAll('.topbar-nav-item')).find(b => b.textContent.includes(name === 'home' ? '首页' : name === 'customer' ? '客户' : name === 'process' ? '制程' : name === 'machine' ? '机型结构' : 'Sensor'));
+      if (btn) btn.classList.add('active');
+    }
+
+    function toggleCat(btn) {
+      const cat = btn.closest('.list-category');
+      cat.classList.toggle('open');
+      btn.classList.toggle('open');
+    }
+
+    function filterList(input, module) {
+      const q = input.value.toLowerCase();
+      document.querySelectorAll(`#view-${module} .list-item`).forEach(item => {
+        const text = (item.dataset.search || item.textContent).toLowerCase();
+        item.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+
+    function setActiveItem(module, el) {
+      document.querySelectorAll(`#view-${module} .list-item`).forEach(i => i.classList.remove('active'));
+      if (el) el.classList.add('active');
+    }
+
+    function breadcrumb(parts) {
+      return `<div class="breadcrumb">
+        ${parts.map((p, i) => i === parts.length - 1 ? `<span>${p}</span>` : `<span>${p}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>`).join('')}
+      </div>`;
+    }
+
+    function tabsHTML(color, tabs) {
+      return `<div class="detail-tabs" style="--tab-color:${color}">
+        ${tabs.map((t, i) => `<div class="detail-tab${i === 0 ? ' active' : ''}" onclick="switchTab(this,'${t.id}')">${t.label}</div>`).join('')}
+      </div>`;
+    }
+
+    function sectionCard(title, bodyHTML) {
+      return `<div class="section-card">
+        <div class="section-card-header">${title}</div>
+        <div class="section-card-body">${bodyHTML}</div>
+      </div>`;
+    }
+
+    function switchTab(el, targetId) {
+      const container = el.closest('.detail-content') || el.closest('.view');
+      el.parentElement.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      container.querySelectorAll('.tab-content').forEach(c => {
+        c.classList.toggle('active', c.id === targetId);
+      });
+    }
+
+    // ===== 客户详情（已改造CRUD）=====
+    function selectCustomer(name, region) {
+      setActiveItem('customer', event.currentTarget);
+      const content = document.getElementById('customer-content');
+      document.getElementById('customer-empty').style.display = 'none';
+      content.style.display = 'block';
+      content.innerHTML = `<div class="fade-in">
+        ${breadcrumb(['客户', region, name])}
+        <div class="detail-title-row">
+          <div class="detail-module-dot" style="background:var(--c-customer)"></div>
+          <div>
+            <div class="detail-title">${name}</div>
+            <span class="detail-badge" style="background:var(--c-customer-lt);color:var(--c-customer)">${region} 区域</span>
+          </div>
+        </div>
+        <div class="detail-desc">${name} — PCB制造客户，${region}区域，全线配套 Symtek 自动化输送及机械手系统。</div>
+        ${tabsHTML('var(--c-customer)', [
+          {id:'tab-req',label:'客户通用要求'},
+          {id:'tab-proc',label:'制程注意事项'},
+          {id:'tab-sensor',label:'感应器选用标准'},
+          {id:'tab-feedback',label:'厂外反馈问题项'},
+        ])}
+        <div class="tab-content active" id="tab-req">
+          <div style="--accent-color:var(--c-customer)">
+            ${renderCrudTable('customer-req', name, 'req')}
+          </div>
+        </div>
+        <div class="tab-content" id="tab-proc">
+          <div style="--accent-color:var(--c-customer)">
+            ${renderCrudTable('customer-proc', name, 'proc')}
+          </div>
+        </div>
+        <div class="tab-content" id="tab-sensor">
+          ${sectionCard('常规结构配置 SOP', `<div class="file-preview locked">
+            <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="fp-name">${name}_常规结构配置SOP_v2.1.pdf</div>
+            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+          </div>`)}
+          ${sectionCard('特殊结构配置 SOP', `<div class="file-preview locked">
+            <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="fp-name">${name}_特殊结构配置SOP_v1.3.pdf</div>
+            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+          </div>`)}
+          ${sectionCard('特殊制程配置 SOP', `<div class="file-preview locked">
+            <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="fp-name">${name}_特殊制程配置SOP_v1.0.pdf</div>
+            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+          </div>`)}
+        </div>
+        <div class="tab-content" id="tab-feedback">
+          <div style="--accent-color:var(--c-customer)">
+            ${renderTimeline('customer-feedback', name)}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ===== 制程详情（已改造CRUD）=====
+    function selectProcess(name, cat) {
+      setActiveItem('process', event.currentTarget);
+      const data = PROCESS_DATA[name];
+      const content = document.getElementById('process-content');
+      document.getElementById('process-empty').style.display = 'none';
+      content.style.display = 'block';
+
+      // 特殊处理：制程报告
+      if (name === '制程报告') {
+        content.innerHTML = `<div class="fade-in">
+          ${breadcrumb(['制程', '制程介绍', '制程报告'])}
+          <div class="detail-title-row">
+            <div class="detail-module-dot" style="background:var(--c-process)"></div>
+            <div>
+              <div class="detail-title">制程报告</div>
+              <span class="detail-badge" style="background:var(--c-process-lt);color:var(--c-process)">制程介绍</span>
+            </div>
+          </div>
+          <div class="detail-desc">刘龙江副理制程报告汇总，涵盖 PCB 制造全流程工艺规范。文件仅供预览，无下载权限。</div>
+          ${data.files.map(f => sectionCard(f.name, `<div class="file-preview locked">
+            <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="fp-name">${f.name}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${f.size}</div>
+            <div class="fp-locked">🔒 ${f.note}</div>
+          </div>`)).join('')}
+        </div>`;
+        return;
+      }
+
+      content.innerHTML = `<div class="fade-in">
+        ${breadcrumb(['制程', cat, name])}
+        <div class="detail-title-row">
+          <div class="detail-module-dot" style="background:var(--c-process)"></div>
+          <div>
+            <div class="detail-title">${name}</div>
+            <span class="detail-badge" style="background:var(--c-process-lt);color:var(--c-process)">${cat}</span>
+          </div>
+        </div>
+        <div class="detail-desc">${data.desc}</div>
+        ${tabsHTML('var(--c-process)', [
+          {id:'ptab-feat',label:'制程特性'},
+          {id:'ptab-sensor',label:'感应器选用标准'},
+        ])}
+        <div class="tab-content active" id="ptab-feat">
+          <div style="--accent-color:var(--c-process)">
+            ${renderCrudList('process-feat', name, 'feat')}
+          </div>
+        </div>
+        <div class="tab-content" id="ptab-sensor">
+          <div style="--accent-color:var(--c-process)">
+            ${renderCrudTable('process-sensor', name, 'sensor')}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ===== 机型详情（已改造CRUD）=====
+    function selectMachine(name, cat) {
+      setActiveItem('machine', event.currentTarget);
+      const data = MACHINE_DATA[name];
+      const content = document.getElementById('machine-content');
+      document.getElementById('machine-empty').style.display = 'none';
+      content.style.display = 'block';
+      content.innerHTML = `<div class="fade-in">
+        ${breadcrumb(['机型结构', cat, name])}
+        <div class="detail-title-row">
+          <div class="detail-module-dot" style="background:var(--c-machine)"></div>
+          <div>
+            <div class="detail-title">${name}</div>
+            <span class="detail-badge" style="background:var(--c-machine-lt);color:var(--c-machine)">${cat}</span>
+          </div>
+        </div>
+        <div class="detail-desc">${data.desc}</div>
+        ${tabsHTML('var(--c-machine)', [
+          {id:'mtab-conveyor',label:'输送机构'},
+          {id:'mtab-arm',label:'手臂机构'},
+          {id:'mtab-platform',label:'台车工位结构'},
+          {id:'mtab-notes',label:'机型注意事项'},
+        ])}
+        <div class="tab-content active" id="mtab-conveyor">
+          <div style="--accent-color:var(--c-machine)">
+            ${renderCrudTable('machine-conveyor', name, 'conveyor')}
+          </div>
+        </div>
+        <div class="tab-content" id="mtab-arm">
+          <div style="--accent-color:var(--c-machine)">
+            ${renderCrudTable('machine-arm', name, 'arm')}
+          </div>
+        </div>
+        <div class="tab-content" id="mtab-platform">
+          <div style="--accent-color:var(--c-machine)">
+            ${renderCrudTable('machine-platform', name, 'platform')}
+          </div>
+        </div>
+        <div class="tab-content" id="mtab-notes">
+          <div style="--accent-color:var(--c-machine)">
+            ${renderCrudTable('machine-notes', name, 'notes')}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ===== Sensor 字典快速定位（保留旧入口兼容）=====
+    function selectSensor(type, category) {
+      openSensorType(type, category || '全部');
+    }
+
+    // ===== 快速入口 =====
+    function quickSensor(type) {
+      openSensorType(type, '现用');
+    }
+
+    function quickMachine(name, cat) {
+      showView('machine');
+      setTimeout(() => {
+        const el = document.querySelector(`#view-machine .list-item[onclick*="'${name}'"]`);
+        if (el) el.click();
+      }, 50);
+    }
+
+    // ===== 搜索功能 =====
+    const SEARCH_INDEX = [
+      ...Object.entries(SENSOR_DATA).map(([k,v]) => ({ type:'sensor', title:k, sub:v.desc, action:()=>{showView('sensor');setTimeout(()=>selectSensor(k,'现用'),50)} })),
+      ...Object.keys(PROCESS_DATA).map(k => ({ type:'process', title:k, sub:PROCESS_DATA[k].desc||'制程工艺', action:()=>{showView('process');setTimeout(()=>selectProcess(k,k==='制程报告'?'制程介绍':'内层制程'),50)} })),
+      ...Object.keys(MACHINE_DATA).map(k => ({ type:'machine', title:k, sub:MACHINE_DATA[k].desc, action:()=>{showView('machine');setTimeout(()=>selectMachine(k,'中间段'),50)} })),
+      ...['庆鼎','健鼎','沪士','胜宏','景旺','宏恒胜','崇达','深南','兴森','博敏','维信','依顿','奥士康','华通','定颖'].map(c => ({ type:'customer', title:c, sub:'PCB制造客户', action:()=>{showView('customer');setTimeout(()=>selectCustomer(c,'华东'),50)} })),
+    ];
+
+    const TYPE_META = {
+      sensor: { label:'Sensor', color:'#0284c7', bg:'#e0f2fe' },
+      process: { label:'制程', color:'#7c3aed', bg:'#ede9fe' },
+      machine: { label:'机型', color:'#ea580c', bg:'#fed7aa' },
+      customer: { label:'客户', color:'#0d9488', bg:'#ccfbf1' },
+    };
+
+    let activeFilter = 'all';
+
+    function doSearch(q) {
+      if (!q) return;
+      showView('search');
+      let results = SEARCH_INDEX.filter(item =>
+        item.title.toLowerCase().includes(q.toLowerCase()) ||
+        item.sub.toLowerCase().includes(q.toLowerCase())
+      );
+
+      const types = ['all', ...new Set(results.map(r => r.type))];
+      document.getElementById('searchFilters').innerHTML = types.map(t =>
+        `<button class="filter-btn${t===activeFilter?' active':''}" onclick="setFilter('${t}','${q}')">${t==='all'?'全部':TYPE_META[t]?.label||t}</button>`
+      ).join('');
+
+      if (activeFilter !== 'all') results = results.filter(r => r.type === activeFilter);
+
+      document.getElementById('searchTitle').innerHTML = `搜索 "<b>${q}</b>" · ${results.length} 条结果`;
+      const container = document.getElementById('searchResults');
+      if (!results.length) {
+        container.innerHTML = `<div style="color:var(--text-muted);font-size:14px;padding:20px 0">未找到相关内容，请尝试其他关键词</div>`;
+        return;
+      }
+      container.innerHTML = results.map((r, i) => {
+        const m = TYPE_META[r.type];
+        return `<div class="search-result-item fade-in" onclick="SEARCH_INDEX[${SEARCH_INDEX.indexOf(r)}].action()" style="animation-delay:${i*0.025}s">
+          <div class="sri-icon" style="background:${m.bg};color:${m.color}">
+            ${typeIcon(r.type)}
+          </div>
+          <div>
+            <div class="sri-title">${highlight(r.title, q)}</div>
+            <div class="sri-sub">${highlight(r.sub.slice(0, 60) + (r.sub.length > 60 ? '…' : ''), q)}</div>
+          </div>
+          <span class="sri-tag" style="background:${m.bg};color:${m.color}">${m.label}</span>
+          <svg class="sri-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+        </div>`;
+      }).join('');
+    }
+
+    function setFilter(type, q) {
+      activeFilter = type;
+      doSearch(q || document.getElementById('searchInput').value.trim());
+    }
+
+    function typeIcon(type) {
+      const icons = {
+        sensor: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>',
+        process:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>',
+        machine:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+        customer:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+      };
+      return icons[type] || '';
+    }
+
+    function highlight(text, q) {
+      if (!q) return text;
+      const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
+    }
+
+    renderSensorCatalog();
+
+    // ===== 文件锁定防护 =====
+    document.addEventListener('contextmenu', function(e) {
+      if (e.target.closest('.file-preview.locked')) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  </script>
+</body>
+</html>

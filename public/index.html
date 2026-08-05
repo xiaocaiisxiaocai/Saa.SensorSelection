@@ -10,13 +10,13 @@
       --brand: #1e40af;
       --brand-mid: #3b82f6;
       --brand-lt: #dbeafe;
-      --c-customer: #0d9488;
+      --c-customer: #0f766e;
       --c-customer-lt: #ccfbf1;
-      --c-process: #7c3aed;
+      --c-process: #6d28d9;
       --c-process-lt: #ede9fe;
-      --c-machine: #ea580c;
+      --c-machine: #9a3412;
       --c-machine-lt: #fed7aa;
-      --c-sensor: #0284c7;
+      --c-sensor: #0369a1;
       --c-sensor-lt: #e0f2fe;
       --bg: #fafafa;
       --bg2: #f4f4f5;
@@ -31,23 +31,8 @@
       --radius-sm: 8px;
       --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
       --shadow-md: 0 4px 12px rgba(0,0,0,.08);
-      --sidebar-w: 260px;
+      --sidebar-w: 236px;
       --list-w: 280px;
-    }
-
-    /* ===== 暗色模式 ===== */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #18181b;
-        --bg2: #27272a;
-        --surface: #27272a;
-        --surface2: #1f1f23;
-        --border: #3f3f46;
-        --border2: #52525b;
-        --text: #fafafa;
-        --text-sec: #d4d4d8;
-        --text-muted: #a1a1aa;
-      }
     }
 
     /* ===== 全局样式 ===== */
@@ -58,49 +43,165 @@
       color: var(--text);
       height: 100vh;
       overflow: hidden;
-      display: flex;
-      flex-direction: column;
     }
     button { cursor: pointer; }
     input, textarea, select { font-family: inherit; }
 
-
-    /* ===== 顶栏 ===== */
-    .topbar {
-      height: 60px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      padding: 0 24px;
-      gap: 20px;
-      flex-shrink: 0;
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
-    .topbar-logo {
+
+    :where(button, input, select, textarea, [tabindex]):focus-visible {
+      outline: 2px solid var(--brand-mid);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* ===== 桌面应用框架与左侧导航 ===== */
+    .app-shell {
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .app-sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 18px 14px;
+      border-right: 1px solid #1e3a5f;
+      background: #0f2744;
+      color: #fff;
+    }
+    .sidebar-brand {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text);
-      white-space: nowrap;
+      padding: 2px 8px 20px;
+      border-bottom: 1px solid rgba(255,255,255,.12);
     }
-    .topbar-logo-icon {
-      width: 28px;
-      height: 28px;
-      background: var(--brand);
-      border-radius: 7px;
+    .sidebar-brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 16px;
-      font-weight: 700;
+      flex-shrink: 0;
+      background: #2563eb;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+      box-shadow: 0 4px 12px rgba(0,0,0,.18);
+    }
+    .sidebar-brand-title {
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+    .sidebar-brand-subtitle {
+      margin-top: 2px;
+      color: #a9bdd3;
+      font-size: 10.5px;
+      line-height: 1.3;
+    }
+    .sidebar-section-label {
+      padding: 20px 10px 8px;
+      color: #7f9ab6;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sidebar-nav-item {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: #cbd9e7;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: left;
+      transition: background .16s, color .16s, border-color .16s;
+    }
+    .sidebar-nav-item:hover {
+      border-color: rgba(255,255,255,.08);
+      background: rgba(255,255,255,.07);
+      color: #fff;
+    }
+    .sidebar-nav-item.active {
+      border-color: rgba(96,165,250,.35);
+      background: #1e4f83;
+      color: #fff;
+      box-shadow: inset 3px 0 0 #60a5fa;
+    }
+    .sidebar-nav-item svg { flex-shrink: 0; }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 14px 10px 2px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      color: #8fa8c2;
+      font-size: 10.5px;
+      line-height: 1.6;
+    }
+    .app-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .workspace-toolbar {
+      height: 60px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .workspace-context {
+      color: var(--text-sec);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
     }
     .topbar-search {
       flex: 1;
-      max-width: 500px;
+      max-width: 680px;
       position: relative;
+      display: flex;
+      align-items: center;
+      margin-left: auto;
     }
     .topbar-search input {
       width: 100%;
@@ -108,7 +209,7 @@
       border-radius: 10px;
       border: 1.5px solid var(--border);
       background: var(--bg);
-      padding: 0 40px 0 38px;
+      padding: 0 116px 0 38px;
       font-size: 13.5px;
       outline: none;
       color: var(--text);
@@ -125,113 +226,34 @@
       top: 50%;
       transform: translateY(-50%);
       color: var(--text-muted);
+      pointer-events: none;
     }
-
-    .topbar-nav {
-      display: flex;
-      gap: 6px;
-      margin-left: auto;
-    }
-    .topbar-nav-item {
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      background: transparent;
-      border: none;
-      color: var(--text-sec);
-      transition: background .12s, color .12s;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .topbar-nav-item:hover {
-      background: var(--bg2);
-      color: var(--text);
-    }
-    .topbar-nav-item.active {
-      background: var(--bg2);
-      color: var(--brand);
-    }
-
-    /* ===== 首页 ===== */
-    .home-view {
-      flex: 1;
-      overflow-y: auto;
-      padding: 40px 32px;
-    }
-    .home-hero {
-      text-align: center;
-      margin-bottom: 50px;
-    }
-    .home-hero h1 {
-      font-size: 32px;
-      font-weight: 800;
-      margin-bottom: 12px;
-      color: var(--text);
-    }
-    .home-hero p {
-      font-size: 15px;
-      color: var(--text-sec);
-    }
-    .home-modules {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .module-card {
-      background: var(--surface);
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      cursor: pointer;
-      transition: border-color .15s, box-shadow .15s, transform .15s;
-    }
-    .module-card:hover {
-      border-color: var(--border2);
-      box-shadow: var(--shadow-md);
-      transform: translateY(-2px);
-    }
-
-    .module-card-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 14px;
-    }
-    .module-card-icon {
-      width: 50px;
-      height: 50px;
-      border-radius: 12px;
+    .search-clear-btn,
+    .search-submit-btn {
+      position: absolute;
+      top: 5px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
-      flex-shrink: 0;
+      border: 0;
+      border-radius: 6px;
+      font-family: inherit;
     }
-    .module-card h3 {
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .module-card p {
-      font-size: 13px;
-      color: var(--text-sec);
-      line-height: 1.6;
-      margin-bottom: 16px;
-    }
-    .module-card-stats {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
+    .search-clear-btn {
+      right: 61px;
+      width: 28px;
+      background: transparent;
       color: var(--text-muted);
     }
-    .module-card-stats div {
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .search-clear-btn:hover { background: var(--bg2); color: var(--text); }
+    .search-submit-btn {
+      right: 5px;
+      padding: 0 12px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 700;
     }
 
     /* ===== 视图容器 ===== */
@@ -252,8 +274,7 @@
       align-items: center;
       gap: 6px;
     }
-    .breadcrumb span { cursor: pointer; }
-    .breadcrumb span:hover { color: var(--text-sec); }
+    .breadcrumb [aria-current="page"] { color: var(--text-sec); font-weight: 600; }
     .breadcrumb svg { flex-shrink: 0; }
 
     /* ===== 详情区样式 ===== */
@@ -301,8 +322,11 @@
       font-weight: 600;
       color: var(--text-sec);
       cursor: pointer;
+      background: transparent;
+      border: 0;
       border-bottom: 2px solid transparent;
       margin-bottom: -2px;
+      font-family: inherit;
       transition: color .12s, border-color .12s;
     }
     .detail-tab:hover {
@@ -314,6 +338,8 @@
     }
     .tab-content {
       display: none;
+      min-width: 0;
+      max-width: 100%;
     }
     .tab-content.active {
       display: block;
@@ -322,6 +348,7 @@
     /* ===== 页面结构 ===== */
     .page-wrap {
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -355,6 +382,7 @@
     /* ===== 三栏布局 ===== */
     .three-col {
       flex: 1;
+      min-width: 0;
       display: flex;
       overflow: hidden;
     }
@@ -447,12 +475,18 @@
       display: flex;
     }
     .list-item {
+      width: 100%;
       padding: 10px 14px 10px 28px;
       font-size: 13px;
       cursor: pointer;
       color: var(--text-sec);
+      border-top: none;
+      border-right: none;
+      border-bottom: none;
       border-left: 3px solid transparent;
       background: transparent;
+      font-family: inherit;
+      text-align: left;
       transition: background .1s, color .1s, border-color .1s;
       display: flex;
       align-items: center;
@@ -472,13 +506,18 @@
     /* ===== 详情面板 ===== */
     .detail-panel {
       flex: 1;
+      min-width: 0;
+      max-width: 100%;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .detail-content {
       flex: 1;
+      min-width: 0;
+      max-width: 100%;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 24px 28px;
     }
     .detail-empty {
@@ -497,6 +536,7 @@
 
     /* ===== 卡片组件 ===== */
     .section-card {
+      max-width: 100%;
       background: var(--surface);
       border: 1.5px solid var(--border);
       border-radius: var(--radius-sm);
@@ -548,30 +588,7 @@
       color: var(--brand);
     }
 
-    /* ===== 表格 ===== */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12.5px;
-    }
-    .data-table thead {
-      background: var(--bg2);
-    }
-    .data-table th {
-      padding: 10px 12px;
-      text-align: left;
-      font-weight: 700;
-      color: var(--text-sec);
-      border-bottom: 1.5px solid var(--border);
-    }
-    .data-table td {
-      padding: 12px 12px;
-      color: var(--text-sec);
-      border-bottom: 1px solid var(--border);
-    }
-    .data-table tbody tr:last-child td {
-      border-bottom: none;
-    }
+    /* ===== 表格补充元素 ===== */
     .model-name {
       font-weight: 600;
       color: var(--text);
@@ -707,6 +724,7 @@
 
     /* ===== 搜索结果 ===== */
     .search-result-item {
+      width: 100%;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -716,11 +734,27 @@
       border-radius: 10px;
       margin-bottom: 10px;
       cursor: pointer;
+      color: var(--text);
+      font-family: inherit;
+      text-align: left;
       transition: border-color .12s, box-shadow .12s;
     }
     .search-result-item:hover {
       border-color: var(--border2);
       box-shadow: var(--shadow-sm);
+    }
+    .search-result-item > div:nth-child(2) {
+      flex: 1;
+      min-width: 0;
+    }
+    .search-empty {
+      padding: 36px 20px;
+      border: 1px dashed var(--border2);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
     }
     .sri-icon {
       width: 34px;
@@ -858,6 +892,8 @@
       font-weight: 650;
     }
     .sensor-catalog-card {
+      width: 100%;
+      max-width: 100%;
       overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -923,7 +959,13 @@
       border-color: var(--c-sensor);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-sensor) 12%, transparent);
     }
-    .sensor-table-scroll { overflow-x: auto; }
+    .sensor-table-scroll {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+    }
     .sensor-catalog-table {
       min-width: 1180px;
       table-layout: fixed;
@@ -1000,23 +1042,6 @@
     }
     .sensor-form-grid .full-row { grid-column: 1 / -1; }
 
-    @media (max-width: 980px) {
-      .sensor-catalog-overview,
-      .sensor-catalog-toolbar { align-items: stretch; flex-direction: column; }
-      .sensor-catalog-stats { align-self: flex-start; }
-      .sensor-toolbar-actions { width: 100%; margin-left: 0; }
-      .sensor-search-input { width: 100%; }
-    }
-
-    @media (max-width: 640px) {
-      .sensor-catalog-page { padding: 14px; }
-      .sensor-catalog-stats { width: 100%; }
-      .sensor-stat { flex: 1; min-width: 0; }
-      .sensor-toolbar-actions { align-items: stretch; flex-direction: column; }
-      .sensor-form-grid { grid-template-columns: 1fr; }
-      .sensor-form-grid .full-row { grid-column: auto; }
-    }
-
     /* ===== CRUD 工具栏 ===== */
     .crud-toolbar {
       display: flex;
@@ -1071,6 +1096,17 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+    .crud-render-root {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .table-scroll {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
     }
     .crud-item {
       background: var(--surface);
@@ -1200,6 +1236,10 @@
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--bg2);
     }
     .data-table tbody tr {
       border-bottom: 1px solid var(--border);
@@ -1215,13 +1255,10 @@
       padding: 14px 16px;
       color: var(--text);
       vertical-align: top;
+      overflow-wrap: anywhere;
     }
     .data-table .btn {
       margin: 0 2px;
-    }
-      color: var(--text-sec);
-      line-height: 1.6;
-      margin-bottom: 8px;
     }
     .timeline-status {
       display: inline-flex;
@@ -1262,6 +1299,7 @@
       z-index: 999;
       align-items: center;
       justify-content: center;
+      padding: 24px;
     }
     .modal-backdrop.open {
       display: flex;
@@ -1272,13 +1310,38 @@
       padding: 24px;
       width: 90%;
       max-width: 500px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
       box-shadow: 0 20px 40px rgba(0,0,0,.2);
+    }
+    .modal-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
     }
     .modal-header {
       font-size: 17px;
       font-weight: 700;
       color: var(--text);
-      margin-bottom: 18px;
+    }
+    .modal-close-btn {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: -6px -6px 0 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text-muted);
+    }
+    .modal-close-btn:hover {
+      background: var(--bg2);
+      color: var(--text);
     }
     .form-group {
       margin-bottom: 14px;
@@ -1303,6 +1366,7 @@
     }
     .form-input:focus, .form-select:focus, .form-textarea:focus {
       border-color: var(--brand-mid);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .1);
     }
     .form-textarea {
       resize: vertical;
@@ -1313,6 +1377,18 @@
       gap: 10px;
       justify-content: flex-end;
       margin-top: 20px;
+    }
+    .form-error {
+      min-height: 17px;
+      margin-top: 5px;
+      color: #b91c1c;
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+    .form-group.has-error .form-input,
+    .form-group.has-error .form-select,
+    .form-group.has-error .form-textarea {
+      border-color: #dc2626;
     }
     .confirm-modal .modal {
       max-width: 400px;
@@ -1354,103 +1430,52 @@
   </style>
 </head>
 <body>
-  <!-- 顶栏 -->
-  <div class="topbar">
-    <div class="topbar-logo">
-      <div class="topbar-logo-icon">S</div>
-      <span>感应器选型软件 · Symtek Automation China</span>
-    </div>
-    <div class="topbar-search">
-      <svg class="topbar-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-      </svg>
-      <input type="text" id="searchInput" placeholder="搜索型号、机型、客户、制程..." onkeypress="if(event.key==='Enter')doSearch(this.value.trim())">
-    </div>
-    <div class="topbar-nav">
-      <button class="topbar-nav-item active" onclick="showView('home')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
-        </svg>
-        首页
-      </button>
-      <button class="topbar-nav-item" onclick="showView('customer')">客户</button>
-      <button class="topbar-nav-item" onclick="showView('process')">制程</button>
-      <button class="topbar-nav-item" onclick="showView('machine')">机型结构</button>
-      <button class="topbar-nav-item" onclick="showView('sensor')">Sensor 选型</button>
-    </div>
-  </div>
+  <div class="app-shell">
+    <aside class="app-sidebar" aria-label="主菜单">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon" aria-hidden="true">S</div>
+        <div>
+          <div class="sidebar-brand-title">感应器选型软件</div>
+          <div class="sidebar-brand-subtitle">Symtek Automation China</div>
+        </div>
+      </div>
+      <div class="sidebar-section-label">功能导航</div>
+      <nav class="sidebar-nav" aria-label="功能导航">
+        <button class="sidebar-nav-item active" type="button" data-view="customer" aria-current="page" onclick="showView('customer')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          客户
+        </button>
+        <button class="sidebar-nav-item" type="button" data-view="process" onclick="showView('process')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          制程
+        </button>
+        <button class="sidebar-nav-item" type="button" data-view="machine" onclick="showView('machine')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          机型结构
+        </button>
+        <button class="sidebar-nav-item" type="button" data-view="sensor" onclick="showView('sensor')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+          Sensor 选型
+        </button>
+      </nav>
+      <div class="sidebar-footer">PCB 自动化设备知识库<br>本地数据自动保存</div>
+    </aside>
 
-  <!-- 首页 -->
-  <div class="view active" id="view-home">
-    <div class="home-view">
-      <div class="home-hero">
-        <h1>Symtek 感应器选型知识库</h1>
-        <p>PCB自动化设备感应器选型、配置与维护的统一参考平台</p>
-      </div>
-      <div class="home-modules">
-        <div class="module-card" onclick="showView('customer')" style="--card-color: var(--c-customer)">
-          <div class="module-card-header">
-            <div class="module-card-icon" style="background: var(--c-customer-lt); color: var(--c-customer)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-              </svg>
-            </div>
-            <h3>客户管理</h3>
-          </div>
-          <p>各客户感应器通用要求、制程注意事项、选用标准及配置 SOP 文档</p>
-          <div class="module-card-stats">
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>15 家客户</div>
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>3 大区域</div>
-          </div>
-        </div>
-        <div class="module-card" onclick="showView('process')" style="--card-color: var(--c-process)">
-          <div class="module-card-header">
-            <div class="module-card-icon" style="background: var(--c-process-lt); color: var(--c-process)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
-              </svg>
-            </div>
-            <h3>制程管理</h3>
-          </div>
-          <p>PCB制程特性、感应器选用标准及制程报告文档库</p>
-          <div class="module-card-stats">
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>11 项制程</div>
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>工艺标准</div>
-          </div>
-        </div>
-        <div class="module-card" onclick="showView('machine')" style="--card-color: var(--c-machine)">
-          <div class="module-card-header">
-            <div class="module-card-icon" style="background: var(--c-machine-lt); color: var(--c-machine)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-              </svg>
-            </div>
-            <h3>机型结构</h3>
-          </div>
-          <p>各机型感应器安装位置、注意事项及配置标准的结构化知识</p>
-          <div class="module-card-stats">
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>14 种机型</div>
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>4 大类别</div>
-          </div>
-        </div>
-        <div class="module-card" onclick="showView('sensor')" style="--card-color: var(--c-sensor)">
-          <div class="module-card-header">
-            <div class="module-card-icon" style="background: var(--c-sensor-lt); color: var(--c-sensor)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/>
-              </svg>
-            </div>
-            <h3>Sensor 选型</h3>
-          </div>
-          <p>各类感应器型号清单、规格参数、特性注意及适用场景参考</p>
-          <div class="module-card-stats">
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>8 大类型</div>
-            <div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/></svg>现用+备选</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+    <main class="app-main" id="mainContent">
+      <header class="workspace-toolbar">
+        <div class="workspace-context" id="currentModuleLabel">客户知识库</div>
+        <form class="topbar-search" role="search" onsubmit="handleSearchSubmit(event)">
+          <label class="sr-only" for="searchInput">全局搜索</label>
+          <svg class="topbar-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="search" id="searchInput" placeholder="搜索型号、品牌、类型、机型、客户或制程..." autocomplete="off" oninput="syncSearchControls()">
+          <button class="search-clear-btn" id="searchClearButton" type="button" aria-label="清除搜索" onclick="clearGlobalSearch()" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <button class="search-submit-btn" type="submit">搜索</button>
+        </form>
+      </header>
 
   <!-- 搜索视图 -->
   <div class="view" id="view-search">
@@ -1469,7 +1494,7 @@
   </div>
 
   <!-- 客户视图 -->
-  <div class="view" id="view-customer">
+  <div class="view active" id="view-customer">
     <div class="page-wrap">
       <div class="page-header">
         <div class="page-header-left">
@@ -1480,7 +1505,8 @@
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
-            <input type="text" placeholder="搜索客户..." oninput="filterList(this, 'customer')">
+            <label class="sr-only" for="customerListSearch">搜索客户</label>
+            <input type="search" id="customerListSearch" placeholder="搜索客户..." oninput="filterList(this, 'customer')">
           </div>
           <div class="list-category open">
             <button class="list-category-btn open" style="--cat-color: #0d9488" onclick="toggleCat(this)">
@@ -1489,11 +1515,11 @@
               <span class="cat-count">5</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="庆鼎" onclick="selectCustomer('庆鼎', '华东')">庆鼎</div>
-              <div class="list-item" data-search="健鼎" onclick="selectCustomer('健鼎', '华东')">健鼎</div>
-              <div class="list-item" data-search="沪士" onclick="selectCustomer('沪士', '华东')">沪士</div>
-              <div class="list-item" data-search="胜宏" onclick="selectCustomer('胜宏', '华东')">胜宏</div>
-              <div class="list-item" data-search="景旺" onclick="selectCustomer('景旺', '华东')">景旺</div>
+              <button type="button" class="list-item" data-search="庆鼎" onclick="selectCustomer('庆鼎', '华东', this)">庆鼎</button>
+              <button type="button" class="list-item" data-search="健鼎" onclick="selectCustomer('健鼎', '华东', this)">健鼎</button>
+              <button type="button" class="list-item" data-search="沪士" onclick="selectCustomer('沪士', '华东', this)">沪士</button>
+              <button type="button" class="list-item" data-search="胜宏" onclick="selectCustomer('胜宏', '华东', this)">胜宏</button>
+              <button type="button" class="list-item" data-search="景旺" onclick="selectCustomer('景旺', '华东', this)">景旺</button>
             </div>
           </div>
           <div class="list-category">
@@ -1503,11 +1529,11 @@
               <span class="cat-count">5</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="宏恒胜" onclick="selectCustomer('宏恒胜', '华南')">宏恒胜</div>
-              <div class="list-item" data-search="崇达" onclick="selectCustomer('崇达', '华南')">崇达</div>
-              <div class="list-item" data-search="深南" onclick="selectCustomer('深南', '华南')">深南</div>
-              <div class="list-item" data-search="兴森" onclick="selectCustomer('兴森', '华南')">兴森</div>
-              <div class="list-item" data-search="博敏" onclick="selectCustomer('博敏', '华南')">博敏</div>
+              <button type="button" class="list-item" data-search="宏恒胜" onclick="selectCustomer('宏恒胜', '华南', this)">宏恒胜</button>
+              <button type="button" class="list-item" data-search="崇达" onclick="selectCustomer('崇达', '华南', this)">崇达</button>
+              <button type="button" class="list-item" data-search="深南" onclick="selectCustomer('深南', '华南', this)">深南</button>
+              <button type="button" class="list-item" data-search="兴森" onclick="selectCustomer('兴森', '华南', this)">兴森</button>
+              <button type="button" class="list-item" data-search="博敏" onclick="selectCustomer('博敏', '华南', this)">博敏</button>
             </div>
           </div>
           <div class="list-category">
@@ -1517,11 +1543,11 @@
               <span class="cat-count">5</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="维信" onclick="selectCustomer('维信', 'SAT')">维信</div>
-              <div class="list-item" data-search="依顿" onclick="selectCustomer('依顿', 'SAT')">依顿</div>
-              <div class="list-item" data-search="奥士康" onclick="selectCustomer('奥士康', 'SAT')">奥士康</div>
-              <div class="list-item" data-search="华通" onclick="selectCustomer('华通', 'SAT')">华通</div>
-              <div class="list-item" data-search="定颖" onclick="selectCustomer('定颖', 'SAT')">定颖</div>
+              <button type="button" class="list-item" data-search="维信" onclick="selectCustomer('维信', 'SAT', this)">维信</button>
+              <button type="button" class="list-item" data-search="依顿" onclick="selectCustomer('依顿', 'SAT', this)">依顿</button>
+              <button type="button" class="list-item" data-search="奥士康" onclick="selectCustomer('奥士康', 'SAT', this)">奥士康</button>
+              <button type="button" class="list-item" data-search="华通" onclick="selectCustomer('华通', 'SAT', this)">华通</button>
+              <button type="button" class="list-item" data-search="定颖" onclick="selectCustomer('定颖', 'SAT', this)">定颖</button>
             </div>
           </div>
         </div>
@@ -1550,7 +1576,8 @@
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
-            <input type="text" placeholder="搜索制程..." oninput="filterList(this, 'process')">
+            <label class="sr-only" for="processListSearch">搜索制程</label>
+            <input type="search" id="processListSearch" placeholder="搜索制程..." oninput="filterList(this, 'process')">
           </div>
           <div class="list-category open">
             <button class="list-category-btn open" style="--cat-color: #7c3aed" onclick="toggleCat(this)">
@@ -1559,7 +1586,7 @@
               <span class="cat-count">1</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="制程报告" onclick="selectProcess('制程报告', '制程介绍')">制程报告</div>
+              <button type="button" class="list-item" data-search="制程报告" onclick="selectProcess('制程报告', '制程介绍', this)">制程报告</button>
             </div>
           </div>
           <div class="list-category">
@@ -1569,13 +1596,13 @@
               <span class="cat-count">7</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="DES显影" onclick="selectProcess('DES显影', '内层制程')">DES显影</div>
-              <div class="list-item" data-search="AOI检测" onclick="selectProcess('AOI检测', '内层制程')">AOI检测</div>
-              <div class="list-item" data-search="棕化" onclick="selectProcess('棕化', '内层制程')">棕化</div>
-              <div class="list-item" data-search="压合" onclick="selectProcess('压合', '内层制程')">压合</div>
-              <div class="list-item" data-search="钻孔" onclick="selectProcess('钻孔', '内层制程')">钻孔</div>
-              <div class="list-item" data-search="PTH沉铜" onclick="selectProcess('PTH沉铜', '内层制程')">PTH沉铜</div>
-              <div class="list-item" data-search="板电" onclick="selectProcess('板电', '内层制程')">板电</div>
+              <button type="button" class="list-item" data-search="DES显影" onclick="selectProcess('DES显影', '内层制程', this)">DES显影</button>
+              <button type="button" class="list-item" data-search="AOI检测" onclick="selectProcess('AOI检测', '内层制程', this)">AOI检测</button>
+              <button type="button" class="list-item" data-search="棕化" onclick="selectProcess('棕化', '内层制程', this)">棕化</button>
+              <button type="button" class="list-item" data-search="压合" onclick="selectProcess('压合', '内层制程', this)">压合</button>
+              <button type="button" class="list-item" data-search="钻孔" onclick="selectProcess('钻孔', '内层制程', this)">钻孔</button>
+              <button type="button" class="list-item" data-search="PTH沉铜" onclick="selectProcess('PTH沉铜', '内层制程', this)">PTH沉铜</button>
+              <button type="button" class="list-item" data-search="板电" onclick="selectProcess('板电', '内层制程', this)">板电</button>
             </div>
           </div>
           <div class="list-category">
@@ -1585,10 +1612,10 @@
               <span class="cat-count">4</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="外层前处理" onclick="selectProcess('外层前处理', '外层制程')">外层前处理</div>
-              <div class="list-item" data-search="图形电镀" onclick="selectProcess('图形电镀', '外层制程')">图形电镀</div>
-              <div class="list-item" data-search="防焊" onclick="selectProcess('防焊', '外层制程')">防焊</div>
-              <div class="list-item" data-search="成型" onclick="selectProcess('成型', '外层制程')">成型</div>
+              <button type="button" class="list-item" data-search="外层前处理" onclick="selectProcess('外层前处理', '外层制程', this)">外层前处理</button>
+              <button type="button" class="list-item" data-search="图形电镀" onclick="selectProcess('图形电镀', '外层制程', this)">图形电镀</button>
+              <button type="button" class="list-item" data-search="防焊" onclick="selectProcess('防焊', '外层制程', this)">防焊</button>
+              <button type="button" class="list-item" data-search="成型" onclick="selectProcess('成型', '外层制程', this)">成型</button>
             </div>
           </div>
         </div>
@@ -1617,7 +1644,8 @@
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
-            <input type="text" placeholder="搜索机型..." oninput="filterList(this, 'machine')">
+            <label class="sr-only" for="machineListSearch">搜索机型</label>
+            <input type="search" id="machineListSearch" placeholder="搜索机型..." oninput="filterList(this, 'machine')">
           </div>
           <div class="list-category open">
             <button class="list-category-btn open" style="--cat-color: #ea580c" onclick="toggleCat(this)">
@@ -1626,10 +1654,10 @@
               <span class="cat-count">4</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="中间六轴机" onclick="selectMachine('中间六轴机', '中间段')">中间六轴机</div>
-              <div class="list-item" data-search="中间翻板机" onclick="selectMachine('中间翻板机', '中间段')">中间翻板机</div>
-              <div class="list-item" data-search="中间输送机" onclick="selectMachine('中间输送机', '中间段')">中间输送机</div>
-              <div class="list-item" data-search="龙门式传送机" onclick="selectMachine('龙门式传送机', '中间段')">龙门式传送机</div>
+              <button type="button" class="list-item" data-search="中间六轴机" onclick="selectMachine('中间六轴机', '中间段', this)">中间六轴机</button>
+              <button type="button" class="list-item" data-search="中间翻板机" onclick="selectMachine('中间翻板机', '中间段', this)">中间翻板机</button>
+              <button type="button" class="list-item" data-search="中间输送机" onclick="selectMachine('中间输送机', '中间段', this)">中间输送机</button>
+              <button type="button" class="list-item" data-search="龙门式传送机" onclick="selectMachine('龙门式传送机', '中间段', this)">龙门式传送机</button>
             </div>
           </div>
           <div class="list-category">
@@ -1639,11 +1667,11 @@
               <span class="cat-count">5</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="单边投板机" onclick="selectMachine('单边投板机', '常规投收板机')">单边投板机</div>
-              <div class="list-item" data-search="单边收板机" onclick="selectMachine('单边收板机', '常规投收板机')">单边收板机</div>
-              <div class="list-item" data-search="双边投板机" onclick="selectMachine('双边投板机', '常规投收板机')">双边投板机</div>
-              <div class="list-item" data-search="双边收板机" onclick="selectMachine('双边收板机', '常规投收板机')">双边收板机</div>
-              <div class="list-item" data-search="盒装投板机" onclick="selectMachine('盒装投板机', '常规投收板机')">盒装投板机</div>
+              <button type="button" class="list-item" data-search="单边投板机" onclick="selectMachine('单边投板机', '常规投收板机', this)">单边投板机</button>
+              <button type="button" class="list-item" data-search="单边收板机" onclick="selectMachine('单边收板机', '常规投收板机', this)">单边收板机</button>
+              <button type="button" class="list-item" data-search="双边投板机" onclick="selectMachine('双边投板机', '常规投收板机', this)">双边投板机</button>
+              <button type="button" class="list-item" data-search="双边收板机" onclick="selectMachine('双边收板机', '常规投收板机', this)">双边收板机</button>
+              <button type="button" class="list-item" data-search="盒装投板机" onclick="selectMachine('盒装投板机', '常规投收板机', this)">盒装投板机</button>
             </div>
           </div>
           <div class="list-category">
@@ -1653,8 +1681,8 @@
               <span class="cat-count">2</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="AOI专用机" onclick="selectMachine('AOI专用机', '特殊机型')">AOI专用机</div>
-              <div class="list-item" data-search="压合专用机" onclick="selectMachine('压合专用机', '特殊机型')">压合专用机</div>
+              <button type="button" class="list-item" data-search="AOI专用机" onclick="selectMachine('AOI专用机', '特殊机型', this)">AOI专用机</button>
+              <button type="button" class="list-item" data-search="压合专用机" onclick="selectMachine('压合专用机', '特殊机型', this)">压合专用机</button>
             </div>
           </div>
           <div class="list-category">
@@ -1664,9 +1692,9 @@
               <span class="cat-count">3</span>
             </button>
             <div class="list-category-items">
-              <div class="list-item" data-search="标准输送段" onclick="selectMachine('标准输送段', '通用结构')">标准输送段</div>
-              <div class="list-item" data-search="六轴机械手" onclick="selectMachine('六轴机械手', '通用结构')">六轴机械手</div>
-              <div class="list-item" data-search="台车系统" onclick="selectMachine('台车系统', '通用结构')">台车系统</div>
+              <button type="button" class="list-item" data-search="标准输送段" onclick="selectMachine('标准输送段', '通用结构', this)">标准输送段</button>
+              <button type="button" class="list-item" data-search="六轴机械手" onclick="selectMachine('六轴机械手', '通用结构', this)">六轴机械手</button>
+              <button type="button" class="list-item" data-search="台车系统" onclick="selectMachine('台车系统', '通用结构', this)">台车系统</button>
             </div>
           </div>
         </div>
@@ -1723,6 +1751,7 @@
               <button class="sensor-filter-btn" type="button" data-sensor-status="全部" onclick="setSensorCatalogStatus('全部')">全部</button>
             </div>
             <div class="sensor-toolbar-actions">
+              <label class="sr-only" for="sensorCatalogSearch">搜索 Sensor 型号目录</label>
               <input class="sensor-search-input" id="sensorCatalogSearch" type="search" placeholder="搜索类型、品牌、型号或场景..." oninput="filterSensorCatalog(this.value)">
               <button class="btn btn-sm btn-primary" type="button" style="--accent-color:var(--c-sensor)" onclick="openAddSensorCatalog()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -1732,8 +1761,9 @@
               </button>
             </div>
           </div>
-          <div class="sensor-table-scroll" id="sensorCatalogTable">
+          <div class="sensor-table-scroll" id="sensorCatalogTable" role="region" aria-label="Sensor 型号数据表" tabindex="0">
             <table class="data-table sensor-catalog-table">
+              <caption class="sr-only">Sensor 型号目录，包含现用与备选型号</caption>
               <thead>
                 <tr>
                   <th style="width:92px">状态</th>
@@ -1755,10 +1785,16 @@
     </div>
   </div>
 
+    </main>
+  </div>
+
   <!-- Sensor 型号编辑模态框 -->
   <div class="modal-backdrop" id="sensorCatalogModal" onclick="closeSensorCatalogModal(event)">
-    <div class="modal sensor-modal">
-      <div class="modal-header" id="sensorCatalogModalTitle">新增 Sensor 型号</div>
+    <div class="modal sensor-modal" role="dialog" aria-modal="true" aria-labelledby="sensorCatalogModalTitle">
+      <div class="modal-title-row">
+        <div class="modal-header" id="sensorCatalogModalTitle">新增 Sensor 型号</div>
+        <button class="modal-close-btn" type="button" aria-label="关闭 Sensor 型号编辑框" onclick="closeSensorCatalogModal()">&times;</button>
+      </div>
       <div class="sensor-form-grid">
         <div class="form-group">
           <label class="form-label" for="sensorCatalogStatus">状态 *</label>
@@ -1777,7 +1813,8 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="sensorCatalogModel">型号 *</label>
-          <input type="text" class="form-input" id="sensorCatalogModel" placeholder="例如 E3Z-D61">
+          <input type="text" class="form-input" id="sensorCatalogModel" placeholder="例如 E3Z-D61" aria-describedby="sensorCatalogModelError">
+          <div class="form-error" id="sensorCatalogModelError" role="alert"></div>
         </div>
         <div class="form-group full-row">
           <label class="form-label" for="sensorCatalogSpec">规格参数</label>
@@ -1801,65 +1838,77 @@
 
   <!-- CRUD 编辑模态框 -->
   <div class="modal-backdrop" id="crudModal" onclick="closeCrudModal(event)">
-    <div class="modal">
-      <div class="modal-header" id="crudModalTitle">新增条目</div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="crudModalTitle">
+      <div class="modal-title-row">
+        <div class="modal-header" id="crudModalTitle">新增条目</div>
+        <button class="modal-close-btn" type="button" aria-label="关闭条目编辑框" onclick="closeCrudModal()">&times;</button>
+      </div>
       <div class="form-group">
-        <label class="form-label">类型</label>
+        <label class="form-label" for="crudType" id="crudTypeLabel">类型</label>
         <select class="form-select" id="crudType"></select>
       </div>
       <div class="form-group">
-        <label class="form-label">名称 *</label>
-        <input type="text" class="form-input" id="crudName" placeholder="输入名称">
+        <label class="form-label" for="crudName" id="crudNameLabel">名称 *</label>
+        <input type="text" class="form-input" id="crudName" placeholder="输入名称" aria-describedby="crudNameError">
+        <div class="form-error" id="crudNameError" role="alert"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">描述</label>
+        <label class="form-label" for="crudDesc" id="crudDescLabel">描述</label>
         <textarea class="form-textarea" id="crudDesc" placeholder="输入描述"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">备注</label>
+        <label class="form-label" for="crudNote" id="crudNoteLabel">备注</label>
         <input type="text" class="form-input" id="crudNote" placeholder="输入备注">
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeCrudModal()">取消</button>
-        <button class="btn btn-primary" onclick="saveCrudItem()">保存</button>
+        <button class="btn btn-ghost" type="button" onclick="closeCrudModal()">取消</button>
+        <button class="btn btn-primary" type="button" onclick="saveCrudItem()">保存</button>
       </div>
     </div>
   </div>
 
   <!-- 删除确认模态框 -->
   <div class="modal-backdrop confirm-modal" id="confirmModal" onclick="closeConfirmModal(event)">
-    <div class="modal">
-      <div class="modal-header">确认删除</div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+      <div class="modal-title-row">
+        <div class="modal-header" id="confirmModalTitle">确认删除</div>
+        <button class="modal-close-btn" type="button" aria-label="关闭删除确认框" onclick="closeConfirmModal()">&times;</button>
+      </div>
       <div class="confirm-msg" id="confirmMsg"></div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeConfirmModal()">取消</button>
-        <button class="btn btn-danger" id="confirmOkBtn">删除</button>
+        <button class="btn btn-ghost" type="button" onclick="closeConfirmModal()">取消</button>
+        <button class="btn btn-danger" type="button" id="confirmOkBtn">删除</button>
       </div>
     </div>
   </div>
 
   <!-- 时间轴编辑模态框 -->
   <div class="modal-backdrop" id="timelineModal" onclick="closeTimelineModal(event)">
-    <div class="modal">
-      <div class="modal-header" id="timelineModalTitle">新增反馈</div>
-      <div class="form-group">
-        <label class="form-label">日期 *</label>
-        <input type="date" class="form-input" id="timelineDate">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="timelineModalTitle">
+      <div class="modal-title-row">
+        <div class="modal-header" id="timelineModalTitle">新增反馈</div>
+        <button class="modal-close-btn" type="button" aria-label="关闭反馈编辑框" onclick="closeTimelineModal()">&times;</button>
       </div>
       <div class="form-group">
-        <label class="form-label">问题标题 *</label>
-        <input type="text" class="form-input" id="timelineTitle" placeholder="简要描述问题">
+        <label class="form-label" for="timelineDate">日期 *</label>
+        <input type="date" class="form-input" id="timelineDate" aria-describedby="timelineDateError">
+        <div class="form-error" id="timelineDateError" role="alert"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">问题描述</label>
+        <label class="form-label" for="timelineTitle">问题标题 *</label>
+        <input type="text" class="form-input" id="timelineTitle" placeholder="简要描述问题" aria-describedby="timelineTitleError">
+        <div class="form-error" id="timelineTitleError" role="alert"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="timelineDesc">问题描述</label>
         <textarea class="form-textarea" id="timelineDesc" placeholder="详细描述问题现象、原因分析等"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">处理措施</label>
+        <label class="form-label" for="timelineActions">处理措施</label>
         <textarea class="form-textarea" id="timelineActions" placeholder="已采取的处理措施和效果"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">状态</label>
+        <label class="form-label" for="timelineStatus">状态</label>
         <select class="form-select" id="timelineStatus">
           <option value="pending">待处理</option>
           <option value="processing">处理中</option>
@@ -1867,13 +1916,71 @@
         </select>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeTimelineModal()">取消</button>
-        <button class="btn btn-primary" onclick="saveTimelineItem()">保存</button>
+        <button class="btn btn-ghost" type="button" onclick="closeTimelineModal()">取消</button>
+        <button class="btn btn-primary" type="button" onclick="saveTimelineItem()">保存</button>
       </div>
     </div>
   </div>
 
   <script>
+    // ===== 可访问弹窗与表单反馈 =====
+    let lastModalTrigger = null;
+
+    function openAccessibleModal(modalId, focusId) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      lastModalTrigger = document.activeElement && typeof document.activeElement.focus === 'function'
+        ? document.activeElement
+        : null;
+      modal.classList.add('open');
+      modal.removeAttribute('aria-hidden');
+      const focusTarget = focusId ? document.getElementById(focusId) : modal.querySelector('button, input, select, textarea');
+      if (focusTarget) requestAnimationFrame(() => focusTarget.focus());
+    }
+
+    function closeAccessibleModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal || !modal.classList.contains('open')) return;
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      if (lastModalTrigger && typeof lastModalTrigger.focus === 'function') lastModalTrigger.focus();
+      lastModalTrigger = null;
+    }
+
+    function trapModalFocus(event) {
+      const modal = document.querySelector('.modal-backdrop.open');
+      if (!modal) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeAccessibleModal(modal.id);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    function setFieldError(inputId, errorId, message) {
+      const input = document.getElementById(inputId);
+      const error = document.getElementById(errorId);
+      if (input) {
+        input.setAttribute('aria-invalid', message ? 'true' : 'false');
+        const group = input.closest('.form-group');
+        if (group) group.classList.toggle('has-error', Boolean(message));
+      }
+      if (error) error.textContent = message || '';
+      return !message;
+    }
+
     // ===== CRUD 数据存储 =====
     // localStorage 持久化
     const CRUD_STORAGE_KEY = 'symtek_crud_store';
@@ -2023,6 +2130,21 @@
       'sensor-scene': ['场景','应用','案例','其他'],
     };
 
+    const CRUD_COLUMN_LABELS = {
+      'customer-req': ['要求分类', '要求名称', '要求说明', '备注'],
+      'customer-proc': ['制程分类', '注意事项', '说明', '备注'],
+      'process-sensor': ['检测位置', '推荐型号', '选用说明', '备注'],
+      'machine-conveyor': ['检测位置', '配置名称', '配置说明', '备注'],
+      'machine-arm': ['机构位置', '配置名称', '配置说明', '备注'],
+      'machine-platform': ['工位位置', '配置名称', '配置说明', '备注'],
+      'machine-notes': ['注意分类', '事项名称', '说明', '备注'],
+      'sensor-model': ['品牌', '型号', '规格参数', '备注'],
+    };
+
+    function getCrudLabels(listId) {
+      return CRUD_COLUMN_LABELS[listId] || ['类型', '名称', '描述', '备注'];
+    }
+
     function getCrudKey(listId, entityName) {
       return `${listId}:${entityName}`;
     }
@@ -2039,13 +2161,12 @@
     // ===== CRUD 渲染 =====
     function renderCrudList(listId, entityName, suffix) {
       const items = getCrudData(listId, entityName);
-      const types = CRUD_TYPE_OPTIONS[listId] || [];
       return `
         <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
         <div class="crud-toolbar">
           <div class="crud-toolbar-title">${items.length} 条记录</div>
-          <button class="btn btn-sm btn-primary" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <button class="btn btn-sm btn-primary" type="button" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
             新增
@@ -2056,21 +2177,21 @@
             <div class="crud-item">
               <div class="crud-item-body">
                 <div class="crud-item-title">
-                  ${item.type ? `<span class="crud-type-badge">${item.type}</span>` : ''}
-                  ${item.name}
+                  ${item.type ? `<span class="crud-type-badge">${escapeSensorText(item.type)}</span>` : ''}
+                  ${escapeSensorText(item.name)}
                 </div>
-                ${item.desc ? `<div class="crud-item-desc">${item.desc}</div>` : ''}
-                ${item.note ? `<div class="crud-item-meta">📌 ${item.note}</div>` : ''}
+                ${item.desc ? `<div class="crud-item-desc">${escapeSensorText(item.desc)}</div>` : ''}
+                ${item.note ? `<div class="crud-item-meta">备注：${escapeSensorText(item.note)}</div>` : ''}
               </div>
               <div class="crud-item-actions">
-                <button class="btn btn-sm btn-ghost" onclick="openEditCrud('${listId}','${entityName}',${item.id})">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button class="btn btn-sm btn-ghost" type="button" aria-label="编辑 ${escapeSensorText(item.name)}" onclick="openEditCrud('${listId}','${entityName}',${item.id})">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button class="btn btn-sm btn-danger" type="button" aria-label="删除 ${escapeSensorText(item.name)}" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                   </svg>
                 </button>
@@ -2085,46 +2206,47 @@
     // ===== 表格渲染（用于客户通用要求和制程注意事项）=====
     function renderCrudTable(listId, entityName, suffix) {
       const items = getCrudData(listId, entityName);
-      const types = CRUD_TYPE_OPTIONS[listId] || [];
+      const labels = getCrudLabels(listId);
       return `
         <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
         <div class="crud-toolbar">
           <div class="crud-toolbar-title">${items.length} 条记录</div>
-          <button class="btn btn-sm btn-primary" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <button class="btn btn-sm btn-primary" type="button" onclick="openAddCrud('${listId}','${entityName}','${suffix}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
             新增
           </button>
         </div>
         ${items.length === 0 ? '<div style="text-align:center;padding:30px 0;color:var(--text-muted);font-size:13px">暂无数据，点击上方"新增"按钮添加</div>' : `
-        <div style="overflow-x:auto">
+        <div class="table-scroll" role="region" aria-label="${escapeSensorText(entityName)} 数据表" tabindex="0">
           <table class="data-table">
+            <caption class="sr-only">${escapeSensorText(entityName)} ${labels.join('、')}</caption>
             <thead>
               <tr>
-                <th style="width:120px">类型</th>
-                <th style="width:200px">名称</th>
-                <th>描述</th>
-                <th style="width:200px">备注</th>
+                <th style="width:120px">${labels[0]}</th>
+                <th style="width:200px">${labels[1]}</th>
+                <th>${labels[2]}</th>
+                <th style="width:200px">${labels[3]}</th>
                 <th style="width:100px;text-align:center">操作</th>
               </tr>
             </thead>
             <tbody>
               ${items.map(item => `
                 <tr>
-                  <td><span class="crud-type-badge">${item.type || '-'}</span></td>
-                  <td style="font-weight:500">${item.name}</td>
-                  <td style="color:var(--text-muted);font-size:13px">${item.desc || '-'}</td>
-                  <td style="font-size:13px">${item.note || '-'}</td>
+                  <td><span class="crud-type-badge">${escapeSensorText(item.type || '-')}</span></td>
+                  <td style="font-weight:500">${escapeSensorText(item.name)}</td>
+                  <td style="color:var(--text-muted);font-size:13px">${escapeSensorText(item.desc || '-')}</td>
+                  <td style="font-size:13px">${escapeSensorText(item.note || '-')}</td>
                   <td style="text-align:center">
-                    <button class="btn btn-sm btn-ghost" onclick="openEditCrud('${listId}','${entityName}',${item.id})" title="编辑">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button class="btn btn-sm btn-ghost" type="button" onclick="openEditCrud('${listId}','${entityName}',${item.id})" aria-label="编辑 ${escapeSensorText(item.name)}">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
                     </button>
-                    <button class="btn btn-sm btn-danger" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})" title="删除">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button class="btn btn-sm btn-danger" type="button" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})" aria-label="删除 ${escapeSensorText(item.name)}">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
                     </button>
@@ -2189,8 +2311,8 @@
         <div class="crud-render-root" data-crud-list-id="${listId}" data-crud-entity="${entityName}">
         <div class="crud-toolbar">
           <div class="crud-toolbar-title">${items.length} 条记录</div>
-          <button class="btn btn-sm btn-primary" onclick="openAddTimeline('${listId}','${entityName}')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <button class="btn btn-sm btn-primary" type="button" onclick="openAddTimeline('${listId}','${entityName}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
             新增
@@ -2203,23 +2325,23 @@
             return `
             <div class="timeline-item">
               <div class="timeline-dot"></div>
-              <div class="timeline-date">${item.date || '未知日期'}</div>
-              <div class="timeline-title">${item.title || item.name || '无标题'}</div>
-              <div class="timeline-desc">${item.desc || ''}</div>
-              ${item.actions ? `<div class="timeline-desc"><strong>处理措施：</strong>${item.actions}</div>` : ''}
+              <div class="timeline-date">${escapeSensorText(item.date || '未知日期')}</div>
+              <div class="timeline-title">${escapeSensorText(item.title || item.name || '无标题')}</div>
+              <div class="timeline-desc">${escapeSensorText(item.desc || '')}</div>
+              ${item.actions ? `<div class="timeline-desc"><strong>处理措施：</strong>${escapeSensorText(item.actions)}</div>` : ''}
               <div style="display:flex;align-items:center;gap:8px">
                 <span class="timeline-status ${item.status || 'pending'}">
                   ${st.icon} ${st.label}
                 </span>
                 <div class="timeline-actions">
-                  <button class="btn btn-sm btn-ghost" onclick="openEditTimeline('${listId}','${entityName}',${item.id})">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <button class="btn btn-sm btn-ghost" type="button" aria-label="编辑反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openEditTimeline('${listId}','${entityName}',${item.id})">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg>
                   </button>
-                  <button class="btn btn-sm btn-danger" onclick="openDeleteTimeline('${listId}','${entityName}',${item.id})">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <button class="btn btn-sm btn-danger" type="button" aria-label="删除反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openDeleteTimeline('${listId}','${entityName}',${item.id})">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
                   </button>
@@ -2235,16 +2357,27 @@
     // ===== CRUD 模态框 =====
     let _crudState = {};
 
+    function configureCrudModalLabels(listId, mode) {
+      const labels = getCrudLabels(listId);
+      document.getElementById('crudModalTitle').textContent = `${mode === 'add' ? '新增' : '编辑'}${labels[1]}`;
+      document.getElementById('crudTypeLabel').textContent = labels[0];
+      document.getElementById('crudNameLabel').textContent = `${labels[1]} *`;
+      document.getElementById('crudDescLabel').textContent = labels[2];
+      document.getElementById('crudNoteLabel').textContent = labels[3];
+      document.getElementById('crudName').placeholder = `输入${labels[1]}`;
+      document.getElementById('crudDesc').placeholder = `输入${labels[2]}`;
+    }
+
     function openAddCrud(listId, entityName, suffix) {
       _crudState = { mode: 'add', listId, entityName };
-      document.getElementById('crudModalTitle').textContent = '新增条目';
+      configureCrudModalLabels(listId, 'add');
       const types = CRUD_TYPE_OPTIONS[listId] || ['通用'];
       document.getElementById('crudType').innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
       document.getElementById('crudName').value = '';
       document.getElementById('crudDesc').value = '';
       document.getElementById('crudNote').value = '';
-      document.getElementById('crudModal').classList.add('open');
-      document.getElementById('crudName').focus();
+      setFieldError('crudName', 'crudNameError', '');
+      openAccessibleModal('crudModal', 'crudName');
     }
 
     function openEditCrud(listId, entityName, id) {
@@ -2252,22 +2385,27 @@
       const item = items.find(i => i.id === id);
       if (!item) return;
       _crudState = { mode: 'edit', listId, entityName, editId: id };
-      document.getElementById('crudModalTitle').textContent = '编辑条目';
+      configureCrudModalLabels(listId, 'edit');
       const types = CRUD_TYPE_OPTIONS[listId] || ['通用'];
       document.getElementById('crudType').innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
       document.getElementById('crudType').value = item.type;
       document.getElementById('crudName').value = item.name;
-      document.getElementById('crudDesc').value = item.desc;
+      document.getElementById('crudDesc').value = item.desc || '';
       document.getElementById('crudNote').value = item.note || '';
-      document.getElementById('crudModal').classList.add('open');
-      document.getElementById('crudName').focus();
+      setFieldError('crudName', 'crudNameError', '');
+      openAccessibleModal('crudModal', 'crudName');
     }
 
     function saveCrudItem() {
       const { mode, listId, entityName, editId } = _crudState;
       const name = document.getElementById('crudName').value.trim();
       const desc = document.getElementById('crudDesc').value.trim();
-      if (!name) { document.getElementById('crudName').focus(); return; }
+      if (!name) {
+        setFieldError('crudName', 'crudNameError', '请输入必填名称');
+        document.getElementById('crudName').focus();
+        return;
+      }
+      setFieldError('crudName', 'crudNameError', '');
       const type = document.getElementById('crudType').value;
       const note = document.getElementById('crudNote').value.trim();
       const items = getCrudData(listId, entityName);
@@ -2285,7 +2423,7 @@
 
     function closeCrudModal(e) {
       if (e && e.target !== document.getElementById('crudModal')) return;
-      document.getElementById('crudModal').classList.remove('open');
+      closeAccessibleModal('crudModal');
     }
 
     // ===== 删除确认 =====
@@ -2296,7 +2434,7 @@
       const item = items.find(i => i.id === id);
       _deleteState = { listId, entityName, id };
       document.getElementById('confirmMsg').textContent = `确定要删除「${item ? item.name : '该条目'}」吗？此操作无法撤销。`;
-      document.getElementById('confirmModal').classList.add('open');
+      openAccessibleModal('confirmModal', 'confirmOkBtn');
       document.getElementById('confirmOkBtn').onclick = () => {
         const arr = getCrudData(listId, entityName);
         const idx = arr.findIndex(i => i.id === id);
@@ -2309,15 +2447,10 @@
 
     function closeConfirmModal(e) {
       if (e && e.target !== document.getElementById('confirmModal')) return;
-      document.getElementById('confirmModal').classList.remove('open');
+      closeAccessibleModal('confirmModal');
     }
 
-    // Esc 关闭
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') {
-        closeCrudModal(); closeConfirmModal(); closeTimelineModal(); closeSensorCatalogModal();
-      }
-    });
+    document.addEventListener('keydown', trapModalFocus);
 
     // ===== 时间轴模态框 =====
     let _timelineState = {};
@@ -2330,8 +2463,9 @@
       document.getElementById('timelineDesc').value = '';
       document.getElementById('timelineActions').value = '';
       document.getElementById('timelineStatus').value = 'pending';
-      document.getElementById('timelineModal').classList.add('open');
-      document.getElementById('timelineTitle').focus();
+      setFieldError('timelineDate', 'timelineDateError', '');
+      setFieldError('timelineTitle', 'timelineTitleError', '');
+      openAccessibleModal('timelineModal', 'timelineTitle');
     }
 
     function openEditTimeline(listId, entityName, id) {
@@ -2345,8 +2479,9 @@
       document.getElementById('timelineDesc').value = item.desc || '';
       document.getElementById('timelineActions').value = item.actions || '';
       document.getElementById('timelineStatus').value = item.status || 'pending';
-      document.getElementById('timelineModal').classList.add('open');
-      document.getElementById('timelineTitle').focus();
+      setFieldError('timelineDate', 'timelineDateError', '');
+      setFieldError('timelineTitle', 'timelineTitleError', '');
+      openAccessibleModal('timelineModal', 'timelineTitle');
     }
 
     function saveTimelineItem() {
@@ -2357,10 +2492,14 @@
       const actions = document.getElementById('timelineActions').value.trim();
       const status = document.getElementById('timelineStatus').value;
       if (!date || !title) {
+        setFieldError('timelineDate', 'timelineDateError', date ? '' : '请选择日期');
+        setFieldError('timelineTitle', 'timelineTitleError', title ? '' : '请输入问题标题');
         if (!date) document.getElementById('timelineDate').focus();
         else document.getElementById('timelineTitle').focus();
         return;
       }
+      setFieldError('timelineDate', 'timelineDateError', '');
+      setFieldError('timelineTitle', 'timelineTitleError', '');
       const items = getCrudData(listId, entityName);
       if (mode === 'add') {
         const newId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
@@ -2376,7 +2515,7 @@
 
     function closeTimelineModal(e) {
       if (e && e.target !== document.getElementById('timelineModal')) return;
-      document.getElementById('timelineModal').classList.remove('open');
+      closeAccessibleModal('timelineModal');
     }
 
     function openDeleteTimeline(listId, entityName, id) {
@@ -2384,7 +2523,7 @@
       const item = items.find(i => i.id === id);
       if (!item) return;
       document.getElementById('confirmMsg').textContent = `确定要删除反馈「${item.title || item.name || '此项'}」吗？此操作无法撤销。`;
-      document.getElementById('confirmModal').classList.add('open');
+      openAccessibleModal('confirmModal', 'confirmOkBtn');
       document.getElementById('confirmOkBtn').onclick = () => {
         const arr = getCrudData(listId, entityName);
         const idx = arr.findIndex(i => i.id === id);
@@ -2647,8 +2786,8 @@
       document.getElementById('sensorCatalogSpec').value = '';
       document.getElementById('sensorCatalogFeature').value = '';
       document.getElementById('sensorCatalogScene').value = '';
-      document.getElementById('sensorCatalogModal').classList.add('open');
-      document.getElementById('sensorCatalogModel').focus();
+      setFieldError('sensorCatalogModel', 'sensorCatalogModelError', '');
+      openAccessibleModal('sensorCatalogModal', 'sensorCatalogModel');
     }
 
     function openEditSensorCatalog(id) {
@@ -2663,8 +2802,8 @@
       document.getElementById('sensorCatalogSpec').value = item.spec;
       document.getElementById('sensorCatalogFeature').value = item.feature;
       document.getElementById('sensorCatalogScene').value = item.scene;
-      document.getElementById('sensorCatalogModal').classList.add('open');
-      document.getElementById('sensorCatalogModel').focus();
+      setFieldError('sensorCatalogModel', 'sensorCatalogModelError', '');
+      openAccessibleModal('sensorCatalogModal', 'sensorCatalogModel');
     }
 
     function saveSensorCatalogItem() {
@@ -2676,9 +2815,11 @@
       const feature = document.getElementById('sensorCatalogFeature').value.trim();
       const scene = document.getElementById('sensorCatalogScene').value.trim();
       if (!model) {
+        setFieldError('sensorCatalogModel', 'sensorCatalogModelError', '请输入型号');
         document.getElementById('sensorCatalogModel').focus();
         return;
       }
+      setFieldError('sensorCatalogModel', 'sensorCatalogModelError', '');
       if (!SENSOR_TYPE_DICTIONARY.includes(sensorType) || !['现用', '备选'].includes(status)) return;
 
       const items = getSensorCatalogData();
@@ -2700,14 +2841,14 @@
 
     function closeSensorCatalogModal(event) {
       if (event && event.target !== document.getElementById('sensorCatalogModal')) return;
-      document.getElementById('sensorCatalogModal').classList.remove('open');
+      closeAccessibleModal('sensorCatalogModal');
     }
 
     function openDeleteSensorCatalog(id) {
       const item = getSensorCatalogData().find(entry => entry.id === id);
       if (!item) return;
       document.getElementById('confirmMsg').textContent = `确定要删除型号「${item.brand ? `${item.brand} ` : ''}${item.model}」吗？此操作无法撤销。`;
-      document.getElementById('confirmModal').classList.add('open');
+      openAccessibleModal('confirmModal', 'confirmOkBtn');
       document.getElementById('confirmOkBtn').onclick = () => {
         const items = getSensorCatalogData();
         const index = items.findIndex(entry => entry.id === id);
@@ -2821,12 +2962,53 @@
     };
 
     // ===== 工具函数 =====
-    function showView(name) {
+    const VIEW_META = {
+      customer: '客户知识库',
+      process: '制程知识库',
+      machine: '机型结构库',
+      sensor: 'Sensor 型号字典',
+      search: '搜索结果',
+    };
+
+    function showView(name, options = {}) {
+      const view = document.getElementById('view-' + name);
+      if (!view) return;
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById('view-' + name).classList.add('active');
-      document.querySelectorAll('.topbar-nav-item').forEach(b => b.classList.remove('active'));
-      const btn = Array.from(document.querySelectorAll('.topbar-nav-item')).find(b => b.textContent.includes(name === 'home' ? '首页' : name === 'customer' ? '客户' : name === 'process' ? '制程' : name === 'machine' ? '机型结构' : 'Sensor'));
-      if (btn) btn.classList.add('active');
+      view.classList.add('active');
+
+      document.querySelectorAll('.sidebar-nav-item').forEach(button => {
+        const isActive = name !== 'search' && button.dataset.view === name;
+        button.classList.toggle('active', isActive);
+        if (isActive) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+      });
+
+      const moduleLabel = document.getElementById('currentModuleLabel');
+      if (moduleLabel) moduleLabel.textContent = VIEW_META[name] || '知识库';
+
+      if (options.updateHistory !== false && typeof history !== 'undefined') {
+        const nextHash = `#${name}`;
+        if (location.hash !== nextHash) {
+          const method = options.replaceHistory ? 'replaceState' : 'pushState';
+          history[method]({ view: name }, '', nextHash);
+        }
+      }
+
+      if (['customer', 'process', 'machine'].includes(name)) {
+        requestAnimationFrame(() => ensureDefaultSelection(name));
+      }
+    }
+
+    function ensureDefaultSelection(module) {
+      const content = document.getElementById(`${module}-content`);
+      if (!content || content.innerHTML.trim()) return;
+      const firstItem = document.querySelector(`#view-${module} .list-item`);
+      if (firstItem) firstItem.click();
+    }
+
+    function findListItem(module, name) {
+      return Array.from(document.querySelectorAll(`#view-${module} .list-item`))
+        .find(item => item.textContent.trim() === name) || null;
     }
 
     function toggleCat(btn) {
@@ -2841,6 +3023,8 @@
         const text = (item.dataset.search || item.textContent).toLowerCase();
         item.style.display = text.includes(q) ? '' : 'none';
       });
+      const activeItem = document.querySelector(`#view-${module} .list-item.active`);
+      if (activeItem && activeItem.style.display === 'none') setActiveItem(module, null);
     }
 
     function setActiveItem(module, el) {
@@ -2849,14 +3033,16 @@
     }
 
     function breadcrumb(parts) {
-      return `<div class="breadcrumb">
-        ${parts.map((p, i) => i === parts.length - 1 ? `<span>${p}</span>` : `<span>${p}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>`).join('')}
-      </div>`;
+      return `<nav class="breadcrumb" aria-label="面包屑">
+        ${parts.map((part, index) => index === parts.length - 1
+          ? `<span aria-current="page">${escapeSensorText(part)}</span>`
+          : `<span>${escapeSensorText(part)}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9,18 15,12 9,6"/></svg>`).join('')}
+      </nav>`;
     }
 
     function tabsHTML(color, tabs) {
-      return `<div class="detail-tabs" style="--tab-color:${color}">
-        ${tabs.map((t, i) => `<div class="detail-tab${i === 0 ? ' active' : ''}" onclick="switchTab(this,'${t.id}')">${t.label}</div>`).join('')}
+      return `<div class="detail-tabs" style="--tab-color:${color}" role="tablist">
+        ${tabs.map((tab, index) => `<button class="detail-tab${index === 0 ? ' active' : ''}" type="button" role="tab" id="${tab.id}-tab" aria-controls="${tab.id}" aria-selected="${index === 0 ? 'true' : 'false'}" tabindex="${index === 0 ? '0' : '-1'}" onclick="switchTab(this,'${tab.id}')" onkeydown="handleTabKeydown(event,this)">${tab.label}</button>`).join('')}
       </div>`;
     }
 
@@ -2869,16 +3055,35 @@
 
     function switchTab(el, targetId) {
       const container = el.closest('.detail-content') || el.closest('.view');
-      el.parentElement.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+      el.parentElement.querySelectorAll('.detail-tab').forEach(tab => {
+        const active = tab === el;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.setAttribute('tabindex', active ? '0' : '-1');
+      });
       el.classList.add('active');
       container.querySelectorAll('.tab-content').forEach(c => {
-        c.classList.toggle('active', c.id === targetId);
+        const active = c.id === targetId;
+        c.classList.toggle('active', active);
+        c.hidden = !active;
       });
     }
 
+    function handleTabKeydown(event, currentTab) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = Array.from(currentTab.parentElement.querySelectorAll('[role="tab"]'));
+      let index = tabs.indexOf(currentTab);
+      if (event.key === 'Home') index = 0;
+      else if (event.key === 'End') index = tabs.length - 1;
+      else index = (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[index].focus();
+      tabs[index].click();
+    }
+
     // ===== 客户详情（已改造CRUD）=====
-    function selectCustomer(name, region) {
-      setActiveItem('customer', event.currentTarget);
+    function selectCustomer(name, region, sourceElement) {
+      setActiveItem('customer', sourceElement || findListItem('customer', name));
       const content = document.getElementById('customer-content');
       document.getElementById('customer-empty').style.display = 'none';
       content.style.display = 'block';
@@ -2887,7 +3092,7 @@
         <div class="detail-title-row">
           <div class="detail-module-dot" style="background:var(--c-customer)"></div>
           <div>
-            <div class="detail-title">${name}</div>
+            <h2 class="detail-title">${escapeSensorText(name)}</h2>
             <span class="detail-badge" style="background:var(--c-customer-lt);color:var(--c-customer)">${region} 区域</span>
           </div>
         </div>
@@ -2898,34 +3103,34 @@
           {id:'tab-sensor',label:'感应器选用标准'},
           {id:'tab-feedback',label:'厂外反馈问题项'},
         ])}
-        <div class="tab-content active" id="tab-req">
+        <div class="tab-content active" id="tab-req" role="tabpanel" aria-labelledby="tab-req-tab">
           <div style="--accent-color:var(--c-customer)">
             ${renderCrudTable('customer-req', name, 'req')}
           </div>
         </div>
-        <div class="tab-content" id="tab-proc">
+        <div class="tab-content" id="tab-proc" role="tabpanel" aria-labelledby="tab-proc-tab" hidden>
           <div style="--accent-color:var(--c-customer)">
             ${renderCrudTable('customer-proc', name, 'proc')}
           </div>
         </div>
-        <div class="tab-content" id="tab-sensor">
+        <div class="tab-content" id="tab-sensor" role="tabpanel" aria-labelledby="tab-sensor-tab" hidden>
           ${sectionCard('常规结构配置 SOP', `<div class="file-preview locked">
             <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
             <div class="fp-name">${name}_常规结构配置SOP_v2.1.pdf</div>
-            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+            <div class="fp-locked">受控文档 · 仅显示索引</div>
           </div>`)}
           ${sectionCard('特殊结构配置 SOP', `<div class="file-preview locked">
             <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
             <div class="fp-name">${name}_特殊结构配置SOP_v1.3.pdf</div>
-            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+            <div class="fp-locked">受控文档 · 仅显示索引</div>
           </div>`)}
           ${sectionCard('特殊制程配置 SOP', `<div class="file-preview locked">
             <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
             <div class="fp-name">${name}_特殊制程配置SOP_v1.0.pdf</div>
-            <div class="fp-locked">&#x1F512; 仅供预览，无下载权限</div>
+            <div class="fp-locked">受控文档 · 仅显示索引</div>
           </div>`)}
         </div>
-        <div class="tab-content" id="tab-feedback">
+        <div class="tab-content" id="tab-feedback" role="tabpanel" aria-labelledby="tab-feedback-tab" hidden>
           <div style="--accent-color:var(--c-customer)">
             ${renderTimeline('customer-feedback', name)}
           </div>
@@ -2934,8 +3139,8 @@
     }
 
     // ===== 制程详情（已改造CRUD）=====
-    function selectProcess(name, cat) {
-      setActiveItem('process', event.currentTarget);
+    function selectProcess(name, cat, sourceElement) {
+      setActiveItem('process', sourceElement || findListItem('process', name));
       const data = PROCESS_DATA[name];
       const content = document.getElementById('process-content');
       document.getElementById('process-empty').style.display = 'none';
@@ -2948,7 +3153,7 @@
           <div class="detail-title-row">
             <div class="detail-module-dot" style="background:var(--c-process)"></div>
             <div>
-              <div class="detail-title">制程报告</div>
+              <h2 class="detail-title">制程报告</h2>
               <span class="detail-badge" style="background:var(--c-process-lt);color:var(--c-process)">制程介绍</span>
             </div>
           </div>
@@ -2957,7 +3162,7 @@
             <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
             <div class="fp-name">${f.name}</div>
             <div style="font-size:12px;color:var(--text-muted)">${f.size}</div>
-            <div class="fp-locked">🔒 ${f.note}</div>
+            <div class="fp-locked">受控文档 · ${escapeSensorText(f.note)}</div>
           </div>`)).join('')}
         </div>`;
         return;
@@ -2968,7 +3173,7 @@
         <div class="detail-title-row">
           <div class="detail-module-dot" style="background:var(--c-process)"></div>
           <div>
-            <div class="detail-title">${name}</div>
+            <h2 class="detail-title">${escapeSensorText(name)}</h2>
             <span class="detail-badge" style="background:var(--c-process-lt);color:var(--c-process)">${cat}</span>
           </div>
         </div>
@@ -2977,12 +3182,12 @@
           {id:'ptab-feat',label:'制程特性'},
           {id:'ptab-sensor',label:'感应器选用标准'},
         ])}
-        <div class="tab-content active" id="ptab-feat">
+        <div class="tab-content active" id="ptab-feat" role="tabpanel" aria-labelledby="ptab-feat-tab">
           <div style="--accent-color:var(--c-process)">
             ${renderCrudList('process-feat', name, 'feat')}
           </div>
         </div>
-        <div class="tab-content" id="ptab-sensor">
+        <div class="tab-content" id="ptab-sensor" role="tabpanel" aria-labelledby="ptab-sensor-tab" hidden>
           <div style="--accent-color:var(--c-process)">
             ${renderCrudTable('process-sensor', name, 'sensor')}
           </div>
@@ -2991,8 +3196,8 @@
     }
 
     // ===== 机型详情（已改造CRUD）=====
-    function selectMachine(name, cat) {
-      setActiveItem('machine', event.currentTarget);
+    function selectMachine(name, cat, sourceElement) {
+      setActiveItem('machine', sourceElement || findListItem('machine', name));
       const data = MACHINE_DATA[name];
       const content = document.getElementById('machine-content');
       document.getElementById('machine-empty').style.display = 'none';
@@ -3002,7 +3207,7 @@
         <div class="detail-title-row">
           <div class="detail-module-dot" style="background:var(--c-machine)"></div>
           <div>
-            <div class="detail-title">${name}</div>
+            <h2 class="detail-title">${escapeSensorText(name)}</h2>
             <span class="detail-badge" style="background:var(--c-machine-lt);color:var(--c-machine)">${cat}</span>
           </div>
         </div>
@@ -3013,22 +3218,22 @@
           {id:'mtab-platform',label:'台车工位结构'},
           {id:'mtab-notes',label:'机型注意事项'},
         ])}
-        <div class="tab-content active" id="mtab-conveyor">
+        <div class="tab-content active" id="mtab-conveyor" role="tabpanel" aria-labelledby="mtab-conveyor-tab">
           <div style="--accent-color:var(--c-machine)">
             ${renderCrudTable('machine-conveyor', name, 'conveyor')}
           </div>
         </div>
-        <div class="tab-content" id="mtab-arm">
+        <div class="tab-content" id="mtab-arm" role="tabpanel" aria-labelledby="mtab-arm-tab" hidden>
           <div style="--accent-color:var(--c-machine)">
             ${renderCrudTable('machine-arm', name, 'arm')}
           </div>
         </div>
-        <div class="tab-content" id="mtab-platform">
+        <div class="tab-content" id="mtab-platform" role="tabpanel" aria-labelledby="mtab-platform-tab" hidden>
           <div style="--accent-color:var(--c-machine)">
             ${renderCrudTable('machine-platform', name, 'platform')}
           </div>
         </div>
-        <div class="tab-content" id="mtab-notes">
+        <div class="tab-content" id="mtab-notes" role="tabpanel" aria-labelledby="mtab-notes-tab" hidden>
           <div style="--accent-color:var(--c-machine)">
             ${renderCrudTable('machine-notes', name, 'notes')}
           </div>
@@ -3048,69 +3253,173 @@
 
     function quickMachine(name, cat) {
       showView('machine');
-      setTimeout(() => {
-        const el = document.querySelector(`#view-machine .list-item[onclick*="'${name}'"]`);
-        if (el) el.click();
-      }, 50);
+      selectMachine(name, cat, findListItem('machine', name));
     }
 
     // ===== 搜索功能 =====
-    const SEARCH_INDEX = [
-      ...Object.entries(SENSOR_DATA).map(([k,v]) => ({ type:'sensor', title:k, sub:v.desc, action:()=>{showView('sensor');setTimeout(()=>selectSensor(k,'现用'),50)} })),
-      ...Object.keys(PROCESS_DATA).map(k => ({ type:'process', title:k, sub:PROCESS_DATA[k].desc||'制程工艺', action:()=>{showView('process');setTimeout(()=>selectProcess(k,k==='制程报告'?'制程介绍':'内层制程'),50)} })),
-      ...Object.keys(MACHINE_DATA).map(k => ({ type:'machine', title:k, sub:MACHINE_DATA[k].desc, action:()=>{showView('machine');setTimeout(()=>selectMachine(k,'中间段'),50)} })),
-      ...['庆鼎','健鼎','沪士','胜宏','景旺','宏恒胜','崇达','深南','兴森','博敏','维信','依顿','奥士康','华通','定颖'].map(c => ({ type:'customer', title:c, sub:'PCB制造客户', action:()=>{showView('customer');setTimeout(()=>selectCustomer(c,'华东'),50)} })),
-    ];
+    const CUSTOMER_CATEGORIES = {
+      '华东': ['庆鼎', '健鼎', '沪士', '胜宏', '景旺'],
+      '华南': ['宏恒胜', '崇达', '深南', '兴森', '博敏'],
+      'SAT': ['维信', '依顿', '奥士康', '华通', '定颖'],
+    };
+    const PROCESS_CATEGORIES = {
+      '制程介绍': ['制程报告'],
+      '内层制程': ['DES显影', 'AOI检测', '棕化', '压合', '钻孔', 'PTH沉铜', '板电'],
+      '外层制程': ['外层前处理', '图形电镀', '防焊', '成型'],
+    };
+    const MACHINE_CATEGORIES = {
+      '中间段': ['中间六轴机', '中间翻板机', '中间输送机', '龙门式传送机'],
+      '常规投收板机': ['单边投板机', '单边收板机', '双边投板机', '双边收板机', '盒装投板机'],
+      '特殊机型': ['AOI专用机', '压合专用机'],
+      '通用结构': ['标准输送段', '六轴机械手', '台车系统'],
+    };
+
+    function navigateToSensorCatalogItem(item) {
+      showView('sensor');
+      sensorCatalogState.status = '全部';
+      sensorCatalogState.query = item.model;
+      const input = document.getElementById('sensorCatalogSearch');
+      if (input) input.value = item.model;
+      renderSensorCatalog();
+    }
+
+    function buildSearchIndex() {
+      const sensorItems = getSensorCatalogData().map(item => ({
+        type: 'sensor',
+        title: [item.brand, item.model].filter(Boolean).join(' '),
+        category: item.sensorType,
+        sub: [item.status, item.sensorType, item.spec, item.feature, item.scene].filter(Boolean).join(' · '),
+        action: () => navigateToSensorCatalogItem(item),
+      }));
+      const processItems = Object.entries(PROCESS_CATEGORIES).flatMap(([category, names]) => names.map(name => ({
+        type: 'process',
+        title: name,
+        category,
+        sub: `${category} · ${PROCESS_DATA[name]?.desc || '制程工艺文档'}`,
+        action: () => {
+          showView('process');
+          selectProcess(name, category, findListItem('process', name));
+        },
+      })));
+      const machineItems = Object.entries(MACHINE_CATEGORIES).flatMap(([category, names]) => names.map(name => ({
+        type: 'machine',
+        title: name,
+        category,
+        sub: `${category} · ${MACHINE_DATA[name]?.desc || '机型结构'}`,
+        action: () => {
+          showView('machine');
+          selectMachine(name, category, findListItem('machine', name));
+        },
+      })));
+      const customerItems = Object.entries(CUSTOMER_CATEGORIES).flatMap(([category, names]) => names.map(name => ({
+        type: 'customer',
+        title: name,
+        category,
+        sub: `${category}区域 · PCB 制造客户`,
+        action: () => {
+          showView('customer');
+          selectCustomer(name, category, findListItem('customer', name));
+        },
+      })));
+      return [...sensorItems, ...processItems, ...machineItems, ...customerItems];
+    }
 
     const TYPE_META = {
-      sensor: { label:'Sensor', color:'#0284c7', bg:'#e0f2fe' },
-      process: { label:'制程', color:'#7c3aed', bg:'#ede9fe' },
-      machine: { label:'机型', color:'#ea580c', bg:'#fed7aa' },
-      customer: { label:'客户', color:'#0d9488', bg:'#ccfbf1' },
+      sensor: { label:'Sensor', color:'#0369a1', bg:'#e0f2fe' },
+      process: { label:'制程', color:'#6d28d9', bg:'#ede9fe' },
+      machine: { label:'机型', color:'#9a3412', bg:'#ffedd5' },
+      customer: { label:'客户', color:'#0f766e', bg:'#ccfbf1' },
     };
 
     let activeFilter = 'all';
+    let lastSearchQuery = '';
+    let currentSearchResults = [];
 
     function doSearch(q) {
-      if (!q) return;
+      const query = String(q || '').trim();
+      if (!query) return;
+      if (query !== lastSearchQuery) activeFilter = 'all';
+      lastSearchQuery = query;
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) searchInput.value = query;
+      syncSearchControls();
       showView('search');
-      let results = SEARCH_INDEX.filter(item =>
-        item.title.toLowerCase().includes(q.toLowerCase()) ||
-        item.sub.toLowerCase().includes(q.toLowerCase())
+      let results = buildSearchIndex().filter(item =>
+        item.title.toLocaleLowerCase('zh-CN').includes(query.toLocaleLowerCase('zh-CN')) ||
+        item.sub.toLocaleLowerCase('zh-CN').includes(query.toLocaleLowerCase('zh-CN')) ||
+        item.category.toLocaleLowerCase('zh-CN').includes(query.toLocaleLowerCase('zh-CN'))
       );
 
       const types = ['all', ...new Set(results.map(r => r.type))];
+      if (!types.includes(activeFilter)) activeFilter = 'all';
       document.getElementById('searchFilters').innerHTML = types.map(t =>
-        `<button class="filter-btn${t===activeFilter?' active':''}" onclick="setFilter('${t}','${q}')">${t==='all'?'全部':TYPE_META[t]?.label||t}</button>`
+        `<button class="filter-btn${t === activeFilter ? ' active' : ''}" type="button" aria-pressed="${t === activeFilter ? 'true' : 'false'}" onclick="setFilter('${t}')">${t === 'all' ? '全部' : TYPE_META[t]?.label || t}</button>`
       ).join('');
 
       if (activeFilter !== 'all') results = results.filter(r => r.type === activeFilter);
+      currentSearchResults = results;
 
-      document.getElementById('searchTitle').innerHTML = `搜索 "<b>${q}</b>" · ${results.length} 条结果`;
+      document.getElementById('searchTitle').innerHTML = `搜索 “<b>${escapeSensorText(query)}</b>” · ${results.length} 条结果`;
       const container = document.getElementById('searchResults');
       if (!results.length) {
-        container.innerHTML = `<div style="color:var(--text-muted);font-size:14px;padding:20px 0">未找到相关内容，请尝试其他关键词</div>`;
+        container.innerHTML = `<div class="search-empty">未找到相关内容，请尝试型号、品牌、客户、制程或机型名称</div>`;
         return;
       }
       container.innerHTML = results.map((r, i) => {
         const m = TYPE_META[r.type];
-        return `<div class="search-result-item fade-in" onclick="SEARCH_INDEX[${SEARCH_INDEX.indexOf(r)}].action()" style="animation-delay:${i*0.025}s">
+        return `<button class="search-result-item fade-in" type="button" onclick="runSearchResult(${i})" style="animation-delay:${i * 0.025}s">
           <div class="sri-icon" style="background:${m.bg};color:${m.color}">
             ${typeIcon(r.type)}
           </div>
           <div>
-            <div class="sri-title">${highlight(r.title, q)}</div>
-            <div class="sri-sub">${highlight(r.sub.slice(0, 60) + (r.sub.length > 60 ? '…' : ''), q)}</div>
+            <div class="sri-title">${highlight(r.title, query)}</div>
+            <div class="sri-sub">${highlight(r.sub.slice(0, 96) + (r.sub.length > 96 ? '…' : ''), query)}</div>
           </div>
           <span class="sri-tag" style="background:${m.bg};color:${m.color}">${m.label}</span>
-          <svg class="sri-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
-        </div>`;
+          <svg class="sri-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9,18 15,12 9,6"/></svg>
+        </button>`;
       }).join('');
     }
 
-    function setFilter(type, q) {
+    function runSearchResult(index) {
+      const result = currentSearchResults[index];
+      if (result) result.action();
+    }
+
+    function setFilter(type) {
       activeFilter = type;
-      doSearch(q || document.getElementById('searchInput').value.trim());
+      doSearch(lastSearchQuery || document.getElementById('searchInput').value.trim());
+    }
+
+    function handleSearchSubmit(event) {
+      event.preventDefault();
+      const input = document.getElementById('searchInput');
+      const query = input.value.trim();
+      if (!query) {
+        input.focus();
+        return;
+      }
+      doSearch(query);
+    }
+
+    function syncSearchControls() {
+      const input = document.getElementById('searchInput');
+      const clearButton = document.getElementById('searchClearButton');
+      if (clearButton) clearButton.hidden = !input || !input.value;
+    }
+
+    function clearGlobalSearch() {
+      const input = document.getElementById('searchInput');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      activeFilter = 'all';
+      lastSearchQuery = '';
+      currentSearchResults = [];
+      syncSearchControls();
+      const searchView = document.getElementById('view-search');
+      if (searchView && searchView.classList.contains('active')) showView('customer');
     }
 
     function typeIcon(type) {
@@ -3124,12 +3433,24 @@
     }
 
     function highlight(text, q) {
-      if (!q) return text;
-      const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      return text.replace(regex, '<mark>$1</mark>');
+      const safeText = escapeSensorText(text);
+      if (!q) return safeText;
+      const safeQuery = escapeSensorText(q);
+      const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return safeText.replace(regex, '<mark>$1</mark>');
     }
 
     renderSensorCatalog();
+
+    function restoreViewFromLocation() {
+      const requestedView = location.hash.replace('#', '');
+      const view = Object.hasOwn(VIEW_META, requestedView) ? requestedView : 'customer';
+      showView(view, { updateHistory: false });
+    }
+
+    window.addEventListener('popstate', restoreViewFromLocation);
+    window.addEventListener('hashchange', restoreViewFromLocation);
+    restoreViewFromLocation();
 
     // ===== 文件锁定防护 =====
     document.addEventListener('contextmenu', function(e) {

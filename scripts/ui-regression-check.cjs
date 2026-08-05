@@ -48,6 +48,14 @@ function staticMarkupIsBalanced() {
 }
 
 check('static HTML shell is structurally balanced', staticMarkupIsBalanced())
+check('collapsed list categories expose expansion state', (html.match(/class="list-category-btn[^>]*aria-expanded=/g) || []).length === 10)
+check('list search opens matching categories and reports no results', html.includes('function setCategoryExpanded') && html.includes('category.hidden = matchCount === 0') && html.includes('class="list-search-status"'))
+check('timeline defaults use local calendar date', html.includes('function formatLocalDate') && !html.includes("new Date().toISOString().split('T')[0]"))
+check('save handlers ignore duplicate queued clicks', (html.match(/if \(!modalIsOpen\('/g) || []).length >= 3)
+check('CRUD actions provide status feedback', html.includes('id="appToast"') && html.includes('function showToast'))
+check('dynamic result counts are announced', html.includes('id="sensorCatalogSummary" aria-live="polite"') && html.includes('id="searchTitle" aria-live="polite"'))
+check('CRUD rerenders restore focus to a live control', html.includes('function focusCrudRecord') && html.includes('data-crud-id='))
+check('skip navigation does not corrupt hash routing', html.includes('onclick="focusMainContent(event)"') && !html.includes("window.addEventListener('hashchange'"))
 
 function makeElement(id = '') {
   const classes = new Set()
@@ -127,6 +135,11 @@ function runBehaviorChecks() {
 
   doSearch('E3Z-D61')
   check('global search finds a concrete sensor model', !document.getElementById('searchResults').innerHTML.includes('未找到相关内容'))
+  const encodedSearchHash = location.hash
+  check('search history preserves the query', encodedSearchHash.startsWith('#search:') && decodeURIComponent(encodedSearchHash.slice('#search:'.length)) === 'E3Z-D61')
+  document.getElementById('searchResults').innerHTML = ''
+  restoreViewFromLocation()
+  check('search deep links restore their results', document.getElementById('view-search').classList.contains('active') && document.getElementById('searchResults').innerHTML.includes('E3Z-D61'))
 
   setFilter('customer', '庆鼎')
   doSearch('中间六轴机')
@@ -141,6 +154,151 @@ function runBehaviorChecks() {
     check('process search preserves the correct category', index.some(item => item.title === '外层前处理' && item.category === '外层制程'))
     check('machine search preserves the correct category', index.some(item => item.title === 'AOI专用机' && item.category === '特殊机型'))
   }
+
+  function makeSearchCategory(open, labels) {
+    const category = makeElement('category')
+    const button = makeElement('category-button')
+    const items = labels.map(label => {
+      const item = makeElement(`item-${label}`)
+      item.dataset.search = label
+      item.textContent = label
+      return item
+    })
+    if (open) category.classList.add('open')
+    category.querySelector = selector => selector === '.list-category-btn' ? button : null
+    category.querySelectorAll = selector => selector === '.list-item' ? items : []
+    return { category, button, items }
+  }
+  const eastCategory = makeSearchCategory(true, ['庆鼎', '健鼎'])
+  const southCategory = makeSearchCategory(false, ['深南', '兴森'])
+  const listStatus = makeElement('customerListStatus')
+  const originalQuerySelectorAll = document.querySelectorAll
+  const originalGetElementById = document.getElementById
+  document.querySelectorAll = selector => selector === '#view-customer .list-category'
+    ? [eastCategory.category, southCategory.category]
+    : originalQuerySelectorAll(selector)
+  document.getElementById = id => id === 'customerListStatus' ? listStatus : originalGetElementById(id)
+  const listSearchInput = { value: '深南' }
+  filterList(listSearchInput, 'customer')
+  check('list search reveals matches from collapsed categories', eastCategory.category.hidden && !southCategory.category.hidden && southCategory.category.classList.contains('open') && !southCategory.items[0].hidden)
+  listSearchInput.value = ''
+  filterList(listSearchInput, 'customer')
+  check('clearing list search restores expansion state', eastCategory.category.classList.contains('open') && !southCategory.category.classList.contains('open') && !eastCategory.category.hidden && !southCategory.category.hidden)
+  listSearchInput.value = '不存在'
+  filterList(listSearchInput, 'customer')
+  check('list search presents an actionable empty state', !listStatus.hidden && listStatus.textContent.includes('不存在'))
+  document.querySelectorAll = originalQuerySelectorAll
+  document.getElementById = originalGetElementById
+
+  selectMachine('AOI专用机', '特殊机型', null)
+  const encodedMachineHash = location.hash
+  check('detail history preserves the selected entity', encodedMachineHash.startsWith('#machine:') && decodeURIComponent(encodedMachineHash.split(':').at(-1)) === 'AOI专用机')
+  document.getElementById('machine-content').innerHTML = ''
+  restoreViewFromLocation()
+  check('detail deep links restore the selected entity', document.getElementById('machine-content').innerHTML.includes('AOI专用机'))
+
+  const duplicateTarget = getSensorCatalogData()[0]
+  const sensorCountBeforeDuplicate = getSensorCatalogData().length
+  openAddSensorCatalog()
+  document.getElementById('sensorCatalogStatus').value = duplicateTarget.status
+  document.getElementById('sensorCatalogType').value = duplicateTarget.sensorType
+  document.getElementById('sensorCatalogBrand').value = duplicateTarget.brand
+  document.getElementById('sensorCatalogModel').value = duplicateTarget.model.toLowerCase()
+  saveSensorCatalogItem()
+  check('sensor catalog rejects duplicate model names', getSensorCatalogData().length === sensorCountBeforeDuplicate && document.getElementById('sensorCatalogModelError').textContent.includes('已存在'))
+  closeSensorCatalogModal()
+
+  const sensorCountBeforeLifecycle = getSensorCatalogData().length
+  openAddSensorCatalog()
+  document.getElementById('sensorCatalogModel').value = 'CODEX-REGRESSION-UNIQUE'
+  document.getElementById('sensorCatalogBrand').value = 'TEST'
+  saveSensorCatalogItem()
+  const addedSensorItem = getSensorCatalogData().find(item => item.model === 'CODEX-REGRESSION-UNIQUE')
+  check('sensor add flow persists a unique model', Boolean(addedSensorItem) && getSensorCatalogData().length === sensorCountBeforeLifecycle + 1)
+  openDeleteSensorCatalog(addedSensorItem.id)
+  document.getElementById('confirmOkBtn').click()
+  check('sensor delete flow removes the confirmed model', !getSensorCatalogData().some(item => item.id === addedSensorItem.id) && getSensorCatalogData().length === sensorCountBeforeLifecycle)
+
+  const duplicateClickEntity = '__regression_double_click__'
+  const crudCountBeforeSave = getCrudData('process-feat', duplicateClickEntity).length
+  openAddCrud('process-feat', duplicateClickEntity, '')
+  document.getElementById('crudName').value = '回归条目'
+  document.getElementById('crudDesc').value = '验证保存按钮快速连点'
+  saveCrudItem()
+  saveCrudItem()
+  check('double save click creates only one CRUD record', getCrudData('process-feat', duplicateClickEntity).length === crudCountBeforeSave + 1)
+  const addedCrudItem = getCrudData('process-feat', duplicateClickEntity).find(item => item.name === '回归条目')
+  openEditCrud('process-feat', duplicateClickEntity, addedCrudItem.id)
+  document.getElementById('crudName').value = '回归条目（已编辑）'
+  saveCrudItem()
+  check('CRUD edit flow updates the selected record', getCrudData('process-feat', duplicateClickEntity).some(item => item.id === addedCrudItem.id && item.name === '回归条目（已编辑）'))
+  openDeleteCrud('process-feat', duplicateClickEntity, addedCrudItem.id)
+  document.getElementById('confirmOkBtn').click()
+  check('CRUD delete flow removes the confirmed record', !getCrudData('process-feat', duplicateClickEntity).some(item => item.id === addedCrudItem.id))
+
+  const timelineEntity = '__regression_timeline_lifecycle__'
+  const timelineCountBefore = getCrudData('customer-feedback', timelineEntity).length
+  openAddTimeline('customer-feedback', timelineEntity)
+  document.getElementById('timelineDate').value = '2026-08-05'
+  document.getElementById('timelineTitle').value = '回归反馈'
+  saveTimelineItem()
+  const addedTimelineItem = getCrudData('customer-feedback', timelineEntity).find(item => item.title === '回归反馈')
+  check('timeline add flow persists a feedback record', Boolean(addedTimelineItem) && getCrudData('customer-feedback', timelineEntity).length === timelineCountBefore + 1)
+  openDeleteTimeline('customer-feedback', timelineEntity, addedTimelineItem.id)
+  document.getElementById('confirmOkBtn').click()
+  check('timeline delete flow removes the confirmed feedback', getCrudData('customer-feedback', timelineEntity).length === timelineCountBefore)
+
+  const staleEditEntity = '__regression_stale_edit__'
+  const staleEditItems = getCrudData('process-feat', staleEditEntity)
+  const staleEditId = staleEditItems[0].id
+  openEditCrud('process-feat', staleEditEntity, staleEditId)
+  staleEditItems.splice(0, staleEditItems.length)
+  document.getElementById('crudName').value = '已被其他窗口删除的条目'
+  saveCrudItem()
+  check('stale edits stay open and report the conflict', document.getElementById('crudModal').classList.contains('open') && document.getElementById('appToast').textContent.includes('不存在'))
+  closeCrudModal()
+
+  const unsafeCrudEntity = '__regression_unsafe_store__'
+  const unsafeCrudItems = getCrudData('process-feat', unsafeCrudEntity)
+  unsafeCrudItems.splice(0, unsafeCrudItems.length, { id: '1);globalThis.injected=true;//', type: 7, name: '<img src=x>', desc: null, note: {} })
+  const normalizedCrudItem = getCrudData('process-feat', unsafeCrudEntity)[0]
+  check('stored CRUD records are normalized before rendering', Number.isSafeInteger(normalizedCrudItem.id) && typeof normalizedCrudItem.type === 'string' && typeof normalizedCrudItem.name === 'string' && typeof normalizedCrudItem.note === 'string')
+
+  const unsafeTimelineEntity = '__regression_unsafe_timeline__'
+  const unsafeTimelineItems = getCrudData('customer-feedback', unsafeTimelineEntity)
+  unsafeTimelineItems.splice(0, unsafeTimelineItems.length, { id: 'bad-id', date: 20260805, title: 42, desc: null, actions: {}, status: 'injected-class' })
+  const normalizedTimelineItem = getCrudData('customer-feedback', unsafeTimelineEntity)[0]
+  check('stored timeline status and ids are normalized', Number.isSafeInteger(normalizedTimelineItem.id) && normalizedTimelineItem.status === 'pending' && typeof normalizedTimelineItem.date === 'string')
+
+  const unsafeSensorItems = getSensorCatalogData()
+  unsafeSensorItems.splice(0, unsafeSensorItems.length,
+    { id: -1, status: '现用', sensorType: '漫反射', model: 'INVALID-ID-A' },
+    { id: -1, status: '备选', sensorType: '对照式', model: 'INVALID-ID-B' },
+    { id: 1.5, status: '现用', sensorType: '近接式', model: 'INVALID-ID-C' },
+  )
+  const normalizedSensorItems = getSensorCatalogData()
+  const normalizedSensorIds = normalizedSensorItems.map(item => item.id)
+  check('stored sensor ids are positive unique integers', normalizedSensorIds.every(id => Number.isSafeInteger(id) && id > 0) && new Set(normalizedSensorIds).size === normalizedSensorIds.length)
+
+  const sanitizedStore = parseCrudStore('{"__proto__":[],"constructor":[],"safe":[],"invalid":{}}')
+  check('stored data ignores prototype keys and non-array entries', Object.getPrototypeOf(sanitizedStore) === null && !Object.hasOwn(sanitizedStore, '__proto__') && !Object.hasOwn(sanitizedStore, 'constructor') && Array.isArray(sanitizedStore.safe) && !Object.hasOwn(sanitizedStore, 'invalid'))
+
+  check('local date formatter preserves the user calendar date', typeof formatLocalDate === 'function' && formatLocalDate(new Date(2026, 0, 2, 0, 30)) === '2026-01-02')
+
+  const originalSetItem = localStorage.setItem
+  const originalConsoleError = console.error
+  localStorage.setItem = () => { throw new Error('storage blocked') }
+  console.error = () => {}
+  let persistenceThrew = false
+  let persistenceResult
+  try {
+    persistenceResult = persistCrudStore()
+  } catch (_error) {
+    persistenceThrew = true
+  }
+  localStorage.setItem = originalSetItem
+  console.error = originalConsoleError
+  check('storage failures are handled without crashing the UI', !persistenceThrew && persistenceResult === false)
 }
 
 try {

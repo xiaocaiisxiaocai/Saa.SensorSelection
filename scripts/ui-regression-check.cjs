@@ -306,7 +306,7 @@ function runBehaviorChecks() {
   let persistenceResult
   try {
     persistenceResult = persistCrudStore()
-  } catch (_error) {
+  } catch {
     persistenceThrew = true
   }
   localStorage.setItem = originalSetItem

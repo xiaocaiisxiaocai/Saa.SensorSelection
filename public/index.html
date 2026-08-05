@@ -32,7 +32,7 @@
       --shadow-sm: 0 1px 4px rgba(0,0,0,.06);
       --shadow-md: 0 4px 12px rgba(0,0,0,.08);
       --sidebar-w: 236px;
-      --list-w: 280px;
+      --list-w: 256px;
     }
 
     /* ===== 全局样式 ===== */
@@ -196,7 +196,7 @@
       overflow: hidden;
     }
     .workspace-toolbar {
-      height: 60px;
+      height: 56px;
       flex-shrink: 0;
       display: flex;
       align-items: center;
@@ -207,8 +207,8 @@
     }
     .workspace-context {
       color: var(--text-sec);
-      font-size: 12px;
-      font-weight: 650;
+      font-size: 14px;
+      font-weight: 750;
       white-space: nowrap;
     }
     .topbar-search {
@@ -369,32 +369,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-    .page-header {
-      padding: 0 24px;
-      height: 52px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-    }
-    .page-header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .page-header-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .page-header h2 {
-      font-size: 15px;
-      font-weight: 700;
-    }
-
     /* ===== 三栏布局 ===== */
     .three-col {
       flex: 1;
@@ -865,14 +839,12 @@
     .status-dot.alt { background: #f59e0b; }
 
     /* ===== Sensor 型号字典 ===== */
-    .sensor-catalog-page {
+    .sensor-catalog-content {
       flex: 1;
       min-width: 0;
       overflow-y: auto;
       padding: 22px 24px 28px;
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--c-sensor-lt) 45%, transparent) 0, transparent 150px),
-        var(--bg);
+      background: var(--bg);
     }
     .sensor-catalog-overview {
       display: flex;
@@ -1015,13 +987,13 @@
     }
     .sensor-catalog-table th {
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: .04em;
       text-transform: none;
     }
     .sensor-catalog-table td {
       color: var(--text-sec);
-      font-size: 12.5px;
+      font-size: 13px;
       line-height: 1.55;
       overflow-wrap: anywhere;
     }
@@ -1056,13 +1028,13 @@
     .sensor-model-cell strong {
       display: block;
       color: var(--text);
-      font-size: 13px;
+      font-size: 14px;
     }
     .sensor-model-cell span {
       display: block;
       margin-top: 2px;
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 11.5px;
     }
     .sensor-catalog-footer {
       padding: 10px 16px;
@@ -1133,6 +1105,20 @@
       padding: 4px 9px;
       font-size: 11.5px;
       border-radius: 5px;
+    }
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      justify-content: center;
+      flex: 0 0 32px;
+    }
+    .table-action-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
     }
 
     /* ===== CRUD 列表 ===== */
@@ -1298,11 +1284,59 @@
     .data-table td {
       padding: 14px 16px;
       color: var(--text);
+      font-size: 13px;
       vertical-align: top;
       overflow-wrap: anywhere;
     }
     .data-table .btn {
-      margin: 0 2px;
+      margin: 0;
+    }
+    .controlled-document-list {
+      overflow: hidden;
+    }
+    .controlled-document-table th:nth-child(2),
+    .controlled-document-table td:nth-child(2) {
+      width: 110px;
+      white-space: nowrap;
+    }
+    .controlled-document-table th:nth-child(3),
+    .controlled-document-table td:nth-child(3) {
+      width: 280px;
+    }
+    .controlled-document-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-weight: 650;
+    }
+    .controlled-document-icon {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 32px;
+      border-radius: 7px;
+      background: var(--bg2);
+      color: var(--text-muted);
+    }
+    .controlled-document-access {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border: 1px solid #fde68a;
+      border-radius: 5px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 11.5px;
+      font-weight: 650;
+    }
+    .search-page-heading {
+      margin-bottom: 16px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 750;
     }
     .timeline-status {
       display: inline-flex;
@@ -1516,7 +1550,7 @@
           客户
         </button>
         <button class="sidebar-nav-item" type="button" data-view="process" onclick="showView('process')">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="9" y="15" width="6" height="6" rx="1"/><path d="M6 9v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9M12 13v2"/></svg>
           制程
         </button>
         <button class="sidebar-nav-item" type="button" data-view="machine" onclick="showView('machine')">
@@ -1524,7 +1558,7 @@
           机型结构
         </button>
         <button class="sidebar-nav-item" type="button" data-view="sensor" onclick="showView('sensor')">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="11" cy="11" r="3"/><path d="m14 14 4 4"/></svg>
           Sensor 选型
         </button>
       </nav>
@@ -1533,7 +1567,7 @@
 
     <main class="app-main" id="mainContent" tabindex="-1">
       <header class="workspace-toolbar">
-        <div class="workspace-context" id="currentModuleLabel">客户知识库</div>
+        <h1 class="workspace-context" id="currentModuleLabel">客户管理</h1>
         <form class="topbar-search" role="search" onsubmit="handleSearchSubmit(event)">
           <label class="sr-only" for="searchInput">全局搜索</label>
           <svg class="topbar-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1550,13 +1584,8 @@
   <!-- 搜索视图 -->
   <div class="view" id="view-search">
     <div class="page-wrap">
-      <div class="page-header">
-        <div class="page-header-left">
-          <div class="page-header-dot" style="background: var(--brand)"></div>
-          <h2 id="searchTitle" aria-live="polite">搜索结果</h2>
-        </div>
-      </div>
       <div class="detail-content">
+        <h2 class="search-page-heading" id="searchTitle" aria-live="polite">搜索结果</h2>
         <div class="search-filters" id="searchFilters"></div>
         <div id="searchResults" aria-live="polite"></div>
       </div>
@@ -1566,12 +1595,6 @@
   <!-- 客户视图 -->
   <div class="view active" id="view-customer">
     <div class="page-wrap">
-      <div class="page-header">
-        <div class="page-header-left">
-          <div class="page-header-dot" style="background: var(--c-customer)"></div>
-          <h2>客户管理</h2>
-        </div>
-      </div>
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
@@ -1638,12 +1661,6 @@
   <!-- 制程视图 -->
   <div class="view" id="view-process">
     <div class="page-wrap">
-      <div class="page-header">
-        <div class="page-header-left">
-          <div class="page-header-dot" style="background: var(--c-process)"></div>
-          <h2>制程管理</h2>
-        </div>
-      </div>
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
@@ -1707,12 +1724,6 @@
   <!-- 机型视图 -->
   <div class="view" id="view-machine">
     <div class="page-wrap">
-      <div class="page-header">
-        <div class="page-header-left">
-          <div class="page-header-dot" style="background: var(--c-machine)"></div>
-          <h2>机型结构</h2>
-        </div>
-      </div>
       <div class="three-col">
         <div class="list-panel">
           <div class="list-panel-top">
@@ -1787,17 +1798,11 @@
   <!-- Sensor 视图 -->
   <div class="view" id="view-sensor">
     <div class="page-wrap">
-      <div class="page-header">
-        <div class="page-header-left">
-          <div class="page-header-dot" style="background: var(--c-sensor)"></div>
-          <h2>Sensor 选型</h2>
-        </div>
-      </div>
-      <div class="sensor-catalog-page">
+      <div class="sensor-catalog-content">
         <section class="sensor-catalog-overview" aria-labelledby="sensorCatalogTitle">
           <div>
             <div class="sensor-catalog-kicker">Sensor dictionary</div>
-            <h3 class="sensor-catalog-title" id="sensorCatalogTitle">型号字典</h3>
+            <h2 class="sensor-catalog-title" id="sensorCatalogTitle">型号字典</h2>
             <p class="sensor-catalog-copy">漫反射、对照式等作为受控类型字典维护；规格参数、特性与注意、适用场景集中在同一张表中。</p>
           </div>
           <div class="sensor-catalog-stats" aria-label="型号统计">
@@ -2361,13 +2366,13 @@
                 ${item.note ? `<div class="crud-item-meta">备注：${escapeSensorText(item.note)}</div>` : ''}
               </div>
               <div class="crud-item-actions">
-                <button class="btn btn-sm btn-ghost" type="button" aria-label="编辑 ${escapeSensorText(item.name)}" onclick="openEditCrud('${listId}','${entityName}',${item.id})">
+                <button class="btn btn-sm btn-ghost btn-icon" type="button" aria-label="编辑 ${escapeSensorText(item.name)}" onclick="openEditCrud('${listId}','${entityName}',${item.id})">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <button class="btn btn-sm btn-danger" type="button" aria-label="删除 ${escapeSensorText(item.name)}" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})">
+                <button class="btn btn-sm btn-danger btn-icon" type="button" aria-label="删除 ${escapeSensorText(item.name)}" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                   </svg>
@@ -2415,18 +2420,20 @@
                   <td style="font-weight:500">${escapeSensorText(item.name)}</td>
                   <td style="color:var(--text-muted);font-size:13px">${escapeSensorText(item.desc || '-')}</td>
                   <td style="font-size:13px">${escapeSensorText(item.note || '-')}</td>
-                  <td style="text-align:center">
-                    <button class="btn btn-sm btn-ghost" type="button" onclick="openEditCrud('${listId}','${entityName}',${item.id})" aria-label="编辑 ${escapeSensorText(item.name)}">
+                  <td>
+                    <div class="table-action-group">
+                    <button class="btn btn-sm btn-ghost btn-icon" type="button" onclick="openEditCrud('${listId}','${entityName}',${item.id})" aria-label="编辑 ${escapeSensorText(item.name)}">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
                     </button>
-                    <button class="btn btn-sm btn-danger" type="button" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})" aria-label="删除 ${escapeSensorText(item.name)}">
+                    <button class="btn btn-sm btn-danger btn-icon" type="button" onclick="openDeleteCrud('${listId}','${entityName}',${item.id})" aria-label="删除 ${escapeSensorText(item.name)}">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
                     </button>
+                    </div>
                   </td>
                 </tr>
               `).join('')}
@@ -2527,13 +2534,13 @@
                   ${st.icon} ${st.label}
                 </span>
                 <div class="timeline-actions">
-                  <button class="btn btn-sm btn-ghost" type="button" aria-label="编辑反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openEditTimeline('${listId}','${entityName}',${item.id})">
+                  <button class="btn btn-sm btn-ghost btn-icon" type="button" aria-label="编辑反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openEditTimeline('${listId}','${entityName}',${item.id})">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg>
                   </button>
-                  <button class="btn btn-sm btn-danger" type="button" aria-label="删除反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openDeleteTimeline('${listId}','${entityName}',${item.id})">
+                  <button class="btn btn-sm btn-danger btn-icon" type="button" aria-label="删除反馈 ${escapeSensorText(item.title || item.name || '')}" onclick="openDeleteTimeline('${listId}','${entityName}',${item.id})">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
@@ -2992,18 +2999,20 @@
             <td>${escapeSensorText(item.spec) || '-'}</td>
             <td>${escapeSensorText(item.feature) || '-'}</td>
             <td>${escapeSensorText(item.scene) || '-'}</td>
-            <td style="text-align:center;white-space:nowrap">
-              <button class="btn btn-sm btn-ghost" type="button" onclick="openEditSensorCatalog(${item.id})" title="编辑型号" aria-label="编辑 ${escapeSensorText(item.model)}">
+            <td>
+              <div class="table-action-group">
+              <button class="btn btn-sm btn-ghost btn-icon" type="button" onclick="openEditSensorCatalog(${item.id})" title="编辑型号" aria-label="编辑 ${escapeSensorText(item.model)}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </button>
-              <button class="btn btn-sm btn-danger" type="button" onclick="openDeleteSensorCatalog(${item.id})" title="删除型号" aria-label="删除 ${escapeSensorText(item.model)}">
+              <button class="btn btn-sm btn-danger btn-icon" type="button" onclick="openDeleteSensorCatalog(${item.id})" title="删除型号" aria-label="删除 ${escapeSensorText(item.model)}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                 </svg>
               </button>
+              </div>
             </td>
           </tr>`;
       }).join('');
@@ -3274,9 +3283,9 @@
 
     // ===== 工具函数 =====
     const VIEW_META = {
-      customer: '客户知识库',
-      process: '制程知识库',
-      machine: '机型结构库',
+      customer: '客户管理',
+      process: '制程管理',
+      machine: '机型结构',
       sensor: 'Sensor 型号字典',
       search: '搜索结果',
     };
@@ -3439,6 +3448,41 @@
       </div>`;
     }
 
+    function renderControlledDocumentList(files) {
+      const documents = Array.isArray(files) ? files : [];
+      return `<section class="section-card controlled-document-list" aria-labelledby="controlledDocumentTitle">
+        <div class="section-card-header" id="controlledDocumentTitle">受控文档索引 · ${documents.length} 份</div>
+        <div class="section-card-body">
+          <div class="table-scroll" role="region" aria-label="制程受控文档索引" tabindex="0">
+            <table class="data-table controlled-document-table">
+              <caption class="sr-only">制程报告受控文档索引</caption>
+              <thead>
+                <tr>
+                  <th>文件名称</th>
+                  <th>大小</th>
+                  <th>访问权限</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${documents.map(file => `<tr>
+                  <td>
+                    <div class="controlled-document-name">
+                      <span class="controlled-document-icon" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                      </span>
+                      <span>${escapeSensorText(file.name)}</span>
+                    </div>
+                  </td>
+                  <td>${escapeSensorText(file.size || '-')}</td>
+                  <td><span class="controlled-document-access">受控文档 · ${escapeSensorText(file.note || '仅供预览，无下载权限')}</span></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>`;
+    }
+
     function switchTab(el, targetId) {
       const container = el.closest('.detail-content') || el.closest('.view');
       el.parentElement.querySelectorAll('.detail-tab').forEach(tab => {
@@ -3552,12 +3596,7 @@
             </div>
           </div>
           <div class="detail-desc">刘龙江副理制程报告汇总，涵盖 PCB 制造全流程工艺规范。文件仅供预览，无下载权限。</div>
-          ${data.files.map(f => sectionCard(f.name, `<div class="file-preview locked">
-            <div class="file-preview-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-            <div class="fp-name">${f.name}</div>
-            <div style="font-size:12px;color:var(--text-muted)">${f.size}</div>
-            <div class="fp-locked">受控文档 · ${escapeSensorText(f.note)}</div>
-          </div>`)).join('')}
+          ${renderControlledDocumentList(data.files)}
         </div>`;
         return;
       }

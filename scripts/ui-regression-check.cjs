@@ -18,6 +18,12 @@ check('legacy top navigation is removed', !html.includes('class="topbar-nav"'))
 check('redundant homepage is removed', !html.includes('data-view="home"') && !html.includes('id="view-home"'))
 check('dark mode rules are removed', !html.includes('prefers-color-scheme: dark'))
 check('narrow-screen rules are out of scope', !html.includes('@media (max-width'))
+check('toolbar owns the single primary page heading', (html.match(/<h1\b/g) || []).length === 1 && html.includes('<h1 class="workspace-context" id="currentModuleLabel">客户管理</h1>') && !html.includes('class="page-header"'))
+check('context navigation uses the compact desktop width', /--list-w:\s*256px/.test(html))
+check('process reports use one controlled document list', html.includes('function renderControlledDocumentList') && !html.includes('data.files.map(f => sectionCard'))
+check('table actions use one horizontal icon-button pattern', html.includes('.table-action-group') && html.includes('.btn-icon') && (html.match(/class="table-action-group"/g) || []).length >= 2)
+check('data tables use readable desktop typography', /\.data-table th\s*\{[^}]*font-size:\s*12px/s.test(html) && /\.data-table td\s*\{[^}]*font-size:\s*13px/s.test(html) && /\.sensor-model-cell strong\s*\{[^}]*font-size:\s*14px/s.test(html))
+check('sensor catalog shares the neutral application canvas', /\.sensor-catalog-content\s*\{[^}]*background:\s*var\(--bg\)/s.test(html) && !/\.sensor-catalog-content\s*\{[^}]*linear-gradient/s.test(html))
 check('tables stay inside their content panels', html.includes('.table-scroll {') && /\.detail-panel\s*\{[^}]*min-width:\s*0/s.test(html) && /\.sensor-table-scroll\s*\{[^}]*max-width:\s*100%/s.test(html))
 check('keyboard focus styling exists', html.includes(':focus-visible'))
 check('reduced-motion preference is respected', html.includes('prefers-reduced-motion'))
@@ -154,6 +160,13 @@ function runBehaviorChecks() {
     check('process search preserves the correct category', index.some(item => item.title === '外层前处理' && item.category === '外层制程'))
     check('machine search preserves the correct category', index.some(item => item.title === 'AOI专用机' && item.category === '特殊机型'))
   }
+
+  selectProcess('制程报告', '制程介绍', null, { updateHistory: false })
+  const processReportHtml = document.getElementById('process-content').innerHTML
+  check('process report renders one compact three-document index',
+    (processReportHtml.match(/controlled-document-list/g) || []).length === 1 &&
+    (processReportHtml.match(/controlled-document-name/g) || []).length === 3 &&
+    !processReportHtml.includes('file-preview locked'))
 
   function makeSearchCategory(open, labels) {
     const category = makeElement('category')

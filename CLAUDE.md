@@ -1,115 +1,52 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## 项目概述
 
-这是一个基于 Next.js 16 的感应器选型软件系统，为 Symtek Automation China 开发。应用采用混合架构：Next.js 作为容器框架，核心应用界面通过 `public/index.html` 中的纯 HTML/CSS/JS 实现。
+这是 Symtek Automation China 的感应器选型软件。前端基于 `purest-admin` 仓库中的 Vue Vben Admin 5.5.1 基座，采用 Vue 3、Vite、TypeScript、Pinia 与 Element Plus。
+
+目标基座来源：`https://github.com/dymproject/purest-admin`，迁移时参考提交 `c8c593ea252db481d72b2aae438c23cc1ee817e2` 下的 `client-vue/vben-admin`。
 
 ## 开发命令
 
-```bash
-# 安装依赖（使用 npm）
-npm install
+项目只使用 pnpm，要求 Node.js 20.10 以上、pnpm 9.12 以上。
 
-# 开发模式
-npm run dev
-
-# 生产构建
-npm run build
-
-# 启动生产服务器
-npm start
-
-# 代码检查
-npm run lint
+```powershell
+pnpm install --frozen-lockfile
+pnpm run dev
+pnpm run test:selection
+pnpm run check:type
+pnpm run lint
+pnpm run build
 ```
 
-注意：虽然 package.json 中有 pnpm 配置，但实际应使用 npm（存在 package-lock.json）。
+主应用默认开发端口为 `5777`。
 
-## 架构设计
+## 架构
 
-### 混合架构模式
+- Vben monorepo 基础包：`internal/`、`packages/`、`scripts/`
+- 应用入口：`apps/web-ele`
+- 业务模块：`apps/web-ele/src/modules/selection`
+- 业务路由：`apps/web-ele/src/router/routes/modules/selection.ts`
+- 本地数据仓库：`apps/web-ele/src/modules/selection/domain.js`
+- Pinia 适配层：`apps/web-ele/src/modules/selection/store.ts`
+- 领域合同测试：`scripts/vben-migration.contract-test.cjs`
 
-- **Next.js 层**：仅作为应用容器和部署框架
-  - `app/layout.tsx`：根布局，配置元数据、图标和 Vercel Analytics
-  - `app/page.tsx`：主页面，通过 iframe 嵌入 `public/index.html`
+## 业务模块
 
-- **核心应用层**：`public/index.html` 包含完整的单页应用
-  - 使用原生 HTML/CSS/JavaScript 实现
-  - 独立的设计系统（CSS 变量定义在 `:root` 中）
-  - 四大功能模块：客户管理、制程管理、机型结构、Sensor 选型
-  - 布局结构：顶栏（固定）+ 侧边栏 + 列表区 + 详情区
+- 客户管理：客户要求、制程注意、受控文档和厂外反馈
+- 制程管理：制程报告、制程特性和感应器选用标准
+- 机型结构：输送机构、手臂机构、台车工位和注意事项
+- Sensor 型号字典：状态筛选、搜索和型号增删改
+- 全局搜索：跨客户、制程、机型和 Sensor 型号
 
-### 技术栈
+## 数据兼容
 
-- **框架**：Next.js 16.2.6 (App Router)
-- **UI 组件**：
-  - shadcn/ui (base-nova 风格)
-  - @base-ui/react 1.5.0（无样式基础组件）
-  - lucide-react（图标库）
-- **样式**：Tailwind CSS 4.3.3 + class-variance-authority
-- **类型**：TypeScript 5.7.3（严格模式）
-- **分析**：Vercel Analytics（仅生产环境）
-
-### 路径别名
-
-```typescript
-@/*        → 项目根目录
-@/components → components/
-@/lib      → lib/
-@/hooks    → hooks/
-@/ui       → components/ui/
-```
+业务数据继续使用浏览器本地存储键 `symtek_crud_store`，以兼容迁移前的已有数据。存储内容必须经过归一化，禁止直接把存储内容拼接成 HTML。写入失败必须回滚内存修改并向用户反馈。
 
 ## 关键约定
 
-### 组件开发
-
-- UI 组件位于 `components/ui/`，使用 shadcn/ui 的 base-nova 风格
-- 所有组件使用 TypeScript 和 React 19
-- 样式通过 `cn()` 工具函数合并（位于 `lib/utils.ts`）
-- 组件变体使用 `class-variance-authority`
-
-### 样式系统
-
-- 主应用的设计令牌在 `public/index.html` 的 `:root` 中定义
-- 品牌主色：`--brand: #1e40af`（深蓝）
-- 四大模块色：
-  - 客户：`--c-customer: #0d9488`（teal）
-  - 制程：`--c-process: #7c3aed`（violet）
-  - 机型：`--c-machine: #ea580c`（orange）
-  - Sensor：`--c-sensor: #0284c7`（sky）
-
-### 元数据配置
-
-- 应用标题：感应器选型软件 · Symtek Automation China
-- 语言：zh-CN
-- 支持明暗主题切换（图标和主题色自适应）
-
-## 修改指南
-
-### 修改 Next.js 容器层
-
-编辑 `app/layout.tsx` 或 `app/page.tsx`。这些文件仅负责应用框架，不包含业务逻辑。
-
-### 修改核心应用
-
-直接编辑 `public/index.html`。这是一个完整的单页应用，包含所有业务逻辑、样式和交互。
-
-### 添加 UI 组件
-
-使用 shadcn CLI 添加新组件：
-```bash
-npx shadcn@latest add <component-name>
-```
-
-组件将自动生成到 `components/ui/` 并遵循项目配置（base-nova 风格、lucide 图标）。
-
-## 重要注意事项
-
-- **不要删除** `public/index.html`，这是核心应用入口
-- iframe 样式固定为全屏（position: fixed, 100% 宽高）
-- 生产环境自动启用 Vercel Analytics
-- 项目使用严格的 TypeScript 配置
-- 所有静态资源（图标、占位图）位于 `public/` 目录
+- 不恢复 Next.js、iframe 或 `public/index.html` 旧入口。
+- 新业务代码放在 `modules/selection` 内，不修改 Vben 核心包来实现业务功能。
+- 本项目无后端登录依赖，路由使用 Vben frontend 权限模式。
+- 操作按钮使用 Lucide 图标和 tooltip；表单、表格、弹窗使用 Element Plus。
+- 修改持久化、路由或搜索行为时，先扩展 `test:selection` 回归，再实现变更。

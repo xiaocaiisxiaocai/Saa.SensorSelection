@@ -462,6 +462,12 @@
   width: min(360px, 38vw);
 }
 
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+}
+
 .sensor-catalog__footer {
   padding: 12px 0 0;
   color: #778296;

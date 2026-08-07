@@ -13,6 +13,7 @@ import {
   ElMessage,
   ElMessageBox,
   ElOption,
+  ElPagination,
   ElRadioButton,
   ElRadioGroup,
   ElSelect,
@@ -70,6 +71,13 @@ const alternativeCount = computed(
   () => store.sensors.filter((item) => item.status === '备选').length,
 );
 
+const page = ref(1);
+const pageSize = ref(20);
+const tableData = computed(() => {
+  const start = (page.value - 1) * pageSize.value;
+  return items.value.slice(start, start + pageSize.value);
+});
+
 watch(
   () => route.query.model,
   (model) => {
@@ -88,6 +96,20 @@ watch([status, query], () => {
     router.replace({ query: nextQuery });
   }
 });
+
+// 筛选条件变化时回到第一页
+watch([status, query], () => {
+  page.value = 1;
+});
+
+// 数据量或每页条数变化时，防止当前页码越界
+watch(
+  () => [items.value.length, pageSize.value],
+  () => {
+    const maxPage = Math.max(1, Math.ceil(items.value.length / pageSize.value));
+    if (page.value > maxPage) page.value = maxPage;
+  },
+);
 
 function resetForm() {
   editId.value = undefined;
@@ -194,7 +216,11 @@ async function deleteItem(item: SensorItem) {
         </div>
       </div>
 
-      <ElTable :data="items" empty-text="没有符合当前条件的型号" row-key="id">
+      <ElTable
+        :data="tableData"
+        empty-text="没有符合当前条件的型号"
+        row-key="id"
+      >
         <ElTableColumn label="状态" width="86">
           <template #default="scope">
             <ElTag :type="scope.row.status === '现用' ? 'success' : 'info'">
@@ -249,8 +275,18 @@ async function deleteItem(item: SensorItem) {
           </template>
         </ElTableColumn>
       </ElTable>
+      <div v-if="items.length > pageSize" class="table-pagination">
+        <ElPagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          :total="items.length"
+          background
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
       <footer class="sensor-catalog__footer">
-        当前显示 {{ items.length }} 条，共 {{ store.sensors.length }} 条
+        当前显示 {{ tableData.length }} 条，共 {{ store.sensors.length }} 条
       </footer>
     </section>
 

@@ -16,9 +16,14 @@ const emit = defineEmits<{
 }>();
 
 const query = ref('');
-const expanded = ref(
-  new Set(props.groups.slice(0, 1).map((group) => group.name)),
-);
+
+function findSelectedGroup(groups: EntityGroup[], selected: string) {
+  return groups.find((group) => group.items.includes(selected))?.name;
+}
+
+const initialGroup =
+  findSelectedGroup(props.groups, props.selected) || props.groups[0]?.name;
+const expanded = ref(new Set(initialGroup ? [initialGroup] : []));
 
 const visibleGroups = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
@@ -38,6 +43,15 @@ watch(query, (value) => {
     expanded.value = new Set(visibleGroups.value.map((group) => group.name));
   }
 });
+
+watch(
+  () => [props.groups, props.selected] as const,
+  ([groups, selected]) => {
+    const groupName = findSelectedGroup(groups, selected);
+    if (!groupName || expanded.value.has(groupName)) return;
+    expanded.value = new Set(expanded.value).add(groupName);
+  },
+);
 
 function toggle(groupName: string) {
   const next = new Set(expanded.value);

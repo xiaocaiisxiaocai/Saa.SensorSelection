@@ -21,6 +21,15 @@ export interface CustomerReqItem {
   note: string;
 }
 
+export interface CustomerProcItem {
+  id: number;
+  type: string;
+  role: string;
+  feature: string;
+  sensorNote: string;
+  note: string;
+}
+
 export interface TimelineItem {
   id: number;
   type: string;
@@ -158,7 +167,9 @@ export const MACHINE_DETAILS: Record<string, EntityDetail>;
 export const SENSOR_DATA: Record<string, SensorTypeDefinition>;
 export const CRUD_DEFAULTS: Record<
   string,
-  (entityName: string) => Array<CrudItem | CustomerReqItem | TimelineItem>
+  (entityName: string) => Array<
+    CrudItem | CustomerReqItem | CustomerProcItem | TimelineItem
+  >
 >;
 export const FEEDBACK_TYPE_OPTIONS: string[];
 export const FEEDBACK_TYPE_DEFAULTS: DictionaryItem[];
@@ -170,7 +181,6 @@ export function createProcessStepDefaults(): ProcessStepItem[];
 export const SENSOR_STATUS_OPTIONS: string[];
 export const SENSOR_TYPE_OPTIONS: string[];
 export const CRUD_TYPE_OPTIONS: Record<string, string[]>;
-export const CRUD_COLUMN_LABELS: Record<string, string[]>;
 export const MACHINE_SECTION_SEED: MachineSectionItem[];
 export const GENERAL_STRUCTURE_CATEGORY: string;
 export const GENERAL_STRUCTURE_SECTION_LABELS: Record<number, string>;

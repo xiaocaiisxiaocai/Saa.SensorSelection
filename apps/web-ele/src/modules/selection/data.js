@@ -234,30 +234,18 @@ export const CRUD_DEFAULTS = {
     {
       id: 1,
       type: 'DES 制程',
-      name: '板件传送检测',
-      desc: '进出口设置漫反射传感器',
+      role: '板件传送检测',
+      feature: '进出口设置漫反射传感器',
+      sensorNote: '',
       note: '防止空喷损耗',
     },
     {
       id: 2,
       type: 'AOI 制程',
-      name: '板件定位传感器',
-      desc: '定位精度不大于 0.1mm',
+      role: '板件定位',
+      feature: '定位精度不大于 0.1mm',
+      sensorNote: '镜头保持清洁',
       note: 'Keyence FS 系列',
-    },
-    {
-      id: 3,
-      type: '压合制程',
-      name: '台车工位传感器',
-      desc: '每工位确认台车锁紧',
-      note: '重要安全要求',
-    },
-    {
-      id: 4,
-      type: '防焊制程',
-      name: '板件到位传感器',
-      desc: '曝光前确认板件落位',
-      note: '避免空曝光',
     },
   ],
   'customer-feedback': () => [
@@ -629,12 +617,3 @@ export function createEntityGroupDefaults(kind) {
     items: [...group.items],
   }));
 }
-
-export const CRUD_COLUMN_LABELS = {
-  'customer-proc': ['制程分类', '注意事项', '说明', '备注'],
-  'process-sensor': ['检测位置', '推荐型号', '选用说明', '备注'],
-  'machine-conveyor': ['检测位置', '配置名称', '配置说明', '备注'],
-  'machine-arm': ['机构位置', '配置名称', '配置说明', '备注'],
-  'machine-platform': ['工位位置', '配置名称', '配置说明', '备注'],
-  'machine-notes': ['注意分类', '事项名称', '说明', '备注'],
-};

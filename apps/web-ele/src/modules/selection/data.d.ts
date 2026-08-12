@@ -11,6 +11,16 @@ export interface CrudItem {
   note: string;
 }
 
+export interface CustomerReqItem {
+  id: number;
+  type: string;
+  machine: string;
+  process: string;
+  content: string;
+  source: string;
+  note: string;
+}
+
 export interface TimelineItem {
   id: number;
   type: string;

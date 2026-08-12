@@ -214,30 +214,20 @@ export const CRUD_DEFAULTS = {
     {
       id: 1,
       type: '输送段',
-      name: '漫反射传感器',
-      desc: '板件有无检测，检测距离不大于 300mm',
+      machine: 'ALL',
+      process: '',
+      content: '板件有无检测，检测距离不大于 300mm',
+      source: '验收规范',
       note: 'OMRON E3Z-D61 或同等级',
     },
     {
       id: 2,
       type: '掉板检测',
-      name: '对照式传感器',
-      desc: '传送路径中段与末端双重设置',
+      machine: 'ALL',
+      process: '',
+      content: '传送路径中段与末端双重设置',
+      source: '客户要求',
       note: '零容忍掉板要求',
-    },
-    {
-      id: 3,
-      type: '真空吸附',
-      name: '真空表头压力传感器',
-      desc: '真空度大于 -60kPa，响应时间不大于 0.3s',
-      note: 'PISCO ZSE10',
-    },
-    {
-      id: 4,
-      type: '位置确认',
-      name: '近接式传感器',
-      desc: '台车对接定位精度在正负 0.5mm 以内',
-      note: 'OMRON E2E 系列',
     },
   ],
   'customer-proc': () => [
@@ -452,6 +442,18 @@ export const FEEDBACK_TYPE_OPTIONS = FEEDBACK_TYPE_DEFAULTS.map(
 
 export const FEEDBACK_STATUS_OPTIONS = ['待处理', '处理中', '已解决'];
 
+export const CUSTOMER_REQ_SOURCE_DEFAULTS = [
+  { id: 1, name: '验收规范', sort: 1 },
+  { id: 2, name: '厂外改善', sort: 2 },
+  { id: 3, name: '客户要求', sort: 3 },
+  { id: 4, name: '产品更新迭代', sort: 4 },
+  { id: 5, name: '其他', sort: 5 },
+];
+
+export const CUSTOMER_REQ_SOURCE_OPTIONS = CUSTOMER_REQ_SOURCE_DEFAULTS.map(
+  (item) => item.name,
+);
+
 export const CRUD_TYPE_OPTIONS = {
   'customer-req': [
     '输送段',
@@ -529,6 +531,14 @@ export const DICTIONARY_DEFINITIONS = [
     field: 'type',
     listIds: ['customer-req'],
     defaults: CRUD_TYPE_OPTIONS['customer-req'],
+  },
+  {
+    code: 'customer-req-source',
+    title: '要求来源',
+    description: '客户通用要求项中的来源，全局共用',
+    field: 'source',
+    listIds: ['customer-req'],
+    defaults: CUSTOMER_REQ_SOURCE_OPTIONS,
   },
   {
     code: 'customer-proc',
@@ -621,7 +631,6 @@ export function createEntityGroupDefaults(kind) {
 }
 
 export const CRUD_COLUMN_LABELS = {
-  'customer-req': ['要求分类', '要求名称', '要求说明', '备注'],
   'customer-proc': ['制程分类', '注意事项', '说明', '备注'],
   'process-sensor': ['检测位置', '推荐型号', '选用说明', '备注'],
   'machine-conveyor': ['检测位置', '配置名称', '配置说明', '备注'],

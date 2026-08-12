@@ -1,4 +1,4 @@
-import { initPreferences } from '@vben/preferences';
+import { initPreferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
 import { overridesPreferences } from './preferences';
@@ -18,6 +18,16 @@ async function initApplication() {
     namespace,
     overrides: overridesPreferences,
   });
+
+  // localStorage 偏好会覆盖 overrides；品牌 logo 每次启动强制同步
+  if (overridesPreferences.logo?.source) {
+    updatePreferences({
+      logo: {
+        enable: overridesPreferences.logo.enable ?? true,
+        source: overridesPreferences.logo.source,
+      },
+    });
+  }
 
   // 启动应用并挂载
   // vue应用主要逻辑及视图

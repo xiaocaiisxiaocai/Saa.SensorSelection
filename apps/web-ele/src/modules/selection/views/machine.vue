@@ -1,7 +1,9 @@
 <script lang="ts" setup>
-import EntityWorkspace from '../components/EntityWorkspace.vue';
+import MachineWorkspace from '../components/MachineWorkspace.vue';
+
+defineOptions({ name: 'SelectionMachine' });
 </script>
 
 <template>
-  <EntityWorkspace kind="machine" />
+  <MachineWorkspace />
 </template>

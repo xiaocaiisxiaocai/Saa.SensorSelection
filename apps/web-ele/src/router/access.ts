@@ -1,6 +1,7 @@
 import type {
   ComponentRecordType,
   GenerateMenuAndRoutesOptions,
+  MenuRecordRaw,
 } from '@vben/types';
 
 import { generateAccessible } from '@vben/access';
@@ -13,11 +14,28 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     '../modules/selection/views/**/*.vue',
   );
 
-  return await generateAccessible('frontend', {
+  const result = await generateAccessible('frontend', {
     ...options,
     layoutMap,
     pageMap,
   });
+
+  // 路由挂在统一 Layout 下，菜单仍展平为一级项，避免页面切换卡在旧视图
+  const accessibleMenus = result.accessibleMenus.flatMap((menu) => {
+    if (menu.path !== '/selection' || !menu.children?.length) return [menu];
+    return menu.children.map(
+      (child): MenuRecordRaw => ({
+        ...child,
+        parent: undefined,
+        parents: undefined,
+      }),
+    );
+  });
+
+  return {
+    ...result,
+    accessibleMenus,
+  };
 }
 
 export { generateAccess };

@@ -6,11 +6,12 @@ const routes: RouteRecordRaw[] = [
   {
     component: BasicLayout,
     meta: {
-      icon: 'lucide:radio-tower',
+      hideInBreadcrumb: true,
+      icon: 'lucide:library',
       order: -10,
       title: '感应器选型',
     },
-    name: 'Selection',
+    name: 'SelectionRoot',
     path: '/selection',
     redirect: '/selection/customer',
     children: [
@@ -18,6 +19,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/modules/selection/views/customer.vue'),
         meta: {
           icon: 'lucide:building-2',
+          order: -10,
           title: '客户管理',
         },
         name: 'SelectionCustomer',
@@ -27,6 +29,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/modules/selection/views/process.vue'),
         meta: {
           icon: 'lucide:factory',
+          order: -9,
           title: '制程管理',
         },
         name: 'SelectionProcess',
@@ -36,6 +39,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/modules/selection/views/machine.vue'),
         meta: {
           icon: 'lucide:cpu',
+          order: -8,
           title: '机型结构',
         },
         name: 'SelectionMachine',
@@ -45,10 +49,21 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/modules/selection/views/sensor.vue'),
         meta: {
           icon: 'lucide:list-filter',
+          order: -7,
           title: 'Sensor 型号字典',
         },
         name: 'SelectionSensor',
         path: 'sensor',
+      },
+      {
+        component: () => import('#/modules/selection/views/dictionary.vue'),
+        meta: {
+          icon: 'lucide:book-type',
+          order: -6,
+          title: '数据字典',
+        },
+        name: 'SelectionDictionary',
+        path: 'dictionary',
       },
       {
         component: () => import('#/modules/selection/views/search.vue'),

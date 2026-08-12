@@ -26,7 +26,6 @@
     "#/*": "./src/*"
   },
   "dependencies": {
-    "@microsoft/signalr": "^8.0.7",
     "@vben/access": "workspace:*",
     "@vben/common-ui": "workspace:*",
     "@vben/constants": "workspace:*",
@@ -34,9 +33,7 @@
     "@vben/icons": "workspace:*",
     "@vben/layouts": "workspace:*",
     "@vben/locales": "workspace:*",
-    "@vben/plugins": "workspace:*",
     "@vben/preferences": "workspace:*",
-    "@vben/request": "workspace:*",
     "@vben/stores": "workspace:*",
     "@vben/styles": "workspace:*",
     "@vben/types": "workspace:*",
@@ -45,11 +42,10 @@
     "dayjs": "catalog:",
     "element-plus": "catalog:",
     "lucide-vue-next": "catalog:",
+    "pdfjs-dist": "^6.2.108",
     "pinia": "catalog:",
     "vue": "catalog:",
-    "vue-router": "catalog:",
-    "vxe-pc-ui": "catalog:",
-    "vxe-table": "catalog:"
+    "vue-router": "catalog:"
   },
   "devDependencies": {
     "unplugin-element-plus": "catalog:"

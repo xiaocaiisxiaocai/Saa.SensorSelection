@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { SearchItem } from '../domain.js';
 
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { ElEmpty, ElTag } from 'element-plus';
@@ -14,7 +14,6 @@ import {
 } from 'lucide-vue-next';
 
 import { useSelectionStore } from '../store';
-import AppToolbar from './AppToolbar.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -50,8 +49,17 @@ const typeMeta = {
   sensor: 'Sensor',
 };
 
-watch(query, () => {
+onMounted(() => {
+  if (!query.value) {
+    router.replace({ name: 'SelectionCustomer' });
+  }
+});
+
+watch(query, (value) => {
   activeType.value = 'all';
+  if (!value && route.name === 'SelectionSearch') {
+    router.replace({ name: 'SelectionCustomer' });
+  }
 });
 
 function openResult(item: SearchItem) {
@@ -61,7 +69,6 @@ function openResult(item: SearchItem) {
 
 <template>
   <main class="selection-page search-page">
-    <AppToolbar subtitle="跨客户、制程、机型与型号字典" title="搜索结果" />
     <section class="search-results">
       <div class="search-results__heading">
         <h2>搜索“{{ query }}”</h2>

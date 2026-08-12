@@ -1,7 +1,9 @@
 <script lang="ts" setup>
-import EntityWorkspace from '../components/EntityWorkspace.vue';
+import ProcessWorkspace from '../components/ProcessWorkspace.vue';
+
+defineOptions({ name: 'SelectionProcess' });
 </script>
 
 <template>
-  <EntityWorkspace kind="process" />
+  <ProcessWorkspace />
 </template>

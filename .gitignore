@@ -10,6 +10,9 @@ dist-ssr
 dist.zip
 dist.tar
 dist.war
+
+# IIS / 本地部署包输出（由 scripts/deploy-iis.ps1 生成）
+/deploy/
 .nitro
 .output
 *-dist.zip

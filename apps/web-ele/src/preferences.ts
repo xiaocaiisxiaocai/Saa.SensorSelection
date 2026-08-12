@@ -25,7 +25,7 @@ export const overridesPreferences = defineOverridesPreferences({
   footer: { enable: false },
   logo: {
     enable: true,
-    source: '/icon.svg',
+    source: '/logo-saa.png',
   },
   navigation: {
     accordion: true,

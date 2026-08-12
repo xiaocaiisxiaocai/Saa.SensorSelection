@@ -153,6 +153,21 @@ export function normalizeCrudItems(listId, sourceItems) {
         };
       }
 
+      if (listId === 'customer-proc') {
+        const type =
+          storedText(item.type).trim() ||
+          createDictionaryDefaults('customer-proc')[0]?.name ||
+          '';
+        return {
+          id,
+          type,
+          role: storedText(item.role),
+          feature: storedText(item.feature),
+          sensorNote: storedText(item.sensorNote),
+          note: storedText(item.note),
+        };
+      }
+
       return {
         id,
         type: storedText(item.type),
@@ -697,13 +712,24 @@ export function createSelectionRepository({
     const snapshot = cloneStore(store);
     const isTimeline = listId === 'customer-feedback';
     const isCustomerReq = listId === 'customer-req';
-    const requiredValue = isTimeline
-      ? payload.problem
-      : isCustomerReq
-        ? payload.content
-        : payload.name;
-    if (!storedText(requiredValue).trim())
-      return { ok: false, reason: 'validation' };
+    const isCustomerProc = listId === 'customer-proc';
+
+    if (isCustomerProc) {
+      if (
+        !storedText(payload.role).trim() ||
+        !storedText(payload.feature).trim()
+      ) {
+        return { ok: false, reason: 'validation' };
+      }
+    } else {
+      const requiredValue = isTimeline
+        ? payload.problem
+        : isCustomerReq
+          ? payload.content
+          : payload.name;
+      if (!storedText(requiredValue).trim())
+        return { ok: false, reason: 'validation' };
+    }
 
     const dictionaryCode = dictionaryCodeForList(listId);
     if (dictionaryCode) {

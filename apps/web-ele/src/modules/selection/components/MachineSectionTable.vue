@@ -15,9 +15,7 @@ import {
   ElInput,
   ElMessage,
   ElMessageBox,
-  ElOption,
   ElPagination,
-  ElSelect,
   ElTable,
   ElTableColumn,
   ElTooltip,
@@ -56,7 +54,15 @@ const previewDragging = ref(false);
 const previewDragOrigin = ref({ x: 0, y: 0, ox: 0, oy: 0 });
 const editId = ref<number>();
 const query = ref('');
-const form = reactive({ desc: '', name: '', note: '', type: '' });
+const form = reactive({
+  role: '',
+  sensorType: '',
+  spec: '',
+  purpose: '',
+  name: '',
+  desc: '',
+  note: '',
+});
 const formImage = ref<MachineRowImage | null>(null);
 const imageTouched = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -66,21 +72,26 @@ const isStructure = computed(() => props.section.kind === 'structure');
 const labels = computed(() =>
   isStructure.value
     ? {
-        type: '类型',
-        name: '名称',
-        desc: '说明',
+        role: '功能作用',
+        sensorType: '传感器类型',
+        spec: '规格',
+        purpose: '作用',
         image: '附加图片',
         note: '备注',
       }
     : {
-        type: '注意分类',
+        role: '注意分类',
         name: '事项名称',
         desc: '说明',
         note: '备注',
       },
 );
 
-const typeOptions = computed(() => [] as string[]);
+const searchPlaceholder = computed(() =>
+  isStructure.value
+    ? '搜索功能作用、传感器类型、规格、作用或备注'
+    : '搜索注意分类、事项名称、说明或备注',
+);
 
 const items = computed(
   () =>
@@ -93,12 +104,15 @@ const items = computed(
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   if (!value) return items.value;
-  return items.value.filter((item) =>
-    [item.role, item.name, item.desc, item.note, item.sensorType]
+  return items.value.filter((item) => {
+    const haystack = isStructure.value
+      ? [item.role, item.sensorType, item.spec, item.purpose, item.note]
+      : [item.role, item.name, item.desc, item.note];
+    return haystack
       .join(' ')
       .toLocaleLowerCase('zh-CN')
-      .includes(value),
-  );
+      .includes(value);
+  });
 });
 
 const dialogTitle = computed(() => (editId.value ? '编辑记录' : '新增记录'));
@@ -138,10 +152,13 @@ watch(
 function resetForm() {
   editId.value = undefined;
   Object.assign(form, {
-    desc: '',
+    role: '',
+    sensorType: '',
+    spec: '',
+    purpose: '',
     name: '',
+    desc: '',
     note: '',
-    type: typeOptions.value[0] || '',
   });
   formImage.value = null;
   imageTouched.value = false;
@@ -156,10 +173,13 @@ function addItem() {
 function editItem(item: MachineSectionRow) {
   editId.value = item.id;
   Object.assign(form, {
-    desc: item.desc,
+    role: item.role,
+    sensorType: item.sensorType,
+    spec: item.spec,
+    purpose: item.purpose,
     name: item.name,
+    desc: item.desc,
     note: item.note,
-    type: item.role,
   });
   formImage.value = item.image ?? null;
   imageTouched.value = false;
@@ -172,7 +192,7 @@ function failureMessage(reason: string) {
   if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
   if (reason === 'size') return '图片大小不能超过 2 MB';
   if (reason === 'type') return '仅支持 JPG、PNG 或 WebP 图片';
-  return '请填写名称';
+  return '请填写必填项';
 }
 
 function readFileAsDataUrl(file: File) {
@@ -305,7 +325,10 @@ function closePreview() {
 
 function saveItem() {
   const payload: Partial<MachineSectionRow> = {
-    role: form.type,
+    role: form.role.trim(),
+    sensorType: form.sensorType.trim(),
+    spec: form.spec.trim(),
+    purpose: form.purpose.trim(),
     name: form.name.trim(),
     desc: form.desc.trim(),
     note: form.note.trim(),
@@ -343,8 +366,9 @@ function saveItem() {
 }
 
 async function deleteItem(item: MachineSectionRow) {
+  const label = item.sensorType || item.name || item.role;
   try {
-    await ElMessageBox.confirm(`确认删除“${item.name}”吗？`, '删除记录', {
+    await ElMessageBox.confirm(`确认删除“${label}”吗？`, '删除记录', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
       type: 'warning',
@@ -381,7 +405,7 @@ async function deleteItem(item: MachineSectionRow) {
           <input
             v-model="query"
             aria-label="搜索记录"
-            placeholder="搜索类型、名称、说明或备注"
+            :placeholder="searchPlaceholder"
             type="search"
           />
           <button
@@ -408,28 +432,45 @@ async function deleteItem(item: MachineSectionRow) {
         :empty-text="query.trim() ? '没有匹配的记录' : '暂无记录'"
         row-key="id"
       >
-        <ElTableColumn :label="labels.type" min-width="120" prop="type" />
-        <ElTableColumn :label="labels.name" min-width="180" prop="name" />
-        <ElTableColumn :label="labels.desc" min-width="260" prop="desc" />
-        <ElTableColumn v-if="isStructure" :label="labels.image" min-width="100">
-          <template #default="scope">
-            <button
-              v-if="scope.row.image?.dataUrl"
-              aria-label="预览附加图片"
-              class="machine-row-thumb-button"
-              type="button"
-              @click="openPreview(scope.row.image.dataUrl)"
-            >
-              <img
-                :src="scope.row.image.dataUrl"
-                alt=""
-                class="machine-row-thumb"
-              />
-            </button>
-            <span v-else>—</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn :label="labels.note" min-width="150" prop="note" />
+        <template v-if="isStructure">
+          <ElTableColumn :label="labels.role" min-width="120" prop="role" />
+          <ElTableColumn
+            :label="labels.sensorType"
+            min-width="140"
+            prop="sensorType"
+          />
+          <ElTableColumn :label="labels.spec" min-width="140" prop="spec" />
+          <ElTableColumn
+            :label="labels.purpose"
+            min-width="160"
+            prop="purpose"
+          />
+          <ElTableColumn :label="labels.image" min-width="100">
+            <template #default="scope">
+              <button
+                v-if="scope.row.image?.dataUrl"
+                aria-label="预览附加图片"
+                class="machine-row-thumb-button"
+                type="button"
+                @click="openPreview(scope.row.image.dataUrl)"
+              >
+                <img
+                  :src="scope.row.image.dataUrl"
+                  alt=""
+                  class="machine-row-thumb"
+                />
+              </button>
+              <span v-else>—</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn :label="labels.note" min-width="150" prop="note" />
+        </template>
+        <template v-else>
+          <ElTableColumn :label="labels.role" min-width="120" prop="role" />
+          <ElTableColumn :label="labels.name" min-width="180" prop="name" />
+          <ElTableColumn :label="labels.desc" min-width="260" prop="desc" />
+          <ElTableColumn :label="labels.note" min-width="150" prop="note" />
+        </template>
         <ElTableColumn fixed="right" label="操作" width="104">
           <template #default="scope">
             <div class="table-actions">
@@ -473,49 +514,72 @@ async function deleteItem(item: MachineSectionRow) {
       @keyup.enter="saveItem"
     >
       <ElForm label-position="top" @submit.prevent="saveItem">
-        <div class="form-grid">
-          <ElFormItem :label="labels.type" required>
-            <ElSelect v-model="form.type" class="w-full">
-              <ElOption
-                v-for="option in typeOptions"
-                :key="option"
-                :label="option"
-                :value="option"
-              />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem :label="labels.name" required>
-            <ElInput v-model="form.name" maxlength="80" />
-          </ElFormItem>
-        </div>
-        <ElFormItem :label="labels.desc">
-          <ElInput
-            v-model="form.desc"
-            :rows="3"
-            maxlength="500"
-            type="textarea"
-          />
-        </ElFormItem>
-        <ElFormItem v-if="isStructure" :label="labels.image">
-          <div class="machine-row-image-field">
-            <input
-              ref="fileInputRef"
-              :accept="MACHINE_ROW_IMAGE_RULES.accept"
-              type="file"
-              @change="handleImageChange"
-            />
-            <div v-if="formImage?.dataUrl" class="machine-row-image-preview">
-              <img :src="formImage.dataUrl" alt="" class="machine-row-thumb" />
-              <span class="machine-row-image-name">{{
-                formImage.fileName
-              }}</span>
-              <ElButton size="small" @click="clearImage">清除</ElButton>
-            </div>
+        <template v-if="isStructure">
+          <div class="form-grid">
+            <ElFormItem :label="labels.role" required>
+              <ElInput v-model="form.role" maxlength="80" />
+            </ElFormItem>
+            <ElFormItem :label="labels.sensorType" required>
+              <ElInput v-model="form.sensorType" maxlength="80" />
+            </ElFormItem>
           </div>
-        </ElFormItem>
-        <ElFormItem :label="labels.note">
-          <ElInput v-model="form.note" maxlength="200" />
-        </ElFormItem>
+          <ElFormItem :label="labels.spec">
+            <ElInput v-model="form.spec" maxlength="200" />
+          </ElFormItem>
+          <ElFormItem :label="labels.purpose">
+            <ElInput
+              v-model="form.purpose"
+              :rows="3"
+              maxlength="500"
+              type="textarea"
+            />
+          </ElFormItem>
+          <ElFormItem :label="labels.image">
+            <div class="machine-row-image-field">
+              <input
+                ref="fileInputRef"
+                :accept="MACHINE_ROW_IMAGE_RULES.accept"
+                type="file"
+                @change="handleImageChange"
+              />
+              <div v-if="formImage?.dataUrl" class="machine-row-image-preview">
+                <img
+                  :src="formImage.dataUrl"
+                  alt=""
+                  class="machine-row-thumb"
+                />
+                <span class="machine-row-image-name">{{
+                  formImage.fileName
+                }}</span>
+                <ElButton size="small" @click="clearImage">清除</ElButton>
+              </div>
+            </div>
+          </ElFormItem>
+          <ElFormItem :label="labels.note">
+            <ElInput v-model="form.note" maxlength="200" />
+          </ElFormItem>
+        </template>
+        <template v-else>
+          <div class="form-grid">
+            <ElFormItem :label="labels.role" required>
+              <ElInput v-model="form.role" maxlength="80" />
+            </ElFormItem>
+            <ElFormItem :label="labels.name" required>
+              <ElInput v-model="form.name" maxlength="80" />
+            </ElFormItem>
+          </div>
+          <ElFormItem :label="labels.desc">
+            <ElInput
+              v-model="form.desc"
+              :rows="3"
+              maxlength="500"
+              type="textarea"
+            />
+          </ElFormItem>
+          <ElFormItem :label="labels.note">
+            <ElInput v-model="form.note" maxlength="200" />
+          </ElFormItem>
+        </template>
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>

@@ -77,7 +77,7 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
           )) {
             machineSectionHits.push({
               type: 'machine',
-              title: row.name,
+              title: row.sensorType || row.name || row.role,
               category: group.name,
               sub: [machineName, section.name, row.role]
                 .filter(Boolean)

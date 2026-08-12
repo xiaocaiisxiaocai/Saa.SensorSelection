@@ -425,8 +425,11 @@ export function normalizeMachineSectionRows(source, { allowImage } = {}) {
 
       const row = {
         id,
-        type: storedText(item.type).trim(),
-        name: storedText(item.name).trim(),
+        role: storedText(item.role),
+        sensorType: storedText(item.sensorType),
+        spec: storedText(item.spec),
+        purpose: storedText(item.purpose),
+        name: storedText(item.name),
         desc: storedText(item.desc),
         note: storedText(item.note),
       };
@@ -436,7 +439,11 @@ export function normalizeMachineSectionRows(source, { allowImage } = {}) {
       }
       return row;
     })
-    .filter((item) => item.name);
+    .filter((item) =>
+      allowImage
+        ? item.role.trim() && item.sensorType.trim()
+        : item.role.trim() && item.name.trim(),
+    );
 }
 
 export function formatLocalDate(date) {
@@ -1475,10 +1482,16 @@ export function createSelectionRepository({
   function saveMachineSectionRow(sectionId, machineName, payload, editId) {
     const numericId = Number(sectionId);
     const items = getMachineSectionRows(numericId, machineName);
-    const name = storedText(payload.name).trim();
-    if (!name) return { ok: false, reason: 'validation' };
-
     const allowImage = sectionAllowsImage(numericId);
+    const role = storedText(payload.role).trim();
+    if (allowImage) {
+      const sensorType = storedText(payload.sensorType).trim();
+      if (!role || !sensorType) return { ok: false, reason: 'validation' };
+    } else {
+      const name = storedText(payload.name).trim();
+      if (!role || !name) return { ok: false, reason: 'validation' };
+    }
+
     let image;
     if (allowImage && Object.hasOwn(payload, 'image')) {
       if (payload.image === null || payload.image === undefined) {
@@ -1499,8 +1512,11 @@ export function createSelectionRepository({
     const snapshot = cloneStore(store);
     const base = {
       id: editId || nextAvailableId(items),
-      type: storedText(payload.type).trim(),
-      name,
+      role,
+      sensorType: storedText(payload.sensorType),
+      spec: storedText(payload.spec),
+      purpose: storedText(payload.purpose),
+      name: storedText(payload.name),
       desc: storedText(payload.desc),
       note: storedText(payload.note),
     };

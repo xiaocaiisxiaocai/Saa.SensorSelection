@@ -614,7 +614,7 @@ async function run() {
   assert.equal(saved.item.sensorType, '漫反射传感器')
   assert.equal(Boolean(saved.item.image?.dataUrl), true)
   assert.equal(saved.item.type, undefined)
-  assert.equal(saved.item.name, undefined)
+  assert.equal(saved.item.name, '')
 
   const missingMachineRole = repository.saveMachineSectionRow(1, machineName, {
     role: '  ',

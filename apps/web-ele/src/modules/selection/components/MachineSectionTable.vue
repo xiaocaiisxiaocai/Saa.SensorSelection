@@ -33,7 +33,7 @@ import {
   X,
 } from 'lucide-vue-next';
 
-import { MACHINE_ROW_IMAGE_RULES, machineSectionTypeOptions } from '../data.js';
+import { MACHINE_ROW_IMAGE_RULES } from '../data.js';
 import { validateMachineRowImage } from '../domain.js';
 import { useSelectionStore } from '../store';
 
@@ -80,7 +80,7 @@ const labels = computed(() =>
       },
 );
 
-const typeOptions = computed(() => machineSectionTypeOptions(props.section.id));
+const typeOptions = computed(() => [] as string[]);
 
 const items = computed(
   () =>
@@ -94,7 +94,7 @@ const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   if (!value) return items.value;
   return items.value.filter((item) =>
-    [item.type, item.name, item.desc, item.note]
+    [item.role, item.name, item.desc, item.note, item.sensorType]
       .join(' ')
       .toLocaleLowerCase('zh-CN')
       .includes(value),
@@ -159,7 +159,7 @@ function editItem(item: MachineSectionRow) {
     desc: item.desc,
     name: item.name,
     note: item.note,
-    type: item.type,
+    type: item.role,
   });
   formImage.value = item.image ?? null;
   imageTouched.value = false;
@@ -305,7 +305,7 @@ function closePreview() {
 
 function saveItem() {
   const payload: Partial<MachineSectionRow> = {
-    type: form.type,
+    role: form.type,
     name: form.name.trim(),
     desc: form.desc.trim(),
     note: form.note.trim(),

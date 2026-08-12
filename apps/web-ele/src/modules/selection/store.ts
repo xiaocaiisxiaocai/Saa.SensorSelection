@@ -79,7 +79,7 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
               type: 'machine',
               title: row.name,
               category: group.name,
-              sub: [machineName, section.name, row.type]
+              sub: [machineName, section.name, row.role]
                 .filter(Boolean)
                 .join(' · '),
               path: '/selection/machine',

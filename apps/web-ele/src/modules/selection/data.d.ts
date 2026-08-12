@@ -133,7 +133,10 @@ export interface MachineRowImage {
 
 export interface MachineSectionRow {
   id: number;
-  type: string;
+  role: string;
+  sensorType: string;
+  spec: string;
+  purpose: string;
   name: string;
   desc: string;
   note: string;
@@ -191,7 +194,6 @@ export const MACHINE_ROW_IMAGE_RULES: {
   maxBytes: number;
   mimeTypes: string[];
 };
-export function machineSectionTypeOptions(sectionId: number): string[];
 export const DICTIONARY_DEFINITIONS: DictionaryDefinition[];
 export const ENTITY_KIND_DEFINITIONS: EntityKindDefinition[];
 export function createEntityGroupDefaults(

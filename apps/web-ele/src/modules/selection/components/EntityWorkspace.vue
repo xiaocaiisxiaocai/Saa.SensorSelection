@@ -8,7 +8,7 @@ import { ElTabPane, ElTabs } from 'element-plus';
 
 import { useSelectionStore } from '../store';
 import ControlledFilesPanel from './ControlledFilesPanel.vue';
-import CrudTable from './CrudTable.vue';
+import CustomerProcPanel from './CustomerProcPanel.vue';
 import CustomerReqPanel from './CustomerReqPanel.vue';
 import EntitySidebar from './EntitySidebar.vue';
 import TimelinePanel from './TimelinePanel.vue';
@@ -79,7 +79,7 @@ function selectEntity(payload: { category: string; item: string }) {
             <CustomerReqPanel :entity-name="selection.item" />
           </ElTabPane>
           <ElTabPane label="制程注意事项" lazy name="proc">
-            <CrudTable :entity-name="selection.item" list-id="customer-proc" />
+            <CustomerProcPanel :entity-name="selection.item" />
           </ElTabPane>
           <ElTabPane label="感应器选用标准" lazy name="sop">
             <ControlledFilesPanel :entity-name="selection.item" />

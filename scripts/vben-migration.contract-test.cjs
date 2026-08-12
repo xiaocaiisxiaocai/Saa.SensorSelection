@@ -379,12 +379,100 @@ async function run() {
     true,
   )
 
+  const reqSourceTypes = repository.getDictionaryItems('customer-req-source')
+  assert.equal(reqSourceTypes.length, 5)
+  assert.deepEqual(
+    reqSourceTypes.map((item) => item.name),
+    ['验收规范', '厂外改善', '客户要求', '产品更新迭代', '其他'],
+  )
+
+  const savedReq = repository.saveCrud('customer-req', customer, {
+    type: '输送段',
+    machine: 'ALL',
+    process: 'DES',
+    content: '板件有无检测距离不大于 300mm',
+    source: '验收规范',
+    note: '示例备注',
+  })
+  assert.equal(savedReq.ok, true)
+  assert.equal(savedReq.item.content, '板件有无检测距离不大于 300mm')
+  assert.equal(savedReq.item.machine, 'ALL')
+  assert.equal(savedReq.item.source, '验收规范')
+  assert.equal(savedReq.item.name, undefined)
+  assert.equal(savedReq.item.desc, undefined)
+
+  const reqRow = repository
+    .getCrud('customer-req', customer)
+    .find((item) => item.content === '板件有无检测距离不大于 300mm')
+  assert.ok(reqRow)
+  assert.deepEqual(Object.keys(reqRow).sort(), [
+    'content',
+    'id',
+    'machine',
+    'note',
+    'process',
+    'source',
+    'type',
+  ])
+
+  const missingContent = repository.saveCrud('customer-req', customer, {
+    type: '输送段',
+    machine: '',
+    process: '',
+    content: '  ',
+    source: '其他',
+    note: '',
+  })
+  assert.deepEqual(missingContent, { ok: false, reason: 'validation' })
+
+  const optionalReq = repository.saveCrud('customer-req', customer, {
+    type: '特殊要求',
+    machine: '',
+    process: '',
+    content: '仅要求内容',
+    source: '客户要求',
+    note: '',
+  })
+  assert.equal(optionalReq.ok, true)
+  assert.equal(optionalReq.item.machine, '')
+  assert.equal(optionalReq.item.process, '')
+  assert.equal(optionalReq.item.note, '')
+
+  const renamedSource = repository.saveDictionaryItem(
+    'customer-req-source',
+    { name: '验收规范-改', sort: 1 },
+    reqSourceTypes[0].id,
+  )
+  assert.equal(renamedSource.ok, true)
+  assert.equal(
+    repository
+      .getCrud('customer-req', customer)
+      .some((item) => item.source === '验收规范-改'),
+    true,
+  )
+
+  const savedProc = repository.saveCrud('customer-proc', customer, {
+    type: 'DES 制程',
+    name: '板件传送检测',
+    desc: '进出口设置漫反射传感器',
+    note: '防止空喷损耗',
+  })
+  assert.equal(savedProc.ok, true)
+  assert.equal(savedProc.item.name, '板件传送检测')
+  assert.equal(savedProc.item.content, undefined)
+
   const renamedReq = repository.saveDictionaryItem(
     'customer-req',
     { name: '输送段-改', sort: 1 },
     reqTypes[0].id,
   )
   assert.equal(renamedReq.ok, true)
+  assert.equal(
+    repository
+      .getCrud('customer-req', customer)
+      .some((item) => item.type === '输送段-改'),
+    true,
+  )
 
   const customerGroups = repository.getEntityGroups('customer')
   assert.equal(customerGroups.some((group) => group.name === '华东'), true)

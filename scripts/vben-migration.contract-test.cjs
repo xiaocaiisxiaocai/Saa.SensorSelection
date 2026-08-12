@@ -590,11 +590,17 @@ async function run() {
   const machineName = '中间六轴机'
   const conveyorRows = repository.getMachineSectionRows(1, machineName)
   assert.ok(conveyorRows.length >= 1, 'legacy conveyor rows should migrate')
+  assert.equal(
+    conveyorRows.some((row) => row.role && row.sensorType),
+    true,
+    'migrated conveyor rows should have role and sensorType',
+  )
 
   const saved = repository.saveMachineSectionRow(1, machineName, {
-    type: '进板检测',
-    name: '测试图行',
-    desc: '带图',
+    role: '进板检测',
+    sensorType: '漫反射传感器',
+    spec: 'OMRON E3Z-D61',
+    purpose: '安装于进板口',
     note: '',
     image: {
       dataUrl: 'data:image/png;base64,aaa',
@@ -604,10 +610,23 @@ async function run() {
     },
   })
   assert.equal(saved.ok, true)
+  assert.equal(saved.item.role, '进板检测')
+  assert.equal(saved.item.sensorType, '漫反射传感器')
   assert.equal(Boolean(saved.item.image?.dataUrl), true)
+  assert.equal(saved.item.type, undefined)
+  assert.equal(saved.item.name, undefined)
+
+  const missingMachineRole = repository.saveMachineSectionRow(1, machineName, {
+    role: '  ',
+    sensorType: '有类型',
+    spec: '',
+    purpose: '',
+    note: '',
+  })
+  assert.deepEqual(missingMachineRole, { ok: false, reason: 'validation' })
 
   const notesSave = repository.saveMachineSectionRow(4, machineName, {
-    type: '安装注意',
+    role: '自由注意分类',
     name: '无图',
     desc: '',
     note: '',
@@ -619,6 +638,8 @@ async function run() {
     },
   })
   assert.equal(notesSave.ok, true)
+  assert.equal(notesSave.item.role, '自由注意分类')
+  assert.equal(notesSave.item.name, '无图')
   assert.equal(notesSave.item.image == null, true)
 
   const delNotes = repository.deleteGlobalMachineSection(
@@ -651,12 +672,7 @@ async function run() {
   const extraRow = repository.saveMachineSectionRow(
     extraSection.item.id,
     machineName,
-    {
-      type: '其他',
-      name: '专属行',
-      desc: '',
-      note: '',
-    },
+    { role: '其他', sensorType: '专属行', spec: '', purpose: '', note: '' },
   )
   assert.equal(extraRow.ok, true)
 
@@ -675,7 +691,7 @@ async function run() {
   assert.equal(
     repository
       .getMachineSectionRows(extraSection.item.id, '中间六轴机-改')
-      .some((item) => item.name === '专属行'),
+      .some((item) => item.sensorType === '专属行'),
     true,
   )
   assert.equal(repository.entityHasData('machine', '中间六轴机-改'), true)
@@ -693,9 +709,10 @@ async function run() {
   assert.equal(rowOnlyMachine.ok, true)
   assert.equal(repository.entityHasData('machine', '仅行数据机'), false)
   const onlyRow = repository.saveMachineSectionRow(1, '仅行数据机', {
-    type: '进板检测',
-    name: '唯一行',
-    desc: '',
+    role: '进板检测',
+    sensorType: '唯一行',
+    spec: '',
+    purpose: '',
     note: '',
   })
   assert.equal(onlyRow.ok, true)
@@ -709,9 +726,9 @@ async function run() {
         for (const row of repository.getMachineSectionRows(section.id, name)) {
           machineSectionHits.push({
             type: 'machine',
-            title: row.name,
+            title: row.sensorType || row.name || row.role,
             category: group.name,
-            sub: [name, section.name, row.type].filter(Boolean).join(' · '),
+            sub: [name, section.name, row.role].filter(Boolean).join(' · '),
             path: '/selection/machine',
             query: {
               category: group.name,

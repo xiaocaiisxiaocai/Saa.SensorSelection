@@ -453,13 +453,59 @@ async function run() {
 
   const savedProc = repository.saveCrud('customer-proc', customer, {
     type: 'DES 制程',
-    name: '板件传送检测',
-    desc: '进出口设置漫反射传感器',
+    role: '板件传送检测',
+    feature: '进出口设置漫反射传感器',
+    sensorNote: '注意检测距离',
     note: '防止空喷损耗',
   })
   assert.equal(savedProc.ok, true)
-  assert.equal(savedProc.item.name, '板件传送检测')
-  assert.equal(savedProc.item.content, undefined)
+  assert.equal(savedProc.item.role, '板件传送检测')
+  assert.equal(savedProc.item.feature, '进出口设置漫反射传感器')
+  assert.equal(savedProc.item.sensorNote, '注意检测距离')
+  assert.equal(savedProc.item.name, undefined)
+  assert.equal(savedProc.item.desc, undefined)
+
+  const procRow = repository
+    .getCrud('customer-proc', customer)
+    .find((item) => item.role === '板件传送检测')
+  assert.ok(procRow)
+  assert.deepEqual(Object.keys(procRow).sort(), [
+    'feature',
+    'id',
+    'note',
+    'role',
+    'sensorNote',
+    'type',
+  ])
+
+  const missingRole = repository.saveCrud('customer-proc', customer, {
+    type: 'AOI 制程',
+    role: '  ',
+    feature: '有特性',
+    sensorNote: '',
+    note: '',
+  })
+  assert.deepEqual(missingRole, { ok: false, reason: 'validation' })
+
+  const missingFeature = repository.saveCrud('customer-proc', customer, {
+    type: 'AOI 制程',
+    role: '有作用',
+    feature: '  ',
+    sensorNote: '',
+    note: '',
+  })
+  assert.deepEqual(missingFeature, { ok: false, reason: 'validation' })
+
+  const optionalProc = repository.saveCrud('customer-proc', customer, {
+    type: '通用',
+    role: '仅作用与特性',
+    feature: '特性正文',
+    sensorNote: '',
+    note: '',
+  })
+  assert.equal(optionalProc.ok, true)
+  assert.equal(optionalProc.item.sensorNote, '')
+  assert.equal(optionalProc.item.note, '')
 
   const renamedReq = repository.saveDictionaryItem(
     'customer-req',

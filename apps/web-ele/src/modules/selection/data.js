@@ -273,19 +273,21 @@ export const CRUD_DEFAULTS = {
   'customer-feedback': () => [
     {
       id: 1,
+      type: '选型配置异常',
+      machine: '六轴上板机',
+      problem: '快速运行时吸板失败率偏高，影响产能。',
+      measure: '更换快速响应型真空表头后恢复稳定。',
       date: '2024-10-15',
-      title: '六轴机吸板失败率偏高',
-      desc: '快速运行时吸板失败率偏高，影响产能。',
-      status: 'resolved',
-      actions: '更换快速响应型真空表头后恢复稳定。',
+      status: '已解决',
     },
     {
       id: 2,
+      type: '感应器异常',
+      machine: 'AOI 段',
+      problem: '光纤传感器镜头积灰导致定位偏移。',
+      measure: '清洁镜头并增加每周清洁提醒。',
       date: '2024-09-22',
-      title: 'AOI 段板件定位偏移',
-      desc: '光纤传感器镜头积灰导致定位偏移。',
-      status: 'resolved',
-      actions: '清洁镜头并增加每周清洁提醒。',
+      status: '已解决',
     },
   ],
   'machine-conveyor': () => [
@@ -407,6 +409,49 @@ export const CRUD_DEFAULTS = {
   ],
 };
 
+export const PROCESS_LAYER_OPTIONS = ['内层', '外层'];
+
+export function createProcessStepDefaults() {
+  let id = 1;
+  const steps = [];
+  for (const group of PROCESS_GROUPS) {
+    if (group.name === '制程介绍') continue;
+    const layer = group.name.includes('外层') ? '外层' : '内层';
+    for (const name of group.items) {
+      steps.push({
+        id: id++,
+        layer,
+        name,
+        role: PROCESS_DETAILS[name]?.desc || '',
+        feature: '',
+        note: '',
+      });
+    }
+  }
+  return steps;
+}
+
+export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
+
+export const SENSOR_TYPE_OPTIONS = Object.keys(SENSOR_DATA);
+
+export const FEEDBACK_TYPE_DEFAULTS = [
+  { id: 1, name: '感应器异常', sort: 1 },
+  { id: 2, name: '测板厚异常', sort: 2 },
+  { id: 3, name: '智能化异常', sort: 3 },
+  { id: 4, name: '选型配置异常', sort: 4 },
+  { id: 5, name: '客户要求', sort: 5 },
+  { id: 6, name: '料件损坏', sort: 6 },
+  { id: 7, name: '厂外改善', sort: 7 },
+  { id: 8, name: '其他', sort: 8 },
+];
+
+export const FEEDBACK_TYPE_OPTIONS = FEEDBACK_TYPE_DEFAULTS.map(
+  (item) => item.name,
+);
+
+export const FEEDBACK_STATUS_OPTIONS = ['待处理', '处理中', '已解决'];
+
 export const CRUD_TYPE_OPTIONS = {
   'customer-req': [
     '输送段',
@@ -424,6 +469,156 @@ export const CRUD_TYPE_OPTIONS = {
   'process-feat': ['特性', '要求', '限制', '其他'],
   'process-sensor': ['输送段', '掉板段', '完板段', '真空段', '其他'],
 };
+
+export const MACHINE_SECTION_SEED = [
+  { id: 1, name: '输送机构', sort: 1, kind: 'structure', scope: 'global' },
+  { id: 2, name: '手臂机构', sort: 2, kind: 'structure', scope: 'global' },
+  { id: 3, name: '台车工位结构', sort: 3, kind: 'structure', scope: 'global' },
+  {
+    id: 4,
+    name: '机型注意事项',
+    sort: 4,
+    kind: 'notes',
+    locked: true,
+    scope: 'global',
+  },
+];
+
+/**
+ * 仅「通用结构」分类：侧栏机型名 ↔ 全局结构 Tab（按稳定 id）显示名对齐。
+ * 其它分类仍直接使用数据字典里的全局 Tab 名称。
+ */
+export const GENERAL_STRUCTURE_CATEGORY = '通用结构';
+
+/** 通用结构初始三项 ↔ 全局结构 Tab 稳定 id（其它机型仍显示字典原名） */
+export const GENERAL_STRUCTURE_SECTION_LABELS = {
+  1: '标准输送段',
+  2: '六轴机械手',
+  3: '台车系统',
+};
+
+export const MACHINE_SECTION_LEGACY_MAP = {
+  'machine-conveyor': 1,
+  'machine-arm': 2,
+  'machine-platform': 3,
+  'machine-notes': 4,
+};
+
+export const MACHINE_ROW_IMAGE_RULES = {
+  accept: '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp',
+  extensions: ['.jpg', '.jpeg', '.png', '.webp'],
+  maxBytes: 2 * 1024 * 1024,
+  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+};
+
+export function machineSectionTypeOptions(sectionId) {
+  const map = {
+    1: CRUD_TYPE_OPTIONS['machine-conveyor'],
+    2: CRUD_TYPE_OPTIONS['machine-arm'],
+    3: CRUD_TYPE_OPTIONS['machine-platform'],
+    4: CRUD_TYPE_OPTIONS['machine-notes'],
+  };
+  return map[sectionId] || ['其他'];
+}
+
+export const DICTIONARY_DEFINITIONS = [
+  {
+    code: 'customer-req',
+    title: '要求分类',
+    description: '客户通用要求中的分类，全局共用',
+    field: 'type',
+    listIds: ['customer-req'],
+    defaults: CRUD_TYPE_OPTIONS['customer-req'],
+  },
+  {
+    code: 'customer-proc',
+    title: '制程分类',
+    description: '制程注意事项中的分类，全局共用',
+    field: 'type',
+    listIds: ['customer-proc'],
+    defaults: CRUD_TYPE_OPTIONS['customer-proc'],
+  },
+  {
+    code: 'customer-feedback',
+    title: '厂外反馈问题分类',
+    description: '厂外反馈问题项中的问题分类，全局共用',
+    field: 'type',
+    listIds: ['customer-feedback'],
+    defaults: FEEDBACK_TYPE_OPTIONS,
+  },
+  {
+    code: 'customer-feedback-status',
+    title: '厂外反馈状态',
+    description: '厂外反馈问题项中的处理状态，全局共用',
+    field: 'status',
+    listIds: ['customer-feedback'],
+    defaults: FEEDBACK_STATUS_OPTIONS,
+  },
+  {
+    code: 'process-layer',
+    title: '制程分层',
+    description: '工艺制程所属内层或外层，全局共用',
+    field: 'layer',
+    listIds: [],
+    catalog: 'process-step',
+    defaults: PROCESS_LAYER_OPTIONS,
+  },
+  {
+    code: 'sensor-status',
+    title: 'Sensor 状态',
+    description: 'Sensor 型号字典中的状态，全局共用',
+    field: 'status',
+    listIds: [],
+    catalog: 'sensor',
+    defaults: SENSOR_STATUS_OPTIONS,
+  },
+  {
+    code: 'sensor-type',
+    title: '感应器类型',
+    description: 'Sensor 型号字典中的感应器类型，全局共用',
+    field: 'sensorType',
+    listIds: [],
+    catalog: 'sensor',
+    defaults: SENSOR_TYPE_OPTIONS,
+  },
+  {
+    code: 'machine-section',
+    title: '机型结构 Tab',
+    description: '机型详情全局 Tab；注意事项锁定且无附加图片',
+    field: 'type',
+    listIds: [],
+    catalog: 'machine-section',
+    defaults: MACHINE_SECTION_SEED.map((item) => item.name),
+  },
+];
+
+export const ENTITY_KIND_DEFINITIONS = [
+  {
+    kind: 'customer',
+    label: '客户',
+    groupLabel: '区域',
+    listIds: ['customer-req', 'customer-proc', 'customer-feedback'],
+    hasControlledFiles: true,
+    seedGroups: CUSTOMER_GROUPS,
+  },
+  {
+    kind: 'machine',
+    label: '机型',
+    groupLabel: '分类',
+    listIds: [],
+    hasControlledFiles: false,
+    seedGroups: MACHINE_GROUPS,
+  },
+];
+
+export function createEntityGroupDefaults(kind) {
+  const definition = ENTITY_KIND_DEFINITIONS.find((item) => item.kind === kind);
+  if (!definition) return [];
+  return definition.seedGroups.map((group) => ({
+    name: group.name,
+    items: [...group.items],
+  }));
+}
 
 export const CRUD_COLUMN_LABELS = {
   'customer-req': ['要求分类', '要求名称', '要求说明', '备注'],

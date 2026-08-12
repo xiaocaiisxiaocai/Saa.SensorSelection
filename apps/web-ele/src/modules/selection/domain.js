@@ -133,6 +133,26 @@ export function normalizeCrudItems(listId, sourceItems) {
         };
       }
 
+      if (listId === 'customer-req') {
+        const type =
+          storedText(item.type).trim() ||
+          createDictionaryDefaults('customer-req')[0]?.name ||
+          '';
+        const source =
+          storedText(item.source).trim() ||
+          createDictionaryDefaults('customer-req-source')[0]?.name ||
+          '';
+        return {
+          id,
+          type,
+          machine: storedText(item.machine),
+          process: storedText(item.process),
+          content: storedText(item.content),
+          source,
+          note: storedText(item.note),
+        };
+      }
+
       return {
         id,
         type: storedText(item.type),
@@ -676,7 +696,12 @@ export function createSelectionRepository({
     const items = getCrud(listId, entityName);
     const snapshot = cloneStore(store);
     const isTimeline = listId === 'customer-feedback';
-    const requiredValue = isTimeline ? payload.problem : payload.name;
+    const isCustomerReq = listId === 'customer-req';
+    const requiredValue = isTimeline
+      ? payload.problem
+      : isCustomerReq
+        ? payload.content
+        : payload.name;
     if (!storedText(requiredValue).trim())
       return { ok: false, reason: 'validation' };
 
@@ -695,6 +720,16 @@ export function createSelectionRepository({
         (item) => item.name === statusName,
       );
       if (!statusName || !allowedStatus) {
+        return { ok: false, reason: 'validation' };
+      }
+    }
+
+    if (listId === 'customer-req') {
+      const sourceName = storedText(payload.source).trim();
+      const allowedSource = getDictionaryItems('customer-req-source').some(
+        (item) => item.name === sourceName,
+      );
+      if (!sourceName || !allowedSource) {
         return { ok: false, reason: 'validation' };
       }
     }

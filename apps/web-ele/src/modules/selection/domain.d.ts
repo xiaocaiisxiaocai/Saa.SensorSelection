@@ -1,6 +1,7 @@
 import type {
   ControlledFileItem,
   CrudItem,
+  CustomerReqItem,
   DictionaryItem,
   EntityGroup,
   MachineRowImage,
@@ -67,7 +68,10 @@ export interface SelectionRepository {
     via: 'label' | 'name';
   } | null;
   getControlledDocuments(entityName: string): ControlledFileItem[];
-  getCrud(listId: string, entityName: string): Array<CrudItem | TimelineItem>;
+  getCrud(
+    listId: string,
+    entityName: string,
+  ): Array<CrudItem | CustomerReqItem | TimelineItem>;
   getDictionaryItems(code: string): DictionaryItem[];
   getEntityGroups(kind: EntityKind): EntityGroup[];
   getExtraMachineSections(machineName: string): MachineSectionItem[];
@@ -96,9 +100,9 @@ export interface SelectionRepository {
   saveCrud(
     listId: string,
     entityName: string,
-    payload: Partial<CrudItem & TimelineItem>,
+    payload: Partial<CrudItem & CustomerReqItem & TimelineItem>,
     editId?: number,
-  ): SaveResult<CrudItem | TimelineItem>;
+  ): SaveResult<CrudItem | CustomerReqItem | TimelineItem>;
   saveDictionaryItem(
     code: string,
     payload: Partial<DictionaryItem>,
@@ -205,7 +209,7 @@ export function parsePersistedStore(
 export function normalizeCrudItems(
   listId: string,
   sourceItems: unknown[],
-): Array<CrudItem | TimelineItem>;
+): Array<CrudItem | CustomerReqItem | TimelineItem>;
 export function normalizeSensorItems(
   sourceItems: unknown[],
   allowedTypes?: string[],
@@ -236,7 +240,7 @@ export function formatLocalDateTime(date: Date): string;
 export function createSelectionRepository(options: {
   crudDefaults: Record<
     string,
-    (entityName: string) => Array<CrudItem | TimelineItem>
+    (entityName: string) => Array<CrudItem | CustomerReqItem | TimelineItem>
   >;
   sensorData: Record<string, SensorTypeDefinition>;
   storage?: StorageLike;

@@ -158,11 +158,13 @@ export const MACHINE_DETAILS: Record<string, EntityDetail>;
 export const SENSOR_DATA: Record<string, SensorTypeDefinition>;
 export const CRUD_DEFAULTS: Record<
   string,
-  (entityName: string) => Array<CrudItem | TimelineItem>
+  (entityName: string) => Array<CrudItem | CustomerReqItem | TimelineItem>
 >;
 export const FEEDBACK_TYPE_OPTIONS: string[];
 export const FEEDBACK_TYPE_DEFAULTS: DictionaryItem[];
 export const FEEDBACK_STATUS_OPTIONS: string[];
+export const CUSTOMER_REQ_SOURCE_OPTIONS: string[];
+export const CUSTOMER_REQ_SOURCE_DEFAULTS: DictionaryItem[];
 export const PROCESS_LAYER_OPTIONS: string[];
 export function createProcessStepDefaults(): ProcessStepItem[];
 export const SENSOR_STATUS_OPTIONS: string[];

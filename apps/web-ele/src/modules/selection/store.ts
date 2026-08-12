@@ -1,5 +1,6 @@
 import type {
   CrudItem,
+  CustomerReqItem,
   DictionaryItem,
   EntityGroup,
   MachineSectionItem,
@@ -160,7 +161,7 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
   function saveCrud(
     listId: string,
     entityName: string,
-    payload: Partial<CrudItem & TimelineItem>,
+    payload: Partial<CrudItem & CustomerReqItem & TimelineItem>,
     editId?: number,
   ) {
     const result = repository.saveCrud(listId, entityName, payload, editId);

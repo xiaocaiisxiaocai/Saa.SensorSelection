@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Symtek.Api.Tests/Symtek.Api.Tests.csproj" />
+  <Project Path="Symtek.Api/Symtek.Api.csproj" />
+</Solution>

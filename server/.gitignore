@@ -1,0 +1,15 @@
+# .NET 构建产物
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+
+# 本地 SQLite 数据（运行时生成，含历史备份）
+**/App_Data*/
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.db-journal
+
+# 发布输出
+publish/

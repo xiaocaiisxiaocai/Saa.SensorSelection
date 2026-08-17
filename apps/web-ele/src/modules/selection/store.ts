@@ -16,12 +16,15 @@ import type {
   EntityTreeItem,
   SaveFailure,
   SearchItem,
+  StorageLike,
 } from './domain.js';
 
 import { computed, ref } from 'vue';
 
 import { defineStore } from 'pinia';
 
+import { api, readTokenDisplayName, storeToken } from './api.js';
+import { BackendStorage, type BackendSyncStatus } from './backend-storage.js';
 import { CRUD_DEFAULTS, MACHINE_DETAILS, SENSOR_DATA } from './data.js';
 import {
   buildSearchIndex,
@@ -30,11 +33,20 @@ import {
 } from './domain.js';
 
 const storage = typeof window === 'undefined' ? undefined : window.localStorage;
-const repository = createSelectionRepository({
+
+let repository = createSelectionRepository({
   crudDefaults: CRUD_DEFAULTS,
   sensorData: SENSOR_DATA,
   storage,
 });
+
+/** 后端连接状态：connecting/online/offline/unauthorized。 */
+const backendStatus = ref<BackendSyncStatus>('connecting');
+/** 后端相关提示（迁移完成、离线、写入失败等）。 */
+const backendMessage = ref('');
+/** 当前登录用户显示名。 */
+const backendUser = ref('');
+let initPromise: null | Promise<void> = null;
 
 let storageSyncBound = false;
 
@@ -394,7 +406,89 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
 
   bindStorageSync();
 
+  /**
+   * 初始化后端连接：拉取远端数据（首次自动迁移 localStorage），
+   * 失败时退化为本地模式或进入未登录状态。
+   */
+  async function initBackend(): Promise<void> {
+    initPromise = null;
+    backendStatus.value = 'connecting';
+    backendMessage.value = '';
+    backendUser.value = readTokenDisplayName() ?? '';
+    const bridge = new BackendStorage({
+      transport: {
+        fetchStore: () => api.getStore(),
+        writeKey: (key, value) => api.putKey(key, value),
+        deleteKey: (key) => api.deleteKey(key),
+        writeAll: (store) => api.replaceAll(store),
+      },
+      // 浏览器环境下 storage 恒为 window.localStorage（SSR 守卫仅用于类型安全）
+      local: storage as StorageLike,
+      migrateOnEmpty: true,
+      onStatus: (status) => {
+        backendStatus.value = status;
+      },
+      onWriteFailure: (message) => {
+        lastFailure.value = 'storage';
+        backendMessage.value = `写入后端失败：${message}`;
+      },
+    });
+    const result = await bridge.init();
+    repository = createSelectionRepository({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
+      storage: bridge,
+    });
+    if (result.migrated) {
+      backendMessage.value = '已将本地数据导入后端（迁移完成）';
+    }
+    touch();
+  }
+
+  /** 确保后端已初始化（幂等，供挂载点调用）。 */
+  function ensureBackendInit(): Promise<void> {
+    if (!initPromise) {
+      initPromise = initBackend().catch(() => {
+        // 状态已通过回调反馈，避免未处理异常
+      });
+    }
+    return initPromise;
+  }
+
+  /** 登录：校验账号密码，签发并保存 token 后重建数据层。 */
+  async function login(username: string, password: string) {
+    if (!username.trim() || !password) {
+      return { ok: false as const, message: '请输入用户名和密码' };
+    }
+    try {
+      const result = await api.login(username.trim(), password);
+      storeToken(result.token);
+      backendUser.value = result.displayName || result.username;
+      await initBackend();
+      return { ok: true as const };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '登录失败，请重试';
+      return { ok: false as const, message };
+    }
+  }
+
+  /** 登出：清除 token 并回到未登录状态（数据层退回本地只读）。 */
+  async function logout() {
+    storeToken(null);
+    backendUser.value = '';
+    await initBackend();
+  }
+
+  /** 手动重连（离线/失败后）。 */
+  function reconnect() {
+    return ensureBackendInit();
+  }
+
   return {
+    backendMessage,
+    backendStatus,
+    backendUser,
     controlledDocuments,
     crudItems,
     deleteControlledFile,
@@ -410,6 +504,8 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     deleteSensorSop,
     dictionaryItems,
     dictionaryNames,
+    ensureBackendInit,
+    initBackend,
     entityGroups,
     entityHasData,
     extraMachineSections,
@@ -419,6 +515,9 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     machineSectionRows,
     processSteps,
     resolvedMachineSections,
+    login,
+    logout,
+    reconnect,
     revision,
     saveControlledFile,
     saveCrud,

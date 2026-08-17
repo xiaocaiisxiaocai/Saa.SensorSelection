@@ -35,8 +35,12 @@ async function run() {
   const dataUrl = pathToFileURL(
     required('apps/web-ele/src/modules/selection/data.js'),
   ).href
+  const backendStorageUrl = pathToFileURL(
+    required('apps/web-ele/src/modules/selection/backend-storage.js'),
+  ).href
   const domain = await import(domainUrl)
   const data = await import(dataUrl)
+  const { BackendStorage } = await import(backendStorageUrl)
 
   const safeStore = domain.parsePersistedStore(
     '{"__proto__":[],"constructor":[],"safe":[],"invalid":{}}',
@@ -768,6 +772,171 @@ async function run() {
     index.some((item) => item.title === '中间六轴机-改' && item.type === 'machine'),
     true,
   )
+
+  // ---- 后端存储桥接层：迁移 / diff PUT / 回滚 / 离线与未登录降级 ----
+
+  function createFakeTransport(initial, opts = {}) {
+    const remote = new Map(Object.entries(initial))
+    const calls = { writes: [], deletes: [], writeAlls: 0, fetches: 0 }
+    return {
+      calls,
+      remote,
+      async fetchStore() {
+        calls.fetches += 1
+        if (opts.fetchError) throw opts.fetchError
+        return Object.fromEntries(remote)
+      },
+      async writeKey(key, value) {
+        if (opts.failKeys && opts.failKeys.includes(key)) {
+          throw new Error(`write blocked: ${key}`)
+        }
+        remote.set(key, value)
+        calls.writes.push(key)
+      },
+      async deleteKey(key) {
+        if (opts.failDeletes && opts.failDeletes.includes(key)) {
+          throw new Error(`delete blocked: ${key}`)
+        }
+        remote.delete(key)
+        calls.deletes.push(key)
+      },
+      async writeAll(store) {
+        if (opts.failWriteAll) throw new Error('writeAll blocked')
+        remote.clear()
+        for (const [key, value] of Object.entries(store)) {
+          remote.set(key, value)
+        }
+        calls.writeAlls += 1
+      },
+    }
+  }
+
+  const makeLocal = (memory) => ({
+    getItem: (key) => memory.get(key) ?? null,
+    setItem: (key, value) => memory.set(key, value),
+  })
+
+  // 迁移：后端空库 + 本地有数据 → 自动导入
+  const localMemory1 = new Map()
+  localMemory1.set(
+    domain.STORAGE_KEY,
+    JSON.stringify({ 'customer-req': [{ id: 1, type: '输送段' }] }),
+  )
+  const transport1 = createFakeTransport({})
+  const bridge1 = new BackendStorage({
+    transport: transport1,
+    local: makeLocal(localMemory1),
+    migrateOnEmpty: true,
+  })
+  const migrated = await bridge1.init()
+  assert.equal(migrated.status, 'online')
+  assert.equal(migrated.migrated, true)
+  assert.equal(migrated.keyCount, 1)
+  assert.equal(transport1.calls.writeAlls, 1)
+  assert.deepEqual(
+    transport1.remote.get('customer-req'),
+    [{ id: 1, type: '输送段' }],
+  )
+
+  // diff PUT：只推送变更的 key
+  const localMemory2 = new Map()
+  const transport2 = createFakeTransport({ a: [1], b: [2] })
+  const bridge2 = new BackendStorage({
+    transport: transport2,
+    local: makeLocal(localMemory2),
+  })
+  await bridge2.init()
+  assert.equal(bridge2.getItem('a'), '[1]')
+  assert.equal(bridge2.setItem('a', JSON.stringify([1, 2])), true)
+  assert.equal(bridge2.setItem('b', JSON.stringify([2])), true) // 值未变 → 不推送
+  assert.equal(bridge2.setItem('c', JSON.stringify([3])), true) // 新 key
+  await bridge2.queue
+  assert.deepEqual(transport2.calls.writes.sort(), ['a', 'c'])
+  assert.equal(transport2.calls.fetches, 1)
+
+  // 写失败：乐观更新回滚到上次同步值
+  const localMemory3 = new Map()
+  let writeFailureMsg = ''
+  const transport3 = createFakeTransport({ a: [{ v: 1 }] }, { failKeys: ['a'] })
+  const bridge3 = new BackendStorage({
+    transport: transport3,
+    local: makeLocal(localMemory3),
+    onWriteFailure: (message) => {
+      writeFailureMsg = message
+    },
+  })
+  await bridge3.init()
+  assert.equal(bridge3.setItem('a', JSON.stringify([{ v: 2 }])), true)
+  assert.equal(bridge3.getItem('a'), '[{"v":2}]') // 乐观读
+  await bridge3.queue
+  assert.equal(bridge3.getItem('a'), '[{"v":1}]') // 已回滚
+  assert.match(writeFailureMsg, /write blocked/)
+  assert.equal(bridge3.lastError, 'write blocked: a')
+
+  // 删除失败：从已同步状态恢复该 key
+  const localMemory4 = new Map()
+  const transport4 = createFakeTransport(
+    { a: [1], b: [2] },
+    { failDeletes: ['a'] },
+  )
+  const bridge4 = new BackendStorage({
+    transport: transport4,
+    local: makeLocal(localMemory4),
+  })
+  await bridge4.init()
+  bridge4.setItem(domain.STORAGE_KEY, JSON.stringify({ b: [2] })) // 整体写回：删除 a
+  await bridge4.queue
+  assert.equal(bridge4.getItem('a'), '[1]') // 删除失败 → 恢复
+  assert.equal(bridge4.getItem('b'), '[2]')
+
+  // 后端不可达：退化为本地模式（可读写）
+  const localMemory5 = new Map()
+  const transport5 = createFakeTransport(
+    {},
+    { fetchError: new Error('network down') },
+  )
+  const bridge5 = new BackendStorage({
+    transport: transport5,
+    local: makeLocal(localMemory5),
+  })
+  const offline = await bridge5.init()
+  assert.equal(offline.status, 'offline')
+  assert.equal(bridge5.setItem('x', JSON.stringify([1])), true)
+  assert.equal(bridge5.getItem('x'), '[1]')
+  assert.equal(localMemory5.get('x'), '[1]')
+
+  // 在线模式：getItem(STORAGE_KEY) 必须把扁平缓存组装成完整 store（仓库按整库读取）
+  const localMemory7 = new Map()
+  const transport7 = createFakeTransport({
+    'customer-req:庆鼎': [{ id: 1, content: '后端行' }],
+    'dict:customer-req': [{ id: 9, name: '输送段' }],
+  })
+  const bridge7 = new BackendStorage({
+    transport: transport7,
+    local: makeLocal(localMemory7),
+  })
+  await bridge7.init()
+  const fullStore = JSON.parse(bridge7.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(Object.keys(fullStore).sort(), [
+    'customer-req:庆鼎',
+    'dict:customer-req',
+  ])
+  assert.deepEqual(fullStore['customer-req:庆鼎'], [{ id: 1, content: '后端行' }])
+  assert.equal(bridge7.getItem('customer-req:庆鼎'), '[{"id":1,"content":"后端行"}]')
+
+  // 未登录：读本地缓存、拒绝写入
+  const unauthorized = new Error('token expired')
+  unauthorized.kind = 'unauthorized'
+  const localMemory6 = new Map()
+  const transport6 = createFakeTransport({}, { fetchError: unauthorized })
+  const bridge6 = new BackendStorage({
+    transport: transport6,
+    local: makeLocal(localMemory6),
+  })
+  const authState = await bridge6.init()
+  assert.equal(authState.status, 'unauthorized')
+  assert.equal(bridge6.setItem('y', JSON.stringify([1])), false)
+  assert.equal(bridge6.getItem('y'), null)
 
   console.log('Vben migration contract checks passed.')
 }

@@ -5,6 +5,8 @@ export const overridesPreferences = defineOverridesPreferences({
     accessMode: 'frontend',
     compact: true,
     contentCompact: 'wide',
+    // 内网部署：避免默认头像走 unpkg
+    defaultAvatar: '/logo-saa.png',
     enableCheckUpdates: false,
     enablePreferences: true,
     locale: 'zh-CN',
@@ -21,6 +23,8 @@ export const overridesPreferences = defineOverridesPreferences({
     companySiteLink: '',
     date: '2026',
     enable: false,
+    icp: '',
+    icpLink: '',
   },
   footer: { enable: false },
   logo: {

@@ -9,8 +9,7 @@ const defaultPreferences: Preferences = {
     colorWeakMode: false,
     compact: false,
     contentCompact: 'wide',
-    defaultAvatar:
-      'https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp',
+    defaultAvatar: '',
     dynamicTitle: true,
     enableCheckUpdates: true,
     enablePreferences: true,
@@ -32,7 +31,7 @@ const defaultPreferences: Preferences = {
   },
   copyright: {
     companyName: 'Vben',
-    companySiteLink: 'https://www.vben.pro',
+    companySiteLink: '',
     date: '2024',
     enable: true,
     icp: '',
@@ -50,7 +49,7 @@ const defaultPreferences: Preferences = {
   },
   logo: {
     enable: true,
-    source: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp',
+    source: '',
   },
   navigation: {
     accordion: true,

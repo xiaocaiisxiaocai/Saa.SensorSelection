@@ -34,9 +34,6 @@
     "test:selection": "node scripts/vben-migration.contract-test.cjs"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "catalog:",
-    "@changesets/cli": "catalog:",
-    "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "@vben/commitlint-config": "workspace:*",
     "@vben/eslint-config": "workspace:*",
@@ -44,7 +41,6 @@
     "@vben/stylelint-config": "workspace:*",
     "@vben/tailwind-config": "workspace:*",
     "@vben/tsconfig": "workspace:*",
-    "@vben/turbo-run": "workspace:*",
     "@vben/vite-config": "workspace:*",
     "@vben/vsh": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",
@@ -57,7 +53,6 @@
     "husky": "catalog:",
     "is-ci": "catalog:",
     "lint-staged": "catalog:",
-    "playwright": "catalog:",
     "rimraf": "catalog:",
     "tailwindcss": "catalog:",
     "turbo": "catalog:",

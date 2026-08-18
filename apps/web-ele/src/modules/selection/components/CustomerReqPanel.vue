@@ -44,10 +44,7 @@ const defaultType = computed(() => typeNames.value[0] || '输送段');
 const defaultSource = computed(() => sourceNames.value[0] || '验收规范');
 
 const items = computed(() => {
-  return store.crudItems(
-    'customer-req',
-    props.entityName,
-  ) as CustomerReqItem[];
+  return store.crudItems('customer-req', props.entityName) as CustomerReqItem[];
 });
 
 const filteredItems = computed(() => {
@@ -76,7 +73,7 @@ watch(
 );
 
 function failureMessage(reason: string) {
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该要求已被其他页面删除';
   if (reason === 'validation') return '请填写要求内容并选择有效分类与来源';
   return '保存失败，请重试';
@@ -182,7 +179,11 @@ async function deleteItem(item: CustomerReqItem) {
             <X :size="15" aria-hidden="true" />
           </button>
         </label>
-        <ElButton type="primary" @click="addItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="addItem"
+        >
           <Plus :size="15" aria-hidden="true" />
           新增要求
         </ElButton>
@@ -201,7 +202,12 @@ async function deleteItem(item: CustomerReqItem) {
           <template #default="{ row }: { row: CustomerReqItem }">
             <div class="table-actions">
               <ElTooltip content="编辑" placement="top">
-                <ElButton aria-label="编辑要求" circle @click="editItem(row)">
+                <ElButton
+                  aria-label="编辑要求"
+                  circle
+                  v-can-write="'selection:write'"
+                  @click="editItem(row)"
+                >
                   <Pencil :size="15" aria-hidden="true" />
                 </ElButton>
               </ElTooltip>
@@ -210,6 +216,7 @@ async function deleteItem(item: CustomerReqItem) {
                   aria-label="删除要求"
                   circle
                   type="danger"
+                  v-can-write="'selection:write'"
                   @click="deleteItem(row)"
                 >
                   <Trash2 :size="15" aria-hidden="true" />
@@ -258,7 +265,11 @@ async function deleteItem(item: CustomerReqItem) {
         </div>
         <div class="form-grid">
           <ElFormItem label="适用机型">
-            <ElInput v-model="form.machine" maxlength="100" placeholder="如 ALL" />
+            <ElInput
+              v-model="form.machine"
+              maxlength="100"
+              placeholder="如 ALL"
+            />
           </ElFormItem>
           <ElFormItem label="适用制程">
             <ElInput v-model="form.process" maxlength="100" />
@@ -278,7 +289,11 @@ async function deleteItem(item: CustomerReqItem) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

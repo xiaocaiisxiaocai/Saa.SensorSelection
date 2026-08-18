@@ -133,7 +133,7 @@ function editItem(item: ProcessStepItem) {
 
 function failureMessage(reason: string) {
   if (reason === 'duplicate') return '该工艺制程已存在';
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该记录已被删除';
   if (reason === 'validation') return '请填写工艺制程并选择制程分层';
   return '保存失败，请重试';
@@ -207,7 +207,11 @@ async function deleteItem(item: ProcessStepItem) {
                     <X :size="15" aria-hidden="true" />
                   </button>
                 </label>
-                <ElButton type="primary" @click="addItem">
+                <ElButton
+                  type="primary"
+                  v-can-write="'selection:write'"
+                  @click="addItem"
+                >
                   <Plus :size="15" aria-hidden="true" />
                   新增
                 </ElButton>
@@ -248,6 +252,7 @@ async function deleteItem(item: ProcessStepItem) {
                         <ElButton
                           aria-label="编辑工艺制程"
                           circle
+                          v-can-write="'selection:write'"
                           @click="editItem(row)"
                         >
                           <Pencil :size="15" aria-hidden="true" />
@@ -258,6 +263,7 @@ async function deleteItem(item: ProcessStepItem) {
                           aria-label="删除工艺制程"
                           circle
                           type="danger"
+                          v-can-write="'selection:write'"
                           @click="deleteItem(row)"
                         >
                           <Trash2 :size="15" aria-hidden="true" />
@@ -330,7 +336,11 @@ async function deleteItem(item: ProcessStepItem) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

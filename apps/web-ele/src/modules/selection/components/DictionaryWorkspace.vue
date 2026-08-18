@@ -100,7 +100,7 @@ function editItem(item: DictionaryItem | MachineSectionItem) {
 
 function failureMessage(reason: string) {
   if (reason === 'duplicate') return '该分类名称已存在';
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该分类已被删除';
   if (reason === 'validation') return '请填写有效的分类名称';
   if (reason === 'not-empty') return '请先清空各机型下该 Tab 的数据';
@@ -259,11 +259,15 @@ async function deleteItem(item: DictionaryItem | MachineSectionItem) {
             </ElFormItem>
           </div>
           <div class="data-section__actions">
-            <ElButton @click="resetForm">
+            <ElButton v-can-write="'selection:write'" @click="resetForm">
               <Plus :size="15" aria-hidden="true" />
               新建
             </ElButton>
-            <ElButton type="primary" @click="saveItem">
+            <ElButton
+              type="primary"
+              v-can-write="'selection:write'"
+              @click="saveItem"
+            >
               <Save :size="15" aria-hidden="true" />
               <template v-if="isMachineSection">
                 {{ editId ? '更新 Tab' : '新增 Tab' }}
@@ -297,6 +301,7 @@ async function deleteItem(item: DictionaryItem | MachineSectionItem) {
                     <ElButton
                       :aria-label="isMachineSection ? '编辑 Tab' : '编辑分类'"
                       circle
+                      v-can-write="'selection:write'"
                       @click="editItem(row)"
                     >
                       <Pencil :size="15" aria-hidden="true" />
@@ -316,6 +321,7 @@ async function deleteItem(item: DictionaryItem | MachineSectionItem) {
                       :aria-label="isMachineSection ? '删除 Tab' : '删除分类'"
                       circle
                       type="danger"
+                      v-can-write="'selection:write'"
                       @click="deleteItem(row)"
                     >
                       <Trash2 :size="15" aria-hidden="true" />

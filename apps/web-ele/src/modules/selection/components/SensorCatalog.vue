@@ -324,7 +324,7 @@ function saveItem() {
       'in-use': '仍有关联数据，无法删除',
       'not-empty': '请先清空关联数据后再删除',
       stale: '该型号已被其他页面删除',
-      storage: '浏览器本地存储不可用，本次修改未保存',
+      storage: '数据保存失败，本次修改未保存',
       validation: '请填写型号并选择感应器类型',
       size: '文件大小超出限制',
       type: '文件类型不受支持',
@@ -378,7 +378,7 @@ function confirmReplace() {
       'in-use': '仍有关联数据',
       'not-empty': '关联数据未清空',
       stale: '型号已不存在，请刷新后重试',
-      storage: '浏览器本地存储不可用，本次替换未保存',
+      storage: '数据保存失败，本次替换未保存',
       validation: '仅备选可替换现用，且必须填写问题点',
       size: '文件大小超出限制',
       type: '文件类型不受支持',
@@ -459,7 +459,11 @@ function candidateLabel(item: SensorItem) {
                 type="search"
               />
             </label>
-            <ElButton type="primary" @click="addItem">
+            <ElButton
+              type="primary"
+              v-can-write="'selection:write'"
+              @click="addItem"
+            >
               <Plus :size="15" aria-hidden="true" />
               新增型号
             </ElButton>
@@ -553,6 +557,7 @@ function candidateLabel(item: SensorItem) {
                     <ElButton
                       aria-label="编辑型号"
                       circle
+                      v-can-write="'selection:write'"
                       @click="editItem(scope.row)"
                     >
                       <Pencil :size="15" aria-hidden="true" />
@@ -567,6 +572,7 @@ function candidateLabel(item: SensorItem) {
                       aria-label="替换现用型号"
                       circle
                       type="primary"
+                      v-can-write="'selection:write'"
                       @click="openReplace(scope.row)"
                     >
                       <Replace :size="15" aria-hidden="true" />
@@ -582,6 +588,7 @@ function candidateLabel(item: SensorItem) {
                       aria-label="删除型号"
                       circle
                       type="danger"
+                      v-can-write="'selection:write'"
                       @click="deleteItem(scope.row)"
                     >
                       <Trash2 :size="15" aria-hidden="true" />
@@ -687,7 +694,11 @@ function candidateLabel(item: SensorItem) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

@@ -218,9 +218,12 @@ async function loadDocument(dataUrl: string) {
   clearContainer();
 
   try {
+    // 直接传 Uint8Array（pdfjs 原生支持），避免展开成普通数组造成数倍内存膨胀
     const bytes = dataUrlToPdfBytes(dataUrl);
-    const data = [...bytes];
-    const pdfDoc = await getDocument({ data, useSystemFonts: true }).promise;
+    const pdfDoc = await getDocument({
+      data: bytes,
+      useSystemFonts: true,
+    }).promise;
     if (token !== renderToken) {
       pdfDoc.cleanup();
       return;

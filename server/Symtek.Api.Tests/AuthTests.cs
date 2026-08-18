@@ -27,6 +27,7 @@ public class AuthTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("ok", body.GetProperty("status").GetString());
+        Assert.Equal("ok", body.GetProperty("db").GetString());
     }
 
     [Fact]

@@ -88,7 +88,7 @@ watch(
 );
 
 function failureMessage(reason: string) {
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该反馈已被其他页面删除';
   if (reason === 'validation') return '请填写问题点并选择有效分类与处理状态';
   return '保存失败，请重试';
@@ -197,7 +197,11 @@ async function deleteItem(item: TimelineItem) {
             <X :size="15" aria-hidden="true" />
           </button>
         </label>
-        <ElButton type="primary" @click="addItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="addItem"
+        >
           <Plus :size="15" aria-hidden="true" />
           新增反馈
         </ElButton>
@@ -222,7 +226,12 @@ async function deleteItem(item: TimelineItem) {
           <template #default="{ row }: { row: TimelineItem }">
             <div class="table-actions">
               <ElTooltip content="编辑" placement="top">
-                <ElButton aria-label="编辑反馈" circle @click="editItem(row)">
+                <ElButton
+                  aria-label="编辑反馈"
+                  circle
+                  v-can-write="'selection:write'"
+                  @click="editItem(row)"
+                >
                   <Pencil :size="15" aria-hidden="true" />
                 </ElButton>
               </ElTooltip>
@@ -231,6 +240,7 @@ async function deleteItem(item: TimelineItem) {
                   aria-label="删除反馈"
                   circle
                   type="danger"
+                  v-can-write="'selection:write'"
                   @click="deleteItem(row)"
                 >
                   <Trash2 :size="15" aria-hidden="true" />
@@ -309,7 +319,11 @@ async function deleteItem(item: TimelineItem) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

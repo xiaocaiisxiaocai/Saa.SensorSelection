@@ -2,12 +2,8 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { ElMessage, ElTooltip } from 'element-plus';
-import { LogOut, Search, X } from 'lucide-vue-next';
-
-import { useSelectionStore } from '../store';
-
-const store = useSelectionStore();
+import { ElMessage } from 'element-plus';
+import { Search, X } from 'lucide-vue-next';
 
 const route = useRoute();
 const router = useRouter();
@@ -84,19 +80,4 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut));
       搜索
     </button>
   </form>
-  <div v-if="store.backendUser" class="selection-user">
-    <span :title="store.backendUser" class="selection-user__name">
-      {{ store.backendUser }}
-    </span>
-    <ElTooltip content="退出登录">
-      <button
-        aria-label="退出登录"
-        class="icon-button"
-        type="button"
-        @click="store.logout()"
-      >
-        <LogOut :size="15" aria-hidden="true" />
-      </button>
-    </ElTooltip>
-  </div>
 </template>

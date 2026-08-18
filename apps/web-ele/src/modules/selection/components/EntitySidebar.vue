@@ -119,7 +119,7 @@ function failureMessage(reason: string, target: 'group' | 'item') {
       ? `请先移除该${kindMeta.value.groupLabel}下的全部${kindMeta.value.label}`
       : `请先清空该${kindMeta.value.label}下的全部业务数据后再删除`;
   }
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该项已被删除，请刷新后重试';
   if (reason === 'validation') return '请填写有效名称';
   return '操作失败，请重试';
@@ -305,7 +305,11 @@ async function removeItem(category: string, itemName: string, event: Event) {
 
     <div class="entity-sidebar__actions">
       <ElTooltip :content="`新建${kindMeta.groupLabel}`" placement="top">
-        <ElButton size="small" @click="openCreateGroup">
+        <ElButton
+          size="small"
+          v-can-write="'selection:write'"
+          @click="openCreateGroup"
+        >
           <FolderPlus :size="14" aria-hidden="true" />
           {{ kindMeta.groupLabel }}
         </ElButton>
@@ -315,6 +319,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
           :disabled="categoryOptions.length === 0"
           size="small"
           type="primary"
+          v-can-write="'selection:write'"
           @click="openCreateItem()"
         >
           <Plus :size="14" aria-hidden="true" />
@@ -350,6 +355,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
                 :aria-label="`在该${kindMeta.groupLabel}下新建${kindMeta.label}`"
                 class="icon-button"
                 type="button"
+                v-can-write="'selection:write'"
                 @click.stop="openCreateItem(group.name)"
               >
                 <Plus :size="13" aria-hidden="true" />
@@ -360,6 +366,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
                 :aria-label="`编辑${kindMeta.groupLabel}`"
                 class="icon-button"
                 type="button"
+                v-can-write="'selection:write'"
                 @click="openEditGroup(group.name, $event)"
               >
                 <Pencil :size="13" aria-hidden="true" />
@@ -370,6 +377,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
                 :aria-label="`删除${kindMeta.groupLabel}`"
                 class="icon-button"
                 type="button"
+                v-can-write="'selection:write'"
                 @click="removeGroup(group.name, $event)"
               >
                 <Trash2 :size="13" aria-hidden="true" />
@@ -397,6 +405,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
                   :aria-label="`编辑${kindMeta.label}`"
                   class="icon-button"
                   type="button"
+                  v-can-write="'selection:write'"
                   @click="openEditItem(group.name, item, $event)"
                 >
                   <Pencil :size="13" aria-hidden="true" />
@@ -407,6 +416,7 @@ async function removeItem(category: string, itemName: string, event: Event) {
                   :aria-label="`删除${kindMeta.label}`"
                   class="icon-button"
                   type="button"
+                  v-can-write="'selection:write'"
                   @click="removeItem(group.name, item, $event)"
                 >
                   <Trash2 :size="13" aria-hidden="true" />
@@ -446,7 +456,13 @@ async function removeItem(category: string, itemName: string, event: Event) {
       </ElForm>
       <template #footer>
         <ElButton @click="groupDialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveGroup">保存</ElButton>
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveGroup"
+        >
+          保存
+        </ElButton>
       </template>
     </ElDialog>
 
@@ -479,7 +495,13 @@ async function removeItem(category: string, itemName: string, event: Event) {
       </ElForm>
       <template #footer>
         <ElButton @click="itemDialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">保存</ElButton>
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
+          保存
+        </ElButton>
       </template>
     </ElDialog>
   </aside>

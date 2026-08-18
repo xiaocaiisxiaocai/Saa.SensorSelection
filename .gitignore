@@ -58,3 +58,10 @@ vite.config.ts.*
 *.sln
 *.sw?
 .history
+
+# 数据库备份输出（由 scripts/backup-db.mjs 生成）
+/backups/
+
+# Freebuff 客户端元数据
+.freebuff/
+

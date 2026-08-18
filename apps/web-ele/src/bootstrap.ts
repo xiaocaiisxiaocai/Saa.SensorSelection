@@ -7,10 +7,12 @@ import '@vben/styles';
 import '@vben/styles/ele';
 
 import { useTitle } from '@vueuse/core';
+import { ElLoading } from 'element-plus';
 
 import { initComponentAdapter } from './adapter/component';
 import App from './app.vue';
 import { setupI18n } from './locales';
+import { registerCanAccessDirective } from './modules/selection/can-write';
 import { router } from './router';
 
 import './modules/selection/selection.css';
@@ -22,6 +24,9 @@ async function bootstrap(namespace: string) {
   await setupI18n(app);
   await initStores(app, { namespace });
   registerAccessDirective(app);
+  registerCanAccessDirective(app);
+  // 注册 v-loading 指令（Element Plus 指令需显式安装，否则模板中 v-loading 无法解析）
+  app.use(ElLoading);
   app.use(router);
 
   watchEffect(() => {

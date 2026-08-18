@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 
 using Symtek.Api;
 using Symtek.Api.Data;
+using Symtek.Api.Infrastructure;
 using Symtek.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,8 +32,15 @@ builder.Services
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.AddSingleton<JwtService>();
 
+builder.Services
+    .AddOptions<RateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(RateLimitOptions.SectionName));
+builder.Services.AddSingleton<LoginRateLimiter>();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
+    options
+        .UseSqlite(builder.Configuration.GetConnectionString("Default"))
+        .AddInterceptors(new SqlitePragmaInterceptor()));
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -50,12 +58,45 @@ builder.Services
             ClockSkew = TimeSpan.FromMinutes(1),
         };
     });
-builder.Services.AddAuthorization();
+// 授权策略：按 JWT 中的 perm 声明（权限码）校验，权限码由角色 → 用户派生并随 token 签发
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("selection:read", policy =>
+        policy.RequireClaim("perm", "selection:read"));
+    options.AddPolicy("selection:write", policy =>
+        policy.RequireClaim("perm", "selection:write"));
+    options.AddPolicy("rbac:view", policy =>
+        policy.RequireClaim("perm", "rbac:view"));
+    options.AddPolicy("rbac:user:write", policy =>
+        policy.RequireClaim("perm", "rbac:user:write"));
+    options.AddPolicy("rbac:role:write", policy =>
+        policy.RequireClaim("perm", "rbac:role:write"));
+    options.AddPolicy("rbac:org:write", policy =>
+        policy.RequireClaim("perm", "rbac:org:write"));
+    options.AddPolicy("audit:view", policy =>
+        policy.RequireClaim("perm", "audit:view"));
+});
+// 403（已登录但无权限）返回 JSON 提示，而不是空响应体
+builder.Services.AddSingleton<
+    Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler,
+    JsonAuthorizationMiddlewareResultHandler>();
 
-// 内网部署：允许跨域直连（前端使用 Bearer Token，不依赖 Cookie）。
+// CORS：优先使用配置的 Cors:AllowedOrigins（逗号分隔）；未配置时保持内网宽松策略。
+// 前端使用 Bearer Token、无 Cookie 依赖，跨域直连仅需 Origin/Header/Method 放行。
+var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod();
+        }
+        else
+        {
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+        }
+    }));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -96,8 +137,18 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
+builder.Services.AddHttpContextAccessor();
+
+builder.Services
+    .AddOptions<AuditOptions>()
+    .Bind(builder.Configuration.GetSection(AuditOptions.SectionName));
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<DbInitializer>();
 builder.Services.AddScoped<StoreService>();
+builder.Services.AddScoped<ProfileService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<RoleService>();
+builder.Services.AddScoped<OrgUnitService>();
 
 var app = builder.Build();
 
@@ -107,9 +158,20 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<DbInitializer>().EnsureReady();
 }
 
+if (app.Environment.IsProduction() && corsOrigins.Length == 0)
+{
+    app.Logger.LogWarning(
+        "CORS 未配置 Cors:AllowedOrigins，当前允许任意来源。建议通过配置限定前端来源。");
+}
+
 app.UseExceptionHandler();
-app.UseSwagger();
-app.UseSwaggerUI();
+
+// Swagger 仅开发环境暴露（生产不开放 API 文档入口）
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseCors();
 app.UseAuthentication();

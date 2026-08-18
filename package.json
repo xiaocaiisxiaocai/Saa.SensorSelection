@@ -32,7 +32,8 @@
     "postinstall": "pnpm -r run stub --if-present",
     "preview": "pnpm --filter @vben/web-ele run preview",
     "test:backend": "dotnet test server/Symtek.slnx",
-    "test:selection": "node scripts/vben-migration.contract-test.cjs"
+    "test:selection": "node scripts/vben-migration.contract-test.cjs",
+    "backup:db": "node scripts/backup-db.mjs"
   },
   "devDependencies": {
     "@types/node": "catalog:",

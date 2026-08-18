@@ -439,6 +439,13 @@ export function createProcessStepDefaults() {
   return steps;
 }
 
+/**
+ * 内置基础数据版本：每当 data.js 的默认数据（字典/机型结构/Sensor 目录等）
+ * 有增删改时递增。桥接层依据它做版本化回填：只补种缺失的默认 key，
+ * 不覆盖用户在已有后端里修改过的数据。
+ */
+export const SEED_VERSION = 1;
+
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
 export const SENSOR_TYPE_OPTIONS = Object.keys(SENSOR_DATA);

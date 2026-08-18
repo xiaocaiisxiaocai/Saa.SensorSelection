@@ -21,12 +21,24 @@ import type {
 
 import { computed, ref } from 'vue';
 
+import { useAccessStore } from '@vben/stores';
+
 import { defineStore } from 'pinia';
 
-import { api, readTokenDisplayName, storeToken } from './api.js';
+import { refreshAccess } from '#/router/access';
+
+import {
+  api,
+  ApiError,
+  getStoredToken,
+  readTokenDisplayName,
+  storeToken,
+  type UserProfile,
+} from './api.js';
 import { BackendStorage, type BackendSyncStatus } from './backend-storage.js';
 import { CRUD_DEFAULTS, MACHINE_DETAILS, SENSOR_DATA } from './data.js';
 import {
+  buildDefaultStore,
   buildSearchIndex,
   createSelectionRepository,
   STORAGE_KEY,
@@ -46,7 +58,10 @@ const backendStatus = ref<BackendSyncStatus>('connecting');
 const backendMessage = ref('');
 /** 当前登录用户显示名。 */
 const backendUser = ref('');
+/** 当前登录用户资料（角色/权限/组织），null = 未登录或未加载。 */
+const profile = ref<null | UserProfile>(null);
 let initPromise: null | Promise<void> = null;
+let profilePromise: null | Promise<void> = null;
 
 let storageSyncBound = false;
 
@@ -406,6 +421,41 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
 
   bindStorageSync();
 
+  /** 权限码同步到 Vben access store（供 v-access 指令与路由过滤使用）。 */
+  function applyProfile(next: null | UserProfile) {
+    profile.value = next;
+    backendUser.value = next ? next.displayName || next.username : '';
+    useAccessStore().setAccessCodes(next ? next.permissions : []);
+  }
+
+  /**
+   * 加载当前用户资料与权限码（幂等）。
+   * - 无 token：清空权限（匿名只读）
+   * - /me 401：token 失效，清空权限（守卫会引导跳转登录页）
+   * - 网络失败：保留 access store 持久化的上次权限码（离线场景），profile 置空
+   */
+  async function ensureProfile(): Promise<void> {
+    if (profilePromise) return profilePromise;
+    profilePromise = (async () => {
+      if (!getStoredToken()) {
+        applyProfile(null);
+        return;
+      }
+      try {
+        applyProfile(await api.me());
+      } catch (error) {
+        if (error instanceof ApiError && error.kind === 'unauthorized') {
+          applyProfile(null);
+        }
+      }
+    })();
+    try {
+      await profilePromise;
+    } finally {
+      profilePromise = null;
+    }
+  }
+
   /**
    * 初始化后端连接：拉取远端数据（首次自动迁移 localStorage），
    * 失败时退化为本地模式或进入未登录状态。
@@ -425,6 +475,11 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
       // 浏览器环境下 storage 恒为 window.localStorage（SSR 守卫仅用于类型安全）
       local: storage as StorageLike,
       migrateOnEmpty: true,
+      // 全新环境（后端空库 + 本地无缓存）时，把内置基础数据种子导入后端
+      seedDefaults: buildDefaultStore({
+        crudDefaults: CRUD_DEFAULTS,
+        sensorData: SENSOR_DATA,
+      }),
       onStatus: (status) => {
         backendStatus.value = status;
       },
@@ -441,6 +496,8 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     });
     if (result.migrated) {
       backendMessage.value = '已将本地数据导入后端（迁移完成）';
+    } else if (result.seeded) {
+      backendMessage.value = '已将内置基础数据初始化到后端';
     }
     touch();
   }
@@ -463,7 +520,13 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     try {
       const result = await api.login(username.trim(), password);
       storeToken(result.token);
-      backendUser.value = result.displayName || result.username;
+      applyProfile(result);
+      // 重建可访问路由/菜单（系统管理页按权限码出现）
+      const { router } = await import('#/router');
+      await refreshAccess(router, [
+        ...result.permissions,
+        ...result.roles.map((role) => role.code),
+      ]);
       await initBackend();
       return { ok: true as const };
     } catch (error) {
@@ -473,10 +536,17 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     }
   }
 
-  /** 登出：清除 token 并回到未登录状态（数据层退回本地只读）。 */
+  /**
+   * 登出：清除 token 与权限，重建为匿名只读路由（系统管理页消失），
+   * 并跳转业务首页进入只读预览（右上角可点「登录」重新登录）。
+   */
   async function logout() {
     storeToken(null);
     backendUser.value = '';
+    applyProfile(null);
+    const { router } = await import('#/router');
+    await refreshAccess(router, []);
+    await router.replace('/selection/customer');
     await initBackend();
   }
 
@@ -489,6 +559,11 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     backendMessage,
     backendStatus,
     backendUser,
+    ensureProfile,
+    profile,
+    userRoleCodes: computed(() =>
+      (profile.value?.roles ?? []).map((role) => role.code),
+    ),
     controlledDocuments,
     crudItems,
     deleteControlledFile,

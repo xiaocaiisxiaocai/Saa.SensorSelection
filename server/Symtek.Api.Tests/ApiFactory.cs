@@ -9,9 +9,18 @@ namespace Symtek.Api.Tests;
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    private readonly string _dbPath = Path.Combine(
-        Path.GetTempPath(),
-        $"symtek-api-test-{Guid.NewGuid():N}.db");
+    private readonly string _dbPath;
+
+    public ApiFactory()
+        : this(Path.Combine(Path.GetTempPath(), $"symtek-api-test-{Guid.NewGuid():N}.db"))
+    {
+    }
+
+    /// <summary>指定数据库文件（用于验证种子/迁移在存量库上的幂等性）。</summary>
+    public ApiFactory(string dbPath)
+    {
+        _dbPath = dbPath;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

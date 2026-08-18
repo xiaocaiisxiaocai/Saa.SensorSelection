@@ -228,7 +228,7 @@ function onTabChange(name: number | string) {
 function failureMessage(reason: string) {
   if (reason === 'duplicate') return '该 Tab 名称已存在';
   if (reason === 'not-empty') return '请先清空该 Tab 下的全部数据后再删除';
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该 Tab 已被删除，请刷新后重试';
   if (reason === 'validation') return '请填写 Tab 名称';
   return '操作失败，请重试';
@@ -372,6 +372,7 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
                         aria-label="删除本机 Tab"
                         class="icon-button"
                         type="button"
+                        v-can-write="'selection:write'"
                         @click="deleteTab(sec, $event)"
                         @mousedown.stop
                       >
@@ -390,6 +391,7 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
           <ElButton
             v-if="!isGeneralStructure"
             class="machine-add-tab"
+            v-can-write="'selection:write'"
             @click="openAddTab"
           >
             <Plus :size="15" aria-hidden="true" />
@@ -415,7 +417,11 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveTab">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveTab"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

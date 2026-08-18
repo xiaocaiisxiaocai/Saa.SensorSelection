@@ -68,7 +68,7 @@ function formatSize(size: number) {
 }
 
 function failureMessage(reason: string) {
-  if (reason === 'storage') return '浏览器本地存储不可用，文件未保存';
+  if (reason === 'storage') return '数据保存失败，文件未保存';
   if (reason === 'size') return '文件大小超出 8 MB 限制';
   if (reason === 'type') return '仅支持 PDF 文档';
   if (reason === 'stale') return '文件不存在或已被删除';
@@ -212,7 +212,11 @@ async function removeFile(file: SensorSopItem) {
           type="file"
           @change="handleUpload"
         />
-        <ElButton type="primary" @click="triggerUpload">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="triggerUpload"
+        >
           <Upload :size="15" aria-hidden="true" />
           上传 PDF
         </ElButton>
@@ -246,6 +250,7 @@ async function removeFile(file: SensorSopItem) {
               aria-label="删除 SOP"
               circle
               type="danger"
+              v-can-write="'selection:write'"
               @click="removeFile(file)"
             >
               <Trash2 :size="15" aria-hidden="true" />

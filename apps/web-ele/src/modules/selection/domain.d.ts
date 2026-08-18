@@ -157,6 +157,7 @@ export interface SelectionRepository {
     payload: Partial<SensorSopItem>,
     editId?: number,
   ): SaveResult<SensorSopItem>;
+  snapshotStore(): Record<string, unknown[]>;
   syncGeneralStructureItemRename(
     fromName: string,
     toName: string,
@@ -250,6 +251,15 @@ export function createSelectionRepository(options: {
   sensorData: Record<string, SensorTypeDefinition>;
   storage?: StorageLike;
 }): SelectionRepository;
+export function buildDefaultStore(options: {
+  crudDefaults: Record<
+    string,
+    (entityName: string) => Array<
+      CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem
+    >
+  >;
+  sensorData: Record<string, SensorTypeDefinition>;
+}): Record<string, unknown[]>;
 export function buildSearchIndex(options: {
   customerGroups: EntityGroup[];
   machineDetails: Record<string, { desc?: string }>;

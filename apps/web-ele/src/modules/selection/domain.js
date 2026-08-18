@@ -8,6 +8,7 @@ import {
   MACHINE_ROW_IMAGE_RULES,
   MACHINE_SECTION_LEGACY_MAP,
   MACHINE_SECTION_SEED,
+  SEED_VERSION,
 } from './data.js';
 
 export const STORAGE_KEY = 'symtek_crud_store';
@@ -1226,11 +1227,9 @@ export function createSelectionRepository({
     });
     store[key] = normalizeMachineSections(store[key], { allowNotes: true });
     if (restored) {
-      try {
-        globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(store));
-      } catch {
-        // ignore
-      }
+      // 通过注入的 storage 持久化修复结果（在线模式下经桥接层同步到后端），
+      // 而不是绕过桥接层直写浏览器 localStorage。
+      persist(cloneStore(store));
     }
     return store[key];
   }
@@ -2078,6 +2077,11 @@ export function createSelectionRepository({
     store = parsePersistedStore(rawValue);
   }
 
+  /** 返回当前内存 store 的快照（全部值为数组）。 */
+  function snapshotStore() {
+    return cloneStore(store);
+  }
+
   return {
     deleteControlledFile,
     deleteCrud,
@@ -2121,8 +2125,45 @@ export function createSelectionRepository({
     replaceSensorCurrent,
     saveSensor,
     saveSensorSop,
+    snapshotStore,
     syncGeneralStructureItemRename,
   };
+}
+
+/**
+ * 物化前端内置的基础数据（数据字典、客户/机型分组、制程步骤、机型全局结构、
+ * 通用结构标签、Sensor 型号目录、SOP 空表），供后端空库时的首次种子导入。
+ *
+ * 只含「全局基础数据」：各实体的业务行（示例行）仍由仓库按需物化，
+ * 避免把 15 个客户 × 多列表的同一批示例行写死进数据库。
+ */
+export function buildDefaultStore({ crudDefaults, sensorData }) {
+  const memory = { value: null };
+  const fakeStorage = {
+    getItem: () => memory.value,
+    setItem: (key, value) => {
+      memory.value = value;
+    },
+  };
+  const repo = createSelectionRepository({
+    storage: fakeStorage,
+    crudDefaults,
+    sensorData,
+  });
+  repo.getEntityGroups('customer');
+  repo.getEntityGroups('machine');
+  for (const definition of DICTIONARY_DEFINITIONS) {
+    repo.getDictionaryItems(definition.code);
+  }
+  repo.getProcessSteps();
+  repo.getGlobalMachineSections();
+  repo.getGeneralStructureLabelMap();
+  repo.getSensors();
+  repo.getSensorSops();
+  const store = repo.snapshotStore();
+  // 记录种子版本，供桥接层做版本化回填（升级时补种缺失默认 key）
+  store['meta:seed-version'] = [{ version: SEED_VERSION }];
+  return store;
 }
 
 export function buildSearchIndex({

@@ -19,6 +19,17 @@ const coreRoutes: RouteRecordRaw[] = [
     path: '/',
     redirect: '/selection/customer',
   },
+  {
+    component: () => import('#/views/login/index.vue'),
+    meta: {
+      hideInBreadcrumb: true,
+      hideInMenu: true,
+      hideInTab: true,
+      title: '登录',
+    },
+    name: 'Login',
+    path: '/login',
+  },
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };

@@ -108,10 +108,7 @@ const filteredItems = computed(() => {
     const haystack = isStructure.value
       ? [item.role, item.sensorType, item.spec, item.purpose, item.note]
       : [item.role, item.name, item.desc, item.note];
-    return haystack
-      .join(' ')
-      .toLocaleLowerCase('zh-CN')
-      .includes(value);
+    return haystack.join(' ').toLocaleLowerCase('zh-CN').includes(value);
   });
 });
 
@@ -189,7 +186,7 @@ function editItem(item: MachineSectionRow) {
 
 function failureMessage(reason: string) {
   if (reason === 'stale') return '该记录已被其他页面删除，请刷新后重试';
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'size') return '图片大小不能超过 2 MB';
   if (reason === 'type') return '仅支持 JPG、PNG 或 WebP 图片';
   return '请填写必填项';
@@ -404,8 +401,8 @@ async function deleteItem(item: MachineSectionRow) {
           <Search :size="16" aria-hidden="true" />
           <input
             v-model="query"
-            aria-label="搜索记录"
             :placeholder="searchPlaceholder"
+            aria-label="搜索记录"
             type="search"
           />
           <button
@@ -419,7 +416,11 @@ async function deleteItem(item: MachineSectionRow) {
             <X :size="15" aria-hidden="true" />
           </button>
         </label>
-        <ElButton type="primary" @click="addItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="addItem"
+        >
           <Plus :size="15" aria-hidden="true" />
           新增
         </ElButton>
@@ -475,7 +476,12 @@ async function deleteItem(item: MachineSectionRow) {
           <template #default="scope">
             <div class="table-actions">
               <ElTooltip content="编辑" placement="top">
-                <ElButton aria-label="编辑" circle @click="editItem(scope.row)">
+                <ElButton
+                  aria-label="编辑"
+                  circle
+                  v-can-write="'selection:write'"
+                  @click="editItem(scope.row)"
+                >
                   <Pencil :size="15" aria-hidden="true" />
                 </ElButton>
               </ElTooltip>
@@ -484,6 +490,7 @@ async function deleteItem(item: MachineSectionRow) {
                   aria-label="删除"
                   circle
                   type="danger"
+                  v-can-write="'selection:write'"
                   @click="deleteItem(scope.row)"
                 >
                   <Trash2 :size="15" aria-hidden="true" />
@@ -583,7 +590,11 @@ async function deleteItem(item: MachineSectionRow) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

@@ -788,7 +788,7 @@ async function run() {
       },
       async writeKey(key, value) {
         if (opts.failKeys && opts.failKeys.includes(key)) {
-          throw new Error(`write blocked: ${key}`)
+          throw opts.failError || new Error(`write blocked: ${key}`)
         }
         remote.set(key, value)
         calls.writes.push(key)
@@ -831,6 +831,7 @@ async function run() {
   const migrated = await bridge1.init()
   assert.equal(migrated.status, 'online')
   assert.equal(migrated.migrated, true)
+  assert.equal(migrated.seeded, false)
   assert.equal(migrated.keyCount, 1)
   assert.equal(transport1.calls.writeAlls, 1)
   assert.deepEqual(
@@ -853,6 +854,7 @@ async function run() {
   await bridge2.queue
   assert.deepEqual(transport2.calls.writes.sort(), ['a', 'c'])
   assert.equal(transport2.calls.fetches, 1)
+  assert.equal(transport2.calls.writeAlls, 0) // 后端非空 → 不迁移也不种子
 
   // 写失败：乐观更新回滚到上次同步值
   const localMemory3 = new Map()
@@ -937,6 +939,201 @@ async function run() {
   assert.equal(authState.status, 'unauthorized')
   assert.equal(bridge6.setItem('y', JSON.stringify([1])), false)
   assert.equal(bridge6.getItem('y'), null)
+
+  // 未登录（启动即 401）但本地有旧数据：整库读取仍回退到本地缓存
+  const localMemory6b = new Map()
+  localMemory6b.set(
+    domain.STORAGE_KEY,
+    JSON.stringify({ 'customer-req:庆鼎': [{ id: 1, content: '本地旧数据' }] }),
+  )
+  const transport6b = createFakeTransport({}, { fetchError: unauthorized })
+  const bridge6b = new BackendStorage({
+    transport: transport6b,
+    local: makeLocal(localMemory6b),
+  })
+  const authState6b = await bridge6b.init()
+  assert.equal(authState6b.status, 'unauthorized')
+  const localRead = JSON.parse(bridge6b.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(localRead['customer-req:庆鼎'], [
+    { id: 1, content: '本地旧数据' },
+  ])
+
+  // 会话中 token 失效（写 401）：切换到未登录状态并保留已同步缓存供只读，禁止继续写入
+  const localMemory9 = new Map()
+  const expired = new Error('token expired')
+  expired.kind = 'unauthorized'
+  const transport9 = createFakeTransport(
+    { a: [{ v: 1 }] },
+    { failKeys: ['a'], failError: expired },
+  )
+  const bridge9 = new BackendStorage({
+    transport: transport9,
+    local: makeLocal(localMemory9),
+  })
+  await bridge9.init()
+  assert.equal(bridge9.status, 'online')
+  assert.equal(bridge9.setItem('a', JSON.stringify([{ v: 2 }])), true)
+  await bridge9.queue
+  assert.equal(bridge9.status, 'unauthorized') // 已切换到未登录（前端引导跳转登录页）
+  assert.equal(bridge9.getItem('a'), '[{"v":1}]') // 缓存保留上次同步值
+  assert.equal(bridge9.setItem('a', JSON.stringify([{ v: 3 }])), false) // 禁止写入
+  const full9 = JSON.parse(bridge9.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(full9.a, [{ v: 1 }])
+
+  // 种子版本化回填：远端版本落后时补种缺失默认 key，不覆盖用户已有数据
+  const localMemory10 = new Map()
+  const transport10 = createFakeTransport({
+    a: [1],
+    'customer-req:庆鼎': [{ id: 1, content: '用户数据' }],
+    'dict:sensor-type': [{ id: 1, name: '旧类型' }],
+  })
+  const bridge10 = new BackendStorage({
+    transport: transport10,
+    local: makeLocal(localMemory10),
+    migrateOnEmpty: true,
+    seedDefaults: {
+      b: [2],
+      // 已存在 → 必须不被覆盖
+      'dict:sensor-type': [{ id: 1, name: '新类型' }],
+      'meta:seed-version': [{ version: 2 }],
+    },
+  })
+  await bridge10.init()
+  assert.equal(bridge10.status, 'online')
+  // 只补缺失 key + 版本号
+  assert.deepEqual(transport10.calls.writes.sort(), ['b', 'meta:seed-version'])
+  assert.equal(transport10.calls.writeAlls, 0)
+  assert.deepEqual(transport10.remote.get('a'), [1])
+  assert.deepEqual(transport10.remote.get('dict:sensor-type'), [
+    { id: 1, name: '旧类型' },
+  ])
+  assert.deepEqual(transport10.remote.get('b'), [2])
+  assert.deepEqual(transport10.remote.get('meta:seed-version'), [
+    { version: 2 },
+  ])
+  // 缓存已包含回填数据
+  const full10 = JSON.parse(bridge10.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(full10.b, [2])
+  assert.deepEqual(full10['dict:sensor-type'], [{ id: 1, name: '旧类型' }])
+
+  // 版本一致（已是最新）：不产生任何写入
+  const localMemory11 = new Map()
+  const transport11 = createFakeTransport({
+    a: [1],
+    'meta:seed-version': [{ version: 2 }],
+  })
+  const bridge11 = new BackendStorage({
+    transport: transport11,
+    local: makeLocal(localMemory11),
+    seedDefaults: {
+      b: [2],
+      'meta:seed-version': [{ version: 2 }],
+    },
+  })
+  await bridge11.init()
+  assert.deepEqual(transport11.calls.writes, [])
+  assert.equal(transport11.calls.writeAlls, 0)
+
+  // 内置基础数据物化：buildDefaultStore 覆盖字典/分组/制程/机型结构/Sensor 目录
+  const defaultStore = domain.buildDefaultStore({
+    crudDefaults: data.CRUD_DEFAULTS,
+    sensorData: data.SENSOR_DATA,
+  })
+  assert.equal(
+    Object.values(defaultStore).every((value) => Array.isArray(value)),
+    true,
+  )
+  assert.equal(defaultStore['entity-groups:customer'].length, 3) // 华东/华南/SAT
+  assert.equal(defaultStore['entity-groups:machine'].length, 4)
+  assert.equal(defaultStore['dict:sensor-type'].length > 0, true)
+  assert.equal(
+    defaultStore['dict:sensor-status'].some((item) => item.name === '停用'),
+    true,
+  )
+  assert.equal(defaultStore['process-steps:all'].length > 0, true)
+  assert.equal(defaultStore['machine-global-sections:all'].length, 4)
+  assert.equal(defaultStore['general-structure-labels:all'].length, 3)
+  assert.equal(defaultStore['sensor-catalog:all'].length > 0, true)
+  assert.deepEqual(defaultStore['sensor-sop:all'], [])
+  assert.deepEqual(defaultStore['meta:seed-version'], [
+    { version: data.SEED_VERSION },
+  ])
+
+  // 种子导入：后端空库 + 本地无数据 + 提供 seedDefaults → 初始化基础数据
+  const localMemory8 = new Map()
+  const transport8 = createFakeTransport({})
+  const bridge8 = new BackendStorage({
+    transport: transport8,
+    local: makeLocal(localMemory8),
+    migrateOnEmpty: true,
+    seedDefaults: defaultStore,
+  })
+  const seeded = await bridge8.init()
+  assert.equal(seeded.status, 'online')
+  assert.equal(seeded.seeded, true)
+  assert.equal(seeded.migrated, false)
+  assert.equal(transport8.calls.writeAlls, 1)
+  assert.deepEqual(
+    transport8.remote.get('machine-global-sections:all'),
+    defaultStore['machine-global-sections:all'],
+  )
+  const seededRead = JSON.parse(bridge8.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(Object.keys(seededRead).sort(), Object.keys(defaultStore).sort())
+  assert.deepEqual(seededRead['sensor-catalog:all'], defaultStore['sensor-catalog:all'])
+
+  // 旧机型结构名修复：必须经注入的 storage 持久化（online 下即桥接层 → 后端）
+  const legacyMemory = new Map()
+  legacyMemory.set(
+    domain.STORAGE_KEY,
+    JSON.stringify({
+      'machine-global-sections:all': [
+        {
+          id: 1,
+          name: '标准输送段',
+          sort: 1,
+          kind: 'structure',
+          scope: 'global',
+        },
+        {
+          id: 2,
+          name: '手臂机构',
+          sort: 2,
+          kind: 'structure',
+          scope: 'global',
+        },
+        {
+          id: 3,
+          name: '台车工位结构',
+          sort: 3,
+          kind: 'structure',
+          scope: 'global',
+        },
+        {
+          id: 4,
+          name: '机型注意事项',
+          sort: 4,
+          kind: 'notes',
+          locked: true,
+          scope: 'global',
+        },
+      ],
+    }),
+  )
+  const legacyStorage = {
+    getItem: (key) => legacyMemory.get(key) ?? null,
+    setItem: (key, value) => legacyMemory.set(key, value),
+  }
+  const legacyRepo = domain.createSelectionRepository({
+    crudDefaults: data.CRUD_DEFAULTS,
+    sensorData: data.SENSOR_DATA,
+    storage: legacyStorage,
+  })
+  legacyRepo.getGlobalMachineSections()
+  const repaired = JSON.parse(legacyMemory.get(domain.STORAGE_KEY))
+  assert.equal(
+    repaired['machine-global-sections:all'].find((item) => item.id === 1).name,
+    '输送机构',
+  )
 
   console.log('Vben migration contract checks passed.')
 }

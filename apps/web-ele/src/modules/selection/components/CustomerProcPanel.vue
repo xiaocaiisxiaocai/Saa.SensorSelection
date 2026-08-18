@@ -64,10 +64,9 @@ watch(
 );
 
 function failureMessage(reason: string) {
-  if (reason === 'storage') return '浏览器本地存储不可用，本次修改未保存';
+  if (reason === 'storage') return '数据保存失败，本次修改未保存';
   if (reason === 'stale') return '该注意事项已被其他页面删除';
-  if (reason === 'validation')
-    return '请填写制程作用、制程特性并选择有效分类';
+  if (reason === 'validation') return '请填写制程作用、制程特性并选择有效分类';
   return '保存失败，请重试';
 }
 
@@ -169,7 +168,11 @@ async function deleteItem(item: CustomerProcItem) {
             <X :size="15" aria-hidden="true" />
           </button>
         </label>
-        <ElButton type="primary" @click="addItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="addItem"
+        >
           <Plus :size="15" aria-hidden="true" />
           新增注意事项
         </ElButton>
@@ -194,6 +197,7 @@ async function deleteItem(item: CustomerProcItem) {
                 <ElButton
                   aria-label="编辑注意事项"
                   circle
+                  v-can-write="'selection:write'"
                   @click="editItem(row)"
                 >
                   <Pencil :size="15" aria-hidden="true" />
@@ -204,6 +208,7 @@ async function deleteItem(item: CustomerProcItem) {
                   aria-label="删除注意事项"
                   circle
                   type="danger"
+                  v-can-write="'selection:write'"
                   @click="deleteItem(row)"
                 >
                   <Trash2 :size="15" aria-hidden="true" />
@@ -263,7 +268,11 @@ async function deleteItem(item: CustomerProcItem) {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogOpen = false">取消</ElButton>
-        <ElButton type="primary" @click="saveItem">
+        <ElButton
+          type="primary"
+          v-can-write="'selection:write'"
+          @click="saveItem"
+        >
           <Save :size="15" aria-hidden="true" />
           保存
         </ElButton>

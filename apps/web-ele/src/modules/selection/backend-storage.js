@@ -35,10 +35,17 @@ function parseStoreJson(value) {
   return store;
 }
 
-/** 结构化错误分类：transport 抛出的错误带 kind='unauthorized' 即视为未登录。 */
+/**
+ * 结构化错误分类：
+ * - kind='unauthorized'：token 缺失/失效，需要登录
+ * - kind='forbidden'：token 有效但缺少权限声明（常见于 RBAC 升级前的旧 token），
+ *   在初始化阶段同样视为需要重新登录（拿携带权限声明的新 token）
+ */
 function isUnauthorized(error) {
   return Boolean(
-    error && typeof error === 'object' && error.kind === 'unauthorized',
+    error &&
+      typeof error === 'object' &&
+      (error.kind === 'unauthorized' || error.kind === 'forbidden'),
   );
 }
 
@@ -58,6 +65,8 @@ export class BackendStorage {
     this.onStatus = options.onStatus;
     this.onWriteFailure = options.onWriteFailure;
     this.migrateOnEmpty = options.migrateOnEmpty !== false;
+    /** 后端空库且本地无数据时，用于初始化后端的内置基础数据（key → 数组）。 */
+    this.seedDefaults = options.seedDefaults;
     this.cache = new Map();
     this.synced = new Map();
     this.queue = Promise.resolve();
@@ -107,22 +116,36 @@ export class BackendStorage {
     this.cache.clear();
     this.synced.clear();
     this.emitStatus();
-    return { migrated: false, keyCount: 0, status: this.status };
+    return {
+      migrated: false,
+      seeded: false,
+      keyCount: 0,
+      status: this.status,
+    };
   }
 
   /** StorageLike#getItem。 */
   getItem(key) {
-    if (this.status === 'offline' || this.status === 'unauthorized') {
+    if (this.status === 'offline') {
       return this.local.getItem(key);
     }
     if (key === STORAGE_KEY) {
       // 缓存按「业务 key」扁平存储，需组装成完整 store 供仓库读取
       const full = {};
       for (const [k, value] of this.cache) full[k] = value;
+      if (this.status === 'unauthorized' && Object.keys(full).length === 0) {
+        // 未登录且无在线缓存（如启动即 401）：回退读本地缓存
+        return this.local.getItem(key);
+      }
       return JSON.stringify(full);
     }
     const value = this.cache.get(key);
-    return value === undefined ? null : JSON.stringify(value);
+    if (value === undefined) {
+      // 未登录时回退读本地缓存；在线缓存保留已同步数据供只读查看
+      if (this.status === 'unauthorized') return this.local.getItem(key);
+      return null;
+    }
+    return JSON.stringify(value);
   }
 
   handleFailure(key, prev, error) {
@@ -135,10 +158,16 @@ export class BackendStorage {
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;
     this.onWriteFailure?.(message);
+    // 登录失效：切换到未登录状态（引导跳转登录页），缓存保留已同步数据供只读
+    if (isUnauthorized(error) && this.status !== 'unauthorized') {
+      this.status = 'unauthorized';
+      this.emitStatus();
+    }
   }
 
   /**
-   * 初始化：拉取后端数据；后端为空且本地有数据时自动迁移；
+   * 初始化：拉取后端数据；后端为空且本地有数据时自动迁移，本地也无数据时用
+   * 内置基础数据种子导入；种子版本落后时按缺失 key 版本化回填（不覆盖用户数据）；
    * 后端不可达时退化为本地模式。
    */
   async init() {
@@ -154,6 +183,7 @@ export class BackendStorage {
 
     const remoteKeys = Object.keys(remote);
     let migrated = false;
+    let seeded = false;
     if (this.migrateOnEmpty && remoteKeys.length === 0) {
       const localStore = parsePersistedStore(this.local.getItem(STORAGE_KEY));
       const localKeys = Object.keys(localStore);
@@ -165,6 +195,40 @@ export class BackendStorage {
         } catch {
           // 迁移失败：继续按远端空库处理，本地数据保留
         }
+      } else if (this.seedDefaults) {
+        // 全新环境：把前端内置基础数据（字典/机型结构/Sensor 目录等）导入后端
+        try {
+          await this.transport.writeAll(this.seedDefaults);
+          remote = this.seedDefaults;
+          seeded = true;
+        } catch {
+          // 种子失败：继续按远端空库处理，前端仍按内置默认渲染
+        }
+      }
+    }
+
+    // 版本化回填：远端种子版本落后时，补种缺失的默认 key 并更新版本号，
+    // 不覆盖用户已在后端修改/删除过的数据（升级路径）。
+    if (this.seedDefaults) {
+      const currentVersion =
+        Number(remote['meta:seed-version']?.[0]?.version) || 0;
+      const seedVersion =
+        Number(this.seedDefaults['meta:seed-version']?.[0]?.version) || 0;
+      if (seedVersion > currentVersion) {
+        try {
+          for (const [key, value] of Object.entries(this.seedDefaults)) {
+            if (key === 'meta:seed-version' || key in remote) continue;
+            await this.transport.writeKey(key, value);
+            remote[key] = value;
+          }
+          await this.transport.writeKey(
+            'meta:seed-version',
+            this.seedDefaults['meta:seed-version'],
+          );
+          remote['meta:seed-version'] = this.seedDefaults['meta:seed-version'];
+        } catch {
+          // 回填失败不影响本次使用：下次连接会重试
+        }
       }
     }
 
@@ -173,7 +237,7 @@ export class BackendStorage {
     this.status = 'online';
     this.lastError = null;
     this.emitStatus();
-    return { migrated, keyCount: this.cache.size, status: 'online' };
+    return { migrated, seeded, keyCount: this.cache.size, status: 'online' };
   }
 
   /** StorageLike#setItem。online 乐观写入；offline 写本地；其余拒绝。 */

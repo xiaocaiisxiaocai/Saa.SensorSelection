@@ -1,0 +1,107 @@
+.rbac-page {
+  padding: 16px;
+}
+
+.rbac-page__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.rbac-page__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rbac-muted {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.rbac-hint {
+  margin: 4px 0 0 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.rbac-perm-group {
+  margin-bottom: 10px;
+}
+
+.rbac-perm-group__module {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 组织架构页 */
+.rbac-org {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.rbac-org__tree {
+  flex: 1 1 340px;
+  max-width: 420px;
+  min-height: 320px;
+  padding: 10px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.rbac-org__empty {
+  margin: 24px 0 0;
+  padding: 0 8px;
+}
+
+.rbac-org__node {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rbac-org__detail {
+  flex: 1 1 auto;
+  min-width: 260px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+}
+
+.rbac-org__detail--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.rbac-org__detail-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rbac-org__detail-list {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  row-gap: 8px;
+  margin: 0;
+}
+
+.rbac-org__detail-list dt {
+  color: var(--el-text-color-secondary);
+}
+
+.rbac-org__detail-list dd {
+  margin: 0;
+}
+
+.rbac-org__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}

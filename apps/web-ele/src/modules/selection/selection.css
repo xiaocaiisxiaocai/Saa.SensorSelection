@@ -84,22 +84,6 @@
   max-width: 520px;
 }
 
-.selection-user {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 12px;
-  color: var(--sel-text-secondary);
-  font-size: 13px;
-}
-
-.selection-user__name {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .selection-search:focus-within,
 .catalog-search:focus-within,
 .entity-filter:focus-within {

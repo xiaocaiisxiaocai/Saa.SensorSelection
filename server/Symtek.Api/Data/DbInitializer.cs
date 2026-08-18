@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace Symtek.Api.Data;
 
@@ -15,6 +16,8 @@ public class DbInitializer(
     {
         EnsureDataDirectory();
         DbSeeder.EnsureSeeded(db, configuration);
+        // WAL：读写不互斥（持久设置，写入库文件）；busy_timeout 由连接拦截器按连接设置
+        db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
     }
 
     private void EnsureDataDirectory()

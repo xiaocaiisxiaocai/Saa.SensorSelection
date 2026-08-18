@@ -32,12 +32,26 @@ public class StoreTests
     }
 
     [Fact]
-    public async Task Store_WithoutToken_Returns401()
+    public async Task Store_Read_WithoutToken_ReturnsStore()
     {
+        // 匿名只读预览：未登录也能读取业务数据（客户/制程/机型/Sensor 型号）
         await using var factory = new ApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/store");
+        var body = await client.GetFromJsonAsync<JsonElement>("/api/store");
+        Assert.Equal(JsonValueKind.Object, body.ValueKind);
+    }
+
+    [Fact]
+    public async Task Store_Write_WithoutToken_Returns401()
+    {
+        // 匿名只读：写入仍要求登录
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            "/api/store/customer-req:匿名写",
+            JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 

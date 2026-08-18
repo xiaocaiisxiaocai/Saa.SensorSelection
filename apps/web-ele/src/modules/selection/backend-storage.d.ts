@@ -21,10 +21,15 @@ export interface BackendStorageOptions {
   onWriteFailure?: (message: string) => void;
   /** 首次接入时把本地数据导入后端 */
   migrateOnEmpty?: boolean;
+  /** 后端空库且本地无数据时，用内置基础数据初始化后端 */
+  seedDefaults?: Record<string, unknown[]>;
 }
 
 export interface BackendInitResult {
+  /** 已把 localStorage 旧数据导入后端 */
   migrated: boolean;
+  /** 已把内置基础数据种子导入后端 */
+  seeded: boolean;
   keyCount: number;
   status: BackendSyncStatus;
 }

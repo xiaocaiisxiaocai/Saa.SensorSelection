@@ -730,11 +730,14 @@ export function createSelectionRepository({
         return { ok: false, reason: 'validation' };
       }
     } else {
-      const requiredValue = isTimeline
-        ? payload.problem
-        : isCustomerReq
-          ? payload.content
-          : payload.name;
+      let requiredValue;
+      if (isTimeline) {
+        requiredValue = payload.problem;
+      } else if (isCustomerReq) {
+        requiredValue = payload.content;
+      } else {
+        requiredValue = payload.name;
+      }
       if (!storedText(requiredValue).trim())
         return { ok: false, reason: 'validation' };
     }
@@ -1931,6 +1934,49 @@ export function createSelectionRepository({
     return null;
   }
 
+  function validReorderIndex(oldIndex, newIndex, length) {
+    return (
+      Number.isInteger(oldIndex) &&
+      Number.isInteger(newIndex) &&
+      oldIndex >= 0 &&
+      oldIndex < length &&
+      newIndex >= 0 &&
+      newIndex < length
+    );
+  }
+
+  function reorderEntityGroups(kind, oldIndex, newIndex) {
+    if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
+    const groups = getEntityGroups(kind);
+    if (!validReorderIndex(oldIndex, newIndex, groups.length)) {
+      return { ok: false, reason: 'validation' };
+    }
+    if (oldIndex === newIndex) return { ok: true };
+
+    const snapshot = cloneStore(store);
+    const [moved] = groups.splice(oldIndex, 1);
+    groups.splice(newIndex, 0, moved);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
+  function reorderEntityItems(kind, groupName, oldIndex, newIndex) {
+    if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
+    const groups = getEntityGroups(kind);
+    const group = groups.find((item) => item.name === groupName);
+    if (!group) return { ok: false, reason: 'stale' };
+    if (!validReorderIndex(oldIndex, newIndex, group.items.length)) {
+      return { ok: false, reason: 'validation' };
+    }
+    if (oldIndex === newIndex) return { ok: true };
+
+    const snapshot = cloneStore(store);
+    const [moved] = group.items.splice(oldIndex, 1);
+    group.items.splice(newIndex, 0, moved);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
   function saveEntityGroup(kind, payload, editName) {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
     const groups = getEntityGroups(kind);
@@ -2112,6 +2158,8 @@ export function createSelectionRepository({
     getSensorSops,
     listResolvedMachineSections,
     replaceFromStorage,
+    reorderEntityGroups,
+    reorderEntityItems,
     saveControlledFile,
     saveCrud,
     saveDictionaryItem,

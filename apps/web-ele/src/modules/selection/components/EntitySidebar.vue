@@ -2,7 +2,18 @@
 import type { EntityGroup } from '../data.js';
 import type { EntityKind } from '../domain.js';
 
-import { computed, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
+
+import { useAccessStore } from '@vben/stores';
+import { type Sortable, useSortable } from '@vben-core/composables';
 
 import {
   ElButton,
@@ -19,6 +30,7 @@ import {
 import {
   ChevronDown,
   FolderPlus,
+  GripVertical,
   Pencil,
   Plus,
   Search,
@@ -33,15 +45,28 @@ const props = defineProps<{
   groups: EntityGroup[];
   kind: EntityKind;
   label: string;
+  selectable?: boolean;
   selected: string;
+  selectedItems?: string[];
 }>();
 
 const emit = defineEmits<{
   select: [payload: { category: string; item: string }];
+  toggleSelect: [payload: { checked: boolean; item: string }];
 }>();
 
 const store = useSelectionStore();
+const accessStore = useAccessStore();
 const query = ref('');
+const sidebarRef = ref<HTMLElement>();
+const sortableInstances: Sortable[] = [];
+let sortableRefreshToken = 0;
+const SIDEBAR_DEFAULT_WIDTH = 260;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 520;
+const sidebarWidth = ref(SIDEBAR_DEFAULT_WIDTH);
+let workspaceElement: HTMLElement | undefined;
+let resizeCleanup: (() => void) | undefined;
 const groupDialogOpen = ref(false);
 const itemDialogOpen = ref(false);
 const editingGroupName = ref<string>();
@@ -86,6 +111,105 @@ const visibleGroups = computed(() => {
     );
 });
 
+const canSort = computed(
+  () =>
+    accessStore.accessCodes.includes('selection:write') && !query.value.trim(),
+);
+const sortableSignature = computed(() =>
+  visibleGroups.value
+    .map((group) => `${group.name}:${group.items.join(',')}`)
+    .join('|'),
+);
+
+function destroySortables() {
+  while (sortableInstances.length > 0) {
+    sortableInstances.pop()?.destroy();
+  }
+}
+
+function handleSortFailure(reason: string) {
+  ElMessage.error(failureMessage(reason, 'item'));
+  // persist 失败时仓库已回滚，触发一次渲染把 DOM 恢复到原顺序。
+  store.revision += 1;
+}
+
+async function refreshSortables() {
+  const refreshToken = ++sortableRefreshToken;
+  destroySortables();
+  if (!canSort.value) return;
+
+  await nextTick();
+  if (refreshToken !== sortableRefreshToken || !canSort.value) return;
+  const sidebar = sidebarRef.value;
+  if (!sidebar) return;
+  const groupsElement = sidebar.querySelector<HTMLElement>('.entity-groups');
+  if (!groupsElement) return;
+
+  const groupSortable = await useSortable(groupsElement, {
+    animation: 160,
+    handle: '.entity-sort-handle',
+    ghostClass: 'entity-sortable-ghost',
+    onEnd: (event) => {
+      if (
+        event.oldIndex === undefined ||
+        event.newIndex === undefined ||
+        event.oldIndex === event.newIndex
+      ) {
+        return;
+      }
+      const result = store.reorderEntityGroups(
+        props.kind,
+        event.oldIndex,
+        event.newIndex,
+      );
+      if (!result.ok) handleSortFailure(result.reason);
+    },
+  }).initializeSortable();
+  if (refreshToken !== sortableRefreshToken) {
+    groupSortable.destroy();
+    return;
+  }
+  sortableInstances.push(groupSortable);
+
+  for (const itemsElement of sidebar.querySelectorAll<HTMLElement>(
+    '.entity-group__items',
+  )) {
+    const itemSortable = await useSortable(itemsElement, {
+      animation: 160,
+      handle: '.entity-sort-handle',
+      ghostClass: 'entity-sortable-ghost',
+      group: {
+        name: `entity-items-${props.kind}`,
+        pull: false,
+        put: false,
+      },
+      onEnd: (event) => {
+        if (
+          event.oldIndex === undefined ||
+          event.newIndex === undefined ||
+          event.oldIndex === event.newIndex
+        ) {
+          return;
+        }
+        const groupName = itemsElement.dataset.groupName;
+        if (!groupName) return;
+        const result = store.reorderEntityItems(
+          props.kind,
+          groupName,
+          event.oldIndex,
+          event.newIndex,
+        );
+        if (!result.ok) handleSortFailure(result.reason);
+      },
+    }).initializeSortable();
+    if (refreshToken !== sortableRefreshToken) {
+      itemSortable.destroy();
+      return;
+    }
+    sortableInstances.push(itemSortable);
+  }
+}
+
 watch(query, (value) => {
   if (value.trim()) {
     expanded.value = new Set(visibleGroups.value.map((group) => group.name));
@@ -101,11 +225,122 @@ watch(
   },
 );
 
+watch([canSort, sortableSignature], () => void refreshSortables(), {
+  flush: 'post',
+});
+
+function sidebarStorageKey() {
+  return `selection:sidebar-width:${props.kind}`;
+}
+
+function clampSidebarWidth(value: number) {
+  return Math.min(
+    SIDEBAR_MAX_WIDTH,
+    Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)),
+  );
+}
+
+function setSidebarWidth(value: number, persist = false) {
+  sidebarWidth.value = clampSidebarWidth(value);
+  workspaceElement?.style.setProperty(
+    '--entity-sidebar-width',
+    `${sidebarWidth.value}px`,
+  );
+  if (persist) {
+    try {
+      localStorage.setItem(sidebarStorageKey(), String(sidebarWidth.value));
+    } catch {
+      // 私有浏览模式下 localStorage 可能不可用，不影响本次调整。
+    }
+  }
+}
+
+function restoreSidebarWidth() {
+  let storedWidth = SIDEBAR_DEFAULT_WIDTH;
+  try {
+    const stored = localStorage.getItem(sidebarStorageKey());
+    const parsed = stored === null ? Number.NaN : Number(stored);
+    if (Number.isFinite(parsed)) storedWidth = parsed;
+  } catch {
+    // 使用默认宽度。
+  }
+  setSidebarWidth(storedWidth);
+}
+
+function stopSidebarResize() {
+  resizeCleanup?.();
+  resizeCleanup = undefined;
+  document.body.style.removeProperty('cursor');
+  document.body.style.removeProperty('user-select');
+}
+
+function startSidebarResize(event: PointerEvent) {
+  if (event.button !== 0 || window.matchMedia('(max-width: 960px)').matches) {
+    return;
+  }
+  event.preventDefault();
+  const startX = event.clientX;
+  const startWidth = sidebarWidth.value;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+
+  const onMove = (moveEvent: PointerEvent) => {
+    setSidebarWidth(startWidth + moveEvent.clientX - startX);
+  };
+  const onUp = () => {
+    setSidebarWidth(sidebarWidth.value, true);
+    stopSidebarResize();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp, { once: true });
+  resizeCleanup = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+}
+
+function adjustSidebarWidth(event: KeyboardEvent) {
+  const step = event.shiftKey ? 40 : 16;
+  const actions: Record<string, () => void> = {
+    ArrowLeft: () => setSidebarWidth(sidebarWidth.value - step, true),
+    ArrowRight: () => setSidebarWidth(sidebarWidth.value + step, true),
+    End: () => setSidebarWidth(SIDEBAR_MAX_WIDTH, true),
+    Home: () => setSidebarWidth(SIDEBAR_MIN_WIDTH, true),
+  };
+  const action = actions[event.key];
+  if (!action) return;
+  event.preventDefault();
+  action();
+}
+
+onMounted(() => {
+  workspaceElement =
+    sidebarRef.value?.closest<HTMLElement>('.entity-workspace') ?? undefined;
+  restoreSidebarWidth();
+  void refreshSortables();
+});
+onUnmounted(() => {
+  sortableRefreshToken += 1;
+  destroySortables();
+  stopSidebarResize();
+  workspaceElement?.style.removeProperty('--entity-sidebar-width');
+  workspaceElement = undefined;
+});
+
 function toggle(groupName: string) {
   const next = new Set(expanded.value);
   if (next.has(groupName)) next.delete(groupName);
   else next.add(groupName);
   expanded.value = next;
+}
+
+function isItemSelected(item: string) {
+  return props.selectedItems?.includes(item) ?? false;
+}
+
+function toggleItemSelection(item: string, event: Event) {
+  const checked = (event.target as HTMLInputElement | null)?.checked ?? false;
+  emit('toggleSelect', { item, checked });
 }
 
 function failureMessage(reason: string, target: 'group' | 'item') {
@@ -282,7 +517,22 @@ async function removeItem(category: string, itemName: string, event: Event) {
 </script>
 
 <template>
-  <aside :aria-label="`${props.label}列表`" class="entity-sidebar">
+  <aside
+    ref="sidebarRef"
+    :aria-label="`${props.label}列表`"
+    class="entity-sidebar"
+  >
+    <button
+      :aria-valuemax="SIDEBAR_MAX_WIDTH"
+      :aria-valuemin="SIDEBAR_MIN_WIDTH"
+      :aria-valuenow="sidebarWidth"
+      aria-label="调整分类栏宽度"
+      class="entity-sidebar__resizer"
+      role="separator"
+      type="button"
+      @keydown="adjustSidebarWidth"
+      @pointerdown="startSidebarResize"
+    ></button>
     <label class="entity-filter">
       <Search :size="16" aria-hidden="true" />
       <input
@@ -341,6 +591,14 @@ async function removeItem(category: string, itemName: string, event: Event) {
             type="button"
             @click="toggle(group.name)"
           >
+            <span
+              v-if="canSort"
+              aria-hidden="true"
+              class="entity-sort-handle"
+              title="拖拽排序"
+            >
+              <GripVertical :size="13" />
+            </span>
             <ChevronDown
               :class="{ 'is-collapsed': !expanded.has(group.name) }"
               :size="15"
@@ -385,18 +643,44 @@ async function removeItem(category: string, itemName: string, event: Event) {
             </ElTooltip>
           </div>
         </div>
-        <div v-show="expanded.has(group.name)" class="entity-group__items">
+        <div
+          v-show="expanded.has(group.name)"
+          :data-group-name="group.name"
+          class="entity-group__items"
+        >
           <div
             v-for="item in group.items"
             :key="item"
+            :class="{ 'entity-group__item--selectable': props.selectable }"
             class="entity-group__item"
           >
+            <label
+              v-if="props.selectable"
+              class="entity-selection-control"
+              @click.stop
+              @mousedown.stop
+            >
+              <input
+                :aria-label="`选择${item}加入示意图`"
+                :checked="isItemSelected(item)"
+                type="checkbox"
+                @change="toggleItemSelection(item, $event)"
+              />
+            </label>
             <button
               :aria-current="selected === item ? 'page' : undefined"
               :class="{ active: selected === item }"
               type="button"
               @click="emit('select', { category: group.name, item })"
             >
+              <span
+                v-if="canSort"
+                aria-hidden="true"
+                class="entity-sort-handle"
+                title="拖拽排序"
+              >
+                <GripVertical :size="13" />
+              </span>
               {{ item }}
             </button>
             <div class="entity-group__actions">

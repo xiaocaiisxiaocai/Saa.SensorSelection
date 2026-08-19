@@ -30,6 +30,8 @@ const store = useSelectionStore();
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
+const typeFilter = ref('');
+const statusFilter = ref('');
 const form = reactive({
   date: '',
   machine: '',
@@ -64,26 +66,35 @@ function statusTagType(status: string) {
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
-  if (!value) return items.value;
-  return items.value.filter((item) =>
-    [
-      item.type,
-      item.machine,
-      item.problem,
-      item.measure,
-      item.date,
-      item.status,
-    ]
-      .join(' ')
-      .toLocaleLowerCase('zh-CN')
-      .includes(value),
+  return items.value.filter(
+    (item) =>
+      (!typeFilter.value || item.type === typeFilter.value) &&
+      (!statusFilter.value || item.status === statusFilter.value) &&
+      (!value ||
+        [
+          item.type,
+          item.machine,
+          item.problem,
+          item.measure,
+          item.date,
+          item.status,
+        ]
+          .join(' ')
+          .toLocaleLowerCase('zh-CN')
+          .includes(value)),
   );
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || typeFilter.value || statusFilter.value),
+);
 
 watch(
   () => props.entityName,
   () => {
     query.value = '';
+    typeFilter.value = '';
+    statusFilter.value = '';
   },
 );
 
@@ -172,12 +183,42 @@ async function deleteItem(item: TimelineItem) {
     <div class="data-section__toolbar">
       <span>
         {{
-          query.trim()
+          hasFilters
             ? `匹配 ${filteredItems.length} / 共 ${items.length} 条`
             : `${items.length} 条厂外反馈`
         }}
       </span>
       <div class="data-section__actions">
+        <ElSelect
+          v-model="typeFilter"
+          aria-label="按问题分类筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="问题分类"
+        >
+          <ElOption
+            v-for="option in typeNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
+        <ElSelect
+          v-model="statusFilter"
+          aria-label="按处理状态筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="处理状态"
+        >
+          <ElOption
+            v-for="option in statusNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
         <label class="tab-search">
           <Search :size="16" aria-hidden="true" />
           <input
@@ -253,7 +294,7 @@ async function deleteItem(item: TimelineItem) {
     </div>
     <ElEmpty
       v-else
-      :description="query.trim() ? '没有匹配的反馈记录' : '暂无反馈记录'"
+      :description="hasFilters ? '没有匹配的反馈记录' : '暂无反馈记录'"
       :image-size="72"
     />
 
@@ -267,7 +308,7 @@ async function deleteItem(item: TimelineItem) {
       <ElForm label-position="top">
         <div class="form-grid">
           <ElFormItem label="问题分类" required>
-            <ElSelect v-model="form.type" class="w-full">
+            <ElSelect v-model="form.type" class="w-full" filterable>
               <ElOption
                 v-for="option in typeNames"
                 :key="option"
@@ -290,7 +331,7 @@ async function deleteItem(item: TimelineItem) {
             />
           </ElFormItem>
           <ElFormItem label="处理状态" required>
-            <ElSelect v-model="form.status" class="w-full">
+            <ElSelect v-model="form.status" class="w-full" filterable>
               <ElOption
                 v-for="option in statusNames"
                 :key="option"

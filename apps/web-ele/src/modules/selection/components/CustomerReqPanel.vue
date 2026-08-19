@@ -27,6 +27,8 @@ const store = useSelectionStore();
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
+const typeFilter = ref('');
+const sourceFilter = ref('');
 const form = reactive({
   content: '',
   machine: '',
@@ -49,26 +51,35 @@ const items = computed(() => {
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
-  if (!value) return items.value;
-  return items.value.filter((item) =>
-    [
-      item.type,
-      item.machine,
-      item.process,
-      item.content,
-      item.source,
-      item.note,
-    ]
-      .join(' ')
-      .toLocaleLowerCase('zh-CN')
-      .includes(value),
+  return items.value.filter(
+    (item) =>
+      (!typeFilter.value || item.type === typeFilter.value) &&
+      (!sourceFilter.value || item.source === sourceFilter.value) &&
+      (!value ||
+        [
+          item.type,
+          item.machine,
+          item.process,
+          item.content,
+          item.source,
+          item.note,
+        ]
+          .join(' ')
+          .toLocaleLowerCase('zh-CN')
+          .includes(value)),
   );
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || typeFilter.value || sourceFilter.value),
+);
 
 watch(
   () => props.entityName,
   () => {
     query.value = '';
+    typeFilter.value = '';
+    sourceFilter.value = '';
   },
 );
 
@@ -154,12 +165,42 @@ async function deleteItem(item: CustomerReqItem) {
     <div class="data-section__toolbar">
       <span>
         {{
-          query.trim()
+          hasFilters
             ? `匹配 ${filteredItems.length} / 共 ${items.length} 条`
             : `${items.length} 条客户要求`
         }}
       </span>
       <div class="data-section__actions">
+        <ElSelect
+          v-model="typeFilter"
+          aria-label="按要求分类筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="要求分类"
+        >
+          <ElOption
+            v-for="option in typeNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
+        <ElSelect
+          v-model="sourceFilter"
+          aria-label="按要求来源筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="要求来源"
+        >
+          <ElOption
+            v-for="option in sourceNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
         <label class="tab-search">
           <Search :size="16" aria-hidden="true" />
           <input
@@ -229,7 +270,7 @@ async function deleteItem(item: CustomerReqItem) {
     </div>
     <ElEmpty
       v-else
-      :description="query.trim() ? '没有匹配的要求记录' : '暂无要求记录'"
+      :description="hasFilters ? '没有匹配的要求记录' : '暂无要求记录'"
       :image-size="72"
     />
 
@@ -243,7 +284,7 @@ async function deleteItem(item: CustomerReqItem) {
       <ElForm label-position="top">
         <div class="form-grid">
           <ElFormItem label="要求分类" required>
-            <ElSelect v-model="form.type" class="w-full">
+            <ElSelect v-model="form.type" class="w-full" filterable>
               <ElOption
                 v-for="option in typeNames"
                 :key="option"
@@ -253,7 +294,7 @@ async function deleteItem(item: CustomerReqItem) {
             </ElSelect>
           </ElFormItem>
           <ElFormItem label="来源" required>
-            <ElSelect v-model="form.source" class="w-full">
+            <ElSelect v-model="form.source" class="w-full" filterable>
               <ElOption
                 v-for="option in sourceNames"
                 :key="option"

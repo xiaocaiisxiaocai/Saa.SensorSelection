@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { MachineSectionItem } from '../data.js';
+import type { MachineReportSection } from '../schematic-report';
 
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -18,7 +19,9 @@ import {
 } from 'element-plus';
 import { Pencil, Plus, Save, Trash2 } from 'lucide-vue-next';
 
+import { api, ApiError } from '../api';
 import { GENERAL_STRUCTURE_CATEGORY } from '../data.js';
+import { openMachineSchematicReport } from '../schematic-report';
 import { useSelectionStore } from '../store';
 import EntitySidebar from './EntitySidebar.vue';
 import MachineSectionTable from './MachineSectionTable.vue';
@@ -33,8 +36,24 @@ const dialogOpen = ref(false);
 const editId = ref<number>();
 const form = reactive({ name: '' });
 const activeSection = ref('');
+const selectedMachineNames = ref<Set<string>>(new Set());
+const reportGenerating = ref(false);
 
 const groups = computed(() => store.entityGroups('machine'));
+
+const availableMachineNames = computed(() =>
+  groups.value.flatMap((group) => group.items),
+);
+
+const selectedMachineNamesList = computed(() =>
+  availableMachineNames.value.filter((name) =>
+    selectedMachineNames.value.has(name),
+  ),
+);
+
+const selectedMachineCount = computed(
+  () => selectedMachineNamesList.value.length,
+);
 
 const selection = computed(() => {
   const requested = String(route.query.item || '');
@@ -97,6 +116,58 @@ const displaySections = computed(() =>
         displayName: section.name,
       })),
 );
+
+watch(
+  () => availableMachineNames.value.join(','),
+  () => {
+    const available = new Set(availableMachineNames.value);
+    selectedMachineNames.value = new Set(
+      [...selectedMachineNames.value].filter((name) => available.has(name)),
+    );
+  },
+  { immediate: true },
+);
+
+const reportSections = computed<MachineReportSection[]>(() => {
+  const machineNames = selectedMachineNamesList.value;
+  const resolvedByMachine = new Map(
+    machineNames.map((machineName) => [
+      machineName,
+      store.resolvedMachineSections(machineName),
+    ]),
+  );
+  const sectionMap = new Map<number, MachineReportSection>();
+
+  for (const sectionsForMachine of resolvedByMachine.values()) {
+    for (const section of sectionsForMachine) {
+      if (!sectionMap.has(section.id)) {
+        sectionMap.set(section.id, {
+          ...section,
+          displayName: section.name,
+          blocks: [],
+        });
+      }
+    }
+  }
+
+  return [...sectionMap.values()]
+    .sort((left, right) => left.sort - right.sort)
+    .map((section) => ({
+      ...section,
+      blocks: machineNames.flatMap((machineName) => {
+        const machineSection = resolvedByMachine
+          .get(machineName)
+          ?.find((candidate) => candidate.id === section.id);
+        if (!machineSection) return [];
+        return [
+          {
+            machineName,
+            rows: store.machineSectionRows(section.id, machineName),
+          },
+        ];
+      }),
+    }));
+});
 
 function sectionIdForGeneralItem(itemName: string) {
   const byLabel = Object.entries(labelMap.value).find(
@@ -225,6 +296,72 @@ function onTabChange(name: number | string) {
   router.replace({ path: route.path, query });
 }
 
+function onMachineSelectionChange(payload: { checked: boolean; item: string }) {
+  const next = new Set(selectedMachineNames.value);
+  if (payload.checked) next.add(payload.item);
+  else next.delete(payload.item);
+  selectedMachineNames.value = next;
+}
+
+function selectAllMachines() {
+  selectedMachineNames.value = new Set(availableMachineNames.value);
+}
+
+function clearSelectedMachines() {
+  selectedMachineNames.value = new Set();
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function previewSchematicReport() {
+  if (selectedMachineNamesList.value.length === 0) {
+    ElMessage.warning('请先在左侧勾选至少一个机型');
+    return;
+  }
+  const opened = openMachineSchematicReport(
+    selectedMachineNamesList.value,
+    reportSections.value,
+  );
+  if (!opened) {
+    ElMessage.warning('报告窗口被浏览器拦截，请允许弹窗后重试');
+  }
+}
+
+async function generateSchematicReport() {
+  if (selectedMachineNamesList.value.length === 0) {
+    ElMessage.warning('请先在左侧勾选至少一个机型');
+    return;
+  }
+
+  reportGenerating.value = true;
+  try {
+    const blob = await api.downloadMachineSchematicReport({
+      machineNames: selectedMachineNamesList.value,
+      sections: reportSections.value,
+    });
+    downloadBlob(
+      blob,
+      `机型结构示意图报告-${new Date().toISOString().slice(0, 10)}.html`,
+    );
+    ElMessage.success('后端报告已生成并下载，可打开后打印为 PDF');
+  } catch (error) {
+    const message =
+      error instanceof ApiError ? error.message : '报告生成失败，请稍后重试';
+    ElMessage.error(message);
+  } finally {
+    reportGenerating.value = false;
+  }
+}
+
 function failureMessage(reason: string) {
   if (reason === 'duplicate') return '该 Tab 名称已存在';
   if (reason === 'not-empty') return '请先清空该 Tab 下的全部数据后再删除';
@@ -323,10 +460,13 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
     <div class="entity-workspace">
       <EntitySidebar
         :groups="groups"
+        :selectable="true"
         :selected="selection.item"
+        :selected-items="selectedMachineNamesList"
         kind="machine"
         label="机型"
         @select="selectEntity"
+        @toggle-select="onMachineSelectionChange"
       />
 
       <section
@@ -334,6 +474,35 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
         :aria-label="selection.item"
         class="entity-detail"
       >
+        <div aria-label="示意图报告" class="machine-report-toolbar">
+          <span class="machine-report-toolbar__count">
+            已选 {{ selectedMachineCount }} /
+            {{ availableMachineNames.length }} 个机型
+          </span>
+          <ElButton text @click="selectAllMachines">全选机型</ElButton>
+          <ElButton
+            :disabled="selectedMachineCount === 0"
+            text
+            @click="clearSelectedMachines"
+          >
+            清空
+          </ElButton>
+          <ElButton
+            :disabled="selectedMachineCount === 0"
+            :loading="reportGenerating"
+            type="primary"
+            @click="generateSchematicReport"
+          >
+            生成并下载报告
+          </ElButton>
+          <ElButton
+            :disabled="selectedMachineCount === 0"
+            text
+            @click="previewSchematicReport"
+          >
+            预览 / 打印 PDF
+          </ElButton>
+        </div>
         <div
           :class="{ 'machine-tabs-wrap--no-add': isGeneralStructure }"
           class="machine-tabs-wrap"
@@ -435,6 +604,20 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
   position: relative;
 }
 
+.machine-report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-height: 32px;
+}
+
+.machine-report-toolbar__count {
+  margin-right: auto;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
 .machine-detail-tabs :deep(.el-tabs__header) {
   padding-right: 118px;
 }
@@ -472,5 +655,16 @@ async function deleteTab(section: MachineSectionItem, event: Event) {
   width: 22px;
   height: 22px;
   flex: 0 0 22px;
+}
+
+@media (max-width: 760px) {
+  .machine-report-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .machine-report-toolbar__count {
+    width: 100%;
+    margin-right: 0;
+  }
 }
 </style>

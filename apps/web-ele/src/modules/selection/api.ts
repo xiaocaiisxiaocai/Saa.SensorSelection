@@ -201,6 +201,49 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers);
+  if (init?.body !== null) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const token = getStoredToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers,
+      signal: init?.signal ?? AbortSignal.timeout(API_TIMEOUT),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError('offline', '请求超时，请稍后重试');
+    }
+    throw new ApiError('offline', '无法连接后端服务');
+  }
+
+  if (response.status === 401) {
+    throw new ApiError('unauthorized', '登录已失效，请重新登录');
+  }
+  if (response.status === 403) {
+    throw new ApiError('forbidden', '无权限执行此操作');
+  }
+  if (!response.ok) {
+    let message = `请求失败（${response.status}）`;
+    try {
+      const body = await response.json();
+      if (body && typeof body.message === 'string') message = body.message;
+    } catch {
+      // 保留默认错误信息
+    }
+    throw new ApiError('error', message);
+  }
+  return response.blob();
+}
+
 export const api = {
   /** 账号密码登录，返回 JWT。 */
   login(username: string, password: string): Promise<LoginResult> {
@@ -223,6 +266,17 @@ export const api = {
     });
   },
 
+  /** 通过后端专用契约保存客户/机型分类及条目顺序。 */
+  async putEntityGroups(
+    kind: 'customer' | 'machine',
+    groups: unknown[],
+  ): Promise<void> {
+    await request(`/store/entity-groups/${kind}`, {
+      method: 'PUT',
+      body: JSON.stringify(groups),
+    });
+  },
+
   /** 删除单个 key。 */
   async deleteKey(key: string): Promise<void> {
     await request(`/store/${encodeURIComponent(key)}`, { method: 'DELETE' });
@@ -231,6 +285,17 @@ export const api = {
   /** 整体替换数据仓库（首次接入迁移用）。 */
   async replaceAll(store: Record<string, unknown[]>): Promise<void> {
     await request('/store', { method: 'PUT', body: JSON.stringify(store) });
+  },
+
+  /** 由后端生成机型结构示意图文档（HTML，可在文档内打印为 PDF）。 */
+  downloadMachineSchematicReport(payload: {
+    machineNames: string[];
+    sections: unknown[];
+  }): Promise<Blob> {
+    return requestBlob('/reports/machine-schematic', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   /** 当前登录用户资料（角色/权限/组织）。 */

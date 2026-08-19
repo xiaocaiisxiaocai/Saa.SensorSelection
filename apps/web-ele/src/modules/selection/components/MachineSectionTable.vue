@@ -15,7 +15,9 @@ import {
   ElInput,
   ElMessage,
   ElMessageBox,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElTable,
   ElTableColumn,
   ElTooltip,
@@ -54,6 +56,7 @@ const previewDragging = ref(false);
 const previewDragOrigin = ref({ x: 0, y: 0, ox: 0, oy: 0 });
 const editId = ref<number>();
 const query = ref('');
+const sensorTypeFilter = ref('');
 const form = reactive({
   role: '',
   sensorType: '',
@@ -93,6 +96,8 @@ const searchPlaceholder = computed(() =>
     : '搜索注意分类、事项名称、说明或备注',
 );
 
+const sensorTypeNames = computed(() => store.dictionaryNames('sensor-type'));
+
 const items = computed(
   () =>
     store.machineSectionRows(
@@ -103,14 +108,24 @@ const items = computed(
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
-  if (!value) return items.value;
   return items.value.filter((item) => {
+    if (
+      isStructure.value &&
+      sensorTypeFilter.value &&
+      item.sensorType !== sensorTypeFilter.value
+    ) {
+      return false;
+    }
     const haystack = isStructure.value
       ? [item.role, item.sensorType, item.spec, item.purpose, item.note]
       : [item.role, item.name, item.desc, item.note];
     return haystack.join(' ').toLocaleLowerCase('zh-CN').includes(value);
   });
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || sensorTypeFilter.value),
+);
 
 const dialogTitle = computed(() => (editId.value ? '编辑记录' : '新增记录'));
 
@@ -125,6 +140,7 @@ watch(
   () => [props.section.id, props.machineName],
   () => {
     query.value = '';
+    sensorTypeFilter.value = '';
     page.value = 1;
     dialogOpen.value = false;
     closePreview();
@@ -391,12 +407,28 @@ async function deleteItem(item: MachineSectionRow) {
     <div class="data-section__toolbar">
       <span>
         {{
-          query.trim()
+          hasFilters
             ? `匹配 ${filteredItems.length} / 共 ${items.length} 条`
             : `${items.length} 条记录`
         }}
       </span>
       <div class="data-section__actions">
+        <ElSelect
+          v-if="isStructure"
+          v-model="sensorTypeFilter"
+          aria-label="按传感器类型筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="传感器类型"
+        >
+          <ElOption
+            v-for="option in sensorTypeNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
         <label class="tab-search">
           <Search :size="16" aria-hidden="true" />
           <input
@@ -430,7 +462,7 @@ async function deleteItem(item: MachineSectionRow) {
     <div class="table-scroll">
       <ElTable
         :data="tableData"
-        :empty-text="query.trim() ? '没有匹配的记录' : '暂无记录'"
+        :empty-text="hasFilters ? '没有匹配的记录' : '暂无记录'"
         row-key="id"
       >
         <template v-if="isStructure">
@@ -527,7 +559,14 @@ async function deleteItem(item: MachineSectionRow) {
               <ElInput v-model="form.role" maxlength="80" />
             </ElFormItem>
             <ElFormItem :label="labels.sensorType" required>
-              <ElInput v-model="form.sensorType" maxlength="80" />
+              <ElSelect v-model="form.sensorType" class="w-full" filterable>
+                <ElOption
+                  v-for="option in sensorTypeNames"
+                  :key="option"
+                  :label="option"
+                  :value="option"
+                />
+              </ElSelect>
             </ElFormItem>
           </div>
           <ElFormItem :label="labels.spec">

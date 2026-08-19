@@ -170,9 +170,9 @@ export const MACHINE_DETAILS: Record<string, EntityDetail>;
 export const SENSOR_DATA: Record<string, SensorTypeDefinition>;
 export const CRUD_DEFAULTS: Record<
   string,
-  (entityName: string) => Array<
-    CrudItem | CustomerReqItem | CustomerProcItem | TimelineItem
-  >
+  (
+    entityName: string,
+  ) => Array<CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem>
 >;
 export const FEEDBACK_TYPE_OPTIONS: string[];
 export const FEEDBACK_TYPE_DEFAULTS: DictionaryItem[];

@@ -41,6 +41,31 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         return Content(result.Json!, "application/json; charset=utf-8");
     }
 
+    /// <summary>持久化客户/机型分类及条目排序。</summary>
+    [HttpPut("entity-groups/{kind}")]
+    [Authorize(Policy = "selection:write")]
+    public async Task<IActionResult> ReplaceEntityGroups(
+        string kind,
+        [FromBody] JsonElement payload)
+    {
+        var result = await store.ReplaceEntityGroupsAsync(kind, payload);
+        var target = $"entity-groups:{kind}";
+        await audit.WriteAsync(
+            "store.entity-groups.reorder",
+            target: target,
+            detail: payload.ValueKind == JsonValueKind.Array
+                ? $"{payload.GetArrayLength()} 个分类"
+                : null,
+            success: result.Success,
+            error: result.Error);
+        if (!result.Success)
+        {
+            return BadRequest(new { ok = false, reason = "validation", message = result.Error });
+        }
+
+        return Ok(new { ok = true });
+    }
+
     /// <summary>整体导入：以提交对象全量替换数据仓库（首次接入时迁移 localStorage 数据用）。</summary>
     [HttpPut]
     [Authorize(Policy = "selection:write")]

@@ -267,19 +267,19 @@ export class BackendStorage {
 
   /** 全量 store 写回：与缓存对比，只推送变更的 key。 */
   syncStore(nextStore) {
-    const changedKeys = [];
+    const changedKeys = new Set();
     const removedKeys = [];
 
     for (const [key, value] of this.cache) {
       if (!(key in nextStore)) {
         removedKeys.push(key);
       } else if (!sameValue(value, nextStore[key])) {
-        changedKeys.push(key);
+        changedKeys.add(key);
       }
     }
     for (const [key, value] of Object.entries(nextStore)) {
       if (!this.cache.has(key) || !sameValue(this.cache.get(key), value)) {
-        changedKeys.push(key);
+        changedKeys.add(key);
       }
     }
 

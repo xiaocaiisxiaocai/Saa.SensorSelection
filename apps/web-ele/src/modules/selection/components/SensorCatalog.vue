@@ -44,6 +44,7 @@ const store = useSelectionStore();
 const mainTab = ref('现用');
 const status = ref('');
 const query = ref('');
+const sensorTypeFilter = ref('');
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const focusSopId = ref<null | number>(null);
@@ -64,6 +65,7 @@ const statusNames = computed(() => {
   });
 });
 const typeNames = computed(() => store.dictionaryNames('sensor-type'));
+const statusFilterOptions = computed(() => ['全部', ...statusNames.value]);
 const defaultStatus = computed(() => statusNames.value[0] || '现用');
 const defaultType = computed(() => typeNames.value[0] || '');
 
@@ -98,6 +100,10 @@ watch(mainTab, (tab) => {
   status.value = tab;
 });
 
+function onStatusFilterChange(value: string) {
+  mainTab.value = value === '全部' ? '全部' : value;
+}
+
 const form = reactive({
   brand: '',
   feature: '',
@@ -119,6 +125,8 @@ const items = computed(() => {
   return store.sensors.filter((item) => {
     const matchesStatus =
       statusFilter === '全部' || item.status === statusFilter;
+    const matchesSensorType =
+      !sensorTypeFilter.value || item.sensorType === sensorTypeFilter.value;
     const related = relatedSensor(item);
     const haystack = [
       item.status,
@@ -137,9 +145,15 @@ const items = computed(() => {
     ]
       .join(' ')
       .toLocaleLowerCase('zh-CN');
-    return matchesStatus && (!value || haystack.includes(value));
+    return (
+      matchesStatus && matchesSensorType && (!value || haystack.includes(value))
+    );
   });
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || sensorTypeFilter.value),
+);
 
 const page = ref(1);
 const pageSize = ref(20);
@@ -444,12 +458,42 @@ function candidateLabel(item: SensorItem) {
         <div class="sensor-catalog__toolbar">
           <span class="sensor-catalog__hint">
             {{
-              query.trim()
+              hasFilters
                 ? `匹配 ${items.length} / 共 ${store.sensors.length} 条`
                 : `${items.length} 条记录`
             }}
           </span>
           <div class="sensor-catalog__actions">
+            <ElSelect
+              :model-value="status === '' ? '全部' : status"
+              aria-label="按 Sensor 状态筛选"
+              class="data-filter-select"
+              filterable
+              placeholder="状态"
+              @change="onStatusFilterChange"
+            >
+              <ElOption
+                v-for="option in statusFilterOptions"
+                :key="option"
+                :label="option"
+                :value="option"
+              />
+            </ElSelect>
+            <ElSelect
+              v-model="sensorTypeFilter"
+              aria-label="按感应器类型筛选"
+              class="data-filter-select"
+              clearable
+              filterable
+              placeholder="感应器类型"
+            >
+              <ElOption
+                v-for="option in typeNames"
+                :key="option"
+                :label="option"
+                :value="option"
+              />
+            </ElSelect>
             <label class="catalog-search">
               <Search :size="16" aria-hidden="true" />
               <input
@@ -622,7 +666,7 @@ function candidateLabel(item: SensorItem) {
       <ElForm label-position="top">
         <div class="form-grid form-grid--three">
           <ElFormItem label="状态" required>
-            <ElSelect v-model="form.status" class="w-full">
+            <ElSelect v-model="form.status" class="w-full" filterable>
               <ElOption
                 v-for="option in statusNames"
                 :key="option"
@@ -639,7 +683,7 @@ function candidateLabel(item: SensorItem) {
             />
           </ElFormItem>
           <ElFormItem label="感应器类型" required>
-            <ElSelect v-model="form.sensorType" class="w-full">
+            <ElSelect v-model="form.sensorType" class="w-full" filterable>
               <ElOption
                 v-for="option in typeNames"
                 :key="option"
@@ -662,6 +706,7 @@ function candidateLabel(item: SensorItem) {
             v-model="form.sopId"
             class="w-full"
             clearable
+            filterable
             placeholder="可选，关联一份 SOP PDF"
           >
             <ElOption

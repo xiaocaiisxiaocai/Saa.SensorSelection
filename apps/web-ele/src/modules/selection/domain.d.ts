@@ -30,6 +30,9 @@ export type SaveResult<T> =
 export type DeleteResult =
   | { ok: false; reason: Exclude<SaveFailure, 'duplicate'> }
   | { ok: true };
+export type ReorderResult =
+  | { ok: false; reason: 'stale' | 'storage' | 'validation' }
+  | { ok: true };
 
 export type EntityKind = 'customer' | 'machine';
 
@@ -88,6 +91,17 @@ export interface SelectionRepository {
   getSensorSops(): SensorSopItem[];
   listResolvedMachineSections(machineName: string): MachineSectionItem[];
   replaceFromStorage(rawValue: null | string): void;
+  reorderEntityGroups(
+    kind: EntityKind,
+    oldIndex: number,
+    newIndex: number,
+  ): ReorderResult;
+  reorderEntityItems(
+    kind: EntityKind,
+    groupName: string,
+    oldIndex: number,
+    newIndex: number,
+  ): ReorderResult;
   saveControlledFile(
     entityName: string,
     attachment: {
@@ -244,9 +258,9 @@ export function formatLocalDateTime(date: Date): string;
 export function createSelectionRepository(options: {
   crudDefaults: Record<
     string,
-    (entityName: string) => Array<
-      CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem
-    >
+    (
+      entityName: string,
+    ) => Array<CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem>
   >;
   sensorData: Record<string, SensorTypeDefinition>;
   storage?: StorageLike;
@@ -254,9 +268,9 @@ export function createSelectionRepository(options: {
 export function buildDefaultStore(options: {
   crudDefaults: Record<
     string,
-    (entityName: string) => Array<
-      CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem
-    >
+    (
+      entityName: string,
+    ) => Array<CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem>
   >;
   sensorData: Record<string, SensorTypeDefinition>;
 }): Record<string, unknown[]>;

@@ -36,6 +36,7 @@ const activeTab = ref(
   String(route.query.tab || '') === 'steps' ? 'steps' : 'intro',
 );
 const query = ref(String(route.query.q || ''));
+const layerFilter = ref('');
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const page = ref(1);
@@ -57,14 +58,20 @@ const introFiles = computed(() => PROCESS_DETAILS['制程报告']?.files || []);
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   const items = store.processSteps;
-  if (!value) return items;
-  return items.filter((item) =>
-    [item.layer, item.name, item.role, item.feature, item.note]
-      .join(' ')
-      .toLocaleLowerCase('zh-CN')
-      .includes(value),
+  return items.filter(
+    (item) =>
+      (!layerFilter.value || item.layer === layerFilter.value) &&
+      (!value ||
+        [item.layer, item.name, item.role, item.feature, item.note]
+          .join(' ')
+          .toLocaleLowerCase('zh-CN')
+          .includes(value)),
   );
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || layerFilter.value),
+);
 
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
@@ -78,6 +85,10 @@ watch(
     if (q !== undefined) query.value = String(q || '');
   },
 );
+
+watch(activeTab, () => {
+  if (activeTab.value !== 'steps') layerFilter.value = '';
+});
 
 watch([query, activeTab], () => {
   page.value = 1;
@@ -187,8 +198,29 @@ async function deleteItem(item: ProcessStepItem) {
         <ElTabPane label="工艺制程" lazy name="steps">
           <section class="data-section">
             <div class="data-section__toolbar">
-              <span>{{ filteredItems.length }} 条记录</span>
+              <span>
+                {{
+                  hasFilters
+                    ? `匹配 ${filteredItems.length} / 共 ${store.processSteps.length} 条`
+                    : `${filteredItems.length} 条记录`
+                }}
+              </span>
               <div class="data-section__actions">
+                <ElSelect
+                  v-model="layerFilter"
+                  aria-label="按制程分层筛选"
+                  class="data-filter-select"
+                  clearable
+                  filterable
+                  placeholder="制程分层"
+                >
+                  <ElOption
+                    v-for="option in layerNames"
+                    :key="option"
+                    :label="option"
+                    :value="option"
+                  />
+                </ElSelect>
                 <label class="tab-search">
                   <Search :size="16" aria-hidden="true" />
                   <input
@@ -301,7 +333,7 @@ async function deleteItem(item: ProcessStepItem) {
       <ElForm label-position="top" @submit.prevent="saveItem">
         <div class="form-grid">
           <ElFormItem label="制程" required>
-            <ElSelect v-model="form.layer" class="w-full">
+            <ElSelect v-model="form.layer" class="w-full" filterable>
               <ElOption
                 v-for="option in layerNames"
                 :key="option"

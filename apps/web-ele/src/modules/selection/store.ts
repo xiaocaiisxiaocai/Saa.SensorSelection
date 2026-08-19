@@ -261,6 +261,34 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     return result;
   }
 
+  function reorderEntityGroups(
+    kind: EntityKind,
+    oldIndex: number,
+    newIndex: number,
+  ) {
+    const result = repository.reorderEntityGroups(kind, oldIndex, newIndex);
+    lastFailure.value = result.ok ? null : result.reason;
+    if (result.ok) touch();
+    return result;
+  }
+
+  function reorderEntityItems(
+    kind: EntityKind,
+    groupName: string,
+    oldIndex: number,
+    newIndex: number,
+  ) {
+    const result = repository.reorderEntityItems(
+      kind,
+      groupName,
+      oldIndex,
+      newIndex,
+    );
+    lastFailure.value = result.ok ? null : result.reason;
+    if (result.ok) touch();
+    return result;
+  }
+
   function saveProcessStep(payload: Partial<ProcessStepItem>, editId?: number) {
     const result = repository.saveProcessStep(payload, editId);
     lastFailure.value = result.ok ? null : result.reason;
@@ -468,7 +496,18 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     const bridge = new BackendStorage({
       transport: {
         fetchStore: () => api.getStore(),
-        writeKey: (key, value) => api.putKey(key, value),
+        writeKey: (key, value) => {
+          const entityGroupsMatch = /^entity-groups:(customer|machine)$/.exec(
+            key,
+          );
+          if (entityGroupsMatch) {
+            return api.putEntityGroups(
+              entityGroupsMatch[1] as 'customer' | 'machine',
+              value,
+            );
+          }
+          return api.putKey(key, value);
+        },
         deleteKey: (key) => api.deleteKey(key),
         writeAll: (store) => api.replaceAll(store),
       },
@@ -571,6 +610,8 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     deleteDictionaryItem,
     deleteEntityGroup,
     deleteEntityItem,
+    reorderEntityGroups,
+    reorderEntityItems,
     deleteExtraMachineSection,
     deleteGlobalMachineSection,
     deleteMachineSectionRow,

@@ -111,6 +111,42 @@ public class StoreTests
     }
 
     [Fact]
+    public async Task Store_EntityGroupsOrder_UsesDedicatedBackendContract()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+
+        var payload = JsonSerializer.Deserialize<JsonElement>(
+            "[{\"name\":\"华南\",\"items\":[\"健鼎\",\"庆鼎\"]},{\"name\":\"华东\",\"items\":[\"沪士\"]}]");
+        var response = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/customer",
+            payload);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var stored = await client.GetFromJsonAsync<JsonElement>(
+            "/api/store/entity-groups:customer");
+        Assert.Equal("华南", stored[0].GetProperty("name").GetString());
+        Assert.Equal("健鼎", stored[0].GetProperty("items")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Store_EntityGroupsOrder_RejectsDuplicateItems()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+
+        var payload = JsonSerializer.Deserialize<JsonElement>(
+            "[{\"name\":\"华东\",\"items\":[\"庆鼎\"]},{\"name\":\"华南\",\"items\":[\"庆鼎\"]}]");
+        var response = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/customer",
+            payload);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("validation", body.GetProperty("reason").GetString());
+    }
+
+    [Fact]
     public async Task Store_ReplaceAll_ValidatesInputAndRemovesStaleKeys()
     {
         await using var factory = new ApiFactory();

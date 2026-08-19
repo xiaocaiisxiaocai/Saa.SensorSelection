@@ -536,6 +536,28 @@ async function run() {
   })
   assert.equal(createdRegion.ok, true)
 
+  const reorderedGroups = repository.reorderEntityGroups('customer', 0, 2)
+  assert.equal(reorderedGroups.ok, true)
+  assert.deepEqual(
+    repository.getEntityGroups('customer').map((group) => group.name),
+    ['华南', 'SAT', '华东', '华中'],
+  )
+  const reorderedItems = repository.reorderEntityItems(
+    'customer',
+    '华东',
+    0,
+    1,
+  )
+  assert.equal(reorderedItems.ok, true)
+  assert.deepEqual(repository.getEntityGroups('customer')[2].items.slice(0, 2), [
+    '健鼎',
+    '庆鼎',
+  ])
+  assert.deepEqual(repository.reorderEntityGroups('customer', 0, 99), {
+    ok: false,
+    reason: 'validation',
+  })
+
   const createdCustomer = repository.saveEntityItem('customer', {
     category: '华中',
     name: '测试客户',
@@ -855,6 +877,40 @@ async function run() {
   assert.deepEqual(transport2.calls.writes.sort(), ['a', 'c'])
   assert.equal(transport2.calls.fetches, 1)
   assert.equal(transport2.calls.writeAlls, 0) // 后端非空 → 不迁移也不种子
+
+  // 全量 store 写回：同一 key 只能产生一次 PUT，并保持远端与缓存一致
+  const localMemoryFullStore = new Map()
+  const fullStoreRemote = new Map([['a', [0]]])
+  const fullStoreWrites = []
+  const transportFullStore = {
+    async fetchStore() {
+      return Object.fromEntries(fullStoreRemote)
+    },
+    async writeKey(key, value) {
+      fullStoreWrites.push({ key, value })
+      if (fullStoreWrites.length === 1) {
+        fullStoreRemote.set(key, value)
+        return
+      }
+      throw new Error('unexpected duplicate write')
+    },
+    async deleteKey(key) {
+      fullStoreRemote.delete(key)
+    },
+  }
+  const bridgeFullStore = new BackendStorage({
+    transport: transportFullStore,
+    local: makeLocal(localMemoryFullStore),
+  })
+  await bridgeFullStore.init()
+  assert.equal(
+    bridgeFullStore.setItem(domain.STORAGE_KEY, JSON.stringify({ a: [1] })),
+    true,
+  )
+  await bridgeFullStore.queue
+  assert.equal(fullStoreWrites.length, 1)
+  assert.deepEqual(fullStoreRemote.get('a'), [1])
+  assert.equal(bridgeFullStore.getItem('a'), '[1]')
 
   // 写失败：乐观更新回滚到上次同步值
   const localMemory3 = new Map()

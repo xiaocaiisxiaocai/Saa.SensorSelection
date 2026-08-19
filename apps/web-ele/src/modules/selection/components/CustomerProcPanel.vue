@@ -27,6 +27,7 @@ const store = useSelectionStore();
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
+const typeFilter = ref('');
 const form = reactive({
   feature: '',
   note: '',
@@ -47,19 +48,26 @@ const items = computed(() => {
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
-  if (!value) return items.value;
-  return items.value.filter((item) =>
-    [item.type, item.role, item.feature, item.sensorNote, item.note]
-      .join(' ')
-      .toLocaleLowerCase('zh-CN')
-      .includes(value),
+  return items.value.filter(
+    (item) =>
+      (!typeFilter.value || item.type === typeFilter.value) &&
+      (!value ||
+        [item.type, item.role, item.feature, item.sensorNote, item.note]
+          .join(' ')
+          .toLocaleLowerCase('zh-CN')
+          .includes(value)),
   );
 });
+
+const hasFilters = computed(() =>
+  Boolean(query.value.trim() || typeFilter.value),
+);
 
 watch(
   () => props.entityName,
   () => {
     query.value = '';
+    typeFilter.value = '';
   },
 );
 
@@ -143,12 +151,27 @@ async function deleteItem(item: CustomerProcItem) {
     <div class="data-section__toolbar">
       <span>
         {{
-          query.trim()
+          hasFilters
             ? `匹配 ${filteredItems.length} / 共 ${items.length} 条`
             : `${items.length} 条制程注意事项`
         }}
       </span>
       <div class="data-section__actions">
+        <ElSelect
+          v-model="typeFilter"
+          aria-label="按制程分类筛选"
+          class="data-filter-select"
+          clearable
+          filterable
+          placeholder="制程分类"
+        >
+          <ElOption
+            v-for="option in typeNames"
+            :key="option"
+            :label="option"
+            :value="option"
+          />
+        </ElSelect>
         <label class="tab-search">
           <Search :size="16" aria-hidden="true" />
           <input
@@ -221,7 +244,7 @@ async function deleteItem(item: CustomerProcItem) {
     </div>
     <ElEmpty
       v-else
-      :description="query.trim() ? '没有匹配的注意事项' : '暂无注意事项'"
+      :description="hasFilters ? '没有匹配的注意事项' : '暂无注意事项'"
       :image-size="72"
     />
 
@@ -234,7 +257,7 @@ async function deleteItem(item: CustomerProcItem) {
     >
       <ElForm label-position="top">
         <ElFormItem label="制程分类" required>
-          <ElSelect v-model="form.type" class="w-full">
+          <ElSelect v-model="form.type" class="w-full" filterable>
             <ElOption
               v-for="option in typeNames"
               :key="option"

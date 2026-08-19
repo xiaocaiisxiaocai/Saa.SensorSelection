@@ -54,4 +54,41 @@ describe('entity sidebar', () => {
       'true',
     );
   });
+
+  it('提供可访问的分类栏宽度调节控件', () => {
+    const wrapper = mount(EntitySidebar, {
+      props: {
+        groups,
+        kind: 'customer',
+        label: '条目',
+        selected: '默认项',
+      },
+    });
+
+    const resizer = wrapper.get('[role="separator"]');
+    expect(resizer.attributes('aria-valuemin')).toBe('220');
+    expect(resizer.attributes('aria-valuemax')).toBe('520');
+    expect(resizer.attributes('aria-valuenow')).toBe('260');
+  });
+
+  it('机型侧栏支持勾选多个条目并单独发出选择事件', async () => {
+    const wrapper = mount(EntitySidebar, {
+      props: {
+        groups,
+        kind: 'machine',
+        label: '机型',
+        selected: '默认项',
+        selectable: true,
+        selectedItems: [],
+      },
+    });
+
+    const checkbox = wrapper.get('input[aria-label="选择默认项加入示意图"]');
+    await checkbox.setValue(true);
+
+    expect(wrapper.emitted('toggleSelect')?.[0]).toEqual([
+      { item: '默认项', checked: true },
+    ]);
+    expect(wrapper.emitted('select')).toBeUndefined();
+  });
 });

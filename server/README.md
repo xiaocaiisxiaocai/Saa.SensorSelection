@@ -49,18 +49,18 @@ dotnet run    # 默认 http://localhost:5080（launchSettings 的 http profile�
 | `Jwt:Key` | 开发密钥（见下） | **生产必须覆盖** |
 | `Jwt:ExpireHours` | `12` | token 有效期（小时），登录响应 `expiresAt` 取真实值 |
 | `Seed:AdminUsername` | `admin` | 种子账号用户名 |
-| `Seed:AdminPassword` | `admin123` | 种子账号密码（首次启动写入，之后不覆盖） |
+| `Seed:AdminPassword` | `admin123`（仅开发） | 种子账号密码（首次启动写入，之后不覆盖；生产必须覆盖） |
 | `Seed:AdminDisplayName` | `管理员` | 显示名 |
 | `RateLimit:MaxFailures` | `5` | 登录失败限流：窗口内失败达到上限后拒绝登录（按用户名+IP） |
 | `RateLimit:WindowMinutes` | `10` | 登录限流统计窗口（分钟） |
 | `Audit:MaxEntries` | `50000` | 操作日志保留上限（条），超出自动清理最旧记录；`0`=不限制 |
-| `Cors:AllowedOrigins` | 空（任意来源） | 允许跨域的来源，逗号分隔；留空=内网宽松模式（生产会打警告日志） |
+| `Cors:AllowedOrigins` | 空（任意来源，仅开发） | 允许跨域的来源，逗号分隔；生产必须配置，否则拒绝启动 |
 | `Kestrel:Limits:MaxRequestBodySize` | `104857600` (100MB) | 受控文档等 base64 文件较大，放宽默认 30MB |
 | `AllowedHosts` | `*` | 内网部署放开 |
 
 ## 生产密钥注入（重要）
 
-默认开发密钥 `symtek-selection-dev-key-change-me-0123456789abcdef` **仅限开发**。当 `ASPNETCORE_ENVIRONMENT=Production` 时若仍使用该密钥，启动会抛出异常拒绝运行（防呆）。
+默认开发密钥 `symtek-selection-dev-key-change-me-0123456789abcdef` 和默认管理员密码 `admin123` **仅限开发**。当 `ASPNETCORE_ENVIRONMENT=Production` 时若仍使用任一默认值，或未配置 `Cors:AllowedOrigins`，启动会抛出异常拒绝运行（防呆）。
 
 注入方式任选其一：
 
@@ -70,6 +70,12 @@ dotnet run    # 默认 http://localhost:5080（launchSettings 的 http profile�
 export Jwt__Key="<随机 32+ 字节密钥>"
 #    Windows PowerShell
 $env:Jwt__Key="<随机 32+ 字节密钥>"
+
+# 生产管理员种子密码（首次启动写入数据库）
+$env:Seed__AdminPassword="<高强度初始密码>"
+
+# 生产前端来源（逗号分隔）
+$env:Cors__AllowedOrigins="https://sensor.example.com"
 
 # 2. 用户机密（仅本机开发，不会进 git）
 cd server/Symtek.Api
@@ -120,6 +126,8 @@ dotnet publish server/Symtek.Api -c Release -o publish/symtek-api
 # 生产环境变量
 ASPNETCORE_ENVIRONMENT=Production
 Jwt__Key=<生产密钥>
+Seed__AdminPassword=<生产初始管理员密码>
+Cors__AllowedOrigins=https://sensor.example.com
 
 # 可选：覆盖数据目录（默认相对内容根 App_Data/symtek.db）
 ConnectionStrings__Default="Data Source=/data/symtek/symtek.db"
@@ -242,4 +250,3 @@ BACKUP_DIR=/data/symtek-backups pnpm run backup:db
 | `PUT` | `/api/rbac/org-units/{id}` | `rbac:org:write` | 更新组织节点 |
 | `DELETE` | `/api/rbac/org-units/{id}` | `rbac:org:write` | 删除组织节点 |
 | `GET` | `/api/audit-logs` | `audit:view` | 操作日志分页查询（可筛选） |
-

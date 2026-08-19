@@ -238,7 +238,7 @@ public class AuditTests
 
         // 第 3 页只剩 1 条
         var page3 = await QueryAuditLogsAsync(admin, "?action=store.upsert&page=3&pageSize=2");
-        Assert.Equal(1, page3.GetProperty("items").EnumerateArray().Count());
+        Assert.Single(page3.GetProperty("items").EnumerateArray());
 
         // 按目标筛选（URL 编码中文 key）
         var filtered = await QueryAuditLogsAsync(

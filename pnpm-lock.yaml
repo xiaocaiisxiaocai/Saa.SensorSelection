@@ -526,6 +526,9 @@ importers:
 
   apps/web-ele:
     dependencies:
+      '@vben-core/composables':
+        specifier: workspace:*
+        version: link:../../packages/@core/composables
       '@vben/access':
         specifier: workspace:*
         version: link:../../packages/effects/access

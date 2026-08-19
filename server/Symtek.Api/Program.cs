@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 using Symtek.Api;
+using Symtek.Api.Configuration;
 using Symtek.Api.Data;
 using Symtek.Api.Infrastructure;
 using Symtek.Api.Services;
@@ -20,12 +21,9 @@ if (string.IsNullOrWhiteSpace(jwtOptions.Key))
     throw new InvalidOperationException("缺少配置 Jwt:Key");
 }
 
-if (builder.Environment.IsProduction() &&
-    jwtOptions.Key == "symtek-selection-dev-key-change-me-0123456789abcdef")
-{
-    throw new InvalidOperationException(
-        "生产环境必须通过环境变量 Jwt__Key 覆盖默认开发密钥");
-}
+ProductionConfigurationGuard.Validate(
+    builder.Environment.EnvironmentName,
+    builder.Configuration);
 
 builder.Services
     .AddOptions<JwtOptions>()
@@ -81,7 +79,7 @@ builder.Services.AddSingleton<
     Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler,
     JsonAuthorizationMiddlewareResultHandler>();
 
-// CORS：优先使用配置的 Cors:AllowedOrigins（逗号分隔）；未配置时保持内网宽松策略。
+// CORS：优先使用配置的 Cors:AllowedOrigins（逗号分隔）；生产环境由启动保护强制配置。
 // 前端使用 Bearer Token、无 Cookie 依赖，跨域直连仅需 Origin/Header/Method 放行。
 var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -149,6 +147,7 @@ builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<RoleService>();
 builder.Services.AddScoped<OrgUnitService>();
+builder.Services.AddScoped<MachineSchematicReportService>();
 
 var app = builder.Build();
 
@@ -156,12 +155,6 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<DbInitializer>().EnsureReady();
-}
-
-if (app.Environment.IsProduction() && corsOrigins.Length == 0)
-{
-    app.Logger.LogWarning(
-        "CORS 未配置 Cors:AllowedOrigins，当前允许任意来源。建议通过配置限定前端来源。");
 }
 
 app.UseExceptionHandler();

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,9 @@ namespace Symtek.Api.Services;
 /// <summary>数据仓库业务逻辑：key → JSON 数组的读、写、整体替换与删除。</summary>
 public class StoreService(AppDbContext db)
 {
+    private static readonly HashSet<string> EntityKinds =
+        new(StringComparer.OrdinalIgnoreCase) { "customer", "machine" };
+
     /// <summary>读取全部 key → JSON 数组。</summary>
     public async Task<JsonObject> GetAllAsync()
     {
@@ -146,6 +150,87 @@ public class StoreService(AppDbContext db)
         return StoreWriteResult.Ok();
     }
 
+    /// <summary>
+    /// 持久化客户/机型分类及其条目顺序。排序使用专用契约，避免前端任意改写实体树结构。
+    /// </summary>
+    public async Task<StoreWriteResult> ReplaceEntityGroupsAsync(
+        string kind,
+        JsonElement value)
+    {
+        var normalizedKind = kind.Trim().ToLowerInvariant();
+        if (!EntityKinds.Contains(normalizedKind))
+        {
+            return StoreWriteResult.Validation("实体类型必须是 customer 或 machine");
+        }
+
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            return StoreWriteResult.Validation("分类顺序必须是数组");
+        }
+
+        var groups = new List<EntityGroupPayload>();
+        var groupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var itemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in value.EnumerateArray())
+        {
+            if (group.ValueKind != JsonValueKind.Object ||
+                !group.TryGetProperty("name", out var nameProperty) ||
+                nameProperty.ValueKind != JsonValueKind.String)
+            {
+                return StoreWriteResult.Validation("分类必须包含 name 字符串");
+            }
+
+            var name = nameProperty.GetString()?.Trim() ?? string.Empty;
+            if (name.Length == 0 || name.Length > 40)
+            {
+                return StoreWriteResult.Validation("分类名称长度必须为 1-40 个字符");
+            }
+
+            if (!groupNames.Add(name))
+            {
+                return StoreWriteResult.Validation($"分类重复: {name}");
+            }
+
+            if (!group.TryGetProperty("items", out var itemsProperty) ||
+                itemsProperty.ValueKind != JsonValueKind.Array)
+            {
+                return StoreWriteResult.Validation($"分类缺少 items 数组: {name}");
+            }
+
+            var items = new List<string>();
+            foreach (var item in itemsProperty.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String)
+                {
+                    return StoreWriteResult.Validation($"分类条目必须是字符串: {name}");
+                }
+
+                var itemName = item.GetString()?.Trim() ?? string.Empty;
+                if (itemName.Length == 0 || itemName.Length > 40)
+                {
+                    return StoreWriteResult.Validation("条目名称长度必须为 1-40 个字符");
+                }
+
+                if (!itemNames.Add(itemName))
+                {
+                    return StoreWriteResult.Validation($"条目重复: {itemName}");
+                }
+
+                items.Add(itemName);
+            }
+
+            groups.Add(new EntityGroupPayload(name, items));
+        }
+
+        if (groups.Count == 0)
+        {
+            return StoreWriteResult.Validation("至少需要一个分类");
+        }
+
+        var normalized = JsonSerializer.SerializeToElement(groups);
+        return await UpsertAsync($"entity-groups:{normalizedKind}", normalized);
+    }
+
     /// <summary>删除单个 key，返回是否实际存在。</summary>
     public async Task<StoreDeleteResult> DeleteAsync(string key)
     {
@@ -174,3 +259,8 @@ public record StoreWriteResult(bool Success, string? Error)
 
 /// <summary>删除结果：Found=false 表示 key 不存在。</summary>
 public record StoreDeleteResult(bool Found);
+
+/// <summary>实体分类排序的后端存储形状。</summary>
+public sealed record EntityGroupPayload(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("items")] IReadOnlyList<string> Items);

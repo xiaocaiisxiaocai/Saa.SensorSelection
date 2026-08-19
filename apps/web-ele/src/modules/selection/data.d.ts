@@ -134,6 +134,9 @@ export interface MachineRowImage {
 export interface MachineSectionRow {
   id: number;
   role: string;
+  /** 关联 Sensor 型号字典记录；规格与型号从这里实时解析。 */
+  sensorIds: number[];
+  /** 旧数据兼容字段，新增/编辑时不作为数据源。 */
   sensorType: string;
   spec: string;
   purpose: string;

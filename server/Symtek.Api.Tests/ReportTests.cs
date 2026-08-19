@@ -31,6 +31,16 @@ public class ReportTests
                             new
                             {
                                 machineName = "中间翻板机",
+                                images = new[]
+                                {
+                                    new
+                                    {
+                                        dataUrl = "data:image/png;base64,AAAA",
+                                        fileName = "输送机构示意图.png",
+                                        mimeType = "image/png",
+                                        size = 4,
+                                    },
+                                },
                                 rows = new[]
                                 {
                                     new
@@ -60,6 +70,8 @@ public class ReportTests
         Assert.Contains("中间翻板机", html);
         Assert.Contains("输送机构", html);
         Assert.Contains("OMRON E3Z-D61", html);
+        Assert.Contains("输送机构示意图.png", html);
+        Assert.Contains("report-structure-images", html);
     }
 
     [Fact]

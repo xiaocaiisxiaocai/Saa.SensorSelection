@@ -163,6 +163,10 @@ const reportSections = computed<MachineReportSection[]>(() => {
           {
             machineName,
             rows: store.machineSectionRows(section.id, machineName),
+            images:
+              section.kind === 'structure'
+                ? store.machineSectionImages(section.id, machineName)
+                : [],
           },
         ];
       }),

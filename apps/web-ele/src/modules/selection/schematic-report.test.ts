@@ -15,7 +15,18 @@ describe('machine schematic report', () => {
         kind: 'structure',
         scope: 'global',
         blocks: [
-          { machineName: '中间翻板机', rows: [] },
+          {
+            machineName: '中间翻板机',
+            rows: [],
+            images: [
+              {
+                dataUrl: 'data:image/png;base64,AAAA',
+                fileName: '输送机构示意图.png',
+                mimeType: 'image/png',
+                size: 4,
+              },
+            ],
+          },
           { machineName: '双边投板机', rows: [] },
         ],
       },
@@ -38,5 +49,7 @@ describe('machine schematic report', () => {
     expect(html.indexOf('输送机构')).toBeLessThan(html.indexOf('手臂机构'));
     expect(html.indexOf('中间翻板机')).toBeLessThan(html.indexOf('双边投板机'));
     expect(html).toContain('已选机型：');
+    expect(html).toContain('输送机构示意图.png');
+    expect(html).toContain('report-structure-images');
   });
 });

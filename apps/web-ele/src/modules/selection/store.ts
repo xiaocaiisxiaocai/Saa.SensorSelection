@@ -4,6 +4,7 @@ import type {
   CustomerReqItem,
   DictionaryItem,
   EntityGroup,
+  MachineRowImage,
   MachineSectionItem,
   MachineSectionRow,
   ProcessStepItem,
@@ -318,6 +319,11 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     return repository.getMachineSectionRows(sectionId, machineName);
   }
 
+  function machineSectionImages(sectionId: number, machineName: string) {
+    revision.value;
+    return repository.getMachineSectionImages(sectionId, machineName);
+  }
+
   function saveGlobalMachineSection(
     payload: Partial<MachineSectionItem>,
     editId?: number,
@@ -368,6 +374,21 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
       machineName,
       payload,
       editId,
+    );
+    lastFailure.value = result.ok ? null : result.reason;
+    if (result.ok) touch();
+    return result;
+  }
+
+  function saveMachineSectionImages(
+    sectionId: number,
+    machineName: string,
+    images: MachineRowImage[],
+  ) {
+    const result = repository.saveMachineSectionImages(
+      sectionId,
+      machineName,
+      images,
     );
     lastFailure.value = result.ok ? null : result.reason;
     if (result.ok) touch();
@@ -629,6 +650,7 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     globalMachineSections,
     lastFailure,
     machineSectionRows,
+    machineSectionImages,
     processSteps,
     resolvedMachineSections,
     login,
@@ -643,6 +665,7 @@ export const useSelectionStore = defineStore('sensor-selection', () => {
     saveExtraMachineSection,
     saveGlobalMachineSection,
     saveMachineSectionRow,
+    saveMachineSectionImages,
     replaceSensorCurrent,
     saveProcessStep,
     saveSensor,

@@ -19,7 +19,8 @@ public sealed record MachineSchematicReportSection(
 
 public sealed record MachineSchematicReportMachineBlock(
     [property: JsonPropertyName("machineName")] string? MachineName,
-    [property: JsonPropertyName("rows")] IReadOnlyList<MachineSchematicReportRow>? Rows);
+    [property: JsonPropertyName("rows")] IReadOnlyList<MachineSchematicReportRow>? Rows,
+    [property: JsonPropertyName("images")] IReadOnlyList<MachineSchematicReportImage>? Images);
 
 public sealed record MachineSchematicReportRow(
     [property: JsonPropertyName("id")] int Id,

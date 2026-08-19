@@ -410,7 +410,61 @@ export function normalizeMachineRowImage(raw) {
   return { dataUrl, fileName, mimeType, size };
 }
 
-export function normalizeMachineSectionRows(source, { allowImage } = {}) {
+export function normalizeMachineSectionImages(source) {
+  const seen = new Set();
+  return (Array.isArray(source) ? source : [])
+    .map((item) => normalizeMachineRowImage(item))
+    .filter((item) => {
+      if (!item || seen.has(item.dataUrl)) return false;
+      seen.add(item.dataUrl);
+      return true;
+    })
+    .slice(0, 2);
+}
+
+function normalizeSensorIds(item, sensorItems = []) {
+  const requested = Array.isArray(item?.sensorIds)
+    ? item.sensorIds
+        .map(Number)
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+    : [];
+  const unique = [...new Set(requested)];
+  if (unique.length > 0 || sensorItems.length === 0) return unique;
+
+  // 兼容旧版的 sensorType/spec 文本：首次读取时尽量转成稳定的目录 ID。
+  const type = storedText(item?.sensorType).trim();
+  const spec = storedText(item?.spec).trim().toLocaleLowerCase('zh-CN');
+  const typeMatches = (sensor) => {
+    const sensorType = storedText(sensor.sensorType).trim();
+    return (
+      !type ||
+      sensorType === type ||
+      sensorType.replace(/传感器$/u, '') === type.replace(/传感器$/u, '')
+    );
+  };
+  const specMatches = (sensor) => {
+    if (!spec) return false;
+    const values = [sensor.model, sensor.spec, sensor.partNumber]
+      .map((value) => storedText(value).trim().toLocaleLowerCase('zh-CN'))
+      .filter(Boolean);
+    return values.some(
+      (value) => value === spec || spec.includes(value) || value.includes(spec),
+    );
+  };
+  const exact = sensorItems.filter(
+    (sensor) => typeMatches(sensor) && specMatches(sensor),
+  );
+  if (exact.length > 0) return exact.map((sensor) => sensor.id);
+  const sameTypeCurrent = sensorItems.find(
+    (sensor) => typeMatches(sensor) && sensor.status === '现用',
+  );
+  return sameTypeCurrent ? [sameTypeCurrent.id] : [];
+}
+
+export function normalizeMachineSectionRows(
+  source,
+  { allowImage, sensorItems = [] } = {},
+) {
   const usedIds = new Set();
   let nextId = 1;
   return (Array.isArray(source) ? source : [])
@@ -427,6 +481,7 @@ export function normalizeMachineSectionRows(source, { allowImage } = {}) {
       const row = {
         id,
         role: storedText(item.role),
+        sensorIds: normalizeSensorIds(item, sensorItems),
         sensorType: storedText(item.sensorType),
         spec: storedText(item.spec),
         purpose: storedText(item.purpose),
@@ -442,7 +497,8 @@ export function normalizeMachineSectionRows(source, { allowImage } = {}) {
     })
     .filter((item) =>
       allowImage
-        ? item.role.trim() && item.sensorType.trim()
+        ? item.role.trim() &&
+          (item.sensorIds.length > 0 || item.sensorType.trim())
         : item.role.trim() && item.name.trim(),
     );
 }
@@ -809,6 +865,37 @@ export function createSelectionRepository({
     return store[key];
   }
 
+  function syncMachineSensorSnapshots() {
+    const sensors = getSensors();
+    const byId = new Map(sensors.map((sensor) => [sensor.id, sensor]));
+    for (const group of getEntityGroups('machine')) {
+      for (const machineName of group.items) {
+        for (const section of listResolvedMachineSections(machineName)) {
+          if (section.kind !== 'structure') continue;
+          const rows = getMachineSectionRows(section.id, machineName);
+          for (const row of rows) {
+            const records = (row.sensorIds || [])
+              .map((id) => byId.get(id))
+              .filter(Boolean);
+            if (records.length === 0) continue;
+            row.sensorType = [
+              ...new Set(records.map((sensor) => sensor.sensorType)),
+            ].join('、');
+            row.spec = records
+              .map((sensor) => sensor.spec || sensor.model)
+              .filter(Boolean)
+              .join('、');
+          }
+          store[machineSectionRowsKey(section.id, machineName)] =
+            normalizeMachineSectionRows(rows, {
+              allowImage: true,
+              sensorItems: sensors,
+            });
+        }
+      }
+    }
+  }
+
   function saveSensor(payload, editId) {
     const items = getSensors();
     const model = storedText(payload.model).trim();
@@ -895,6 +982,7 @@ export function createSelectionRepository({
     } else {
       items.push(normalized);
     }
+    syncMachineSensorSnapshots();
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: normalized };
   }
@@ -971,6 +1059,42 @@ export function createSelectionRepository({
       typeNames,
       statusNames,
     )[0];
+
+    // 传感器替换是目录级操作，所有机型结构行都改为引用新型号，
+    // 避免页面继续展示已停用型号的规格。
+    const machineGroups = getEntityGroups('machine');
+    for (const group of machineGroups) {
+      for (const machineName of group.items) {
+        for (const section of listResolvedMachineSections(machineName)) {
+          if (section.kind !== 'structure') continue;
+          const rows = getMachineSectionRows(section.id, machineName);
+          let changed = false;
+          for (const row of rows) {
+            if (!row.sensorIds?.includes(curId)) continue;
+            row.sensorIds = [
+              ...new Set(
+                row.sensorIds.map((id) => (id === curId ? altId : id)),
+              ),
+            ];
+            const primary = getSensors().find(
+              (sensor) => sensor.id === row.sensorIds[0],
+            );
+            if (primary) {
+              row.sensorType = primary.sensorType;
+              row.spec = primary.spec || primary.model;
+            }
+            changed = true;
+          }
+          if (changed) {
+            store[machineSectionRowsKey(section.id, machineName)] =
+              normalizeMachineSectionRows(rows, {
+                allowImage: true,
+                sensorItems: items,
+              });
+          }
+        }
+      }
+    }
 
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: items[altIndex] };
@@ -1117,6 +1241,10 @@ export function createSelectionRepository({
 
   function machineSectionRowsKey(sectionId, machineName) {
     return `machine-section-rows:${sectionId}:${machineName}`;
+  }
+
+  function machineSectionImagesKey(sectionId, machineName) {
+    return `machine-section-images:${sectionId}:${machineName}`;
   }
 
   function generalStructureLabelsKey() {
@@ -1310,7 +1438,10 @@ export function createSelectionRepository({
 
     for (const group of getEntityGroups('machine')) {
       for (const machineName of group.items) {
-        if (getMachineSectionRows(id, machineName).length > 0) {
+        if (
+          getMachineSectionRows(id, machineName).length > 0 ||
+          getMachineSectionImages(id, machineName).length > 0
+        ) {
           return { ok: false, reason: 'not-empty' };
         }
       }
@@ -1413,7 +1544,10 @@ export function createSelectionRepository({
     const items = getExtraMachineSections(machineName);
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
-    if (getMachineSectionRows(id, machineName).length > 0) {
+    if (
+      getMachineSectionRows(id, machineName).length > 0 ||
+      getMachineSectionImages(id, machineName).length > 0
+    ) {
       return { ok: false, reason: 'not-empty' };
     }
 
@@ -1466,6 +1600,7 @@ export function createSelectionRepository({
 
     store[newKey] = normalizeMachineSectionRows(legacyItems, {
       allowImage: sectionAllowsImage(numericId),
+      sensorItems: getSensors(),
     });
   }
 
@@ -1476,9 +1611,36 @@ export function createSelectionRepository({
     const allowImage = sectionAllowsImage(numericId);
     store[key] = normalizeMachineSectionRows(
       Array.isArray(store[key]) ? store[key] : [],
-      { allowImage },
+      { allowImage, sensorItems: getSensors() },
     );
     return store[key];
+  }
+
+  function getMachineSectionImages(sectionId, machineName) {
+    const numericId = Number(sectionId);
+    const key = machineSectionImagesKey(numericId, machineName);
+    if (Object.hasOwn(store, key)) {
+      store[key] = normalizeMachineSectionImages(store[key]);
+    } else {
+      const legacyImages = getMachineSectionRows(numericId, machineName)
+        .map((row) => row.image)
+        .filter(Boolean);
+      store[key] = normalizeMachineSectionImages(legacyImages);
+    }
+    return store[key];
+  }
+
+  function saveMachineSectionImages(sectionId, machineName, images) {
+    const numericId = Number(sectionId);
+    const normalized = normalizeMachineSectionImages(images);
+    if (normalized.length !== (Array.isArray(images) ? images.length : 0)) {
+      return { ok: false, reason: 'validation' };
+    }
+    const snapshot = cloneStore(store);
+    store[machineSectionImagesKey(numericId, machineName)] = normalized;
+    return persist(snapshot)
+      ? { ok: true, item: { items: normalized } }
+      : { ok: false, reason: 'storage' };
   }
 
   function saveMachineSectionRow(sectionId, machineName, payload, editId) {
@@ -1487,8 +1649,19 @@ export function createSelectionRepository({
     const allowImage = sectionAllowsImage(numericId);
     const role = storedText(payload.role).trim();
     if (allowImage) {
-      const sensorType = storedText(payload.sensorType).trim();
-      if (!role || !sensorType) return { ok: false, reason: 'validation' };
+      const sensorIds = Array.isArray(payload.sensorIds)
+        ? [
+            ...new Set(
+              payload.sensorIds
+                .map(Number)
+                .filter((value) => Number.isSafeInteger(value) && value > 0),
+            ),
+          ]
+        : [];
+      if (!role || sensorIds.length === 0) {
+        return { ok: false, reason: 'validation' };
+      }
+      payload = { ...payload, sensorIds };
     } else {
       const name = storedText(payload.name).trim();
       if (!role || !name) return { ok: false, reason: 'validation' };
@@ -1515,6 +1688,7 @@ export function createSelectionRepository({
     const base = {
       id: editId || nextAvailableId(items),
       role,
+      sensorIds: Array.isArray(payload.sensorIds) ? payload.sensorIds : [],
       sensorType: storedText(payload.sensorType),
       spec: storedText(payload.spec),
       purpose: storedText(payload.purpose),
@@ -1531,7 +1705,26 @@ export function createSelectionRepository({
       }
     }
 
-    const normalized = normalizeMachineSectionRows([base], { allowImage })[0];
+    const selectedSensors = getSensors().filter((sensor) =>
+      base.sensorIds.includes(sensor.id),
+    );
+    if (allowImage && selectedSensors.length === 0) {
+      return { ok: false, reason: 'stale' };
+    }
+    if (allowImage) {
+      base.sensorIds = selectedSensors.map((sensor) => sensor.id);
+      base.sensorType = selectedSensors
+        .map((sensor) => sensor.sensorType)
+        .join('、');
+      base.spec = selectedSensors
+        .map((sensor) => sensor.spec || sensor.model)
+        .filter(Boolean)
+        .join('、');
+    }
+    const normalized = normalizeMachineSectionRows([base], {
+      allowImage,
+      sensorItems: getSensors(),
+    })[0];
     if (!normalized) return { ok: false, reason: 'validation' };
 
     if (editId) {
@@ -1543,7 +1736,10 @@ export function createSelectionRepository({
     }
 
     store[machineSectionRowsKey(numericId, machineName)] =
-      normalizeMachineSectionRows(items, { allowImage });
+      normalizeMachineSectionRows(items, {
+        allowImage,
+        sensorItems: getSensors(),
+      });
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: normalized };
   }
@@ -1558,6 +1754,7 @@ export function createSelectionRepository({
     store[machineSectionRowsKey(numericId, machineName)] =
       normalizeMachineSectionRows(items, {
         allowImage: sectionAllowsImage(numericId),
+        sensorItems: getSensors(),
       });
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
@@ -1828,13 +2025,26 @@ export function createSelectionRepository({
         listResolvedMachineSections(entityName).map((item) => item.id),
       );
       for (const sectionId of sectionIds) {
-        keys.push(machineSectionRowsKey(sectionId, entityName));
+        keys.push(
+          machineSectionRowsKey(sectionId, entityName),
+          machineSectionImagesKey(sectionId, entityName),
+        );
       }
       const rowSuffix = `:${entityName}`;
       for (const key of Object.keys(store)) {
         if (
           key.startsWith('machine-section-rows:') &&
           key.endsWith(rowSuffix) &&
+          !keys.includes(key)
+        ) {
+          keys.push(key);
+        }
+      }
+      const imageSuffix = `:${entityName}`;
+      for (const key of Object.keys(store)) {
+        if (
+          key.startsWith('machine-section-images:') &&
+          key.endsWith(imageSuffix) &&
           !keys.includes(key)
         ) {
           keys.push(key);
@@ -1856,7 +2066,9 @@ export function createSelectionRepository({
     if (kind === 'machine') {
       if (getExtraMachineSections(entityName).length > 0) return true;
       return listResolvedMachineSections(entityName).some(
-        (section) => getMachineSectionRows(section.id, entityName).length > 0,
+        (section) =>
+          getMachineSectionRows(section.id, entityName).length > 0 ||
+          getMachineSectionImages(section.id, entityName).length > 0,
       );
     }
     return entityDataKeys(kind, entityName).some(
@@ -1878,6 +2090,18 @@ export function createSelectionRepository({
       for (const key of Object.keys(store)) {
         if (
           !key.startsWith('machine-section-rows:') ||
+          !key.endsWith(fromSuffix)
+        ) {
+          continue;
+        }
+        const toKey = `${key.slice(0, -fromSuffix.length)}:${toName}`;
+        store[toKey] = store[key];
+        removals.push(key);
+      }
+
+      for (const key of Object.keys(store)) {
+        if (
+          !key.startsWith('machine-section-images:') ||
           !key.endsWith(fromSuffix)
         ) {
           continue;
@@ -2152,6 +2376,7 @@ export function createSelectionRepository({
     getFeedbackTypes,
     getGeneralStructureLabelMap,
     getGlobalMachineSections,
+    getMachineSectionImages,
     getMachineSectionRows,
     getProcessSteps,
     getSensors,
@@ -2169,6 +2394,7 @@ export function createSelectionRepository({
     saveFeedbackType,
     saveGlobalMachineSection,
     saveMachineSectionRow,
+    saveMachineSectionImages,
     saveProcessStep,
     replaceSensorCurrent,
     saveSensor,

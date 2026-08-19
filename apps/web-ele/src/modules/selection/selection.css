@@ -59,6 +59,130 @@
   min-width: 720px;
 }
 
+.machine-section-content.machine-structure-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 16px;
+  align-items: start;
+}
+
+.machine-structure-images {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--sel-border);
+  border-radius: 8px;
+  background: var(--sel-surface-muted, rgb(255 255 255 / 3%));
+}
+
+.machine-structure-images__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.machine-structure-images__header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.machine-structure-images__header span,
+.machine-structure-images__empty,
+.form-help {
+  color: var(--sel-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.machine-image-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.machine-structure-images__grid {
+  display: grid;
+  gap: 10px;
+}
+
+.machine-structure-image-card {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--sel-border);
+  border-radius: 6px;
+  background: var(--sel-surface);
+}
+
+.machine-structure-image-card > button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.machine-structure-image-card img {
+  display: block;
+  width: 100%;
+  height: 128px;
+  object-fit: contain;
+  background: #f8fafc;
+}
+
+.machine-structure-image-card figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  color: var(--sel-text-muted);
+  font-size: 11px;
+}
+
+.machine-structure-image-card figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-structure-image-card figcaption button {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  color: var(--sel-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.sensor-chip-list,
+.sensor-spec-list {
+  display: grid;
+  gap: 4px;
+}
+
+.sensor-chip {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  font-size: 12px;
+}
+
+.sensor-spec-list span {
+  color: var(--sel-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .selection-search,
 .catalog-search,
 .entity-filter {
@@ -1160,6 +1284,10 @@
   }
 
   .entity-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .machine-section-content.machine-structure-layout {
     grid-template-columns: 1fr;
   }
 

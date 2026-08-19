@@ -1,8 +1,13 @@
-import type { MachineSectionItem, MachineSectionRow } from './data.js';
+import type {
+  MachineRowImage,
+  MachineSectionItem,
+  MachineSectionRow,
+} from './data.js';
 
 export interface MachineReportMachineBlock {
   machineName: string;
   rows: MachineSectionRow[];
+  images?: MachineRowImage[];
 }
 
 export interface MachineReportSection extends Omit<MachineSectionItem, 'name'> {
@@ -20,12 +25,12 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", '&#39;');
 }
 
-function imageMarkup(row: MachineSectionRow) {
-  const dataUrl = row.image?.dataUrl || '';
+function imageMarkup(image: MachineRowImage) {
+  const dataUrl = image.dataUrl || '';
   if (!/^data:image\/(?:png|jpe?g|webp);base64,/i.test(dataUrl)) {
     return '<span class="report-muted">-</span>';
   }
-  return `<img class="report-row-image" src="${escapeHtml(dataUrl)}" alt="${escapeHtml(row.image?.fileName || '附加图片')}" />`;
+  return `<img class="report-structure-image" src="${escapeHtml(dataUrl)}" alt="${escapeHtml(image.fileName || '结构示意图')}" />`;
 }
 
 function structureRowsMarkup(block: MachineReportMachineBlock) {
@@ -34,7 +39,6 @@ function structureRowsMarkup(block: MachineReportMachineBlock) {
       (row, index) => `
         <article class="report-row">
           <div class="report-row__index">${index + 1}</div>
-          <div class="report-row__image">${imageMarkup(row)}</div>
           <div class="report-row__body">
             <h4>${escapeHtml(row.role || row.sensorType || `记录 ${index + 1}`)}</h4>
             <dl>
@@ -76,6 +80,7 @@ function renderSection(section: MachineReportSection) {
         <article class="report-machine-block">
           <h3>${escapeHtml(block.machineName)}</h3>
           <div class="report-machine-block__content">
+            ${section.kind === 'structure' && block.images?.length ? `<div class="report-structure-images">${block.images.map((image) => imageMarkup(image)).join('')}</div>` : ''}
             ${section.kind === 'notes' ? notesRowsMarkup(block) : structureRowsMarkup(block)}
           </div>
         </article>`,
@@ -134,10 +139,10 @@ export function buildMachineSchematicReportHtml(
       .report-machine-block { margin-bottom: 18px; break-inside: avoid; }
       .report-machine-block > h3 { margin: 0; padding: 8px 12px; border-left: 3px solid #b45309; background: #fff7ed; color: #92400e; font-size: 16px; }
       .report-machine-block__content { padding: 0 12px; }
-      .report-row { display: grid; grid-template-columns: 30px 150px 1fr; gap: 14px; border-bottom: 1px solid #edf0f4; padding: 12px 0; break-inside: avoid; }
+      .report-row { display: grid; grid-template-columns: 30px 1fr; gap: 14px; border-bottom: 1px solid #edf0f4; padding: 12px 0; break-inside: avoid; }
       .report-row__index { color: #98a2b3; font-size: 13px; padding-top: 3px; text-align: center; }
-      .report-row__image { min-height: 72px; display: grid; place-items: center; border: 1px solid #e4e7ec; border-radius: 6px; background: #fafbfc; overflow: hidden; }
-      .report-row-image { display: block; max-width: 100%; max-height: 110px; object-fit: contain; }
+      .report-structure-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+      .report-structure-images img { display: block; width: 100%; height: 180px; object-fit: contain; border: 1px solid #e4e7ec; border-radius: 6px; background: #fafbfc; }
       .report-row h4, .report-note-row h4 { margin: 0 0 7px; font-size: 15px; color: #172033; }
       dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 24px; margin: 0; }
       dl > div { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: 13px; line-height: 1.55; }
@@ -151,7 +156,8 @@ export function buildMachineSchematicReportHtml(
       @media (max-width: 700px) {
         body { padding: 0; }
         .report-shell { padding: 20px; box-shadow: none; }
-        .report-row { grid-template-columns: 24px 90px 1fr; gap: 9px; }
+        .report-row { grid-template-columns: 24px 1fr; gap: 9px; }
+        .report-structure-images { grid-template-columns: 1fr; }
         dl { grid-template-columns: 1fr; }
       }
       @media print {

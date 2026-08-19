@@ -154,6 +154,15 @@ export interface SelectionRepository {
     payload: Partial<MachineSectionRow>,
     editId?: number,
   ): SaveResult<MachineSectionRow>;
+  getMachineSectionImages(
+    sectionId: number,
+    machineName: string,
+  ): MachineRowImage[];
+  saveMachineSectionImages(
+    sectionId: number,
+    machineName: string,
+    images: MachineRowImage[],
+  ): SaveResult<{ items: MachineRowImage[] }>;
   saveProcessStep(
     payload: Partial<ProcessStepItem>,
     editId?: number,
@@ -246,8 +255,11 @@ export function normalizeMachineSections(
 export function normalizeMachineRowImage(raw: unknown): MachineRowImage | null;
 export function normalizeMachineSectionRows(
   source: unknown[],
-  options?: { allowImage?: boolean },
+  options?: { allowImage?: boolean; sensorItems?: SensorItem[] },
 ): MachineSectionRow[];
+export function normalizeMachineSectionImages(
+  source: unknown[],
+): MachineRowImage[];
 export function validateMachineRowImage(
   fileName: string,
   mimeType: string,

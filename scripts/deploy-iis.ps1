@@ -12,7 +12,7 @@
   生产环境默认使用 hash 路由（VITE_ROUTER_HISTORY=hash），IIS 无需 URL Rewrite 也能打开子路由。
   若站点挂在虚拟目录（如 /sensor），请用 -BasePath '/sensor/' 重新构建。
 
-  前端已接入 ASP.NET Core 后端（server/Symtek.Api，JWT + SQLite）：
+  前端已接入 ASP.NET Core 后端（backend/Saa.SensorSelection.Api，JWT + SQLite）：
   - 默认同源 /api（需在 IIS 用 ARR/URL Rewrite 把 /api 反向代理到后端，或用站点本身托管后端）；
   - 或用 -ApiBase 指向后端地址（如 http://server:5080/api，后端已开 CORS）。
 
@@ -179,7 +179,7 @@ Write-Host '部署到 IIS 建议步骤：'
 Write-Host '  1. 将输出目录内容复制到站点物理路径（或解压 zip）'
 Write-Host '  2. IIS 新建网站 / 应用程序池：.NET CLR 选「无托管代码」'
 Write-Host '  3. 绑定主机名与端口；根站点 BasePath 用 /，虚拟目录用 -BasePath ''/你的路径/'''
-Write-Host '  4. 前端需连接后端：同源则用 ARR/URL Rewrite 把 /api 代理到 server/Symtek.Api（dotnet publish 部署）；跨域则重新构建并指定 -ApiBase'  
+Write-Host '  4. 前端需连接后端：同源则用 ARR/URL Rewrite 把 /api 代理到 backend/Saa.SensorSelection.Api（dotnet publish 部署）；跨域则重新构建并指定 -ApiBase'
 Write-Host '  5. 本包 web.config 不含 URL Rewrite，适配未安装该模块的 IIS（同源 /api 代理需另配 ARR）'
 Write-Host ''
 Write-Host '完成。'

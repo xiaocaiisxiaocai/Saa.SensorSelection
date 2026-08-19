@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Saa.SensorSelection.Api.Tests/Saa.SensorSelection.Api.Tests.csproj" />
+  <Project Path="Saa.SensorSelection.Api/Saa.SensorSelection.Api.csproj" />
+</Solution>

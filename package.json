@@ -1,5 +1,5 @@
 {
-  "name": "symtek-sensor-selection",
+  "name": "saa-sensor-selection",
   "version": "1.0.0",
   "private": true,
   "keywords": [
@@ -31,7 +31,7 @@
     "lint": "eslint apps/web-ele/src/modules/selection apps/web-ele/src/router/routes/modules/selection.ts apps/web-ele/src/layouts/basic.vue apps/web-ele/src/bootstrap.ts apps/web-ele/src/preferences.ts --max-warnings=0",
     "postinstall": "pnpm -r run stub --if-present",
     "preview": "pnpm --filter @vben/web-ele run preview",
-    "test:backend": "dotnet test server/Symtek.slnx",
+    "test:backend": "dotnet test backend/Saa.SensorSelection.slnx",
     "test:selection": "node scripts/vben-migration.contract-test.cjs",
     "backup:db": "node scripts/backup-db.mjs"
   },

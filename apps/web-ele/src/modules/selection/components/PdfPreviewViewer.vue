@@ -42,6 +42,26 @@ const renderedPages = new Set<number>();
 const renderingPages = new Set<number>();
 const pageSizes = new Map<number, { height: number; width: number }>();
 
+function releasePdfDoc(doc: null | PdfDoc) {
+  if (!doc) return;
+  const destroyable = doc as { destroy?: () => Promise<unknown> } & PdfDoc;
+  if (typeof destroyable.destroy === 'function') {
+    void destroyable.destroy().catch(() => {
+      try {
+        doc.cleanup();
+      } catch {
+        // ignore
+      }
+    });
+    return;
+  }
+  try {
+    doc.cleanup();
+  } catch {
+    // ignore
+  }
+}
+
 function disconnectObserver() {
   observer?.disconnect();
   observer = null;
@@ -199,11 +219,7 @@ async function loadDocument(dataUrl: string) {
   zoom.value = 1;
 
   if (activeDoc) {
-    try {
-      activeDoc.cleanup();
-    } catch {
-      // ignore
-    }
+    releasePdfDoc(activeDoc);
     activeDoc = null;
   }
 
@@ -225,7 +241,7 @@ async function loadDocument(dataUrl: string) {
       useSystemFonts: true,
     }).promise;
     if (token !== renderToken) {
-      pdfDoc.cleanup();
+      releasePdfDoc(pdfDoc);
       return;
     }
 
@@ -320,11 +336,7 @@ watch(
 onUnmounted(() => {
   renderToken += 1;
   disconnectObserver();
-  try {
-    activeDoc?.cleanup();
-  } catch {
-    // ignore
-  }
+  releasePdfDoc(activeDoc);
   activeDoc = null;
 });
 </script>

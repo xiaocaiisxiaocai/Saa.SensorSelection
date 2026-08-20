@@ -751,7 +751,13 @@ export function createSelectionRepository({
 
   function persist(snapshot) {
     try {
-      storage?.setItem?.(STORAGE_KEY, JSON.stringify(store));
+      // BackendStorage 用 false 表示拒绝写入（未登录/离线失败），不会抛异常；
+      // localStorage 配额满时才会 throw。两种失败都要回滚内存。
+      const result = storage?.setItem?.(STORAGE_KEY, JSON.stringify(store));
+      if (result === false) {
+        store = snapshot;
+        return false;
+      }
       return true;
     } catch {
       store = snapshot;

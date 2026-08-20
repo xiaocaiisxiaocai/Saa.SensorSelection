@@ -213,6 +213,29 @@ async function run() {
     beforeRollback,
   )
 
+  // 桥接层拒绝写入时返回 false（不会 throw），内存同样必须回滚
+  const rejectingStorage = {
+    getItem: () => null,
+    setItem: () => false,
+  }
+  const rejectedRepository = domain.createSelectionRepository({
+    crudDefaults: data.CRUD_DEFAULTS,
+    sensorData: data.SENSOR_DATA,
+    storage: rejectingStorage,
+  })
+  const beforeReject = rejectedRepository.getCrud('process-feat', 'DES显影').length
+  const rejectedSave = rejectedRepository.saveCrud('process-feat', 'DES显影', {
+    type: '特性',
+    name: '未登录不能落盘',
+    desc: '',
+    note: '',
+  })
+  assert.deepEqual(rejectedSave, { ok: false, reason: 'storage' })
+  assert.equal(
+    rejectedRepository.getCrud('process-feat', 'DES显影').length,
+    beforeReject,
+  )
+
   const customer = '庆鼎'
   const defaultDocs = repository.getControlledDocuments(customer)
   assert.equal(defaultDocs.length, 0)
@@ -622,10 +645,12 @@ async function run() {
     'migrated conveyor rows should have role and sensorType',
   )
 
+  // 结构类分区改为从 Sensor 目录多选，sensorType/spec 由所选型号派生
+  const machineSensors = repository.getSensors().slice(0, 2)
+  assert.ok(machineSensors.length === 2, 'sensor catalog should provide fixtures')
   const saved = repository.saveMachineSectionRow(1, machineName, {
     role: '进板检测',
-    sensorType: '漫反射传感器',
-    spec: 'OMRON E3Z-D61',
+    sensorIds: machineSensors.map((sensor) => sensor.id),
     purpose: '安装于进板口',
     note: '',
     image: {
@@ -637,19 +662,51 @@ async function run() {
   })
   assert.equal(saved.ok, true)
   assert.equal(saved.item.role, '进板检测')
-  assert.equal(saved.item.sensorType, '漫反射传感器')
+  assert.deepEqual(
+    saved.item.sensorIds,
+    machineSensors.map((sensor) => sensor.id),
+  )
+  assert.equal(
+    saved.item.sensorType,
+    machineSensors.map((sensor) => sensor.sensorType).join('、'),
+  )
+  assert.equal(
+    saved.item.spec,
+    machineSensors
+      .map((sensor) => sensor.spec || sensor.model)
+      .filter(Boolean)
+      .join('、'),
+  )
   assert.equal(Boolean(saved.item.image?.dataUrl), true)
   assert.equal(saved.item.type, undefined)
   assert.equal(saved.item.name, '')
 
   const missingMachineRole = repository.saveMachineSectionRow(1, machineName, {
     role: '  ',
-    sensorType: '有类型',
-    spec: '',
+    sensorIds: [machineSensors[0].id],
     purpose: '',
     note: '',
   })
   assert.deepEqual(missingMachineRole, { ok: false, reason: 'validation' })
+
+  // 结构类分区必须选到至少一个目录型号，自由文本不再被接受
+  const missingMachineSensor = repository.saveMachineSectionRow(1, machineName, {
+    role: '进板检测',
+    sensorType: '漫反射传感器',
+    spec: 'OMRON E3Z-D61',
+    purpose: '',
+    note: '',
+  })
+  assert.deepEqual(missingMachineSensor, { ok: false, reason: 'validation' })
+
+  // 目录中不存在的 ID 视为过期选择
+  const staleMachineSensor = repository.saveMachineSectionRow(1, machineName, {
+    role: '进板检测',
+    sensorIds: [999_999],
+    purpose: '',
+    note: '',
+  })
+  assert.deepEqual(staleMachineSensor, { ok: false, reason: 'stale' })
 
   const notesSave = repository.saveMachineSectionRow(4, machineName, {
     role: '自由注意分类',
@@ -698,7 +755,12 @@ async function run() {
   const extraRow = repository.saveMachineSectionRow(
     extraSection.item.id,
     machineName,
-    { role: '其他', sensorType: '专属行', spec: '', purpose: '', note: '' },
+    {
+      role: '其他',
+      sensorIds: [machineSensors[0].id],
+      purpose: '',
+      note: '',
+    },
   )
   assert.equal(extraRow.ok, true)
 
@@ -717,7 +779,7 @@ async function run() {
   assert.equal(
     repository
       .getMachineSectionRows(extraSection.item.id, '中间六轴机-改')
-      .some((item) => item.sensorType === '专属行'),
+      .some((item) => item.sensorIds.includes(machineSensors[0].id)),
     true,
   )
   assert.equal(repository.entityHasData('machine', '中间六轴机-改'), true)
@@ -736,8 +798,7 @@ async function run() {
   assert.equal(repository.entityHasData('machine', '仅行数据机'), false)
   const onlyRow = repository.saveMachineSectionRow(1, '仅行数据机', {
     role: '进板检测',
-    sensorType: '唯一行',
-    spec: '',
+    sensorIds: [machineSensors[0].id],
     purpose: '',
     note: '',
   })
@@ -783,7 +844,7 @@ async function run() {
   assert.equal(
     index.some(
       (item) =>
-        item.title === '专属行' &&
+        item.title === machineSensors[0].sensorType &&
         item.type === 'machine' &&
         item.query.item === '中间六轴机-改' &&
         item.query.section === String(extraSection.item.id),
@@ -981,6 +1042,26 @@ async function run() {
   ])
   assert.deepEqual(fullStore['customer-req:庆鼎'], [{ id: 1, content: '后端行' }])
   assert.equal(bridge7.getItem('customer-req:庆鼎'), '[{"id":1,"content":"后端行"}]')
+  const onlineSnapshot = JSON.parse(localMemory7.get(domain.STORAGE_KEY))
+  assert.deepEqual(onlineSnapshot['customer-req:庆鼎'], [
+    { id: 1, content: '后端行' },
+  ])
+
+  // 后端再次不可达时，用上次在线快照恢复，而不是空库
+  const transportDown = createFakeTransport(
+    {},
+    { fetchError: new Error('network down') },
+  )
+  const bridgeDown = new BackendStorage({
+    transport: transportDown,
+    local: makeLocal(localMemory7),
+  })
+  const offlineFromSnapshot = await bridgeDown.init()
+  assert.equal(offlineFromSnapshot.status, 'offline')
+  const recovered = JSON.parse(bridgeDown.getItem(domain.STORAGE_KEY))
+  assert.deepEqual(recovered['customer-req:庆鼎'], [
+    { id: 1, content: '后端行' },
+  ])
 
   // 未登录：读本地缓存、拒绝写入
   const unauthorized = new Error('token expired')
@@ -1195,6 +1276,7 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error(error.message)
+  // 打印完整错误（含断言栈），否则断言失败时无法定位到具体用例
+  console.error(error)
   process.exitCode = 1
 })

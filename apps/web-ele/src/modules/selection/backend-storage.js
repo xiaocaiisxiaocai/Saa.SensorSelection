@@ -80,12 +80,15 @@ export class BackendStorage {
     const prev = this.synced.get(key);
     if (!this.transport.deleteKey) {
       this.synced.delete(key);
+      this.snapshotLocal();
       return;
     }
     this.queue = this.queue.then(async () => {
       try {
         await this.transport.deleteKey?.(key);
         this.synced.delete(key);
+        this.lastError = null;
+        this.snapshotLocal();
       } catch (error) {
         // 删除失败：从已同步状态恢复该 key
         this.handleFailure(key, prev, error);
@@ -99,6 +102,7 @@ export class BackendStorage {
         await this.transport.writeKey(key, value);
         this.synced.set(key, value);
         this.lastError = null;
+        this.snapshotLocal();
       } catch (error) {
         this.handleFailure(key, prev, error);
       }
@@ -155,6 +159,7 @@ export class BackendStorage {
     } else {
       this.cache.set(key, prev);
     }
+    this.snapshotLocal();
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;
     this.onWriteFailure?.(message);
@@ -236,6 +241,7 @@ export class BackendStorage {
     this.synced = cloneMap(this.cache);
     this.status = 'online';
     this.lastError = null;
+    this.snapshotLocal();
     this.emitStatus();
     return { migrated, seeded, keyCount: this.cache.size, status: 'online' };
   }
@@ -263,6 +269,17 @@ export class BackendStorage {
     this.cache.set(key, parsed);
     this.enqueueWrite(key, parsed, prev);
     return true;
+  }
+
+  /** 把当前在线缓存写到 localStorage，作为后端不可达时的最后一份可读快照。 */
+  snapshotLocal() {
+    try {
+      const full = {};
+      for (const [key, value] of this.cache) full[key] = value;
+      this.local.setItem(STORAGE_KEY, JSON.stringify(full));
+    } catch {
+      // 快照失败不影响在线读写；配额满时下次再试
+    }
   }
 
   /** 全量 store 写回：与缓存对比，只推送变更的 key。 */

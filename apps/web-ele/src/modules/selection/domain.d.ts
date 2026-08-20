@@ -43,6 +43,10 @@ export interface EntityTreeItem {
 
 export interface StorageLike {
   getItem(key: string): null | string;
+  /**
+   * 写入。桥接层可返回 false 表示拒绝（未登录/离线失败）；
+   * localStorage 无返回值，领域层视为成功。
+   */
   setItem(key: string, value: string): void;
 }
 

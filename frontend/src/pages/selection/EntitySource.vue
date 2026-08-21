@@ -202,58 +202,58 @@ function onReorderItems(payload: { group: string; items: string[] }) {
 <template>
   <div class="entity-source">
     <ASourceList
-    :groups="groups"
-    :selected="selected"
-    :checked-items="checkedItems"
-    :editable="writable"
-    :sortable="writable"
-    :group-label="groupLabel"
-    :item-label="itemLabel"
-    :min-width="listMinWidth"
-    :max-width="listMaxWidth"
-    :default-width="listDefaultWidth"
-    :storage-key="`selection:source-list-width:${kind}:v4`"
-    @select="emit('select', { category: $event.group, item: $event.item })"
-    @toggle-check="emit('toggleCheck', $event)"
-    @create-group="openCreateGroup"
-    @edit-group="openEditGroup"
-    @delete-group="removeGroup"
-    @create-item="openCreateItem"
-    @edit-item="openEditItem"
-    @delete-item="removeItem"
-    @reorder-groups="onReorderGroups"
-    @reorder-items="onReorderItems"
-  />
+      :groups="groups"
+      :selected="selected"
+      :checked-items="checkedItems"
+      :editable="writable"
+      :sortable="writable"
+      :group-label="groupLabel"
+      :item-label="itemLabel"
+      :min-width="listMinWidth"
+      :max-width="listMaxWidth"
+      :default-width="listDefaultWidth"
+      :storage-key="`selection:source-list-width:${kind}:v4`"
+      @select="emit('select', { category: $event.group, item: $event.item })"
+      @toggle-check="emit('toggleCheck', $event)"
+      @create-group="openCreateGroup"
+      @edit-group="openEditGroup"
+      @delete-group="removeGroup"
+      @create-item="openCreateItem"
+      @edit-item="openEditItem"
+      @delete-item="removeItem"
+      @reorder-groups="onReorderGroups"
+      @reorder-items="onReorderItems"
+    />
 
-  <ASheet
-    v-model:open="groupOpen"
-    :title="editingGroup ? `编辑${groupLabel}` : `新建${groupLabel}`"
-    :width="420"
-  >
-    <AFormRow :label="`${groupLabel}名称`" required>
-      <AField v-model="groupForm.name" :maxlength="40" />
-    </AFormRow>
-    <template #footer>
-      <AButton @click="groupOpen = false">取消</AButton>
-      <AButton variant="filled" @click="saveGroup">保存</AButton>
-    </template>
-  </ASheet>
+    <ASheet
+      v-model:open="groupOpen"
+      :title="editingGroup ? `编辑${groupLabel}` : `新建${groupLabel}`"
+      :width="420"
+    >
+      <AFormRow :label="`${groupLabel}名称`" required>
+        <AField v-model="groupForm.name" :maxlength="40" />
+      </AFormRow>
+      <template #footer>
+        <AButton @click="groupOpen = false">取消</AButton>
+        <AButton variant="filled" @click="saveGroup">保存</AButton>
+      </template>
+    </ASheet>
 
-  <ASheet
-    v-model:open="itemOpen"
-    :title="editingItem ? `编辑${itemLabel}` : `新建${itemLabel}`"
-    :width="420"
-  >
-    <AFormRow :label="groupLabel" required>
-      <ASelect v-model="itemForm.category" :options="categoryOptions" />
-    </AFormRow>
-    <AFormRow :label="`${itemLabel}名称`" required>
-      <AField v-model="itemForm.name" :maxlength="40" />
-    </AFormRow>
-    <template #footer>
-      <AButton @click="itemOpen = false">取消</AButton>
-      <AButton variant="filled" @click="saveItem">保存</AButton>
-    </template>
-  </ASheet>
+    <ASheet
+      v-model:open="itemOpen"
+      :title="editingItem ? `编辑${itemLabel}` : `新建${itemLabel}`"
+      :width="420"
+    >
+      <AFormRow :label="groupLabel" required>
+        <ASelect v-model="itemForm.category" :options="categoryOptions" />
+      </AFormRow>
+      <AFormRow :label="`${itemLabel}名称`" required>
+        <AField v-model="itemForm.name" :maxlength="40" />
+      </AFormRow>
+      <template #footer>
+        <AButton @click="itemOpen = false">取消</AButton>
+        <AButton variant="filled" @click="saveItem">保存</AButton>
+      </template>
+    </ASheet>
   </div>
 </template>

@@ -36,5 +36,9 @@ export default {
         message: 'Expected class selector to be kebab-case',
       },
     ],
+    'selector-pseudo-class-no-unknown': [
+      true,
+      { ignorePseudoClasses: ['deep'] },
+    ],
   },
 };

@@ -379,58 +379,58 @@ async function removeImage(index: number) {
       </p>
     </aside>
   </div>
-    <ASheet
-      v-model:open="dialogOpen"
-      :title="editId ? '编辑记录' : '新增记录'"
-      :width="isStructure ? 640 : 480"
-    >
-      <AFormGrid v-if="isStructure" :columns="1">
-        <AFormRow label="功能作用" required>
-          <AField v-model="form.role" :maxlength="80" />
-        </AFormRow>
-        <AFormRow
-          label="关联传感器"
-          required
-          hint="规格和型号来自 Sensor 型号字典；目录替换后这里会自动更新。"
-        >
-          <ATokenField
-            v-model="form.sensorIds"
-            :options="sensorOptions"
-            filterable
-            :max-visible-tokens="2"
-            placeholder="按类型、品牌或型号搜索"
-          />
-        </AFormRow>
-        <AFormRow label="作用">
-          <ATextArea v-model="form.purpose" :rows="3" :maxlength="500" />
-        </AFormRow>
-        <AFormRow label="备注">
-          <AField v-model="form.note" :maxlength="200" />
-        </AFormRow>
-      </AFormGrid>
-      <AFormGrid v-else :columns="1">
-        <AFormRow label="注意分类" required>
-          <AField v-model="form.role" :maxlength="80" />
-        </AFormRow>
-        <AFormRow label="事项名称" required>
-          <AField v-model="form.name" :maxlength="80" />
-        </AFormRow>
-        <AFormRow label="说明">
-          <ATextArea v-model="form.desc" :rows="3" :maxlength="500" />
-        </AFormRow>
-        <AFormRow label="备注">
-          <AField v-model="form.note" :maxlength="200" />
-        </AFormRow>
-      </AFormGrid>
-      <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
-        <AButton variant="filled" @click="saveItem">保存</AButton>
-      </template>
-    </ASheet>
-    <AImageViewer
-      v-if="preview"
-      v-model:open="imageOpen"
-      :src="preview.dataUrl"
-      :alt="preview.fileName"
-    />
+  <ASheet
+    v-model:open="dialogOpen"
+    :title="editId ? '编辑记录' : '新增记录'"
+    :width="isStructure ? 640 : 480"
+  >
+    <AFormGrid v-if="isStructure" :columns="1">
+      <AFormRow label="功能作用" required>
+        <AField v-model="form.role" :maxlength="80" />
+      </AFormRow>
+      <AFormRow
+        label="关联传感器"
+        required
+        hint="规格和型号来自 Sensor 型号字典；目录替换后这里会自动更新。"
+      >
+        <ATokenField
+          v-model="form.sensorIds"
+          :options="sensorOptions"
+          filterable
+          :max-visible-tokens="2"
+          placeholder="按类型、品牌或型号搜索"
+        />
+      </AFormRow>
+      <AFormRow label="作用">
+        <ATextArea v-model="form.purpose" :rows="3" :maxlength="500" />
+      </AFormRow>
+      <AFormRow label="备注">
+        <AField v-model="form.note" :maxlength="200" />
+      </AFormRow>
+    </AFormGrid>
+    <AFormGrid v-else :columns="1">
+      <AFormRow label="注意分类" required>
+        <AField v-model="form.role" :maxlength="80" />
+      </AFormRow>
+      <AFormRow label="事项名称" required>
+        <AField v-model="form.name" :maxlength="80" />
+      </AFormRow>
+      <AFormRow label="说明">
+        <ATextArea v-model="form.desc" :rows="3" :maxlength="500" />
+      </AFormRow>
+      <AFormRow label="备注">
+        <AField v-model="form.note" :maxlength="200" />
+      </AFormRow>
+    </AFormGrid>
+    <template #footer>
+      <AButton @click="dialogOpen = false">取消</AButton>
+      <AButton variant="filled" @click="saveItem">保存</AButton>
+    </template>
+  </ASheet>
+  <AImageViewer
+    v-if="preview"
+    v-model:open="imageOpen"
+    :src="preview.dataUrl"
+    :alt="preview.fileName"
+  />
 </template>

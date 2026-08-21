@@ -139,8 +139,7 @@ function onOpenAutoFocus(event: Event) {
   min-width: 0;
   min-height: 0;
   padding: var(--space-6);
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .a-sheet__footer {

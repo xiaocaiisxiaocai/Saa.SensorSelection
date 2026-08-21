@@ -15,7 +15,7 @@ withDefaults(
     alt=""
     aria-hidden="true"
     draggable="false"
-  />
+  >
 </template>
 
 <style scoped>

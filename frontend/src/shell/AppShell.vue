@@ -88,6 +88,12 @@ function submitSearch() {
   void router.push({ path: '/selection/search', query: { q: value } });
 }
 
+function onSearchKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  submitSearch();
+}
+
 function onSearchHotkey(event: KeyboardEvent) {
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') {
     return;
@@ -139,7 +145,7 @@ watch(
           type="button"
           :aria-expanded="!collapsed"
           aria-controls="app-sidebar"
-          aria-label="折叠侧栏"
+          :aria-label="collapsed ? '展开侧栏' : '折叠侧栏'"
           @click="toggleSidebar"
         >
           <PanelLeft :size="18" :stroke-width="1.5" />
@@ -160,6 +166,7 @@ watch(
           aria-label="全局搜索"
           autocomplete="off"
           placeholder="搜索客户、制程、机型或型号"
+          @keydown="onSearchKeydown"
         >
         <kbd>{{ searchHotkey }}</kbd>
       </form>
@@ -510,8 +517,7 @@ watch(
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .content__loading {

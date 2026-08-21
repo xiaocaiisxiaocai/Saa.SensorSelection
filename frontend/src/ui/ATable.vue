@@ -239,8 +239,7 @@ watch(
 .a-table {
   position: relative;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden auto;
   background: var(--bg-content);
 }
 

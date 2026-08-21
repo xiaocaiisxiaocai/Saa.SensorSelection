@@ -72,101 +72,101 @@ function remove(value: string | number, event: Event) {
 <template>
   <div class="a-token-field">
     <APopover v-model:open="open" align="start" match-trigger-width>
-    <template #trigger>
-      <div
-        :id="id"
-        class="a-control a-token-field__trigger"
-        :class="{
-          'a-control--disabled': disabled,
-          'a-control--invalid': invalid,
-          'a-control--small': size === 'small',
-        }"
-        role="combobox"
-        tabindex="0"
-        :aria-expanded="open"
-        :aria-controls="listId"
-        :aria-invalid="invalid ? true : undefined"
-        :aria-required="required ? true : undefined"
-        :aria-describedby="describedBy"
-        :aria-disabled="disabled ? true : undefined"
-      >
-        <span
-          v-for="option in visible"
-          :key="String(option.value)"
-          class="a-token-field__chip"
+      <template #trigger>
+        <div
+          :id="id"
+          class="a-control a-token-field__trigger"
+          :class="{
+            'a-control--disabled': disabled,
+            'a-control--invalid': invalid,
+            'a-control--small': size === 'small',
+          }"
+          role="combobox"
+          tabindex="0"
+          :aria-expanded="open"
+          :aria-controls="listId"
+          :aria-invalid="invalid ? true : undefined"
+          :aria-required="required ? true : undefined"
+          :aria-describedby="describedBy"
+          :aria-disabled="disabled ? true : undefined"
         >
-          <span class="a-token-field__chip-label">{{ option.label }}</span>
-          <button
-            class="a-token-field__chip-remove"
-            type="button"
-            :aria-label="`移除 ${option.label}`"
-            :disabled="disabled"
-            @pointerdown.stop
-            @click="remove(option.value, $event)"
+          <span
+            v-for="option in visible"
+            :key="String(option.value)"
+            class="a-token-field__chip"
           >
-            <X :size="12" :stroke-width="1.5" />
-          </button>
-        </span>
-        <ATooltip v-if="hidden.length" :content="overflowLabel">
-          <template #trigger>
-            <span class="a-token-field__more">+{{ hidden.length }}</span>
-          </template>
-        </ATooltip>
-        <span
-          v-if="selected.length === 0"
-          class="a-token-field__placeholder"
-        >
-          {{ placeholder }}
-        </span>
-        <ChevronDown
-          class="a-token-field__chevron"
-          :size="16"
-          :stroke-width="1.5"
-        />
-      </div>
-    </template>
+            <span class="a-token-field__chip-label">{{ option.label }}</span>
+            <button
+              class="a-token-field__chip-remove"
+              type="button"
+              :aria-label="`移除 ${option.label}`"
+              :disabled="disabled"
+              @pointerdown.stop
+              @click="remove(option.value, $event)"
+            >
+              <X :size="12" :stroke-width="1.5" />
+            </button>
+          </span>
+          <ATooltip v-if="hidden.length" :content="overflowLabel">
+            <template #trigger>
+              <span class="a-token-field__more">+{{ hidden.length }}</span>
+            </template>
+          </ATooltip>
+          <span
+            v-if="selected.length === 0"
+            class="a-token-field__placeholder"
+          >
+            {{ placeholder }}
+          </span>
+          <ChevronDown
+            class="a-token-field__chevron"
+            :size="16"
+            :stroke-width="1.5"
+          />
+        </div>
+      </template>
 
-    <div class="a-select__panel">
-      <input
-        v-if="filterable"
-        v-model="query"
-        class="a-select__filter"
-        type="search"
-        placeholder="筛选"
-        aria-label="筛选选项"
-      >
-      <ListboxRoot
-        :id="listId"
-        v-model="model"
-        class="a-select__list"
-        role="listbox"
-        multiple
-        highlight-on-hover
-        selection-behavior="toggle"
-        :disabled="disabled"
-      >
-        <ListboxItem
-          v-for="option in filtered"
-          :key="String(option.value)"
-          class="a-menu-item"
-          :value="option.value"
-          :disabled="option.disabled"
+      <div class="a-select__panel">
+        <input
+          v-if="filterable"
+          v-model="query"
+          class="a-select__filter"
+          type="search"
+          placeholder="筛选"
+          aria-label="筛选选项"
         >
-          <span class="a-menu-item__check">
-            <ListboxItemIndicator>
-              <Check :size="16" :stroke-width="1.5" />
-            </ListboxItemIndicator>
-          </span>
-          <span class="a-menu-item__text">
-            <span class="a-menu-item__label">{{ option.label }}</span>
-            <span v-if="option.hint" class="a-menu-item__hint">
-              {{ option.hint }}
+        <ListboxRoot
+          :id="listId"
+          v-model="model"
+          class="a-select__list"
+          role="listbox"
+          multiple
+          highlight-on-hover
+          selection-behavior="toggle"
+          :disabled="disabled"
+        >
+          <ListboxItem
+            v-for="option in filtered"
+            :key="String(option.value)"
+            class="a-menu-item"
+            :value="option.value"
+            :disabled="option.disabled"
+          >
+            <span class="a-menu-item__check">
+              <ListboxItemIndicator>
+                <Check :size="16" :stroke-width="1.5" />
+              </ListboxItemIndicator>
             </span>
-          </span>
-        </ListboxItem>
-      </ListboxRoot>
-      <p v-if="filtered.length === 0" class="a-select__empty">无匹配结果</p>
-    </div>
+            <span class="a-menu-item__text">
+              <span class="a-menu-item__label">{{ option.label }}</span>
+              <span v-if="option.hint" class="a-menu-item__hint">
+                {{ option.hint }}
+              </span>
+            </span>
+          </ListboxItem>
+        </ListboxRoot>
+        <p v-if="filtered.length === 0" class="a-select__empty">无匹配结果</p>
+      </div>
     </APopover>
   </div>
 </template>

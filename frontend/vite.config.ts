@@ -30,5 +30,28 @@ export default defineConfig(({ mode }) => {
     preview: {
       port,
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replaceAll('\\', '/');
+            if (!normalizedId.includes('/node_modules/')) return undefined;
+            if (normalizedId.includes('/pdfjs-dist/')) return 'vendor-pdf';
+            if (normalizedId.includes('/reka-ui/')) return 'vendor-reka';
+            if (normalizedId.includes('/lucide-vue-next/')) {
+              return 'vendor-icons';
+            }
+            if (
+              normalizedId.includes('/vue/') ||
+              normalizedId.includes('/vue-router/') ||
+              normalizedId.includes('/pinia/')
+            ) {
+              return 'vendor-vue';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
   };
 });

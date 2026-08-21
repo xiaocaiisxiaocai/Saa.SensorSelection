@@ -144,19 +144,23 @@ async function removeGroup(name: string) {
 }
 
 function saveItem() {
-  const result = store.saveEntityItem(
-    props.kind,
-    { category: itemForm.category, name: itemForm.name.trim() },
-    editingItem.value,
-  );
+  const previous = editingItem.value;
+  const category = itemForm.category;
+  const name = itemForm.name.trim();
+  const result = store.saveEntityItem(props.kind, { category, name }, previous);
   if (
-    toastResult(result, editingItem.value ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`, {
+    toastResult(result, previous ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`, {
       duplicate: `该${itemLabel.value}已存在`,
       validation: `请填写${itemLabel.value}名称并选择${groupLabel.value}`,
       'in-use': `请先清空该${itemLabel.value}下的业务数据`,
     })
   ) {
     itemOpen.value = false;
+    // A new row lands in a group that may still be collapsed, and renaming the
+    // current selection would otherwise fall back to the first entity.
+    if (!previous || previous === props.selected) {
+      emit('select', { category, item: name });
+    }
   }
 }
 

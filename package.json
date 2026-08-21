@@ -12,6 +12,8 @@
     "test": "pnpm --dir frontend test",
     "test:unit": "pnpm --dir frontend test",
     "test:selection": "node scripts/selection-contract-test.cjs",
+    "test:api": "node scripts/e2e/api-crud-test.mjs",
+    "test:ui": "node scripts/e2e/ui-e2e-test.mjs",
     "test:backend": "dotnet test backend/Saa.SensorSelection.slnx",
     "backup:db": "node backend/scripts/backup-db.mjs"
   },
@@ -19,5 +21,8 @@
     "node": ">=20.10.0",
     "pnpm": ">=9.12.0"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
 }

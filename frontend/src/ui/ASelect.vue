@@ -46,11 +46,12 @@ const showClear = computed(
 );
 
 function onPick(value: unknown) {
-  if (typeof value !== 'string' && typeof value !== 'number') {
-    return;
+  // Re-picking the current option makes the listbox report `undefined`. A
+  // single select must keep that value, but the panel still has to close.
+  if (typeof value === 'string' || typeof value === 'number') {
+    model.value = value;
   }
 
-  model.value = value;
   open.value = false;
   query.value = '';
 }

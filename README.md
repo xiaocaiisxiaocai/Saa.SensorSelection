@@ -35,6 +35,15 @@ pnpm run build
 pnpm run test:backend
 ```
 
+端到端回归需要前端（`5178`）与后端（`5080`）都已启动，会在运行结束时清理自己创建的全部数据：
+
+```powershell
+pnpm run test:api   # 后端 API 全量增删改查 + 权限矩阵
+pnpm run test:ui    # 浏览器端全量增删改查 + 字体/间距/点击热区/无障碍审计
+```
+
+`test:ui` 依赖 Playwright 的 Chromium：首次运行前执行 `pnpm exec playwright install chromium`。加 `--headed` 可观察浏览器操作，失败截图落在 `scripts/e2e/artifacts/`。
+
 ## 目录
 
 ```text

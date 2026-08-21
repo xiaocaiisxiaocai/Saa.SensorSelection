@@ -65,6 +65,28 @@ describe('ASelect', () => {
     wrapper.unmount();
   });
 
+  it('closes and keeps the value when the selected option is picked again', async () => {
+    const wrapper = mount(ASelect, {
+      attachTo: document.body,
+      props: { options, modelValue: 'backup', placeholder: '选择状态' },
+    });
+
+    await wrapper.get('[role="combobox"]').trigger('click');
+    await nextTick();
+
+    const option = [...document.querySelectorAll('[role="option"]')].find(
+      (node) => node.textContent?.includes('备选'),
+    );
+    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+
+    expect(document.querySelector('.a-popover[data-state="open"]')).toBeNull();
+    expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([null]);
+    expect(wrapper.get('[role="combobox"]').text()).toContain('备选');
+
+    wrapper.unmount();
+  });
+
   it('does not select a disabled option', async () => {
     const wrapper = mount(ASelect, {
       attachTo: document.body,

@@ -66,6 +66,9 @@ vite.config.ts.*
 # 数据库备份输出（由 backend/scripts/backup-db.mjs 生成）
 /backups/
 
+# 端到端测试失败截图（由 scripts/e2e/ui-e2e-test.mjs 生成）
+scripts/e2e/artifacts/
+
 # Freebuff 客户端元数据
 .freebuff/
 

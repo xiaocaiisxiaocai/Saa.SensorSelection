@@ -144,6 +144,9 @@ async function onSelect(id: string) {
 
 <style scoped>
 .user-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height-sm);
   padding: var(--space-1) var(--space-3);
   font: var(--text-caption);
   color: var(--label-2);

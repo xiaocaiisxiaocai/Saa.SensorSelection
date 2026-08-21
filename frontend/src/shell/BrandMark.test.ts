@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest';
 import BrandMark from './BrandMark.vue';
 
 describe('BrandMark', () => {
-  it('renders a compact SAA mark for the toolbar', () => {
+  it('renders the SAA mark for the toolbar', () => {
     const wrapper = mount(BrandMark);
 
-    expect(wrapper.text()).toBe('SAA');
+    expect(wrapper.element.tagName).toBe('IMG');
+    expect(wrapper.attributes('src') ?? '').toMatch(/logo-saa\.png|image\/png/);
     expect(wrapper.classes()).toContain('brand-mark--toolbar');
     expect(wrapper.attributes('aria-hidden')).toBe('true');
   });

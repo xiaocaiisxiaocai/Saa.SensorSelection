@@ -23,6 +23,8 @@ coverage
 **/.vitepress/cache
 .cache
 .turbo
+.tmp/
+__pycache__/
 .isolated-test-output
 .temp
 backend/.test-out-*/

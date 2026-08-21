@@ -28,6 +28,7 @@ public class ProfileService(AppDbContext db)
     {
         var user = await db.Users
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(item => item.Roles)
             .ThenInclude(role => role.Permissions)
             .Include(item => item.OrgUnit)

@@ -318,17 +318,25 @@ public class RbacTests
         var sectionId = (await section.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt32();
 
-        // 部门挂在课别下（任意层级）
-        var department = await admin.PostAsJsonAsync(
+        var inverted = await admin.PostAsJsonAsync(
             "/api/rbac/org-units",
             new { name = "标准件组", level = "部门", parentId = sectionId });
+        Assert.Equal(HttpStatusCode.BadRequest, inverted.StatusCode);
+        var invertedBody = await inverted.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(
+            "层级不能倒挂（事业部 > 部门 > 课别，允许跳级）",
+            invertedBody.GetProperty("message").GetString());
+
+        var department = await admin.PostAsJsonAsync(
+            "/api/rbac/org-units",
+            new { name = "标准件组", level = "部门", parentId = divisionId });
         Assert.Equal(HttpStatusCode.OK, department.StatusCode);
 
         // 列表返回层级信息
         var list = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/org-units");
         var divisionNode = list.EnumerateArray().First(item =>
             item.GetProperty("id").GetInt32() == divisionId);
-        Assert.Equal(1, divisionNode.GetProperty("childCount").GetInt32());
+        Assert.Equal(2, divisionNode.GetProperty("childCount").GetInt32());
 
         // 有子级不可删除
         var deleteParent = await admin.DeleteAsync($"/api/rbac/org-units/{divisionId}");

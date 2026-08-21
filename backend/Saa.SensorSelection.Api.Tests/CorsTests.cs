@@ -24,10 +24,10 @@ public class CorsTests
     {
         await using var factory = new ApiFactory()
             .WithWebHostBuilder(builder =>
-                builder.UseSetting("Cors:AllowedOrigins", "http://localhost:5777"));
+                builder.UseSetting("Cors:AllowedOrigins", "http://localhost:5178"));
         using var client = factory.CreateClient();
 
-        var allowed = await client.SendAsync(Preflight("http://localhost:5777"));
+        var allowed = await client.SendAsync(Preflight("http://localhost:5178"));
         Assert.True(HasAllowOrigin(allowed), "配置的来源应返回 Access-Control-Allow-Origin");
 
         var denied = await client.SendAsync(Preflight("http://evil.example"));
@@ -51,10 +51,10 @@ public class CorsTests
             .WithWebHostBuilder(builder =>
                 builder.UseSetting(
                     "Cors:AllowedOrigins",
-                    "http://localhost:5777, https://sensor.symtek.local"));
+                    "http://localhost:5178, https://sensor.symtek.local"));
         using var client = factory.CreateClient();
 
-        var first = await client.SendAsync(Preflight("http://localhost:5777"));
+        var first = await client.SendAsync(Preflight("http://localhost:5178"));
         Assert.True(HasAllowOrigin(first));
 
         var second = await client.SendAsync(Preflight("https://sensor.symtek.local"));

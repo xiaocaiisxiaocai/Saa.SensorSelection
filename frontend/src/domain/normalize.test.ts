@@ -1,0 +1,303 @@
+import { describe, expect, it } from 'vitest';
+
+import { STORAGE_KEY, keyFor, machineSectionImagesKey, machineSectionRowsKey } from './keys';
+import {
+  CONTROLLED_FILE_RULES,
+  createSensorCatalogDefaults,
+  detectControlledFileKind,
+  formatLocalDate,
+  formatLocalDateTime,
+  normalizeControlledDocuments,
+  normalizeCrudItems,
+  normalizeDictionaryItems,
+  normalizeEntityGroups,
+  normalizeMachineSectionImages,
+  normalizeMachineSectionRows,
+  normalizeMachineSections,
+  normalizeProcessSteps,
+  normalizeSensorItems,
+  parsePersistedStore,
+  validateControlledUpload,
+  validateMachineRowImage,
+} from './normalize';
+import { MACHINE_ROW_IMAGE_RULES, SENSOR_DATA, createDictionaryDefaults } from './seed';
+
+describe('keys', () => {
+  it('keeps the live localStorage key and list-id constructors', () => {
+    expect(STORAGE_KEY).toBe('symtek_crud_store');
+    expect(keyFor('customer-sop', '庆鼎')).toBe('customer-sop:庆鼎');
+    expect(machineSectionRowsKey(1, '中间翻板机')).toBe(
+      'machine-section-rows:1:中间翻板机',
+    );
+    expect(machineSectionImagesKey(2, '中间六轴机')).toBe(
+      'machine-section-images:2:中间六轴机',
+    );
+  });
+});
+
+describe('parsePersistedStore', () => {
+  it('drops prototype keys and non-array values', () => {
+    const store = parsePersistedStore(
+      '{"__proto__":[],"constructor":[],"prototype":[],"safe":[],"invalid":{}}',
+    );
+    expect(Object.getPrototypeOf(store)).toBe(null);
+    expect(Object.hasOwn(store, '__proto__')).toBe(false);
+    expect(Object.hasOwn(store, 'constructor')).toBe(false);
+    expect(Object.hasOwn(store, 'prototype')).toBe(false);
+    expect(store.safe).toEqual([]);
+    expect(Object.hasOwn(store, 'invalid')).toBe(false);
+  });
+
+  it('returns an empty null-prototype store for unusable input', () => {
+    for (const raw of [null, '', '{', '[]', '1', '{"a":1}']) {
+      const store = parsePersistedStore(raw);
+      expect(Object.getPrototypeOf(store)).toBe(null);
+      expect(Object.keys(store)).toEqual([]);
+    }
+  });
+});
+
+describe('normalizeCrudItems', () => {
+  it('reassigns bad ids and stringifies only primitive text fields', () => {
+    const normalized = normalizeCrudItems('process-feat', [
+      { id: -1, type: 7, name: '<img src=x>', desc: null, note: {} },
+      { id: -1, type: '特性', name: '重复编号' },
+    ]);
+    expect(normalized).toHaveLength(2);
+    expect(new Set(normalized.map((item) => item.id)).size).toBe(2);
+    expect(
+      normalized.every((item) => Number.isSafeInteger(item.id) && item.id > 0),
+    ).toBe(true);
+    const first = normalized[0];
+    expect(first && 'type' in first ? first.type : undefined).toBe('7');
+    expect(first && 'note' in first ? first.note : undefined).toBe('');
+    expect(first && 'name' in first ? first.name : undefined).toBe('<img src=x>');
+  });
+
+  it('maps feedback status aliases and fills default type', () => {
+    const [item] = normalizeCrudItems('customer-feedback', [
+      { id: 1, status: 'pending', problem: '掉板' },
+    ]);
+    expect(item && 'status' in item ? item.status : undefined).toBe('待处理');
+    expect(item && 'type' in item ? item.type : undefined).toBe(
+      createDictionaryDefaults('customer-feedback')[0]?.name,
+    );
+  });
+});
+
+describe('normalizeSensorItems', () => {
+  it('falls back to allowed type and status lists', () => {
+    const [item] = normalizeSensorItems(
+      [
+        {
+          id: 1,
+          model: 'X',
+          sensorType: '未知',
+          status: '坏状态',
+          sopId: 0,
+          replacesId: 'nope',
+        },
+      ],
+      ['漫反射'],
+      ['现用', '备选'],
+    );
+    expect(item).toMatchObject({
+      sensorType: '漫反射',
+      status: '现用',
+      sopId: null,
+      replacesId: null,
+      replacedById: null,
+    });
+  });
+});
+
+describe('createSensorCatalogDefaults', () => {
+  it('seeds 13 catalog rows with first model current', () => {
+    const items = createSensorCatalogDefaults(SENSOR_DATA);
+    expect(items).toHaveLength(13);
+    expect(items[0]).toMatchObject({
+      id: 1,
+      status: '现用',
+      sensorType: '漫反射',
+      model: 'E3Z-D61',
+    });
+    expect(items[1]?.status).toBe('备选');
+  });
+});
+
+describe('normalizeProcessSteps', () => {
+  it('drops empty names and defaults layer to 内层', () => {
+    const items = normalizeProcessSteps([
+      { id: 1, name: '  ', layer: '' },
+      { id: 2, name: 'DES显影', layer: '  ' },
+    ]);
+    expect(items).toEqual([
+      expect.objectContaining({ id: 2, name: 'DES显影', layer: '内层' }),
+    ]);
+  });
+});
+
+describe('normalizeMachineSections', () => {
+  it('dedupes zh-CN names and forces extra tabs to structure', () => {
+    const items = normalizeMachineSections(
+      [
+        { id: 1, name: '输送机构', sort: 2, kind: 'notes' },
+        { id: 2, name: '输送机构', sort: 1, kind: 'structure' },
+        { id: 3, name: '本机Tab', kind: 'notes', scope: 'machine' },
+      ],
+      { allowNotes: false },
+    );
+    expect(items.map((item) => item.name)).toEqual(['输送机构', '本机Tab']);
+    expect(items.every((item) => item.kind === 'structure')).toBe(true);
+  });
+});
+
+describe('machine row images', () => {
+  it('rejects oversized or disallowed files', () => {
+    expect(
+      validateMachineRowImage('a.png', 'image/png', MACHINE_ROW_IMAGE_RULES.maxBytes + 1),
+    ).toEqual({ ok: false, reason: 'size' });
+    expect(validateMachineRowImage('a.gif', 'image/gif', 12)).toEqual({
+      ok: false,
+      reason: 'type',
+    });
+    expect(validateMachineRowImage('a.png', '', 12)).toEqual({ ok: true });
+  });
+
+  it('keeps at most two unique data URLs', () => {
+    const png = 'data:image/png;base64,aaa';
+    const jpeg = 'data:image/jpeg;base64,bbb';
+    const webp = 'data:image/webp;base64,ccc';
+    const images = normalizeMachineSectionImages([
+      { dataUrl: png, fileName: 'a.png', mimeType: 'image/png', size: 8 },
+      { dataUrl: png, fileName: 'dup.png', mimeType: 'image/png', size: 8 },
+      { dataUrl: jpeg, fileName: 'b.jpg', mimeType: 'image/jpeg', size: 8 },
+      { dataUrl: webp, fileName: 'c.webp', mimeType: 'image/webp', size: 8 },
+    ]);
+    expect(images.map((item) => item.fileName)).toEqual(['a.png', 'b.jpg']);
+  });
+});
+
+describe('normalizeMachineSectionRows', () => {
+  it('maps legacy type/spec text onto catalog ids when sensorIds are empty', () => {
+    const [row] = normalizeMachineSectionRows(
+      [
+        {
+          id: 1,
+          role: '进板检测',
+          sensorType: '漫反射传感器',
+          spec: 'E3Z-D61',
+        },
+      ],
+      {
+        allowImage: true,
+        sensorItems: [
+          {
+            id: 9,
+            status: '现用',
+            partNumber: '',
+            sensorType: '漫反射',
+            brand: 'OMRON',
+            model: 'E3Z-D61',
+            spec: '0~300mm',
+            feature: '',
+            scene: '',
+            sopId: null,
+            replacesId: null,
+            replacedById: null,
+            problemNote: '',
+            replacedAt: '',
+          },
+        ],
+      },
+    );
+    expect(row?.sensorIds).toEqual([9]);
+  });
+
+  it('keeps notes rows that have role and name', () => {
+    const rows = normalizeMachineSectionRows(
+      [{ id: 1, role: '安装注意', name: '角度' }],
+      { allowImage: false },
+    );
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe('dates', () => {
+  it('formats local date and date-time with zero padding', () => {
+    const date = new Date(2024, 8, 7, 4, 5, 6);
+    expect(formatLocalDate(date)).toBe('2024-09-07');
+    expect(formatLocalDateTime(date)).toBe('2024-09-07 04:05:06');
+    expect(formatLocalDate(new Date('invalid'))).toBe('');
+  });
+});
+
+describe('controlled files', () => {
+  it('classifies pdf and word by extension or mime', () => {
+    expect(detectControlledFileKind('a.PDF', '')).toBe('pdf');
+    expect(
+      detectControlledFileKind(
+        'a.bin',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    ).toBe('word');
+    expect(detectControlledFileKind('a.txt', 'text/plain')).toBe(null);
+  });
+
+  it('validates size and type against kind rules', () => {
+    expect(validateControlledUpload('excel' as 'pdf', 'a.pdf', 'application/pdf', 1)).toEqual({
+      ok: false,
+      reason: 'validation',
+    });
+    expect(
+      validateControlledUpload('pdf', 'a.pdf', 'application/pdf', CONTROLLED_FILE_RULES.pdf.maxBytes + 1),
+    ).toEqual({ ok: false, reason: 'size' });
+    expect(validateControlledUpload('pdf', 'a.doc', 'application/msword', 10)).toEqual({
+      ok: false,
+      reason: 'type',
+    });
+  });
+
+  it('flattens legacy labelled pdf/word slots', () => {
+    const items = normalizeControlledDocuments([
+      {
+        label: '验收',
+        pdf: {
+          fileName: 'a.pdf',
+          mimeType: 'application/pdf',
+          dataUrl: 'data:application/pdf;base64,aaa',
+          size: 12,
+          uploadedAt: '2024-01-01',
+        },
+      },
+    ]);
+    expect(items).toEqual([
+      expect.objectContaining({ id: 1, kind: 'pdf', fileName: 'a.pdf' }),
+    ]);
+  });
+});
+
+describe('normalizeDictionaryItems', () => {
+  it('trims, dedupes locale names, and sorts by sort then id', () => {
+    const items = normalizeDictionaryItems([
+      { id: 2, name: ' 乙 ', sort: 1 },
+      { id: 1, name: '乙', sort: 1 },
+      { id: 3, name: '甲', sort: 0 },
+    ]);
+    expect(items.map((item) => item.name)).toEqual(['甲', '乙']);
+  });
+});
+
+describe('normalizeEntityGroups', () => {
+  it('drops blank names and duplicate locale item names across groups', () => {
+    const groups = normalizeEntityGroups([
+      { name: '华东', items: ['庆鼎', '庆鼎', ''] },
+      { name: '华东', items: ['健鼎'] },
+      { name: '华南', items: ['庆鼎', '崇达'] },
+    ]);
+    expect(groups).toEqual([
+      { name: '华东', items: ['庆鼎'] },
+      { name: '华南', items: ['崇达'] },
+    ]);
+  });
+});

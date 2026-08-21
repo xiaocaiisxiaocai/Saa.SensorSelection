@@ -2,92 +2,22 @@
   "name": "saa-sensor-selection",
   "version": "1.0.0",
   "private": true,
-  "keywords": [
-    "monorepo",
-    "turbo",
-    "vben",
-    "vben admin",
-    "vben pro",
-    "vue",
-    "vue admin",
-    "vue vben admin",
-    "vue vben admin pro",
-    "vue3"
-  ],
-  "homepage": "",
-  "repository": "",
-  "license": "MIT",
-  "author": {
-    "name": "vben",
-    "email": "ann.vben@gmail.com",
-    "url": "https://github.com/anncwb"
-  },
   "type": "module",
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 turbo build --filter=@vben/web-ele...",
-    "check:type": "pnpm --filter @vben/web-ele run typecheck",
-    "dev": "pnpm --filter @vben/web-ele run dev",
-    "format": "vsh lint --format",
-    "lint": "eslint apps/web-ele/src --max-warnings=0",
-    "postinstall": "pnpm -r run stub --if-present",
-    "preview": "pnpm --filter @vben/web-ele run preview",
+    "dev": "pnpm --dir frontend dev",
+    "build": "pnpm --dir frontend build",
+    "preview": "pnpm --dir frontend preview",
+    "lint": "pnpm --dir frontend lint",
+    "check:type": "pnpm --dir frontend check:type",
+    "test": "pnpm --dir frontend test",
+    "test:unit": "pnpm --dir frontend test",
+    "test:selection": "node scripts/selection-contract-test.cjs",
     "test:backend": "dotnet test backend/Saa.SensorSelection.slnx",
-    "test:selection": "node scripts/vben-migration.contract-test.cjs",
-    "test:unit": "vitest run",
-    "backup:db": "node scripts/backup-db.mjs"
-  },
-  "devDependencies": {
-    "@types/node": "catalog:",
-    "@vben/commitlint-config": "workspace:*",
-    "@vben/eslint-config": "workspace:*",
-    "@vben/prettier-config": "workspace:*",
-    "@vben/stylelint-config": "workspace:*",
-    "@vben/tailwind-config": "workspace:*",
-    "@vben/tsconfig": "workspace:*",
-    "@vben/vite-config": "workspace:*",
-    "@vben/vsh": "workspace:*",
-    "@vitejs/plugin-vue": "catalog:",
-    "@vitejs/plugin-vue-jsx": "catalog:",
-    "@vue/test-utils": "catalog:",
-    "autoprefixer": "catalog:",
-    "cross-env": "catalog:",
-    "cspell": "catalog:",
-    "happy-dom": "catalog:",
-    "husky": "catalog:",
-    "is-ci": "catalog:",
-    "lint-staged": "catalog:",
-    "rimraf": "catalog:",
-    "tailwindcss": "catalog:",
-    "turbo": "catalog:",
-    "typescript": "catalog:",
-    "unbuild": "catalog:",
-    "vite": "catalog:",
-    "vitest": "catalog:",
-    "vue": "catalog:",
-    "vue-tsc": "catalog:"
+    "backup:db": "node backend/scripts/backup-db.mjs"
   },
   "engines": {
     "node": ">=20.10.0",
     "pnpm": ">=9.12.0"
   },
-  "packageManager": "pnpm@9.15.0",
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "eslint": "*"
-      }
-    },
-    "overrides": {
-      "@ast-grep/napi": "catalog:",
-      "@ctrl/tinycolor": "catalog:",
-      "clsx": "catalog:",
-      "esbuild": "0.24.0",
-      "pinia": "catalog:",
-      "vue": "catalog:"
-    },
-    "neverBuiltDependencies": [
-      "canvas",
-      "node-gyp"
-    ]
-  }
+  "packageManager": "pnpm@9.15.0"
 }

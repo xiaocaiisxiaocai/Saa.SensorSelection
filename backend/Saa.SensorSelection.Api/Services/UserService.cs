@@ -9,6 +9,7 @@ namespace Saa.SensorSelection.Api.Services;
 /// <summary>
 /// 用户管理：创建/更新/删除/重置密码，以及角色、组织引用的合法性校验。
 /// 保护规则：用户名唯一；不能删除自己；至少保留一名系统管理员。
+/// 当前登录用户改自己的密码走 ChangeOwnPasswordAsync，需验证当前密码。
 /// </summary>
 public class UserService(AppDbContext db, ProfileService profiles)
 {
@@ -156,6 +157,34 @@ public class UserService(AppDbContext db, ProfileService profiles)
             return RbacResult.Fail("用户不存在");
         }
         user.PasswordHash = PasswordService.Hash(password);
+        await db.SaveChangesAsync(ct);
+        return RbacResult.Ok();
+    }
+
+    public async Task<RbacResult> ChangeOwnPasswordAsync(
+        string username,
+        string currentPassword,
+        string newPassword,
+        CancellationToken ct = default)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(
+            item => item.Username == username,
+            ct);
+        if (user is null)
+        {
+            return RbacResult.Fail("登录已失效，请重新登录");
+        }
+        if (string.IsNullOrEmpty(currentPassword) ||
+            !PasswordService.Verify(currentPassword, user.PasswordHash))
+        {
+            return RbacResult.Fail("当前密码不正确");
+        }
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 4)
+        {
+            return RbacResult.Fail("新密码至少 4 位");
+        }
+
+        user.PasswordHash = PasswordService.Hash(newPassword);
         await db.SaveChangesAsync(ct);
         return RbacResult.Ok();
     }

@@ -16,6 +16,7 @@ public class AuthController(
     AppDbContext db,
     JwtService jwt,
     ProfileService profiles,
+    UserService users,
     LoginRateLimiter rateLimiter,
     AuditLogService audit,
     ILogger<AuthController> logger) : ControllerBase
@@ -25,6 +26,12 @@ public class AuthController(
     public record LoginRequest(
         [Required(ErrorMessage = "请输入用户名")] string Username,
         [Required(ErrorMessage = "请输入密码")] string Password);
+
+    public record ChangePasswordRequest(
+        [Required(ErrorMessage = "请输入当前密码")] string CurrentPassword,
+        [Required(ErrorMessage = "请输入新密码")]
+        [MinLength(4, ErrorMessage = "新密码至少 4 位")]
+        string NewPassword);
 
     public record LoginResponse(
         string Token,
@@ -161,5 +168,28 @@ public class AuthController(
         return profile == null
             ? Unauthorized(new { message = "登录已失效，请重新登录" })
             : Ok(profile);
+    }
+
+    /// <summary>当前登录用户修改自己的密码，需验证当前密码。</summary>
+    [Authorize]
+    [HttpPut("password")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await users.ChangeOwnPasswordAsync(
+            username,
+            request.CurrentPassword,
+            request.NewPassword);
+        await audit.WriteAsync(
+            "auth.change-password",
+            target: username,
+            success: result.Success,
+            error: result.Error);
+        return result.Success
+            ? Ok(new { ok = true })
+            : BadRequest(new { message = result.Error });
     }
 }

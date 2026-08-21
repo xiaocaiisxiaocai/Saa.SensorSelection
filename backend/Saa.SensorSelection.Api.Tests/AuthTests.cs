@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -81,5 +82,65 @@ public class AuthTests
 
         var response = await LoginAsync(client, "admin", password: null);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithCurrentPassword_UpdatesLogin()
+    {
+        await using var factory = new ApiFactory();
+        using var login = factory.CreateClient();
+        var tokenResponse = await LoginAsync(login, "admin");
+        tokenResponse.EnsureSuccessStatusCode();
+        var tokenBody = await tokenResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var token = tokenBody.GetProperty("token").GetString();
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        var changed = await client.PutAsJsonAsync(
+            "/api/auth/password",
+            new { currentPassword = "admin123", newPassword = "admin456" });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+
+        using var after = factory.CreateClient();
+        var oldLogin = await LoginAsync(after, "admin", "admin123");
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+        var newLogin = await LoginAsync(after, "admin", "admin456");
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithWrongCurrentPassword_Returns400()
+    {
+        await using var factory = new ApiFactory();
+        using var login = factory.CreateClient();
+        var tokenResponse = await LoginAsync(login, "admin");
+        tokenResponse.EnsureSuccessStatusCode();
+        var tokenBody = await tokenResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var token = tokenBody.GetProperty("token").GetString();
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/auth/password",
+            new { currentPassword = "wrong-password", newPassword = "admin456" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("当前密码不正确", body.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithoutToken_Returns401()
+    {
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            "/api/auth/password",
+            new { currentPassword = "admin123", newPassword = "admin456" });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

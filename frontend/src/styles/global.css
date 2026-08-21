@@ -1,0 +1,60 @@
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-ext-400.css';
+@import '@fontsource/inter/latin-ext-600.css';
+@import '@fontsource/inter/latin-ext-700.css';
+@import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
+@import '@fontsource/noto-sans-sc/chinese-simplified-600.css';
+@import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
+@import './tokens.css';
+@import './reset.css';
+@import './a11y.css';
+@import '../ui/control.css';
+@import '../ui/menu.css';
+@import '../ui/overlay.css';
+
+.hairline-bottom {
+  box-shadow: var(--hairline);
+}
+
+.material-sidebar {
+  background: var(--material-sidebar-bg);
+  backdrop-filter: var(--material-blur);
+  -webkit-backdrop-filter: var(--material-blur);
+}
+
+.material-toolbar {
+  background: var(--material-toolbar-bg);
+  backdrop-filter: var(--material-blur);
+  -webkit-backdrop-filter: var(--material-blur);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .material-sidebar {
+    background: var(--bg-window);
+  }
+
+  .material-toolbar {
+    background: var(--bg-content);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: var(--dur-0) !important;
+    animation-duration: var(--dur-0) !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .material-sidebar,
+  .material-toolbar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

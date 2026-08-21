@@ -1,0 +1,49 @@
+.a-sheet__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--overlay);
+  backdrop-filter: var(--overlay-blur);
+  -webkit-backdrop-filter: var(--overlay-blur);
+}
+
+.a-sheet__overlay[data-state='open'] {
+  animation: a-sheet-overlay-in var(--dur-3) var(--ease-sheet);
+}
+
+@keyframes a-sheet-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes a-sheet-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-sheet[data-state='open'],
+  .a-sheet__overlay[data-state='open'],
+  .a-alert[data-state='open'] {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .a-sheet__overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

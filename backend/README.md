@@ -1,6 +1,6 @@
 # Saa.SensorSelection.Api — 感应器选型后端
 
-ASP.NET Core 8 + EF Core + SQLite + JWT 的轻量后端，为前端 `apps/web-ele` 提供数据仓库持久化与登录鉴权。业务校验仍由前端 `modules/selection/domain.js` 完成，后端只负责按 `key → JSON 数组` 的通用结构存取数据。
+ASP.NET Core 8 + EF Core + SQLite + JWT 的轻量后端，为前端 `frontend/` 提供数据仓库持久化与登录鉴权。业务校验由前端 `frontend/src/domain` 完成，后端只负责按 `key → JSON 数组` 的通用结构存取数据。
 
 ## 技术栈
 
@@ -36,7 +36,7 @@ dotnet run    # 默认 http://localhost:5080（launchSettings 的 http profile�
 ```
 
 - Swagger：http://localhost:5080/swagger（**仅 Development 环境启用**，生产不暴露 API 文档）
-- 前端开发代理：`apps/web-ele/vite.config.mts` 把 `/api` 转发到 `http://localhost:5080`（端口被占用时可用 `VITE_API_TARGET=http://localhost:5081 pnpm run dev` 覆盖）
+- 前端开发代理：`frontend/vite.config.ts` 把 `/api` 转发到 `http://localhost:5080`（端口被占用时可用 `VITE_API_TARGET=http://localhost:5081 pnpm --dir frontend dev` 覆盖）
 - 首次启动自动完成：创建 SQLite 数据目录 → 应用 EF Migrations → 种子权限/内置角色（admin/editor/viewer）→ 种子 admin 用户并授予系统管理员角色
 
 ## 配置项（appsettings.json）
@@ -88,20 +88,23 @@ dotnet user-secrets set "Jwt:Key" "<随机 32+ 字节密钥>"
 
 ## EF Core Migrations
 
-启动时由 `DbInitializer → DbSeeder` 自动调用 `Database.Migrate()` 应用待迁移，日常运行无需手动操作。开发时用 dotnet-ef 本地工具（清单在仓库根 `dotnet-tools.json`）：
+启动时由 `DbInitializer → DbSeeder` 自动调用 `Database.Migrate()` 应用待迁移，日常运行无需手动操作。开发时用 dotnet-ef 本地工具（清单在 `backend/dotnet-tools.json`）：
 
 ```bash
+cd backend
+dotnet tool restore
+
 # 修改模型后新增迁移
-dotnet tool run dotnet-ef migrations add YourChange --project backend/Saa.SensorSelection.Api
+dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelection.Api
 
 # 查看待应用/已应用迁移
-dotnet tool run dotnet-ef migrations list --project backend/Saa.SensorSelection.Api
+dotnet tool run dotnet-ef migrations list --project Saa.SensorSelection.Api
 
 # 回滚最近一次（仅删除生成文件，不改数据库）
-dotnet tool run dotnet-ef migrations remove --project backend/Saa.SensorSelection.Api
+dotnet tool run dotnet-ef migrations remove --project Saa.SensorSelection.Api
 
 # 生成 SQL 脚本（交付评审/手工执行）
-dotnet tool run dotnet-ef migrations script --project backend/Saa.SensorSelection.Api
+dotnet tool run dotnet-ef migrations script --project Saa.SensorSelection.Api
 ```
 
 > 注意：旧版本用 `EnsureCreated` 建库（无 `__EFMigrationsHistory` 表），直接 `Migrate()` 会因表已存在而失败。升级路径：先备份 `App_Data`，删除旧库让迁移重建，或手工向 `__EFMigrationsHistory` 补记录。本次迁移已把 `App_Data.bak-ensurecreated` 保留作备份示例。

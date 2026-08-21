@@ -5,8 +5,8 @@
 .DESCRIPTION
   1. 检查 Node.js / pnpm
   2. 安装依赖（可用 -SkipInstall 跳过）
-  3. 执行 pnpm run build
-  4. 将 apps/web-ele/dist 复制到输出目录，并写入 IIS 用 web.config
+  3. 在 frontend/ 执行 pnpm run build（生产 hash 路由）
+  4. 将 frontend/dist 复制到输出目录，并写入 IIS 用 web.config
   5. 可选生成 zip
 
   生产环境默认使用 hash 路由（VITE_ROUTER_HISTORY=hash），IIS 无需 URL Rewrite 也能打开子路由。
@@ -26,7 +26,7 @@
   跳过 pnpm install（依赖已装好时使用）。
 
 .PARAMETER BasePath
-  对应 Vite/Vben 的 VITE_BASE，必须以 / 开头和结尾（根站点用 '/'）。
+  对应 Vite 的 VITE_BASE，必须以 / 开头和结尾（根站点用 '/'）。
 
 .PARAMETER ApiBase
   对应 VITE_API_BASE（前端 API 基地址）。默认 '/api'（同源反向代理）。
@@ -84,7 +84,8 @@ else {
 }
 
 $BasePath = Normalize-BasePath $BasePath
-$distDir = Join-Path $repoRoot 'apps\web-ele\dist'
+$frontendDir = Join-Path $repoRoot 'frontend'
+$distDir = Join-Path $frontendDir 'dist'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $zipPath = Join-Path (Split-Path -Parent $OutputDir) ("sensor-selection-iis-$stamp.zip")
 
@@ -101,20 +102,37 @@ if ($nodeVersion -notmatch '^v(2[0-9]|[3-9]\d)\.') {
   Write-Warning "建议使用 Node.js 20.10+，当前为 $nodeVersion"
 }
 
+if (-not (Test-Path (Join-Path $frontendDir 'package.json'))) {
+  throw "未找到新前端目录：$frontendDir"
+}
+
 if (-not $SkipInstall) {
-  Write-Host '==> 安装依赖 (pnpm install --frozen-lockfile)'
-  pnpm install --frozen-lockfile
-  if ($LASTEXITCODE -ne 0) { throw "pnpm install 失败，退出码 $LASTEXITCODE" }
+  Write-Host '==> 安装依赖 (frontend: pnpm install --frozen-lockfile)'
+  Push-Location $frontendDir
+  try {
+    pnpm install --frozen-lockfile
+    if ($LASTEXITCODE -ne 0) { throw "pnpm install 失败，退出码 $LASTEXITCODE" }
+  }
+  finally {
+    Pop-Location
+  }
 }
 else {
   Write-Host '==> 跳过依赖安装 (-SkipInstall)'
 }
 
-Write-Host '==> 构建生产包'
+Write-Host '==> 构建生产包 (frontend)'
 $env:VITE_BASE = $BasePath
 $env:VITE_API_BASE = $ApiBase
-pnpm run build
-if ($LASTEXITCODE -ne 0) { throw "构建失败，退出码 $LASTEXITCODE" }
+$env:VITE_ROUTER_HISTORY = 'hash'
+Push-Location $frontendDir
+try {
+  pnpm run build
+  if ($LASTEXITCODE -ne 0) { throw "构建失败，退出码 $LASTEXITCODE" }
+}
+finally {
+  Pop-Location
+}
 
 if (-not (Test-Path (Join-Path $distDir 'index.html'))) {
   throw "未找到构建产物：$distDir\index.html"

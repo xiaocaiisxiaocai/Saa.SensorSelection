@@ -2,38 +2,53 @@
 
 Symtek Automation China 的客户、PCB 制程、机型结构与 Sensor 型号知识库。
 
-前端已迁移到 [purest-admin](https://github.com/dymproject/purest-admin) 中的 Vue Vben Admin 5.5.1 基座，技术栈为 Vue 3、Vite、TypeScript、Pinia 和 Element Plus。迁移基线提交为 `c8c593ea252db481d72b2aae438c23cc1ee817e2`。
+前端是自建 Apple 设计规范组件库 + Vue 3 单一应用（`frontend/`）。后端是 ASP.NET Core 8 + EF Core + SQLite，提供 JWT 登录、RBAC、审计日志和选型数据仓库。
 
 ## 本地运行
 
-要求 Node.js 20.10 以上和 pnpm 9.12 以上。
+要求 Node.js 20.10 以上、pnpm 9.12 以上，以及 .NET 8 SDK。
 
 ```powershell
-pnpm install --frozen-lockfile
-pnpm run dev
+cd frontend
+pnpm install
+pnpm dev
 ```
 
-默认地址：`http://localhost:5777`
+默认地址：`http://localhost:5178`（`/api` 代理到后端 `http://localhost:5080`）。
+
+```powershell
+dotnet run --launch-profile http --project backend/Saa.SensorSelection.Api
+```
+
+开发登录默认账号 `admin` / `admin123`。未登录可只读预览业务数据；写入需要 JWT 与 `selection:write`。
+
+仓库根也提供同样的快捷命令：`pnpm dev`、`pnpm run build`、`pnpm run test`。
 
 ## 验证
 
 ```powershell
 pnpm run test:selection
+pnpm run test:unit
 pnpm run check:type
 pnpm run lint
 pnpm run build
+pnpm run test:backend
 ```
 
 ## 目录
 
 ```text
-apps/web-ele/                         Vben Element Plus 应用
-  src/modules/selection/              感应器选型业务模块
-  src/router/routes/modules/          业务路由
-internal/                             Vben 内部构建配置
-packages/                             Vben 工作区基础包
-scripts/vben-migration.contract-test.cjs
-                                      迁移与领域行为回归
+frontend/                             前端（Vue 3 + 自建组件库）
+  src/api/                            后端薄客户端
+  src/domain/                         选型领域层（TypeScript）
+  src/pages/                          业务页、登录、系统管理
+  src/ui/                             组件库
+backend/                              后端（ASP.NET Core + SQLite）
+  Saa.SensorSelection.Api/            Web API
+  Saa.SensorSelection.Api.Tests/      集成测试
+  scripts/backup-db.mjs               数据库备份
+scripts/deploy-iis.ps1                IIS 静态站点打包
+scripts/selection-contract-test.cjs   领域合同回归
 ```
 
-业务数据保存在浏览器 `localStorage` 的 `symtek_crud_store` 中，并兼容迁移前的数据格式。
+业务数据在线以 SQLite 为准，并快照到浏览器 `localStorage` 键 `symtek_crud_store`。

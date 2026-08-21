@@ -17,7 +17,7 @@ public record UserListItem(
 public record CreateUserRequest(
     [Required(ErrorMessage = "请输入用户名")] string Username,
     [Required(ErrorMessage = "请输入密码")]
-    [MinLength(6, ErrorMessage = "密码至少 6 位")]
+    [MinLength(4, ErrorMessage = "密码至少 4 位")]
     string Password,
     [Required(ErrorMessage = "请输入显示名")] string DisplayName,
     bool IsActive = true,
@@ -32,7 +32,7 @@ public record UpdateUserRequest(
 
 public record ResetPasswordRequest(
     [Required(ErrorMessage = "请输入密码")]
-    [MinLength(6, ErrorMessage = "密码至少 6 位")]
+    [MinLength(4, ErrorMessage = "密码至少 4 位")]
     string Password);
 
 // 角色与权限

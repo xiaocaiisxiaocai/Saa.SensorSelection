@@ -12,7 +12,7 @@ public class ProductionConfigurationGuardTests
         var configuration = BuildConfiguration(
             jwtKey: ProductionConfigurationGuard.DefaultJwtKey,
             adminPassword: "strong-admin-password",
-            allowedOrigins: "http://localhost:5777");
+            allowedOrigins: "http://localhost:5178");
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             ProductionConfigurationGuard.Validate("Production", configuration));
@@ -26,7 +26,7 @@ public class ProductionConfigurationGuardTests
         var configuration = BuildConfiguration(
             jwtKey: "strong-jwt-key-0123456789abcdef",
             adminPassword: ProductionConfigurationGuard.DefaultAdminPassword,
-            allowedOrigins: "http://localhost:5777");
+            allowedOrigins: "http://localhost:5178");
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             ProductionConfigurationGuard.Validate("Production", configuration));
@@ -54,7 +54,7 @@ public class ProductionConfigurationGuardTests
         var configuration = BuildConfiguration(
             jwtKey: "strong-jwt-key-0123456789abcdef",
             adminPassword: "strong-admin-password",
-            allowedOrigins: "http://localhost:5777");
+            allowedOrigins: "http://localhost:5178");
 
         var exception = Record.Exception(() =>
             ProductionConfigurationGuard.Validate("Production", configuration));

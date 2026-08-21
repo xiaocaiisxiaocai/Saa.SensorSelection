@@ -23,7 +23,9 @@ coverage
 **/.vitepress/cache
 .cache
 .turbo
+.isolated-test-output
 .temp
+backend/.test-out-*/
 dev-dist
 .stylelintcache
 yarn.lock
@@ -59,7 +61,7 @@ vite.config.ts.*
 *.sw?
 .history
 
-# 数据库备份输出（由 scripts/backup-db.mjs 生成）
+# 数据库备份输出（由 backend/scripts/backup-db.mjs 生成）
 /backups/
 
 # Freebuff 客户端元数据

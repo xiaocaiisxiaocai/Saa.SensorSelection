@@ -10,6 +10,7 @@ import {
 } from '@/theme/theme';
 
 function readSystemDark() {
+  if (typeof window === 'undefined') return false;
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
@@ -34,11 +35,14 @@ export const useThemeStore = defineStore('theme', () => {
     { immediate: true },
   );
 
-  window
-    .matchMedia('(prefers-color-scheme: dark)')
-    .addEventListener('change', (event) => {
+  // 保存 listener 引用，以便未来 SSR / 测试环境可随时移除
+  if (typeof window !== 'undefined') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onColorSchemeChange = (event: MediaQueryListEvent) => {
       systemDark.value = event.matches;
-    });
+    };
+    mq.addEventListener('change', onColorSchemeChange);
+  }
 
   return {
     preference,

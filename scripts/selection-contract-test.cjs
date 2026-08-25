@@ -365,9 +365,17 @@ async function run() {
     'id',
     'machine',
     'measure',
+    'measureHistory',
     'problem',
     'status',
     'type',
+  ])
+  assert.deepEqual(feedbackRow.measureHistory, [
+    {
+      date: '2026-08-11',
+      measure: '更换真空表头',
+      status: '现行',
+    },
   ])
 
   const missingProblem = repository.saveCrud('customer-feedback', customer, {
@@ -650,11 +658,10 @@ async function run() {
 
   const machineName = '中间六轴机'
   const conveyorRows = repository.getMachineSectionRows(1, machineName)
-  assert.ok(conveyorRows.length >= 1, 'legacy conveyor rows should migrate')
-  assert.equal(
-    conveyorRows.some((row) => row.role && row.sensorType),
-    true,
-    'migrated conveyor rows should have role and sensorType',
+  assert.deepEqual(
+    conveyorRows,
+    [],
+    'missing machine data must stay empty instead of creating demo rows',
   )
 
   // 结构类分区改为从 Sensor 目录多选，sensorType/spec 由所选型号派生
@@ -985,7 +992,7 @@ async function run() {
   assert.deepEqual(fullStoreRemote.get('a'), [1])
   assert.equal(bridgeFullStore.getItem('a'), '[1]')
 
-  // 写失败：乐观更新回滚到上次同步值
+  // 写失败：标记后端离线，不再暴露浏览器本地数据
   const localMemory3 = new Map()
   let writeFailureMsg = ''
   const transport3 = createFakeTransport({ a: [{ v: 1 }] }, { failKeys: ['a'] })
@@ -1000,11 +1007,12 @@ async function run() {
   assert.equal(bridge3.setItem('a', JSON.stringify([{ v: 2 }])), true)
   assert.equal(bridge3.getItem('a'), '[{"v":2}]') // 乐观读
   await bridge3.queue
-  assert.equal(bridge3.getItem('a'), '[{"v":1}]') // 已回滚
+  assert.equal(bridge3.status, 'offline')
+  assert.equal(bridge3.getItem('a'), null)
   assert.match(writeFailureMsg, /write blocked/)
   assert.equal(bridge3.lastError, 'write blocked: a')
 
-  // 删除失败：从已同步状态恢复该 key
+  // 删除失败：同样标记后端离线，不再继续读取缓存
   const localMemory4 = new Map()
   const transport4 = createFakeTransport(
     { a: [1], b: [2] },
@@ -1017,10 +1025,11 @@ async function run() {
   await bridge4.init()
   bridge4.setItem(domain.STORAGE_KEY, JSON.stringify({ b: [2] })) // 整体写回：删除 a
   await bridge4.queue
-  assert.equal(bridge4.getItem('a'), '[1]') // 删除失败 → 恢复
-  assert.equal(bridge4.getItem('b'), '[2]')
+  assert.equal(bridge4.status, 'offline')
+  assert.equal(bridge4.getItem('a'), null)
+  assert.equal(bridge4.getItem('b'), null)
 
-  // 后端不可达：退化为本地模式（可读写）
+  // 后端不可达：不读取或写入浏览器本地数据
   const localMemory5 = new Map()
   const transport5 = createFakeTransport(
     {},
@@ -1032,9 +1041,9 @@ async function run() {
   })
   const offline = await bridge5.init()
   assert.equal(offline.status, 'offline')
-  assert.equal(bridge5.setItem('x', JSON.stringify([1])), true)
-  assert.equal(bridge5.getItem('x'), '[1]')
-  assert.equal(localMemory5.get('x'), '[1]')
+  assert.equal(bridge5.setItem('x', JSON.stringify([1])), false)
+  assert.equal(bridge5.getItem('x'), null)
+  assert.equal(localMemory5.has('x'), false)
 
   // 在线模式：getItem(STORAGE_KEY) 必须把扁平缓存组装成完整 store（仓库按整库读取）
   const localMemory7 = new Map()
@@ -1059,7 +1068,7 @@ async function run() {
     { id: 1, content: '后端行' },
   ])
 
-  // 后端再次不可达时，用上次在线快照恢复，而不是空库
+  // 后端再次不可达时，不向页面暴露上次在线快照
   const transportDown = createFakeTransport(
     {},
     { fetchError: new Error('network down') },
@@ -1070,10 +1079,7 @@ async function run() {
   })
   const offlineFromSnapshot = await bridgeDown.init()
   assert.equal(offlineFromSnapshot.status, 'offline')
-  const recovered = JSON.parse(bridgeDown.getItem(domain.STORAGE_KEY))
-  assert.deepEqual(recovered['customer-req:庆鼎'], [
-    { id: 1, content: '后端行' },
-  ])
+  assert.equal(bridgeDown.getItem(domain.STORAGE_KEY), null)
 
   // 未登录：读本地缓存、拒绝写入
   const unauthorized = new Error('token expired')
@@ -1089,7 +1095,7 @@ async function run() {
   assert.equal(bridge6.setItem('y', JSON.stringify([1])), false)
   assert.equal(bridge6.getItem('y'), null)
 
-  // 未登录（启动即 401）但本地有旧数据：整库读取仍回退到本地缓存
+  // 未登录（启动即 401）且本地有旧数据：仍不向页面暴露本地缓存
   const localMemory6b = new Map()
   localMemory6b.set(
     domain.STORAGE_KEY,
@@ -1102,12 +1108,9 @@ async function run() {
   })
   const authState6b = await bridge6b.init()
   assert.equal(authState6b.status, 'unauthorized')
-  const localRead = JSON.parse(bridge6b.getItem(domain.STORAGE_KEY))
-  assert.deepEqual(localRead['customer-req:庆鼎'], [
-    { id: 1, content: '本地旧数据' },
-  ])
+  assert.equal(bridge6b.getItem(domain.STORAGE_KEY), null)
 
-  // 会话中 token 失效（写 401）：切换到未登录状态并保留已同步缓存供只读，禁止继续写入
+  // 会话中 token 失效（写 401）：切换到未登录状态，不再暴露缓存并禁止继续写入
   const localMemory9 = new Map()
   const expired = new Error('token expired')
   expired.kind = 'unauthorized'
@@ -1124,10 +1127,9 @@ async function run() {
   assert.equal(bridge9.setItem('a', JSON.stringify([{ v: 2 }])), true)
   await bridge9.queue
   assert.equal(bridge9.status, 'unauthorized') // 已切换到未登录（前端引导跳转登录页）
-  assert.equal(bridge9.getItem('a'), '[{"v":1}]') // 缓存保留上次同步值
+  assert.equal(bridge9.getItem('a'), null)
   assert.equal(bridge9.setItem('a', JSON.stringify([{ v: 3 }])), false) // 禁止写入
-  const full9 = JSON.parse(bridge9.getItem(domain.STORAGE_KEY))
-  assert.deepEqual(full9.a, [{ v: 1 }])
+  assert.equal(bridge9.getItem(domain.STORAGE_KEY), null)
 
   // 种子版本化回填：远端版本落后时补种缺失默认 key，不覆盖用户已有数据
   const localMemory10 = new Map()

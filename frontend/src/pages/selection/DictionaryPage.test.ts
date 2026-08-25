@@ -16,7 +16,7 @@ describe('DictionaryPage', () => {
 
     await tabs[7]?.trigger('click');
     expect(wrapper.text()).toContain('漫反射');
-    expect(wrapper.text()).not.toContain('Sensor 型号字典中的感应器类型，全局共用');
+    expect(wrapper.text()).not.toContain('Sensor型号中的感应器类型，全局共用');
     wrapper.unmount();
   });
 });

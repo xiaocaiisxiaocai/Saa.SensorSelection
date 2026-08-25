@@ -108,33 +108,36 @@ async function onSelect(id: string) {
   </AMenu>
   <AButton v-else size="small" variant="tinted" @click="goLogin">登录</AButton>
   <ASheet v-model:open="passwordOpen" title="修改密码" :width="420">
-    <AFormRow label="当前密码" required>
-      <AField
-        v-model="form.currentPassword"
-        type="password"
-        autocomplete="current-password"
-        :maxlength="64"
-        placeholder="请输入当前密码"
-      />
-    </AFormRow>
-    <AFormRow label="新密码" required>
-      <AField
-        v-model="form.newPassword"
-        type="password"
-        autocomplete="new-password"
-        :maxlength="64"
-        placeholder="至少 4 位"
-      />
-    </AFormRow>
-    <AFormRow label="确认新密码" required>
-      <AField
-        v-model="form.confirmPassword"
-        type="password"
-        autocomplete="new-password"
-        :maxlength="64"
-        placeholder="再次输入新密码"
-      />
-    </AFormRow>
+    <div class="password-form">
+      <AFormRow label="当前密码" required>
+        <AField
+          v-model="form.currentPassword"
+          type="password"
+          autocomplete="current-password"
+          :maxlength="64"
+          :show-count="false"
+          placeholder="请输入当前密码"
+        />
+      </AFormRow>
+      <AFormRow label="新密码" required>
+        <AField
+          v-model="form.newPassword"
+          type="password"
+          autocomplete="new-password"
+          :maxlength="64"
+          placeholder="至少 4 位"
+        />
+      </AFormRow>
+      <AFormRow label="确认新密码" required>
+        <AField
+          v-model="form.confirmPassword"
+          type="password"
+          autocomplete="new-password"
+          :maxlength="64"
+          placeholder="再次输入新密码"
+        />
+      </AFormRow>
+    </div>
     <template #footer>
       <AButton @click="passwordOpen = false">取消</AButton>
       <AButton variant="filled" :loading="saving" @click="savePassword">保存</AButton>
@@ -161,5 +164,14 @@ async function onSelect(id: string) {
 
 .user-chip--menu:hover {
   background: var(--fill-4);
+}
+
+.password-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.password-form :deep(.a-form-row) {
+  gap: var(--space-3);
 }
 </style>

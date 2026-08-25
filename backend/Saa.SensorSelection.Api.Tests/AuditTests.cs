@@ -3,10 +3,25 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Microsoft.Extensions.DependencyInjection;
+
+using Saa.SensorSelection.Api.Data;
+using Saa.SensorSelection.Api.Models;
+using Saa.SensorSelection.Api.Services;
+
 namespace Saa.SensorSelection.Api.Tests;
 
 public class AuditTests
 {
+    [Fact]
+    public void AuditLogIpNormalization_UsesIpv4LoopbackForIpv6Loopback()
+    {
+        Assert.Equal("127.0.0.1", AuditLogService.NormalizeIp("::1"));
+        Assert.Equal("127.0.0.1", AuditLogService.NormalizeIp("::ffff:127.0.0.1"));
+        Assert.Equal("192.0.2.10", AuditLogService.NormalizeIp("192.0.2.10"));
+        Assert.Equal("127.0.0.2", AuditLogService.NormalizeIp("127.0.0.2"));
+    }
+
     private static async Task<string> LoginTokenAsync(
         HttpClient client,
         string username = "admin",
@@ -78,6 +93,53 @@ public class AuditTests
         var failedEntry = entries.First(item => !item.GetProperty("result").GetBoolean());
         Assert.Equal("admin", failedEntry.GetProperty("target").GetString());
         Assert.Equal("admin", failedEntry.GetProperty("username").GetString());
+        var successEntry = entries.First(item => item.GetProperty("result").GetBoolean());
+        Assert.Contains("登录成功", successEntry.GetProperty("detail").GetString());
+        Assert.Contains("权限：", successEntry.GetProperty("detail").GetString());
+        // TestServer 没有真实 socket 地址，生产 Kestrel 的 ::1/映射地址由
+        // AuditLogService.NormalizeIp 统一转为 127.0.0.1；此处只防止回归为 ::1。
+        Assert.NotEqual("::1", successEntry.GetProperty("ip").GetString());
+    }
+
+    [Fact]
+    public async Task AuditLogs_EnrichLegacyDetailsWithoutChangingStoredEntries()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AuditLogs.AddRange(
+                new AuditLog
+                {
+                    Action = "auth.login",
+                    Target = "admin",
+                    Result = true,
+                    Ip = "::1",
+                },
+                new AuditLog
+                {
+                    Action = "store.upsert",
+                    Target = "customer-req:历史客户",
+                    Detail = "2 条记录",
+                    Result = true,
+                    Ip = "::ffff:127.0.0.1",
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await QueryAuditLogsAsync(admin, "?pageSize=20");
+        var entries = page.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(entries, item =>
+            item.GetProperty("action").GetString() == "auth.login" &&
+            item.GetProperty("target").GetString() == "admin" &&
+            item.GetProperty("detail").GetString() == "登录成功" &&
+            item.GetProperty("ip").GetString() == "127.0.0.1");
+        Assert.Contains(entries, item =>
+            item.GetProperty("action").GetString() == "store.upsert" &&
+            item.GetProperty("target").GetString() == "customer-req:历史客户" &&
+            item.GetProperty("detail").GetString() == "数据类型：数组；记录数：2");
     }
 
     [Fact]
@@ -104,7 +166,7 @@ public class AuditTests
         var successEntries = page.GetProperty("items").EnumerateArray().ToArray();
         var success = successEntries.First(item =>
             item.GetProperty("target").GetString() == "customer-req:测试客户");
-        Assert.Equal("1 条记录", success.GetProperty("detail").GetString());
+        Assert.Equal("数据类型：数组；记录数：1", success.GetProperty("detail").GetString());
 
         var failedPage = await QueryAuditLogsAsync(
             admin,
@@ -181,7 +243,8 @@ public class AuditTests
             item.GetProperty("error").GetString() == "用户名已存在");
         Assert.Contains(entries, item =>
             item.GetProperty("action").GetString() == "org.create" &&
-            item.GetProperty("target").GetString() == "审计部");
+            item.GetProperty("target").GetString() == "审计部" &&
+            item.GetProperty("detail").GetString() == "层级：部门；父级：无；排序：0；子级：0；用户：0");
     }
 
     [Fact]

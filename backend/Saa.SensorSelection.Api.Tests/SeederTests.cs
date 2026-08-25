@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -6,6 +7,37 @@ namespace Saa.SensorSelection.Api.Tests;
 
 public class SeederTests
 {
+    [Fact]
+    public async Task Seeder_CreatesDefaultOrganizationHierarchy()
+    {
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var login = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new { username = "admin", password = "admin123" });
+        var body = await login.Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            body.GetProperty("token").GetString());
+
+        var orgs = await client.GetFromJsonAsync<JsonElement>("/api/rbac/org-units");
+        var nodes = orgs.EnumerateArray().ToDictionary(
+            item => item.GetProperty("name").GetString()!,
+            item => item);
+
+        Assert.Equal(3, nodes.Count);
+        Assert.Equal("事业部", nodes["制造事业部"].GetProperty("level").GetString());
+        Assert.Null(nodes["制造事业部"].GetProperty("parentId").GetString());
+        Assert.Equal("部门", nodes["标准件组"].GetProperty("level").GetString());
+        Assert.Equal(
+            nodes["制造事业部"].GetProperty("id").GetInt32(),
+            nodes["标准件组"].GetProperty("parentId").GetInt32());
+        Assert.Equal("课别", nodes["选型课"].GetProperty("level").GetString());
+        Assert.Equal(
+            nodes["标准件组"].GetProperty("id").GetInt32(),
+            nodes["选型课"].GetProperty("parentId").GetInt32());
+    }
+
     [Fact]
     public async Task Seeder_IsIdempotent_AcrossRestartsOnSameDatabase()
     {

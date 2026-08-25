@@ -61,7 +61,7 @@ export type TableAlign = 'start' | 'center' | 'end';
 
 export type TableRowHeight = 'compact' | 'loose';
 
-export interface TableColumn {
+export interface TableColumn<T = unknown> {
   key: string;
   label: string;
   width?: number;
@@ -70,6 +70,7 @@ export interface TableColumn {
   ellipsis?: boolean;
   mono?: boolean;
   fixed?: 'end';
+  rowSpan?: (row: T, rowIndex: number) => number;
 }
 
 export type SegmentedSize = 'medium' | 'large';

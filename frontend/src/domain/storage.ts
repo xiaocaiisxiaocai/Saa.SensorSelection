@@ -57,6 +57,7 @@ export class BackendStorage implements StorageLike {
   private readonly onWriteFailure?: (message: string) => void;
   private readonly migrateOnEmpty: boolean;
   private readonly seedDefaults?: Record<string, unknown[]>;
+  private readonly seedMigration?: BackendStorageOptions['seedMigration'];
   private cache = new Map<string, unknown[]>();
   private synced = new Map<string, unknown[]>();
 
@@ -67,6 +68,7 @@ export class BackendStorage implements StorageLike {
     this.onWriteFailure = options.onWriteFailure;
     this.migrateOnEmpty = options.migrateOnEmpty !== false;
     this.seedDefaults = options.seedDefaults;
+    this.seedMigration = options.seedMigration;
   }
 
   private emitStatus() {
@@ -105,7 +107,7 @@ export class BackendStorage implements StorageLike {
     });
   }
 
-  private fallbackToLocal(error: unknown): BackendInitResult {
+  private markUnavailable(error: unknown): BackendInitResult {
     if (isUnauthorized(error)) {
       this.status = 'unauthorized';
       this.lastError = errorMessage(error, '登录已失效');
@@ -125,22 +127,14 @@ export class BackendStorage implements StorageLike {
   }
 
   getItem(key: string): null | string {
-    if (this.status === 'offline') {
-      return this.local.getItem(key);
-    }
+    if (this.status !== 'online') return null;
     if (key === STORAGE_KEY) {
       const full: Record<string, unknown[]> = {};
       for (const [k, value] of this.cache) full[k] = value;
-      if (this.status === 'unauthorized' && Object.keys(full).length === 0) {
-        return this.local.getItem(key);
-      }
       return JSON.stringify(full);
     }
     const value = this.cache.get(key);
-    if (value === undefined) {
-      if (this.status === 'unauthorized') return this.local.getItem(key);
-      return null;
-    }
+    if (value === undefined) return null;
     return JSON.stringify(value);
   }
 
@@ -150,14 +144,11 @@ export class BackendStorage implements StorageLike {
     } else {
       this.cache.set(key, prev);
     }
-    this.snapshotLocal();
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;
     this.onWriteFailure?.(message);
-    if (isUnauthorized(error) && this.status !== 'unauthorized') {
-      this.status = 'unauthorized';
-      this.emitStatus();
-    }
+    this.status = isUnauthorized(error) ? 'unauthorized' : 'offline';
+    this.emitStatus();
   }
 
   async init(): Promise<BackendInitResult> {
@@ -168,7 +159,7 @@ export class BackendStorage implements StorageLike {
     try {
       remote = await this.transport.fetchStore();
     } catch (error) {
-      return this.fallbackToLocal(error);
+      return this.markUnavailable(error);
     }
 
     const remoteKeys = Object.keys(remote);
@@ -211,6 +202,42 @@ export class BackendStorage implements StorageLike {
           )?.version,
         ) || 0;
       if (seedVersion > currentVersion) {
+        let canAdvanceSeedVersion = true;
+        if (this.seedMigration) {
+          try {
+            const migration = this.seedMigration(
+              remote,
+              currentVersion,
+              seedVersion,
+            );
+            if (migration.changed) {
+              for (const [key, value] of Object.entries(migration.store)) {
+                if (sameValue(remote[key], value)) continue;
+                await this.transport.writeKey(key, value);
+              }
+              for (const key of Object.keys(remote)) {
+                if (key in migration.store) continue;
+                if (!this.transport.deleteKey) {
+                  throw new Error(`无法迁移需删除的旧数据键: ${key}`);
+                }
+                await this.transport.deleteKey(key);
+              }
+              remote = migration.store;
+            }
+          } catch {
+            canAdvanceSeedVersion = false;
+          }
+        }
+        if (!canAdvanceSeedVersion) {
+          // 保留旧版本号，下次连接时继续执行幂等迁移。
+          this.cache = new Map(Object.entries(remote));
+          this.synced = cloneMap(this.cache);
+          this.status = 'online';
+          this.lastError = null;
+          this.snapshotLocal();
+          this.emitStatus();
+          return { migrated, seeded, keyCount: this.cache.size, status: 'online' };
+        }
         try {
           for (const [key, value] of Object.entries(this.seedDefaults)) {
             if (key === 'meta:seed-version' || key in remote) continue;
@@ -238,9 +265,6 @@ export class BackendStorage implements StorageLike {
   }
 
   setItem(key: string, value: string): boolean {
-    if (this.status === 'offline') {
-      return this.writeLocal(key, value);
-    }
     if (this.status !== 'online') {
       return false;
     }
@@ -262,6 +286,7 @@ export class BackendStorage implements StorageLike {
   }
 
   snapshotLocal() {
+    if (this.status !== 'online') return;
     try {
       const full: Record<string, unknown[]> = {};
       for (const [key, value] of this.cache) full[key] = value;
@@ -298,12 +323,4 @@ export class BackendStorage implements StorageLike {
     return true;
   }
 
-  private writeLocal(key: string, value: string): boolean {
-    try {
-      this.local.setItem(key, value);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }

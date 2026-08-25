@@ -47,6 +47,10 @@ const hintText = computed(
 );
 
 function takeFiles(list: FileList | File[] | null) {
+  if (inputEl.value) {
+    inputEl.value.value = '';
+  }
+
   if (!list || props.disabled) {
     return;
   }

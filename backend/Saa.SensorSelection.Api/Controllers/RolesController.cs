@@ -38,7 +38,9 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
         await audit.WriteAsync(
             "role.create",
             target: result.Value?.Code ?? request.Code,
-            detail: result.Success ? $"{result.Value!.Permissions.Count} 项权限" : null,
+            detail: result.Success
+                ? $"角色：{result.Value!.Name}；权限数：{result.Value.Permissions.Count}；系统角色：{(result.Value.IsSystem ? "是" : "否")}"
+                : null,
             success: result.Success,
             error: result.Error);
         return result.Success
@@ -57,7 +59,9 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
         await audit.WriteAsync(
             "role.update",
             target: result.Value?.Code ?? $"#{id}",
-            detail: result.Success ? $"{result.Value!.Permissions.Count} 项权限" : null,
+            detail: result.Success
+                ? $"角色：{result.Value!.Name}；权限数：{result.Value.Permissions.Count}；系统角色：{(result.Value.IsSystem ? "是" : "否")}"
+                : null,
             success: result.Success,
             error: result.Error);
         return result.Success
@@ -76,6 +80,7 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
         await audit.WriteAsync(
             "role.delete",
             target: $"#{id}",
+            detail: $"角色ID：{id}",
             success: result.Success,
             error: result.Error);
         return result.Success

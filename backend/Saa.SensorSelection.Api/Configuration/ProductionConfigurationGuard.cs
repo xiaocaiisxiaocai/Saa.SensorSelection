@@ -28,11 +28,13 @@ public static class ProductionConfigurationGuard
         }
 
         var adminPassword = configuration["Seed:AdminPassword"];
+        var allowDefaultAdminPassword = configuration.GetValue<bool>("Seed:AllowDefaultPassword");
         if (string.IsNullOrWhiteSpace(adminPassword) ||
-            string.Equals(adminPassword, DefaultAdminPassword, StringComparison.Ordinal))
+            (string.Equals(adminPassword, DefaultAdminPassword, StringComparison.Ordinal) &&
+             !allowDefaultAdminPassword))
         {
             throw new InvalidOperationException(
-                "生产环境必须通过环境变量 Seed__AdminPassword 覆盖默认管理员密码");
+                "生产环境必须配置 Seed__AdminPassword，或显式允许首次部署默认密码");
         }
 
         if (string.IsNullOrWhiteSpace(configuration["Cors:AllowedOrigins"]))

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Claims;
 
 using Microsoft.EntityFrameworkCore;
@@ -42,6 +43,90 @@ public class AuditLogService(
     ILogger<AuditLogService> logger)
 {
     /// <summary>
+    /// 将本机回环地址及 IPv4 映射 IPv6 地址统一为 IPv4 文本。
+    /// 其他真实 IPv6 地址保持 IPv6，避免伪造或丢失客户端地址。
+    /// </summary>
+    public static string? NormalizeIp(string? ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip) || !IPAddress.TryParse(ip, out var address))
+        {
+            return ip;
+        }
+
+        if (address.Equals(IPAddress.IPv6Loopback))
+        {
+            return IPAddress.Loopback.ToString();
+        }
+
+        return address.IsIPv4MappedToIPv6
+            ? address.MapToIPv4().ToString()
+            : address.ToString();
+    }
+
+    /// <summary>
+    /// 为早期格式的日志补充可从既有字段确定的展示详情。
+    /// 仅转换查询结果，不回写历史审计记录，避免改变原始证据。
+    /// </summary>
+    private static string? NormalizeDetail(AuditLogItem item)
+    {
+        var detail = item.Detail?.Trim();
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            if (item.Action == "store.upsert" &&
+                TryReadCount(detail, "条记录", out var recordCount))
+            {
+                return $"数据类型：{(item.Result ? "数组" : "未记录")}；记录数：{recordCount}";
+            }
+            if (item.Action == "store.entity-groups.reorder" &&
+                TryReadCount(detail, "个分类", out var groupCount))
+            {
+                return $"数据类型：数组；分类数：{groupCount}";
+            }
+            if (item.Action == "store.replace-all" &&
+                TryReadCount(detail, "个 key", out var keyCount))
+            {
+                return $"数据类型：对象；key数：{keyCount}";
+            }
+            if ((item.Action == "role.create" || item.Action == "role.update") &&
+                TryReadCount(detail, "项权限", out var permissionCount))
+            {
+                return $"权限数：{permissionCount}";
+            }
+
+            return detail;
+        }
+
+        return item.Action switch
+        {
+            "auth.login" => item.Result
+                ? "登录成功"
+                : $"登录失败；原因：{item.Error ?? "未记录"}",
+            "auth.change-password" => item.Result ? "密码修改成功" : "密码修改失败",
+            "org.delete" => $"组织ID：{TargetId(item.Target)}",
+            "role.delete" => $"角色ID：{TargetId(item.Target)}",
+            "store.delete" => item.Result
+                ? $"删除目标：{item.Target ?? "未记录"}"
+                : "删除目标不存在",
+            "user.delete" => $"用户ID：{TargetId(item.Target)}",
+            _ when !item.Result && !string.IsNullOrWhiteSpace(item.Error)
+                => $"操作失败；原因：{item.Error}",
+            _ => null,
+        };
+    }
+
+    private static bool TryReadCount(string detail, string suffix, out int count)
+    {
+        count = 0;
+        return detail.EndsWith(suffix, StringComparison.Ordinal) &&
+            int.TryParse(detail[..^suffix.Length].Trim(), out count);
+    }
+
+    private static string TargetId(string? target)
+    {
+        return string.IsNullOrWhiteSpace(target) ? "未知" : target.TrimStart('#');
+    }
+
+    /// <summary>
     /// 写入一条操作日志。用户名/IP 默认从当前请求取，匿名场景（登录失败等）显式传入。
     /// </summary>
     public async Task WriteAsync(
@@ -57,24 +142,15 @@ public class AuditLogService(
         try
         {
             username ??= http.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            ip ??= http.HttpContext?.Connection.RemoteIpAddress?.ToString();
+            ip = NormalizeIp(ip ?? http.HttpContext?.Connection.RemoteIpAddress?.ToString());
 
-            db.AuditLogs.Add(new AuditLog
-            {
-                Timestamp = DateTimeOffset.UtcNow,
-                Username = username,
-                Action = action,
-                Target = target,
-                Detail = detail,
-                Ip = ip,
-                Result = success,
-                Error = error,
-            });
+            // 事务包裹：确保计数→删除→写入在同一个数据库快照内执行，
+            // 避免并发请求同时 CountAsync 并重叠执行 ExecuteDeleteAsync 导致多删日志。
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-            // 保留上限：超出后先清理最旧记录再写入（只在本批次内检查，避免高频统计）
             if (options.Value.MaxEntries > 0)
             {
-                var toRemove = await db.AuditLogs.CountAsync(ct) - options.Value.MaxEntries;
+                var toRemove = await db.AuditLogs.CountAsync(ct) - options.Value.MaxEntries + 1;
                 if (toRemove > 0)
                 {
                     var oldest = await db.AuditLogs
@@ -88,7 +164,20 @@ public class AuditLogService(
                 }
             }
 
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTimeOffset.UtcNow,
+                Username = username,
+                Action = action,
+                Target = target,
+                Detail = detail,
+                Ip = ip,
+                Result = success,
+                Error = error,
+            });
+
             await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
         catch (Exception ex)
         {
@@ -159,6 +248,12 @@ public class AuditLogService(
                 log.Error))
             .ToArrayAsync(ct);
 
-        return new AuditLogPage(items, total);
+        return new AuditLogPage(
+            items.Select(item => item with
+            {
+                Detail = NormalizeDetail(item),
+                Ip = NormalizeIp(item.Ip),
+            }).ToArray(),
+            total);
     }
 }

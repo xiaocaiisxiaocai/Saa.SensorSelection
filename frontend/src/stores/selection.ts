@@ -9,6 +9,7 @@ import {
   createSelectionRepository,
   CRUD_DEFAULTS,
   MACHINE_DETAILS,
+  migrateSelectionSeedStore,
   SENSOR_DATA,
   STORAGE_KEY,
   type BackendSyncStatus,
@@ -43,9 +44,9 @@ function createLocalRepository(storage: StorageLike | undefined = browserStorage
   });
 }
 
-let storageSyncBound = false;
-
 export const useSelectionStore = defineStore('selection', () => {
+  // 每个 Store 实例独立的标志位（避免 Vitest 测试间跨实例共享）
+  let storageSyncBound = false;
   let repository: Repository = createLocalRepository();
   let initPromise: null | Promise<void> = null;
   const revision = ref(0);
@@ -226,6 +227,7 @@ export const useSelectionStore = defineStore('selection', () => {
           crudDefaults: CRUD_DEFAULTS,
           sensorData: SENSOR_DATA,
         }),
+        seedMigration: migrateSelectionSeedStore,
         onStatus: (status) => {
           backendStatus.value = status;
         },

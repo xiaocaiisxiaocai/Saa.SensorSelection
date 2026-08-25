@@ -109,8 +109,8 @@
 }
 
 .selection-toolbar .a-control.selection-toolbar__filter {
-  flex: 0 0 calc(var(--space-9) * 8);
-  width: calc(var(--space-9) * 8);
+  flex: 0 0 calc(var(--space-9) * 10);
+  width: calc(var(--space-9) * 10);
 }
 
 .selection-toolbar .docs-heading {
@@ -156,7 +156,7 @@
 }
 
 .machine-body--with-images {
-  grid-template-columns: minmax(0, 1fr) minmax(calc(var(--space-9) * 6), 18rem);
+  grid-template-columns: minmax(0, 1fr) clamp(19rem, 21vw, 21rem);
 }
 
 .machine-images {

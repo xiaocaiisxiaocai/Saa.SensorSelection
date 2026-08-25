@@ -50,12 +50,6 @@ watch(
   { immediate: true },
 );
 
-watch(
-  () => selection.value.item,
-  () => {
-    customerTab.value = 'req';
-  },
-);
 
 function selectEntity(payload: { category: string; item: string }) {
   void router.replace({ path: route.path, query: payload });
@@ -72,10 +66,26 @@ function selectEntity(payload: { category: string; item: string }) {
       />
       <div v-if="selection.item" class="selection-panel">
         <ASegmentedControl v-model="customerTab" :segments="tabs" />
-        <CustomerReqPanel v-if="customerTab === 'req'" :entity-name="selection.item" />
-        <CustomerProcPanel v-else-if="customerTab === 'proc'" :entity-name="selection.item" />
-        <CustomerDocsPanel v-else-if="customerTab === 'sop'" :entity-name="selection.item" />
-        <CustomerFeedbackPanel v-else :entity-name="selection.item" />
+        <CustomerReqPanel
+          v-if="customerTab === 'req'"
+          :key="`req:${selection.item}`"
+          :entity-name="selection.item"
+        />
+        <CustomerProcPanel
+          v-else-if="customerTab === 'proc'"
+          :key="`proc:${selection.item}`"
+          :entity-name="selection.item"
+        />
+        <CustomerDocsPanel
+          v-else-if="customerTab === 'sop'"
+          :key="`sop:${selection.item}`"
+          :entity-name="selection.item"
+        />
+        <CustomerFeedbackPanel
+          v-else
+          :key="`feedback:${selection.item}`"
+          :entity-name="selection.item"
+        />
       </div>
       <AEmptyState
         v-else

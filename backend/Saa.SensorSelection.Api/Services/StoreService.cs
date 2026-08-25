@@ -85,14 +85,10 @@ public class StoreService(AppDbContext db)
             }
         }
 
-        var staleKeys = await db.StoreEntries
+        // 一次数据库调用删除所有不在本次提交中的旧 key
+        await db.StoreEntries
             .Where(e => !submittedKeys.Contains(e.Key))
-            .Select(e => e.Key)
-            .ToListAsync();
-        if (staleKeys.Count > 0)
-        {
-            db.StoreEntries.RemoveRange(db.StoreEntries.Where(e => staleKeys.Contains(e.Key)));
-        }
+            .ExecuteDeleteAsync();
 
         await db.SaveChangesAsync();
         return StoreWriteResult.Ok();

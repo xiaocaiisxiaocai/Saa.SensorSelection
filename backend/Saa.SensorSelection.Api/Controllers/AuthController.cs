@@ -51,7 +51,8 @@ public class AuthController(
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var username = request.Username?.Trim() ?? string.Empty;
-        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ip = AuditLogService.NormalizeIp(
+            HttpContext.Connection.RemoteIpAddress?.ToString()) ?? "unknown";
         var rateKey = $"{username}|{ip}";
         var now = DateTimeOffset.UtcNow;
 
@@ -61,6 +62,7 @@ public class AuthController(
             await audit.WriteAsync(
                 "auth.login",
                 target: username,
+                detail: "登录失败；原因：超过失败次数",
                 success: false,
                 error: "失败次数过多，已限流",
                 username: username,
@@ -81,6 +83,7 @@ public class AuthController(
             await audit.WriteAsync(
                 "auth.login",
                 target: username,
+                detail: "登录失败；原因：用户名或密码错误",
                 success: false,
                 error: "用户名或密码错误",
                 username: username,
@@ -96,6 +99,7 @@ public class AuthController(
             await audit.WriteAsync(
                 "auth.login",
                 target: username,
+                detail: "登录失败；原因：用户名或密码错误",
                 success: false,
                 error: "用户名或密码错误",
                 username: username,
@@ -110,6 +114,7 @@ public class AuthController(
             await audit.WriteAsync(
                 "auth.login",
                 target: username,
+                detail: "登录失败；原因：账号已停用",
                 success: false,
                 error: "账号已停用",
                 username: username,
@@ -124,6 +129,7 @@ public class AuthController(
             await audit.WriteAsync(
                 "auth.login",
                 target: username,
+                detail: "登录失败；原因：用户资料不可用",
                 success: false,
                 error: "用户名或密码错误",
                 username: username,
@@ -137,6 +143,7 @@ public class AuthController(
         await audit.WriteAsync(
             "auth.login",
             target: username,
+            detail: $"登录成功；账号：{user.Username}；显示名：{user.DisplayName}；角色：{string.Join("、", profile.Roles.Select(role => role.Name))}；权限：{string.Join("、", profile.Permissions)}；组织：{profile.OrgUnit?.Path ?? "未分配"}",
             username: username,
             ip: ip);
         return Ok(new LoginResponse(
@@ -186,6 +193,7 @@ public class AuthController(
         await audit.WriteAsync(
             "auth.change-password",
             target: username,
+            detail: result.Success ? "密码修改成功" : "密码修改失败",
             success: result.Success,
             error: result.Error);
         return result.Success

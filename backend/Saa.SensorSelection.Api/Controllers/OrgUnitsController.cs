@@ -31,7 +31,7 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
             "org.create",
             target: result.Value?.Name ?? request.Name,
             detail: result.Success
-                ? (string.IsNullOrWhiteSpace(result.Value!.Level) ? "顶层组织" : $"层级：{result.Value.Level}")
+                ? FormatDetail(result.Value!)
                 : null,
             success: result.Success,
             error: result.Error);
@@ -52,7 +52,7 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
             "org.update",
             target: result.Value?.Name ?? $"#{id}",
             detail: result.Success
-                ? (string.IsNullOrWhiteSpace(result.Value!.Level) ? "顶层组织" : $"层级：{result.Value.Level}")
+                ? FormatDetail(result.Value!)
                 : null,
             success: result.Success,
             error: result.Error);
@@ -72,10 +72,16 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
         await audit.WriteAsync(
             "org.delete",
             target: $"#{id}",
+            detail: $"组织ID：{id}",
             success: result.Success,
             error: result.Error);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
+    }
+
+    private static string FormatDetail(OrgUnitListItem item)
+    {
+        return $"层级：{item.Level ?? "未设置"}；父级：{item.ParentId?.ToString() ?? "无"}；排序：{item.SortOrder}；子级：{item.ChildCount}；用户：{item.UserCount}";
     }
 }

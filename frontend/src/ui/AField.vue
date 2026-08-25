@@ -17,10 +17,12 @@ const props = withDefaults(
     maxlength?: number;
     placeholder?: string;
     prefixIcon?: Component;
+    showCount?: boolean;
     type?: 'text' | 'password';
   }>(),
   {
     clearable: true,
+    showCount: true,
     type: 'text',
   },
 );
@@ -46,7 +48,7 @@ const showClear = computed(
     (focused.value || hovered.value),
 );
 const showCount = computed(() => {
-  if (!props.maxlength) {
+  if (!props.showCount || !props.maxlength) {
     return false;
   }
 

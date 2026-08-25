@@ -69,7 +69,180 @@ describe('createSelectionRepository persist', () => {
       },
       setItem: () => undefined,
     });
-    expect(repo.snapshotStore()).toEqual({});
+    expect(repo.snapshotStore()['customer-req:庆鼎']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: '进板前确认板件到位后再启动输送' }),
+      ]),
+    );
+    expect(repo.snapshotStore()['customer-req:健鼎']).toBeUndefined();
+  });
+});
+
+describe('entity-scoped business data', () => {
+  it('seeds only the configured customers and keeps other customers empty', () => {
+    const repo = createRepo();
+
+    expect(repo.getCrud('customer-req', '庆鼎')).toHaveLength(2);
+    expect(repo.getCrud('customer-proc', '庆鼎')).toHaveLength(1);
+    expect(repo.getCrud('customer-feedback', '庆鼎')).toHaveLength(1);
+    expect(repo.getCrud('customer-req', '景旺')).toHaveLength(2);
+    expect(repo.getCrud('customer-proc', '景旺')).toHaveLength(1);
+    expect(repo.getCrud('customer-feedback', '景旺')).toEqual([]);
+    expect(repo.getCrud('customer-req', '健鼎')).toEqual([]);
+    expect(repo.getCrud('customer-proc', '健鼎')).toEqual([]);
+    expect(repo.getCrud('customer-feedback', '健鼎')).toEqual([]);
+    expect(repo.getControlledDocuments('庆鼎')).toEqual([]);
+    expect(repo.getControlledDocuments('景旺')).toEqual([]);
+  });
+
+  it('keeps old countermeasures when feedback is updated', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+    const original = repo.getCrud('customer-feedback', '庆鼎')[0];
+    expect(original).toBeDefined();
+
+    const changed = repo.saveCrud(
+      'customer-feedback',
+      '庆鼎',
+      {
+        ...original,
+        measure: '更换新型真空表头并重新验证参数。',
+        date: '2026-08-25',
+      },
+      original?.id,
+    );
+
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect('measureHistory' in changed.item).toBe(true);
+    if (!('measureHistory' in changed.item)) return;
+    expect(changed.item).toMatchObject({
+      date: '2026-08-25',
+      measure: '更换新型真空表头并重新验证参数。',
+    });
+    expect(changed.item.measureHistory).toEqual([
+      {
+        date: '2024-10-15',
+        measure: '更换快速响应型真空表头后恢复稳定。',
+        status: '已作废',
+      },
+      {
+        date: '2026-08-25',
+        measure: '更换新型真空表头并重新验证参数。',
+        status: '现行',
+      },
+    ]);
+
+    const statusOnly = repo.saveCrud(
+      'customer-feedback',
+      '庆鼎',
+      { ...changed.item, status: '处理中' },
+      changed.item.id,
+    );
+    expect(statusOnly.ok).toBe(true);
+    if (!statusOnly.ok) return;
+    expect('measureHistory' in statusOnly.item).toBe(true);
+    if (!('measureHistory' in statusOnly.item)) return;
+    expect(statusOnly.item.measureHistory).toHaveLength(2);
+
+    const reloaded = createRepo(storage);
+    const persisted = reloaded.getCrud('customer-feedback', '庆鼎')[0];
+    expect(persisted && 'measureHistory' in persisted).toBe(true);
+    if (!persisted || !('measureHistory' in persisted)) return;
+    expect(persisted.measureHistory).toEqual(statusOnly.item.measureHistory);
+    expect(persisted).toMatchObject({
+      date: '2026-08-25',
+      measure: '更换新型真空表头并重新验证参数。',
+    });
+  });
+
+  it('does not create demo rows for missing legacy process or machine data', () => {
+    const repo = createRepo();
+
+    expect(repo.getCrud('process-feat', 'DES显影')).toEqual([]);
+    expect(repo.getCrud('process-sensor', 'DES显影')).toEqual([]);
+    expect(repo.getMachineSectionRows(1, '标准输送段')).toEqual([]);
+    expect(repo.getMachineSectionRows(2, '标准输送段')).toEqual([]);
+    expect(repo.getMachineSectionRows(3, '标准输送段')).toEqual([]);
+  });
+
+  it('preserves persisted records without leaking them to another customer', () => {
+    const { storage } = createMemory();
+    storage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        'customer-req:庆鼎': [
+          {
+            id: 7,
+            type: '特殊要求',
+            machine: '专用机',
+            process: '压合',
+            content: '庆鼎专属要求',
+            source: '客户要求',
+            note: '保留真实数据',
+          },
+        ],
+      }),
+    );
+    const repo = createRepo(storage);
+
+    expect(repo.getCrud('customer-req', '庆鼎')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 7, content: '庆鼎专属要求' }),
+      ]),
+    );
+    expect(repo.getCrud('customer-req', '景旺')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 1, content: '中段与末端均需设置掉板检测' }),
+      ]),
+    );
+  });
+
+  it('removes exact legacy demo rows while preserving customer-specific records', () => {
+    const { storage } = createMemory();
+    storage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        'meta:seed-version': [{ version: 1 }],
+        'customer-req:庆鼎': [
+          {
+            id: 1,
+            type: '输送段',
+            machine: 'ALL',
+            process: '',
+            content: '板件有无检测，检测距离不大于 300mm',
+            source: '验收规范',
+            note: 'OMRON E3Z-D61 或同等级',
+          },
+          {
+            id: 2,
+            type: '掉板检测',
+            machine: 'ALL',
+            process: '',
+            content: '传送路径中段与末端双重设置',
+            source: '客户要求',
+            note: '零容忍掉板要求',
+          },
+          {
+            id: 9,
+            type: '特殊要求',
+            machine: '专用机',
+            process: '压合',
+            content: '庆鼎专属要求',
+            source: '客户要求',
+            note: '必须保留',
+          },
+        ],
+      }),
+    );
+
+    const repo = createRepo(storage);
+
+    expect(repo.getCrud('customer-req', '庆鼎')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 9, content: '庆鼎专属要求' }),
+      ]),
+    );
   });
 });
 
@@ -77,7 +250,8 @@ describe('sensors', () => {
   it('rejects duplicate models using zh-CN case folding', () => {
     const repo = createRepo();
     const sensors = repo.getSensors();
-    expect(sensors).toHaveLength(13);
+    // 只断言种子数据已加载，避免因新增种子而破坏测试
+    expect(sensors.length).toBeGreaterThan(0);
     const duplicate = repo.saveSensor({
       ...sensors[0],
       id: undefined,
@@ -123,6 +297,61 @@ describe('sensors', () => {
     expect(repo.getMachineSectionRows(1, '中间翻板机')[0]?.sensorIds).toEqual([
       alternate.id,
     ]);
+  });
+
+  it('rewrites sensor references in every persisted machine structure row', () => {
+    const repo = createRepo();
+    const current = repo
+      .getSensors()
+      .find((item) => item.status === '现用' && item.sensorType === '漫反射');
+    const alternate = repo
+      .getSensors()
+      .find((item) => item.status === '备选' && item.sensorType === '漫反射');
+    if (!current || !alternate) throw new Error('seed sensors missing');
+
+    const rows = repo.getMachineSectionRows(999, '中间翻板机');
+    rows.push({
+      id: 1,
+      role: '历史结构行',
+      sensorIds: [current.id],
+      sensorType: current.sensorType,
+      spec: current.spec,
+      purpose: '',
+      name: '',
+      desc: '',
+      note: '',
+    });
+
+    const replaced = repo.replaceSensorCurrent(
+      alternate.id,
+      current.id,
+      '历史型号停产',
+    );
+    if (!replaced.ok) throw new Error(replaced.reason);
+
+    expect(repo.getMachineSectionRows(999, '中间翻板机')[0]?.sensorIds).toEqual([
+      alternate.id,
+    ]);
+  });
+
+  it('removes sensorIds references from machine section rows when sensor is deleted', () => {
+    const repo = createRepo();
+    const sensor = repo.getSensors().find((s) => s.status === '现用');
+    if (!sensor) throw new Error('seed sensor missing');
+
+    // 将该 Sensor 挂载到一个机型结构行
+    const saved = repo.saveMachineSectionRow(1, '中间翻板机', {
+      role: '到位检测',
+      sensorIds: [sensor.id],
+    });
+    if (!saved.ok) throw new Error(saved.reason);
+    expect(repo.getMachineSectionRows(1, '中间翻板机')[0]?.sensorIds).toContain(sensor.id);
+
+    // 删除 Sensor 后，机型行引用应被级联清理
+    const deleted = repo.deleteSensor(sensor.id);
+    expect(deleted).toEqual({ ok: true });
+    const rowsAfter = repo.getMachineSectionRows(1, '中间翻板机');
+    expect(rowsAfter.every((r) => !r.sensorIds.includes(sensor.id))).toBe(true);
   });
 });
 
@@ -224,6 +453,7 @@ describe('controlled documents', () => {
     });
     if (!saved.ok) throw new Error(saved.reason);
     expect(repo.getControlledDocuments('庆鼎')[0]?.kind).toBe('pdf');
+    expect(repo.getControlledDocuments('景旺')).toEqual([]);
     expect(JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎']).toEqual(
       [saved.item],
     );

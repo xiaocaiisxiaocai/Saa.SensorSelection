@@ -59,6 +59,12 @@ export interface CustomerProcItem {
   note: string;
 }
 
+export interface FeedbackMeasureHistoryEntry {
+  measure: string;
+  date: string;
+  status: '已作废' | '现行';
+}
+
 export interface TimelineItem {
   id: number;
   type: string;
@@ -67,6 +73,7 @@ export interface TimelineItem {
   measure: string;
   date: string;
   status: string;
+  measureHistory: FeedbackMeasureHistoryEntry[];
 }
 
 export type CrudRecord =
@@ -230,6 +237,11 @@ export interface BackendStorageOptions {
   onWriteFailure?: (message: string) => void;
   migrateOnEmpty?: boolean;
   seedDefaults?: Record<string, unknown[]>;
+  seedMigration?: (
+    store: PersistedStore,
+    currentVersion: number,
+    targetVersion: number,
+  ) => { changed: boolean; store: PersistedStore };
 }
 
 export interface BackendInitResult {

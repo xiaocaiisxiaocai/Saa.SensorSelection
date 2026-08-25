@@ -30,6 +30,7 @@ export {
   createSelectionRepository,
 } from './repository';
 export { buildSearchIndex } from './search';
+export { migrateSelectionSeedStore } from './seed-migration';
 export {
   buildMachineSchematicReportHtml,
   openMachineSchematicReport,

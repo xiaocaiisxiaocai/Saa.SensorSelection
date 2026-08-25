@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, api } from '@/api';
+import { STORAGE_KEY } from '@/domain';
 import { useSelectionStore } from './selection';
 
 describe('selection store', () => {
@@ -38,13 +39,27 @@ describe('selection store', () => {
     expect(store.backendStatus).toBe('online');
   });
 
-  it('falls back to offline local data when the backend is unreachable', async () => {
+  it('does not expose browser local data when the backend is unreachable', async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        'customer-req:庆鼎': [{ id: 99, content: '浏览器本地旧数据' }],
+      }),
+    );
     vi.spyOn(api, 'getStore').mockRejectedValue(
       new ApiError('offline', '无法连接后端服务'),
     );
     const store = useSelectionStore();
     await store.initBackend();
     expect(store.backendStatus).toBe('offline');
+    expect(
+      store
+        .crudItems('customer-req', '庆鼎')
+        .some(
+          (item) =>
+            'content' in item && item.content === '浏览器本地旧数据',
+        ),
+    ).toBe(false);
   });
 
   it('reconnects after an offline failure', async () => {

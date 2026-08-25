@@ -15,10 +15,10 @@ public sealed class ReportsController(MachineSchematicReportService reportServic
 {
     /// <summary>
     /// 由服务端生成机型结构示意图 HTML 文档。客户端可直接打开并打印为 PDF。
-    /// 读取权限与业务 Store 一致，匿名只读预览也可以生成报告。
+    /// 报告生成与下载需要登录，匿名用户只能浏览业务数据。
     /// </summary>
     [HttpPost("machine-schematic")]
-    [AllowAnonymous]
+    [Authorize]
     [RequestSizeLimit(10_000_000)]
     public IActionResult BuildMachineSchematic([FromBody] MachineSchematicReportRequest request)
     {

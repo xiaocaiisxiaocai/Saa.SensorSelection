@@ -9,9 +9,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import type { BackendSyncStatus } from '@/domain/types';
 import AppShell from './AppShell.vue';
 
-async function mountShell() {
+async function mountShell(backendStatus?: BackendSyncStatus) {
   localStorage.removeItem('apple-frontend:sidebar-collapsed');
 
   const router = createRouter({
@@ -29,6 +30,9 @@ async function mountShell() {
   setActivePinia(pinia);
   useAuthStore(pinia).applyProfile(null);
   const selection = useSelectionStore(pinia);
+  if (backendStatus) {
+    selection.backendStatus = backendStatus;
+  }
   vi.spyOn(selection, 'ensureBackendInit').mockResolvedValue();
 
   await router.push('/selection/customer');
@@ -85,6 +89,15 @@ describe('AppShell', () => {
 
     expect(toggle().attributes('aria-expanded')).toBe('false');
     expect(toggle().attributes('aria-label')).toBe('展开侧栏');
+    wrapper.unmount();
+  });
+
+  it('silently uses local data when the backend is offline', async () => {
+    const { wrapper } = await mountShell('offline');
+
+    expect(wrapper.text()).not.toContain('后端服务不可用');
+    expect(wrapper.text()).not.toContain('重新连接');
+
     wrapper.unmount();
   });
 });

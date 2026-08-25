@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { h, nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ATable from './ATable.vue';
+import ATooltip from './ATooltip.vue';
 import type { TableColumn } from './types';
 
 interface SensorRow {
@@ -67,6 +68,60 @@ describe('ATable', () => {
     expect(wrapper.text()).toContain('#E3Z-D61');
   });
 
+  it('shows the full custom cell text when a nested element is truncated', async () => {
+    const fullSpec = 'OMRON E3Z-D61 · 检测距离 0~300mm；12~24V DC；PNP/NPN；IP67';
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [{ key: 'spec', label: '规格', ellipsis: true }],
+        rows: [{ id: '1', spec: fullSpec }],
+        rowKey: 'id',
+      },
+      slots: {
+        'cell-spec': (props: { value: unknown }) =>
+          h('div', { class: 'spec-lines' }, String(props.value)),
+      },
+    });
+
+    const cell = wrapper.findAll('.a-table__ellipsis')[1];
+    expect(cell).toBeTruthy();
+    if (!cell) return;
+    const nestedContent = cell.get('.spec-lines').element;
+    Object.defineProperty(cell.element, 'clientWidth', { value: 244, configurable: true });
+    Object.defineProperty(cell.element, 'scrollWidth', { value: 244, configurable: true });
+    Object.defineProperty(nestedContent, 'clientWidth', { value: 244, configurable: true });
+    Object.defineProperty(nestedContent, 'scrollWidth', { value: 430, configurable: true });
+
+    await cell.trigger('mouseenter');
+    await nextTick();
+
+    const tooltip = wrapper.findAllComponents(ATooltip)[1];
+    expect(tooltip?.props('content')).toBe(fullSpec);
+    expect(tooltip?.props('disabled')).toBe(false);
+  });
+
+  it('supports row-spanned cells while keeping detail cells on each physical row', () => {
+    const groupedRows = [
+      { id: '1-a', group: '进板检测', detail: '漫反射' },
+      { id: '1-b', group: '进板检测', detail: '对射' },
+    ];
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'group', label: '功能作用', rowSpan: (_row, index) => (index === 0 ? 2 : 0) },
+          { key: 'detail', label: '传感器类型' },
+        ],
+        rows: groupedRows,
+        rowKey: 'id',
+      },
+    });
+
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2);
+    expect(wrapper.findAll('tbody tr')[0]?.find('td')?.attributes('rowspan')).toBe('2');
+    expect(wrapper.findAll('tbody tr')[1]?.findAll('td')).toHaveLength(1);
+    expect(wrapper.text()).toContain('漫反射');
+    expect(wrapper.text()).toContain('对射');
+  });
+
   it('shows an empty state when there are no rows', () => {
     const wrapper = mount(ATable, {
       props: { columns, rows: [], rowKey: 'id', emptyText: '暂无型号' },
@@ -97,6 +152,36 @@ describe('ATable', () => {
 
     const bodyRows = wrapper.findAll('tbody tr');
     expect(document.activeElement).toBe(bodyRows[1]?.element);
+
+    wrapper.unmount();
+  });
+  it('renders only the visible window of rows when virtual=true', async () => {
+    // 生成 100 行数据
+    const manyRows = Array.from({ length: 100 }, (_, i) => ({
+      id: String(i + 1),
+      model: `Sensor-${i + 1}`,
+      note: `说明${i + 1}`,
+    }));
+
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: { columns, rows: manyRows, rowKey: 'id', virtual: true },
+    });
+
+    // JSDOM 中 clientHeight 默认为 0，需要模拟容器高度（4 行 × 40px = 160px）
+    Object.defineProperty(wrapper.element, 'clientHeight', { value: 160, configurable: true });
+    // 触发 ResizeObserver 回调（JSDOM 不实现 ResizeObserver，直接注入值）
+    // 通过模拟 scrollTop=0，验证默认只渲染 start..end 范围
+    await nextTick();
+
+    // virtual=true 时，visibleRows 应远小于 100
+    const dataRows = wrapper.findAll('tbody tr:not(.a-table__spacer)');
+    // OVERSCAN=5，containerHeight=0 时 visibleCount=0，因此 end = min(100, 0+0+10) = 10
+    expect(dataRows.length).toBeLessThan(manyRows.length);
+    expect(dataRows.length).toBeLessThanOrEqual(10 + 5); // overscan 窗口
+
+    // 底部占位行应存在（总行数 - 渲染行数 > 0）
+    expect(wrapper.find('.a-table__spacer').exists()).toBe(true);
 
     wrapper.unmount();
   });

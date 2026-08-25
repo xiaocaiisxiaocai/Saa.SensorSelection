@@ -11,7 +11,8 @@ public static class DbSeeder
     /// 启动时应用 EF Core Migrations 建库/升级架构，并幂等写入：
     /// 1. 权限清单（RbacDefaults）
     /// 2. 内置角色（admin/editor/viewer，admin 为系统角色）
-    /// 3. 默认管理员账号（appsettings Seed 节），并授予 admin 角色
+    /// 3. 默认组织架构（制造事业部 → 标准件组 → 选型课）
+    /// 4. 默认管理员账号（appsettings Seed 节），并授予 admin 角色
     /// </summary>
     public static void EnsureSeeded(AppDbContext db, IConfiguration configuration)
     {
@@ -19,7 +20,41 @@ public static class DbSeeder
 
         EnsurePermissions(db);
         EnsureRoles(db);
+        EnsureOrganizationHierarchy(db);
         EnsureAdminUser(db, configuration);
+    }
+
+    private static void EnsureOrganizationHierarchy(AppDbContext db)
+    {
+        // 只在全新数据库中写入基础组织，绝不覆盖已有组织或用户关联。
+        if (db.OrgUnits.Any())
+        {
+            return;
+        }
+
+        var division = new OrgUnit
+        {
+            Name = "制造事业部",
+            Level = "事业部",
+            SortOrder = 0,
+        };
+        var department = new OrgUnit
+        {
+            Name = "标准件组",
+            Level = "部门",
+            SortOrder = 0,
+            Parent = division,
+        };
+        var section = new OrgUnit
+        {
+            Name = "选型课",
+            Level = "课别",
+            SortOrder = 0,
+            Parent = department,
+        };
+
+        db.OrgUnits.AddRange(division, department, section);
+        db.SaveChanges();
     }
 
     private static void EnsurePermissions(AppDbContext db)

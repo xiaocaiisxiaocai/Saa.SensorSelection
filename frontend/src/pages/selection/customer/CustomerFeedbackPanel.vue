@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pencil, Trash2 } from 'lucide-vue-next';
+import { History, Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { TimelineItem } from '@/domain';
@@ -30,6 +30,8 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
 const dialogOpen = ref(false);
+const historyOpen = ref(false);
+const historyItem = ref<TimelineItem>();
 const editId = ref<number>();
 const query = ref('');
 const typeFilter = ref<string | null>(null);
@@ -70,14 +72,20 @@ const filtered = computed(() => {
           .includes(value)),
   );
 });
+const historyRows = computed(() =>
+  [...(historyItem.value?.measureHistory ?? [])].sort((left, right) =>
+    right.date.localeCompare(left.date, 'zh-CN'),
+  ),
+);
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '问题分类', width: 140 },
-    { key: 'machine', label: '适用机型', width: 110 },
-    { key: 'problem', label: '问题点', minWidth: 160, ellipsis: true },
-    { key: 'measure', label: '改善对策', minWidth: 160, ellipsis: true },
-    { key: 'date', label: '反馈时间', width: 120 },
-    { key: 'status', label: '处理状态', width: 100 },
+    { key: 'type', label: '问题分类', width: 100 },
+    { key: 'machine', label: '适用机型', width: 90 },
+    { key: 'problem', label: '问题点', minWidth: 205, ellipsis: true },
+    { key: 'measure', label: '改善对策', minWidth: 205, ellipsis: true },
+    { key: 'date', label: '反馈时间', width: 100 },
+    { key: 'status', label: '处理状态', width: 90 },
+    { key: 'history', label: '历史', width: 60 },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
@@ -91,6 +99,8 @@ watch(
     query.value = '';
     typeFilter.value = null;
     statusFilter.value = null;
+    historyOpen.value = false;
+    historyItem.value = undefined;
   },
 );
 
@@ -128,6 +138,11 @@ function editItem(item: TimelineItem) {
     type: item.type,
   });
   dialogOpen.value = true;
+}
+
+function showHistory(item: TimelineItem) {
+  historyItem.value = item;
+  historyOpen.value = true;
 }
 
 function saveItem() {
@@ -197,6 +212,14 @@ async function deleteItem(item: TimelineItem) {
       <template #cell-status="{ row }">
         <ABadge :label="row.status" :tone="statusTone(row.status)" />
       </template>
+      <template #cell-history="{ row }">
+        <AIconButton
+          :icon="History"
+          label="查看改善对策历史"
+          size="small"
+          @click="showHistory(row)"
+        />
+      </template>
       <template #cell-actions="{ row }">
         <div class="table-actions">
           <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
@@ -210,6 +233,34 @@ async function deleteItem(item: TimelineItem) {
         </div>
       </template>
     </ATable>
+    <ASheet v-model:open="historyOpen" title="改善对策历史" :width="680">
+      <div v-if="historyItem" class="feedback-history">
+        <div class="feedback-history__context">
+          <span>问题点</span>
+          <strong>{{ historyItem.problem }}</strong>
+        </div>
+        <div v-if="historyRows.length" class="feedback-history__table">
+          <div class="feedback-history__header" aria-hidden="true">
+            <span>改善对策</span>
+            <span>反馈时间</span>
+            <span>状态</span>
+          </div>
+          <div
+            v-for="(entry, index) in historyRows"
+            :key="`${entry.date}-${entry.measure}-${index}`"
+            class="feedback-history__row"
+          >
+            <span class="feedback-history__measure">{{ entry.measure || '—' }}</span>
+            <span>{{ entry.date || '—' }}</span>
+            <ABadge
+              :label="entry.status"
+              :tone="entry.status === '现行' ? 'green' : 'neutral'"
+            />
+          </div>
+        </div>
+        <div v-else class="feedback-history__empty">暂无改善对策历史</div>
+      </div>
+    </ASheet>
     <ASheet v-model:open="dialogOpen" :title="editId ? '编辑反馈' : '新增反馈'" :width="560">
       <AFormGrid>
         <AFormRow label="问题分类" required>
@@ -238,3 +289,73 @@ async function deleteItem(item: TimelineItem) {
     </ASheet>
   </div>
 </template>
+
+<style scoped>
+.feedback-history {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.feedback-history__context {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  background: var(--fill-4);
+  border-radius: var(--radius-lg);
+}
+
+.feedback-history__context span,
+.feedback-history__header {
+  color: var(--label-2);
+}
+
+.feedback-history__context strong {
+  font: var(--text-control);
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.feedback-history__table {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.feedback-history__header,
+.feedback-history__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 76px;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.feedback-history__header {
+  font: var(--text-control-em);
+  background: var(--fill-4);
+}
+
+.feedback-history__row {
+  min-height: var(--row-height-loose);
+  font: var(--text-control);
+  box-shadow: inset 0 -0.5px 0 var(--separator);
+}
+
+.feedback-history__row:last-child {
+  box-shadow: none;
+}
+
+.feedback-history__measure {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.feedback-history__empty {
+  display: grid;
+  place-items: center;
+  min-height: 128px;
+  color: var(--label-2);
+}
+</style>

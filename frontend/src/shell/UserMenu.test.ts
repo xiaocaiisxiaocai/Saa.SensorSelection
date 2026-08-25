@@ -73,6 +73,7 @@ describe('UserMenu', () => {
     item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await nextTick();
     await nextTick();
+    expect(document.querySelector('.password-form')).not.toBeNull();
 
     fill('请输入当前密码', 'admin123');
     fill('至少 4 位', 'admin456');

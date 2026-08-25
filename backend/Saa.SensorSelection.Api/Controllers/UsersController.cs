@@ -32,7 +32,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
         await audit.WriteAsync(
             "user.create",
             target: result.Value?.Username ?? request.Username,
-            detail: result.Success ? $"显示名：{result.Value!.DisplayName}" : null,
+            detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
             error: result.Error);
         return result.Success
@@ -51,7 +51,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
         await audit.WriteAsync(
             "user.update",
             target: result.Value?.Username ?? $"#{id}",
-            detail: result.Success ? $"显示名：{result.Value!.DisplayName}" : null,
+            detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
             error: result.Error);
         return result.Success
@@ -70,6 +70,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
         await audit.WriteAsync(
             "user.reset-password",
             target: $"#{id}",
+            detail: result.Success ? "密码已重置" : "密码重置失败",
             success: result.Success,
             error: result.Error);
         return result.Success
@@ -89,10 +90,19 @@ public class UsersController(UserService users, AuditLogService audit) : Control
         await audit.WriteAsync(
             "user.delete",
             target: $"#{id}",
+            detail: $"用户ID：{id}",
             success: result.Success,
             error: result.Error);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
+    }
+
+    private static string FormatDetail(UserListItem user)
+    {
+        var roles = user.Roles.Count == 0
+            ? "无"
+            : string.Join("、", user.Roles.Select(role => role.Name));
+        return $"显示名：{user.DisplayName}；状态：{(user.IsActive ? "启用" : "停用")}；角色：{roles}；组织：{user.OrgUnit?.Path ?? "未分配"}";
     }
 }

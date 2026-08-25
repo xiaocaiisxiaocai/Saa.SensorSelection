@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
+import { useThemeStore } from '@/stores/theme';
 import { toast } from '@/ui/toast';
 import LoginPage from './LoginPage.vue';
 
@@ -37,11 +38,50 @@ describe('LoginPage', () => {
     document.body.innerHTML = '';
   });
 
+  it('renders brand headings and footer', async () => {
+    const wrapper = await mountLogin();
+    expect(wrapper.find('.login__title').text()).toBe('感应器选型系统');
+    expect(wrapper.find('.login__subtitle').text()).toBe('Symtek Automation China');
+    expect(wrapper.find('.login-layout__footer').text()).toContain('Symtek Automation China');
+    wrapper.unmount();
+  });
+
   it('warns when username or password is empty', async () => {
     const warning = vi.spyOn(toast, 'warning');
     const wrapper = await mountLogin();
     await wrapper.get('form').trigger('submit');
     expect(warning).toHaveBeenCalledWith('请输入用户名和密码');
+    wrapper.unmount();
+  });
+
+  it('warns when only username is provided', async () => {
+    const warning = vi.spyOn(toast, 'warning');
+    const wrapper = await mountLogin();
+    const inputs = wrapper.findAll('input');
+    await inputs[0].setValue('admin');
+    await wrapper.get('form').trigger('submit');
+    expect(warning).toHaveBeenCalledWith('请输入密码');
+    wrapper.unmount();
+  });
+
+  it('warns when only password is provided', async () => {
+    const warning = vi.spyOn(toast, 'warning');
+    const wrapper = await mountLogin();
+    const inputs = wrapper.findAll('input');
+    await inputs[1].setValue('admin123');
+    await wrapper.get('form').trigger('submit');
+    expect(warning).toHaveBeenCalledWith('请输入用户名');
+    wrapper.unmount();
+  });
+
+  it('switches theme preference from the top-right switcher', async () => {
+    const wrapper = await mountLogin();
+    const themeStore = useThemeStore();
+    const darkBtn = wrapper.find('button[aria-label="深色"]');
+    expect(darkBtn.exists()).toBe(true);
+
+    await darkBtn.trigger('click');
+    expect(themeStore.preference).toBe('dark');
     wrapper.unmount();
   });
 

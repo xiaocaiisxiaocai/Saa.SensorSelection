@@ -40,7 +40,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/selection/sensor',
     component: () => import('@/pages/selection/SensorPage.vue'),
-    meta: { title: 'Sensor 型号字典' },
+    meta: { title: 'Sensor型号' },
   },
   {
     path: '/selection/dictionary',

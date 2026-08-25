@@ -165,13 +165,9 @@ const replaceCandidates = computed<SelectOption[]>(() => {
   const currents = store.sensors.filter(
     (item) => item.status === '现用' && item.id !== source.id,
   );
-  const same = currents.filter((item) => item.sensorType === source.sensorType);
-  const other = currents.filter((item) => item.sensorType !== source.sensorType);
-  return [...same, ...other].map((item) => ({
+  return currents.map((item) => ({
     value: item.id,
-    label: `${item.brand} ${item.model}${
-      item.sensorType === source.sensorType ? '（同类型）' : ''
-    }`,
+    label: `${item.brand} ${item.model}`,
   }));
 });
 
@@ -522,7 +518,7 @@ function saveReplace() {
           <ASelect
             v-model="replaceTargetId"
             :options="replaceCandidates"
-            placeholder="同类型优先，也可选其他现用"
+            placeholder="请选择现用型号"
           />
         </AFormRow>
         <AFormRow label="问题点" required>

@@ -55,4 +55,14 @@ describe('AField', () => {
     await wrapper.get('input').trigger('focus');
     expect(wrapper.text()).toContain('4/5');
   });
+
+  it('can hide the character count while keeping the maxlength', async () => {
+    const wrapper = mount(AField, {
+      props: { modelValue: '', maxlength: 64, showCount: false },
+    });
+
+    await wrapper.get('input').trigger('focus');
+    expect(wrapper.get('input').attributes('maxlength')).toBe('64');
+    expect(wrapper.text()).not.toContain('0/64');
+  });
 });

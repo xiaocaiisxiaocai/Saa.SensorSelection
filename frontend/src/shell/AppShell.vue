@@ -17,7 +17,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { useThemeStore } from '@/stores/theme';
 import type { ThemePreference } from '@/theme/theme';
-import { ABanner, ASpinner } from '@/ui';
+import { ABanner, ASpinner, ATooltip } from '@/ui';
 import { toast } from '@/ui/toast';
 
 const SIDEBAR_STORAGE_KEY = 'apple-frontend:sidebar-collapsed';
@@ -193,18 +193,7 @@ watch(
     </header>
 
     <div
-      v-if="selection.backendStatus === 'offline'"
-      class="shell-banner"
-    >
-      <ABanner
-        tone="warning"
-        message="后端服务不可用，当前使用浏览器本地数据（仅本机可见）"
-        action-label="重新连接"
-        @action="selection.reconnect()"
-      />
-    </div>
-    <div
-      v-else-if="selection.backendStatus === 'unauthorized'"
+      v-if="selection.backendStatus === 'unauthorized'"
       class="shell-banner"
     >
       <ABanner
@@ -223,17 +212,25 @@ watch(
       >
         <section v-for="group in groups" :key="group.id" class="nav-group">
           <h2 v-if="!collapsed" class="nav-group__label">{{ group.label }}</h2>
-          <RouterLink
+          <ATooltip
             v-for="item in group.items"
             :key="item.to"
-            class="nav-item"
-            :class="{ 'nav-item--active': isActive(item.to) }"
-            :to="item.to"
-            :title="collapsed ? item.label : undefined"
+            :content="item.label"
+            side="right"
+            :disabled="!collapsed"
           >
-            <component :is="item.icon" class="nav-item__icon" :size="18" :stroke-width="1.5" />
-            <span v-if="!collapsed" class="nav-item__label">{{ item.label }}</span>
-          </RouterLink>
+            <template #trigger>
+              <RouterLink
+                class="nav-item"
+                :class="{ 'nav-item--active': isActive(item.to) }"
+                :to="item.to"
+                :title="collapsed ? item.label : undefined"
+              >
+                <component :is="item.icon" class="nav-item__icon" :size="18" :stroke-width="1.5" />
+                <span v-if="!collapsed" class="nav-item__label">{{ item.label }}</span>
+              </RouterLink>
+            </template>
+          </ATooltip>
         </section>
       </nav>
 
@@ -429,6 +426,7 @@ watch(
   width: var(--sidebar-width);
   padding: var(--space-3);
   overflow: auto;
+  box-shadow: inset -1px 0 0 var(--separator);
   transition:
     width var(--dur-4) var(--ease-in-out),
     padding var(--dur-4) var(--ease-in-out);
@@ -439,8 +437,13 @@ watch(
   padding: var(--space-3) var(--space-2);
 }
 
-.app-shell--collapsed .brand__name {
+.app-shell--collapsed .brand {
   display: none;
+}
+
+.app-shell--collapsed .toolbar__start {
+  width: calc(var(--sidebar-collapsed-width) - var(--space-4) * 2);
+  justify-content: center;
 }
 
 .nav-group {

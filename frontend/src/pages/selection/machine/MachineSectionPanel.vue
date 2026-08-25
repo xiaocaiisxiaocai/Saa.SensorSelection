@@ -14,6 +14,10 @@ import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
+  buildMachineTableRows,
+  type MachineTableRow,
+} from './table-rows';
+import {
   ABadge,
   AButton,
   AField,
@@ -108,16 +112,23 @@ const filtered = computed(() => {
 });
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
-  return filtered.value.slice(start, start + pageSize.value);
+  return buildMachineTableRows(
+    filtered.value.slice(start, start + pageSize.value),
+    store.sensors,
+    isStructure.value,
+  );
 });
-const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = isStructure.value
+const columns = computed<TableColumn<MachineTableRow>[]>(() => {
+  const rowSpan = isStructure.value
+    ? (row: MachineTableRow) => (row.groupStart ? row.groupSize : 0)
+    : undefined;
+  const cols: TableColumn<MachineTableRow>[] = isStructure.value
     ? [
-        { key: 'role', label: '功能作用', minWidth: 140 },
-        { key: 'sensorType', label: '传感器类型', minWidth: 140 },
-        { key: 'spec', label: '规格', minWidth: 180 },
-        { key: 'purpose', label: '作用', minWidth: 140, ellipsis: true },
-        { key: 'note', label: '备注', minWidth: 120, ellipsis: true },
+        { key: 'role', label: '功能作用', minWidth: 100, rowSpan },
+        { key: 'sensorType', label: '传感器类型', minWidth: 110 },
+        { key: 'spec', label: '规格', minWidth: 260, ellipsis: true },
+        { key: 'purpose', label: '作用', minWidth: 150, ellipsis: true, rowSpan },
+        { key: 'note', label: '备注', minWidth: 130, ellipsis: true, rowSpan },
       ]
     : [
         { key: 'role', label: '注意分类', width: 120 },
@@ -126,7 +137,7 @@ const columns = computed<TableColumn[]>(() => {
         { key: 'note', label: '备注', minWidth: 120, ellipsis: true },
       ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
+    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end', rowSpan });
   }
   return cols;
 });
@@ -156,9 +167,9 @@ function sensorTypesLabel(item: MachineSectionRow) {
   return types.length > 0 ? types.join('、') : item.sensorType || '—';
 }
 
-function sensorTypeList(item: MachineSectionRow) {
-  const types = [...new Set(sensorRecords(item).map((sensor) => sensor.sensorType))];
-  return types.length > 0 ? types : item.sensorType ? [item.sensorType] : [];
+function sensorTypeList(item: MachineTableRow) {
+  if (item.sensor) return [item.sensor.sensorType];
+  return item.sensorType ? [item.sensorType] : [];
 }
 
 function sensorSpecsLabel(item: MachineSectionRow) {
@@ -303,7 +314,7 @@ async function removeImage(index: number) {
       <ATable
         :columns="columns"
         :rows="tableData"
-        row-key="id"
+        row-key="displayId"
         :empty-text="
           query.trim() || sensorTypeFilter ? '没有匹配的记录' : '暂无记录'
         "
@@ -321,17 +332,22 @@ async function removeImage(index: number) {
           <span v-else>—</span>
         </template>
         <template v-if="isStructure" #cell-spec="{ row }">
-          <div class="spec-lines">{{ sensorSpecsLabel(row) }}</div>
+          <div class="spec-lines">{{ row.spec || '—' }}</div>
         </template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
-            <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
+            <AIconButton
+              :icon="Pencil"
+              label="编辑"
+              size="small"
+              @click="editItem(row.source)"
+            />
             <AIconButton
               :icon="Trash2"
               label="删除"
               size="small"
               variant="destructive"
-              @click="deleteItem(row)"
+              @click="deleteItem(row.source)"
             />
           </div>
         </template>
@@ -391,7 +407,7 @@ async function removeImage(index: number) {
       <AFormRow
         label="关联传感器"
         required
-        hint="规格和型号来自 Sensor 型号字典；目录替换后这里会自动更新。"
+        hint="规格和型号来自 Sensor型号；目录替换后这里会自动更新。"
       >
         <ATokenField
           v-model="form.sensorIds"

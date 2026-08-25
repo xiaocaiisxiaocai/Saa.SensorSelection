@@ -12,7 +12,7 @@ import {
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
-import { useAccess } from '@/stores/auth';
+import { useAccess, useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { toast } from '@/ui/toast';
 import {
@@ -30,6 +30,7 @@ import '../shared/selection-page.css';
 const route = useRoute();
 const router = useRouter();
 const store = useSelectionStore();
+const auth = useAuthStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
@@ -141,13 +142,20 @@ const reportSections = computed<MachineReportSection[]>(() => {
           .get(machineName)
           ?.find((candidate) => candidate.id === section.id);
         if (!machineSection) return [];
+        const rows = store.machineSectionRows(section.id, machineName);
         return [
           {
             machineName,
-            rows: store.machineSectionRows(section.id, machineName),
+            rows,
             images:
               section.kind === 'structure'
                 ? store.machineSectionImages(section.id, machineName)
+                : [],
+            sensors:
+              section.kind === 'structure'
+                ? store.sensors.filter((sensor) =>
+                    rows.some((row) => row.sensorIds.includes(sensor.id)),
+                  )
                 : [],
           },
         ];
@@ -162,6 +170,13 @@ watch(
     checkedNames.value = checkedNames.value.filter((name) => available.has(name));
   },
   { immediate: true },
+);
+
+watch(
+  () => auth.isAuthenticated,
+  (isAuthenticated) => {
+    if (!isAuthenticated) checkedNames.value = [];
+  },
 );
 
 watch(
@@ -282,6 +297,7 @@ function onTabChange(sectionId: string) {
 }
 
 function onToggleCheck(payload: { item: string; checked: boolean }) {
+  if (!auth.isAuthenticated) return;
   const next = new Set(checkedNames.value);
   if (payload.checked) next.add(payload.item);
   else next.delete(payload.item);
@@ -295,6 +311,7 @@ function ensureSelected() {
 }
 
 function previewReport() {
+  if (!auth.isAuthenticated) return;
   if (!ensureSelected()) return;
   const opened = openMachineSchematicReport(
     selectedMachineNames.value,
@@ -306,6 +323,7 @@ function previewReport() {
 }
 
 async function generateReport() {
+  if (!auth.isAuthenticated) return;
   if (!ensureSelected()) return;
   reportGenerating.value = true;
   try {
@@ -389,12 +407,12 @@ async function closeTab(value: string) {
       <EntitySource
         kind="machine"
         :selected="selection.item"
-        :checked-items="checkedNames"
+        :checked-items="auth.isAuthenticated ? checkedNames : undefined"
         @select="selectEntity"
         @toggle-check="onToggleCheck"
       />
       <div v-if="selection.item" class="selection-panel">
-        <div class="machine-report">
+        <div v-if="auth.isAuthenticated" class="machine-report">
           <span class="selection-toolbar__count">
             已选 {{ selectedMachineNames.length }} /
             {{ availableMachineNames.length }} 个机型

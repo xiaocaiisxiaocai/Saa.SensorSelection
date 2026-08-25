@@ -1,56 +1,49 @@
 <#
 .SYNOPSIS
-  构建感应器选型前端，并打包为可部署到 IIS 的静态站点目录。
+  将前端和 .NET 8 后端合并发布到一个 IIS 站点目录。
 
 .DESCRIPTION
-  1. 检查 Node.js / pnpm
-  2. 安装依赖（可用 -SkipInstall 跳过）
-  3. 在 frontend/ 执行 pnpm run build（生产 hash 路由）
-  4. 将 frontend/dist 复制到输出目录，并写入 IIS 用 web.config
-  5. 可选生成 zip
+  发布后的 OutputDir 本身就是 IIS 物理路径：
+  - 后端 DLL、exe、web.config 位于根目录；
+  - 前端 dist 位于 wwwroot；
+  - SQLite 数据库位于 App_Data；
+  - 不生成压缩包，也不拆分 frontend/backend 子目录。
 
-  生产环境默认使用 hash 路由（VITE_ROUTER_HISTORY=hash），IIS 无需 URL Rewrite 也能打开子路由。
-  若站点挂在虚拟目录（如 /sensor），请用 -BasePath '/sensor/' 重新构建。
-
-  前端已接入 ASP.NET Core 后端（backend/Saa.SensorSelection.Api，JWT + SQLite）：
-  - 默认同源 /api（需在 IIS 用 ARR/URL Rewrite 把 /api 反向代理到后端，或用站点本身托管后端）；
-  - 或用 -ApiBase 指向后端地址（如 http://server:5080/api，后端已开 CORS）。
+  pnpm 依赖校验强制使用 --offline --frozen-lockfile，缓存不完整时直接失败，不会联网下载。
 
 .PARAMETER OutputDir
-  部署包输出目录。默认：仓库根目录下的 deploy\iis
-
-.PARAMETER Zip
-  生成 zip 压缩包到输出目录旁。
-
+  IIS 站点目录，默认：仓库根目录下的 deploy\iis。
+.PARAMETER Clean
+  兼容旧命令。脚本现在检测到输出目录存在时会自动清理并重新生成。
 .PARAMETER SkipInstall
-  跳过 pnpm install（依赖已装好时使用）。
-
+  跳过 pnpm install --offline --frozen-lockfile。
 .PARAMETER BasePath
-  对应 Vite 的 VITE_BASE，必须以 / 开头和结尾（根站点用 '/'）。
-
+  Vite 部署路径，根站点使用 /。
 .PARAMETER ApiBase
-  对应 VITE_API_BASE（前端 API 基地址）。默认 '/api'（同源反向代理）。
-
-.EXAMPLE
-  .\scripts\deploy-iis.ps1
-
-.EXAMPLE
-  .\scripts\deploy-iis.ps1 -Zip
-
-.EXAMPLE
-  .\scripts\deploy-iis.ps1 -BasePath '/sensor/' -OutputDir 'D:\publish\sensor' -Zip
-
-.EXAMPLE
-  .\scripts\deploy-iis.ps1 -ApiBase 'http://10.0.0.8:5080/api' -Zip
+  VITE_API_BASE，默认 /api。
+.PARAMETER SelfContained
+  发布 win-x64 自包含后端；默认需要 IIS 服务器安装 .NET 8 Hosting Bundle。
+.PARAMETER JwtKey
+  可选的生产 JWT 密钥。不传时自动随机生成。
+.PARAMETER AdminPassword
+  初始管理员密码，默认：admin123。首次登录后请立即修改。
+.PARAMETER CorsAllowedOrigins
+  生产环境允许的前端来源，默认覆盖 localhost 和 127.0.0.1:3336。
 #>
 
 [CmdletBinding()]
 param(
   [string]$OutputDir = '',
-  [switch]$Zip,
+  [switch]$Clean,
   [switch]$SkipInstall,
   [string]$BasePath = '/',
-  [string]$ApiBase = '/api'
+  [string]$ApiBase = '/api',
+  [ValidateSet('Debug', 'Release')]
+  [string]$Configuration = 'Release',
+  [switch]$SelfContained,
+  [string]$JwtKey = '',
+  [string]$AdminPassword = 'admin123',
+  [string]$CorsAllowedOrigins = 'http://localhost:3336,http://127.0.0.1:3336'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,146 +51,192 @@ Set-StrictMode -Version Latest
 
 function Assert-Command([string]$Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-    throw "未找到命令：$Name。请先安装并确保已加入 PATH。"
+    throw "未找到命令：$Name"
   }
 }
 
-function Normalize-BasePath([string]$PathValue) {
-  $value = if ([string]::IsNullOrWhiteSpace($PathValue)) { '/' } else { $PathValue.Trim() }
-  if (-not $value.StartsWith('/')) {
-    $value = '/' + $value
+function Invoke-Checked([string]$Command, [string[]]$Arguments) {
+  & $Command @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "命令失败（退出码 $LASTEXITCODE）：$Command $($Arguments -join ' ')"
   }
-  if (-not $value.EndsWith('/')) {
-    $value = $value + '/'
-  }
-  return $value
 }
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-Set-Location $repoRoot
-
-if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-  $OutputDir = Join-Path $repoRoot 'deploy\iis'
-}
-else {
-  $OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
+function Resolve-PathValue([string]$Value) {
+  return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Value)
 }
 
-$BasePath = Normalize-BasePath $BasePath
-$frontendDir = Join-Path $repoRoot 'frontend'
-$distDir = Join-Path $frontendDir 'dist'
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$zipPath = Join-Path (Split-Path -Parent $OutputDir) ("sensor-selection-iis-$stamp.zip")
-
-Write-Host '==> 仓库根目录:' $repoRoot
-Write-Host '==> 输出目录:' $OutputDir
-Write-Host '==> VITE_BASE:' $BasePath
-
-Assert-Command 'node'
-Assert-Command 'pnpm'
-
-$nodeVersion = (& node -v).Trim()
-Write-Host '==> Node.js' $nodeVersion
-if ($nodeVersion -notmatch '^v(2[0-9]|[3-9]\d)\.') {
-  Write-Warning "建议使用 Node.js 20.10+，当前为 $nodeVersion"
+function Normalize-BasePath([string]$Value) {
+  $result = if ([string]::IsNullOrWhiteSpace($Value)) { '/' } else { $Value.Trim() }
+  if (-not $result.StartsWith('/')) { $result = '/' + $result }
+  if (-not $result.EndsWith('/')) { $result += '/' }
+  return $result
 }
 
-if (-not (Test-Path (Join-Path $frontendDir 'package.json'))) {
-  throw "未找到新前端目录：$frontendDir"
+function Write-Utf8NoBom([string]$PathValue, [string]$Content) {
+  $encoding = New-Object System.Text.UTF8Encoding $false
+  [System.IO.File]::WriteAllText($PathValue, $Content.Trim() + [Environment]::NewLine, $encoding)
 }
 
-if (-not $SkipInstall) {
-  Write-Host '==> 安装依赖 (frontend: pnpm install --frozen-lockfile)'
-  Push-Location $frontendDir
+function New-RandomSecret([int]$ByteCount) {
+  $bytes = New-Object byte[] $ByteCount
+  $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   try {
-    pnpm install --frozen-lockfile
-    if ($LASTEXITCODE -ne 0) { throw "pnpm install 失败，退出码 $LASTEXITCODE" }
+    $generator.GetBytes($bytes)
   }
   finally {
-    Pop-Location
+    $generator.Dispose()
   }
-}
-else {
-  Write-Host '==> 跳过依赖安装 (-SkipInstall)'
+  return [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
 
-Write-Host '==> 构建生产包 (frontend)'
+$repoRoot = Resolve-PathValue (Join-Path $PSScriptRoot '..')
+Set-Location $repoRoot
+if ([string]::IsNullOrWhiteSpace($OutputDir)) { $OutputDir = Join-Path $repoRoot 'deploy\iis' }
+$OutputDir = Resolve-PathValue $OutputDir
+
+# 只保护源代码目录；输出目录允许位于仓库外，但绝不能指向仓库本身或源码目录。
+$repoFull = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
+$outputFull = [System.IO.Path]::GetFullPath($OutputDir).TrimEnd('\')
+$protected = @('frontend', 'backend', '.git') | ForEach-Object {
+  [System.IO.Path]::GetFullPath((Join-Path $repoFull $_)).TrimEnd('\')
+}
+if ($outputFull -eq $repoFull -or $protected -contains $outputFull) {
+  throw "拒绝使用源代码目录作为 IIS 输出目录：$OutputDir"
+}
+
+$frontendDir = Join-Path $repoRoot 'frontend'
+$distDir = Join-Path $frontendDir 'dist'
+$backendProject = Join-Path $repoRoot 'backend\Saa.SensorSelection.Api\Saa.SensorSelection.Api.csproj'
+$wwwroot = Join-Path $OutputDir 'wwwroot'
+$BasePath = Normalize-BasePath $BasePath
+if ([string]::IsNullOrWhiteSpace($ApiBase)) { $ApiBase = '/api' }
+
+Assert-Command 'node'; Assert-Command 'pnpm'; Assert-Command 'dotnet'
+$nodeVersion = (& node -v).Trim()
+$pnpmVersion = (& pnpm --version).Trim()
+$dotnetVersion = (& dotnet --version).Trim()
+if ($nodeVersion -notmatch '^v(2[0-9]|[3-9]\d)\.') { throw "Node.js 版本不满足要求：$nodeVersion" }
+if ($pnpmVersion -notmatch '^(9|[1-9]\d)\.') { throw "pnpm 版本不满足要求：$pnpmVersion" }
+if ((& dotnet --list-sdks | Out-String) -notmatch '(?m)^8\.') { throw '未找到 .NET 8 SDK' }
+if (-not (Test-Path (Join-Path $frontendDir 'package.json'))) { throw "未找到前端项目：$frontendDir" }
+if (-not (Test-Path (Join-Path $frontendDir 'pnpm-lock.yaml'))) { throw '未找到 frontend/pnpm-lock.yaml' }
+if (-not (Test-Path $backendProject)) { throw "未找到后端项目：$backendProject" }
+
+Write-Host "==> IIS 单目录输出：$OutputDir"
+Write-Host "==> Node.js $nodeVersion / pnpm $pnpmVersion / dotnet SDK $dotnetVersion"
+Write-Host "==> VITE_BASE $BasePath / VITE_API_BASE $ApiBase"
+
+if (Test-Path $OutputDir) {
+  Write-Host "==> 输出目录已存在，自动清理：$OutputDir"
+  Remove-Item -LiteralPath $OutputDir -Recurse -Force
+}
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+
+if (-not $SkipInstall) {
+  Write-Host '==> 校验前端依赖（离线、锁文件固定）'
+  Push-Location $frontendDir
+  try { Invoke-Checked 'pnpm' @('install', '--offline', '--frozen-lockfile') }
+  finally { Pop-Location }
+}
+
+Write-Host '==> 构建前端生产包'
+$oldBase = [Environment]::GetEnvironmentVariable('VITE_BASE', 'Process')
+$oldApi = [Environment]::GetEnvironmentVariable('VITE_API_BASE', 'Process')
+$oldHistory = [Environment]::GetEnvironmentVariable('VITE_ROUTER_HISTORY', 'Process')
 $env:VITE_BASE = $BasePath
 $env:VITE_API_BASE = $ApiBase
 $env:VITE_ROUTER_HISTORY = 'hash'
 Push-Location $frontendDir
-try {
-  pnpm run build
-  if ($LASTEXITCODE -ne 0) { throw "构建失败，退出码 $LASTEXITCODE" }
-}
+try { Invoke-Checked 'pnpm' @('run', 'build') }
 finally {
   Pop-Location
+  if ($null -eq $oldBase) { Remove-Item Env:VITE_BASE -ErrorAction SilentlyContinue } else { $env:VITE_BASE = $oldBase }
+  if ($null -eq $oldApi) { Remove-Item Env:VITE_API_BASE -ErrorAction SilentlyContinue } else { $env:VITE_API_BASE = $oldApi }
+  if ($null -eq $oldHistory) { Remove-Item Env:VITE_ROUTER_HISTORY -ErrorAction SilentlyContinue } else { $env:VITE_ROUTER_HISTORY = $oldHistory }
+}
+if (-not (Test-Path (Join-Path $distDir 'index.html'))) { throw '前端构建产物缺少 dist/index.html' }
+
+Write-Host '==> 发布 .NET 8 后端到同一个 IIS 目录'
+$publishArgs = @('publish', $backendProject, '--configuration', $Configuration, '--no-restore', '--output', $OutputDir, '--nologo')
+if ($SelfContained) { $publishArgs += @('--runtime', 'win-x64', '--self-contained', 'true') }
+else { $publishArgs += @('--self-contained', 'false') }
+Invoke-Checked 'dotnet' $publishArgs
+if (-not (Test-Path (Join-Path $OutputDir 'web.config'))) { throw '后端发布产物缺少 web.config' }
+
+Write-Host '==> 将前端 dist 合并到后端 wwwroot'
+New-Item -ItemType Directory -Path $wwwroot -Force | Out-Null
+Get-ChildItem -LiteralPath $distDir -Force | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination $wwwroot -Recurse -Force
+}
+if (-not (Test-Path (Join-Path $wwwroot 'index.html'))) { throw '合并后的 wwwroot 缺少 index.html' }
+
+if ([string]::IsNullOrWhiteSpace($JwtKey)) { $JwtKey = New-RandomSecret 48 }
+if ([string]::IsNullOrWhiteSpace($AdminPassword)) { $AdminPassword = 'admin123' }
+if ([string]::IsNullOrWhiteSpace($CorsAllowedOrigins)) {
+  throw 'CorsAllowedOrigins 不能为空，请传入浏览器实际访问地址，例如 http://192.168.7.102:3336'
 }
 
-if (-not (Test-Path (Join-Path $distDir 'index.html'))) {
-  throw "未找到构建产物：$distDir\index.html"
-}
-
-Write-Host '==> 准备 IIS 发布目录'
-if (Test-Path $OutputDir) {
-  Remove-Item -Recurse -Force $OutputDir
-}
-New-Item -ItemType Directory -Path $OutputDir | Out-Null
-Copy-Item -Path (Join-Path $distDir '*') -Destination $OutputDir -Recurse -Force
-
-# IIS：默认文档 + 静态 MIME。
-# 生产为 hash 路由，不要写 <rewrite>：未安装 URL Rewrite 时 IIS 会报 500.19 / 0x8007000d。
-$webConfig = @'
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <system.webServer>
-    <defaultDocument enabled="true">
-      <files>
-        <clear />
-        <add value="index.html" />
-      </files>
-    </defaultDocument>
-    <directoryBrowse enabled="false" />
-    <staticContent>
-      <remove fileExtension=".json" />
-      <mimeMap fileExtension=".json" mimeType="application/json" />
-      <remove fileExtension=".webp" />
-      <mimeMap fileExtension=".webp" mimeType="image/webp" />
-      <remove fileExtension=".mjs" />
-      <mimeMap fileExtension=".mjs" mimeType="text/javascript" />
-      <clientCache cacheControlMode="UseMaxAge" cacheControlMaxAge="7.00:00:00" />
-    </staticContent>
-    <httpProtocol>
-      <customHeaders>
-        <remove name="X-Content-Type-Options" />
-        <add name="X-Content-Type-Options" value="nosniff" />
-      </customHeaders>
-    </httpProtocol>
-  </system.webServer>
-</configuration>
-'@
-
-$webConfigPath = Join-Path $OutputDir 'web.config'
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($webConfigPath, $webConfig.Trim() + [Environment]::NewLine, $utf8NoBom)
-
-$fileCount = (Get-ChildItem -Path $OutputDir -Recurse -File).Count
-Write-Host "==> 已输出 $fileCount 个文件到 $OutputDir"
-
-if ($Zip) {
-  if (Test-Path $zipPath) {
-    Remove-Item -Force $zipPath
+$productionSettings = [ordered]@{
+  Jwt = [ordered]@{ Key = $JwtKey }
+  Seed = [ordered]@{
+    AdminPassword = $AdminPassword
+    AllowDefaultPassword = [bool]($AdminPassword -eq 'admin123')
   }
-  Compress-Archive -Path (Join-Path $OutputDir '*') -DestinationPath $zipPath -Force
-  Write-Host '==> 已生成压缩包:' $zipPath
+  Cors = [ordered]@{ AllowedOrigins = $CorsAllowedOrigins }
 }
+Write-Utf8NoBom (Join-Path $OutputDir 'appsettings.Production.json') ($productionSettings | ConvertTo-Json -Depth 4)
+ $credentials = @"
+SAA 感应器选型初始部署凭据
 
-Write-Host ''
-Write-Host '部署到 IIS 建议步骤：'
-Write-Host '  1. 将输出目录内容复制到站点物理路径（或解压 zip）'
-Write-Host '  2. IIS 新建网站 / 应用程序池：.NET CLR 选「无托管代码」'
-Write-Host '  3. 绑定主机名与端口；根站点 BasePath 用 /，虚拟目录用 -BasePath ''/你的路径/'''
-Write-Host '  4. 前端需连接后端：同源则用 ARR/URL Rewrite 把 /api 代理到 backend/Saa.SensorSelection.Api（dotnet publish 部署）；跨域则重新构建并指定 -ApiBase'
-Write-Host '  5. 本包 web.config 不含 URL Rewrite，适配未安装该模块的 IIS（同源 /api 代理需另配 ARR）'
-Write-Host ''
-Write-Host '完成。'
+管理员账号：admin
+初始管理员密码：$AdminPassword
+
+请首次登录后立即修改密码，并删除本文件。
+本文件不在 wwwroot 中，不会作为前端静态文件发布，但仍应限制文件系统权限。
+"@
+Write-Utf8NoBom (Join-Path $OutputDir 'DEPLOYMENT-CREDENTIALS.txt') $credentials
+Write-Host "==> 初始管理员密码为 admin123，详见：$OutputDir\DEPLOYMENT-CREDENTIALS.txt"
+
+$guide = @"
+# IIS 单目录部署说明
+
+本目录本身就是 IIS 站点物理路径，不要再分别指向 frontend/backend：
+
+- 根目录：ASP.NET Core 8 后端发布文件和 web.config
+- `wwwroot/`：前端构建产物，由后端 UseDefaultFiles/UseStaticFiles 提供
+- `App_Data/symtek.db`：服务器现有 SQLite 数据库，打包脚本不会复制或覆盖
+
+部署步骤：
+1. IIS 安装 ASP.NET Core 8 Hosting Bundle（非自包含发布必须）。
+2. 新建 IIS 网站，物理路径直接指向本目录。
+3. 应用程序池选择“无托管代码”，启用 64 位应用程序。
+4. 给 `App_Data` 授予 IIS 应用程序池身份读写权限。
+5. 脚本已自动生成 `appsettings.Production.json`，其中包含随机 JWT 密钥、初始管理员密码和 CORS 来源。
+6. 如果管理员密码是脚本自动生成的，请读取 `DEPLOYMENT-CREDENTIALS.txt`，首次登录后立即修改并删除该文件。
+7. 更新站点时必须保留服务器原有的 `App_Data`；不要清空服务器站点目录，也不要使用会删除目标多余文件的 `/MIR`。
+
+前端 API 基地址：`$ApiBase`。当前默认同源 `/api`，不需要 ARR/URL Rewrite。
+默认 CORS 来源：`$CorsAllowedOrigins`。如果通过服务器 IP 或其他端口访问，请重新打包时传入 `-CorsAllowedOrigins`。
+构建使用 `pnpm install --offline --frozen-lockfile`，IIS 服务器不需要 Node.js/npm。
+"@
+Write-Utf8NoBom (Join-Path $OutputDir 'DEPLOYMENT.md') $guide
+
+$manifest = [ordered]@{
+  project = 'SAA Sensor Selection'
+  generatedAt = (Get-Date).ToUniversalTime().ToString('o')
+  targetFramework = 'net8.0'
+  configuration = $Configuration
+  node = $nodeVersion
+  pnpm = $pnpmVersion
+  dotnetSdk = $dotnetVersion
+  viteBase = $BasePath
+  apiBase = $ApiBase
+  routerHistory = 'hash'
+  selfContained = [bool]$SelfContained
+  databaseIncluded = $false
+  siteLayout = 'backend-root-with-wwwroot'
+}
+Write-Utf8NoBom (Join-Path $OutputDir 'deploy-manifest.json') ($manifest | ConvertTo-Json -Depth 5)
+
+Write-Host "==> IIS 单目录发布完成：$OutputDir（未生成压缩包）"

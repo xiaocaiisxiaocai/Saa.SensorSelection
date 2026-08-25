@@ -159,6 +159,11 @@ using (var scope = app.Services.CreateScope())
 
 app.UseExceptionHandler();
 
+// IIS 单目录部署：前端构建产物由打包脚本复制到后端发布目录的 wwwroot。
+// 生产使用 hash 路由，因此不需要 URL Rewrite；默认文档负责提供 index.html。
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Swagger 仅开发环境暴露（生产不开放 API 文档入口）
 if (app.Environment.IsDevelopment())
 {

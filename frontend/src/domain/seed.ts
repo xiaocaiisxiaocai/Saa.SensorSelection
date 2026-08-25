@@ -1,5 +1,6 @@
 import type {
   CrudDefaults,
+  CrudRecord,
   CustomerProcItem,
   CustomerReqItem,
   DictionaryDefinition,
@@ -237,7 +238,7 @@ function cloneMachineRows(
   return rows.map((row) => ({ ...row, sensorIds: [] }));
 }
 
-export const CRUD_DEFAULTS: CrudDefaults = {
+export const LEGACY_DEMO_CRUD_DEFAULTS: CrudDefaults = {
   'customer-req': (): CustomerReqItem[] => [
     {
       id: 1,
@@ -285,6 +286,7 @@ export const CRUD_DEFAULTS: CrudDefaults = {
       measure: '更换快速响应型真空表头后恢复稳定。',
       date: '2024-10-15',
       status: '已解决',
+      measureHistory: [],
     },
     {
       id: 2,
@@ -294,6 +296,7 @@ export const CRUD_DEFAULTS: CrudDefaults = {
       measure: '清洁镜头并增加每周清洁提醒。',
       date: '2024-09-22',
       status: '已解决',
+      measureHistory: [],
     },
   ],
   'machine-conveyor': () =>
@@ -449,6 +452,98 @@ export const CRUD_DEFAULTS: CrudDefaults = {
   ],
 };
 
+// 只保留少量可直接使用的首装业务资料，帮助新环境快速确认页面结构。
+// 数据严格按客户键写入，其他客户和未配置的客户仍然保持为空。
+export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
+  'customer-req:庆鼎': [
+    {
+      id: 1,
+      type: '输送段',
+      machine: 'ALL',
+      process: 'DES显影',
+      content: '进板前确认板件到位后再启动输送',
+      source: '客户要求',
+      note: '首件验证时确认传感器响应',
+    },
+    {
+      id: 2,
+      type: '出板检测',
+      machine: 'ALL',
+      process: 'DES显影',
+      content: '出板信号确认后再进入下一工序',
+      source: '客户要求',
+      note: '与下游设备联锁',
+    },
+  ],
+  'customer-req:景旺': [
+    {
+      id: 1,
+      type: '掉板检测',
+      machine: 'ALL',
+      process: '压合',
+      content: '中段与末端均需设置掉板检测',
+      source: '验收规范',
+      note: '联动停机并记录报警',
+    },
+    {
+      id: 2,
+      type: '进板检测',
+      machine: 'ALL',
+      process: 'AOI检测',
+      content: '进入 AOI 前需确认板件边缘无遮挡',
+      source: '客户要求',
+      note: '避免误触发检测',
+    },
+  ],
+  'customer-proc:庆鼎': [
+    {
+      id: 1,
+      type: 'DES 制程',
+      role: '板件传送检测',
+      feature: '进出口设置漫反射传感器',
+      sensorNote: '镜头保持清洁',
+      note: '首件确认检测距离',
+    },
+  ],
+  'customer-proc:景旺': [
+    {
+      id: 1,
+      type: 'AOI 制程',
+      role: '板件定位',
+      feature: '定位精度不大于 0.1mm',
+      sensorNote: '保持镜头清洁',
+      note: '每班点检一次',
+    },
+  ],
+  'customer-feedback:庆鼎': [
+    {
+      id: 1,
+      type: '选型配置异常',
+      machine: '中间六轴机',
+      problem: '快速运行时吸板失败率偏高，影响产能。',
+      measure: '更换快速响应型真空表头后恢复稳定。',
+      date: '2024-10-15',
+      status: '已解决',
+      measureHistory: [],
+    },
+  ],
+};
+
+function initialCrudRows(listId: string, entityName: string): CrudRecord[] {
+  return (INITIAL_CRUD_DATA[`${listId}:${entityName}`] || []).map((item) => ({
+    ...item,
+  }));
+}
+
+// 正式业务数据按客户独立初始化；运行时缺失键仍然保持为空，不会回退到其他客户。
+export const CRUD_DEFAULTS: CrudDefaults = {
+  'customer-req': (entityName) => initialCrudRows('customer-req', entityName),
+  'customer-proc': (entityName) =>
+    initialCrudRows('customer-proc', entityName),
+  'customer-feedback': (entityName) =>
+    initialCrudRows('customer-feedback', entityName),
+};
+
 export const PROCESS_LAYER_OPTIONS = ['内层', '外层'];
 
 export function createProcessStepDefaults(): ProcessStepItem[] {
@@ -471,7 +566,7 @@ export function createProcessStepDefaults(): ProcessStepItem[] {
   return steps;
 }
 
-export const SEED_VERSION = 1;
+export const SEED_VERSION = 4;
 
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
@@ -601,7 +696,7 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
   {
     code: 'sensor-status',
     title: 'Sensor 状态',
-    description: 'Sensor 型号字典中的状态，全局共用',
+    description: 'Sensor型号中的状态，全局共用',
     field: 'status',
     listIds: [],
     catalog: 'sensor',
@@ -610,7 +705,7 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
   {
     code: 'sensor-type',
     title: '感应器类型',
-    description: 'Sensor 型号字典中的感应器类型，全局共用',
+    description: 'Sensor型号中的感应器类型，全局共用',
     field: 'sensorType',
     listIds: [],
     catalog: 'sensor',

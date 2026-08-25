@@ -76,12 +76,88 @@ describe('normalizeCrudItems', () => {
 
   it('maps feedback status aliases and fills default type', () => {
     const [item] = normalizeCrudItems('customer-feedback', [
-      { id: 1, status: 'pending', problem: '掉板' },
+      {
+        id: 1,
+        status: 'pending',
+        problem: '掉板',
+        measure: '调整吸盘位置',
+        date: '2026-08-20',
+      },
     ]);
     expect(item && 'status' in item ? item.status : undefined).toBe('待处理');
     expect(item && 'type' in item ? item.type : undefined).toBe(
       createDictionaryDefaults('customer-feedback')[0]?.name,
     );
+    expect(item && 'measureHistory' in item ? item.measureHistory : undefined).toEqual([
+      {
+        date: '2026-08-20',
+        measure: '调整吸盘位置',
+        status: '现行',
+      },
+    ]);
+  });
+
+  it('keeps only the latest feedback measure current without adding version metadata', () => {
+    const [item] = normalizeCrudItems('customer-feedback', [
+      {
+        id: 1,
+        status: 'resolved',
+        problem: '吸板不稳',
+        measure: '采用新型真空表头',
+        date: '2026-08-22',
+        measureHistory: [
+          {
+            measure: '调整真空参数',
+            date: '2026-08-18',
+            status: '已作废',
+            version: 1,
+            voidReason: '不再适用',
+            operator: 'admin',
+          },
+          {
+            measure: '采用新型真空表头',
+            date: '2026-08-22',
+            status: '现行',
+            version: 2,
+          },
+        ],
+      },
+    ]);
+
+    expect(item && 'measureHistory' in item ? item.measureHistory : undefined).toEqual([
+      {
+        date: '2026-08-18',
+        measure: '调整真空参数',
+        status: '已作废',
+      },
+      {
+        date: '2026-08-22',
+        measure: '采用新型真空表头',
+        status: '现行',
+      },
+    ]);
+  });
+
+  it('derives the latest feedback fields from a history-only stored record', () => {
+    const [item] = normalizeCrudItems('customer-feedback', [
+      {
+        id: 1,
+        status: 'resolved',
+        problem: '吸板不稳',
+        measureHistory: [
+          {
+            measure: '采用新型真空表头',
+            date: '2026-08-22',
+            status: '现行',
+          },
+        ],
+      },
+    ]);
+
+    expect(item && 'measure' in item ? item.measure : undefined).toBe(
+      '采用新型真空表头',
+    );
+    expect(item && 'date' in item ? item.date : undefined).toBe('2026-08-22');
   });
 });
 

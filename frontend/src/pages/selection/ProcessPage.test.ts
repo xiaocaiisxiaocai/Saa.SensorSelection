@@ -46,4 +46,16 @@ describe('ProcessPage', () => {
     expect(wrapper.text()).toContain('工艺制程');
     wrapper.unmount();
   });
+
+  it('keeps the process layer column compact', async () => {
+    const wrapper = await mountPage();
+    await wrapper.findAll('[role="tab"]')[1]?.trigger('click');
+    await nextTick();
+
+    expect(wrapper.find('thead th').attributes('style')).toContain(
+      'width: 64px',
+    );
+
+    wrapper.unmount();
+  });
 });

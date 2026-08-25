@@ -1,25 +1,37 @@
 <script setup lang="ts" generic="T">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 import AEmptyState from './AEmptyState.vue';
 import ASpinner from './ASpinner.vue';
 import ATooltip from './ATooltip.vue';
 import type { TableColumn, TableRowHeight } from './types';
 
+// 行高常量与 tokens.css 中 --row-height / --row-height-loose 保持同步
+const ROW_HEIGHT_COMPACT = 40;
+const ROW_HEIGHT_LOOSE = 48;
+/** 虚拟滚动上下各额外预渲染的行数，避免快速滚动时出现空白 */
+const OVERSCAN = 5;
+
 const props = withDefaults(
   defineProps<{
-    columns: TableColumn[];
+    columns: TableColumn<T>[];
     rows: T[];
     rowKey: string | ((row: T) => string | number);
     emptyText?: string;
     loading?: boolean;
     striped?: boolean;
     rowHeight?: TableRowHeight;
+    /**
+     * 启用虚拟滚动。数据量大（> 200 行）且无 rowSpan 的场景建议开启。
+     * 注意：启用后 column.rowSpan 将失效，请勿同时使用。
+     */
+    virtual?: boolean;
   }>(),
   {
     emptyText: '暂无数据',
     striped: false,
     rowHeight: 'compact',
+    virtual: false,
   },
 );
 
@@ -35,6 +47,78 @@ const scroller = ref<HTMLElement | null>(null);
 const scrolled = ref(false);
 const focusedKey = ref<string | number | null>(null);
 
+// ─── 虚拟滚动状态 ────────────────────────────────────────────────
+const containerHeight = ref(0);
+const scrollTop = ref(0);
+
+const unitRowHeight = computed(() =>
+  props.rowHeight === 'loose' ? ROW_HEIGHT_LOOSE : ROW_HEIGHT_COMPACT,
+);
+
+/** 当前可视范围（行下标，左闭右开） */
+const virtualRange = computed(() => {
+  if (!props.virtual || props.rows.length === 0) {
+    return { start: 0, end: props.rows.length };
+  }
+  const rh = unitRowHeight.value;
+  const start = Math.max(0, Math.floor(scrollTop.value / rh) - OVERSCAN);
+  const visibleCount = Math.ceil(containerHeight.value / rh);
+  const end = Math.min(props.rows.length, start + visibleCount + OVERSCAN * 2);
+  return { start, end };
+});
+
+/** 实际渲染的行切片 */
+const visibleRows = computed(() =>
+  props.virtual
+    ? props.rows.slice(virtualRange.value.start, virtualRange.value.end)
+    : props.rows,
+);
+
+/** 顶部占位行高度（px） */
+const spacerTopHeight = computed(() =>
+  props.virtual ? virtualRange.value.start * unitRowHeight.value : 0,
+);
+
+/** 底部占位行高度（px） */
+const spacerBottomHeight = computed(() =>
+  props.virtual
+    ? (props.rows.length - virtualRange.value.end) * unitRowHeight.value
+    : 0,
+);
+
+let resizeObserver: ResizeObserver | null = null;
+
+function setupResizeObserver() {
+  if (!props.virtual || !scroller.value) return;
+  resizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    if (entry) containerHeight.value = entry.contentRect.height;
+  });
+  resizeObserver.observe(scroller.value);
+  containerHeight.value = scroller.value.clientHeight;
+}
+
+onMounted(() => {
+  if (props.virtual) setupResizeObserver();
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+});
+
+watch(
+  () => props.virtual,
+  (enabled) => {
+    if (enabled) {
+      void nextTick(setupResizeObserver);
+    } else {
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+    }
+  },
+);
+// ─────────────────────────────────────────────────────────────────
+
 function rowId(row: T): string | number {
   const key = props.rowKey;
   const value =
@@ -48,11 +132,11 @@ function rowId(row: T): string | number {
   return String(value);
 }
 
-function cellValue(row: T, column: TableColumn): unknown {
+function cellValue(row: T, column: TableColumn<T>): unknown {
   return (row as Record<string, unknown>)[column.key];
 }
 
-function cellText(row: T, column: TableColumn): string {
+function cellText(row: T, column: TableColumn<T>): string {
   const value = cellValue(row, column);
   if (value == null) {
     return '';
@@ -61,25 +145,49 @@ function cellText(row: T, column: TableColumn): string {
   return String(value);
 }
 
-function displayText(row: T, column: TableColumn): string {
+function displayText(row: T, column: TableColumn<T>): string {
   return cellText(row, column).trim() || '—';
 }
 
-function isActionColumn(column: TableColumn): boolean {
+function tooltipText(row: T, column: TableColumn<T>): string {
+  const text = cellText(row, column).trim();
+  return text === '—' ? '' : text;
+}
+
+function isActionColumn(column: TableColumn<T>): boolean {
   return column.key === 'actions' || column.fixed === 'end';
 }
 
 const hoverTip = ref('');
 
-function onEllipsisEnter(event: Event) {
-  const text = (event.currentTarget as HTMLElement).innerText.trim();
-  hoverTip.value = !text || text === '—' ? '' : text;
+function hasOverflowingContent(el: HTMLElement): boolean {
+  const elements = [el, ...el.querySelectorAll<HTMLElement>('*')];
+  return elements.some((content) => content.scrollWidth > content.clientWidth + 1);
 }
 
-function cellStyle(column: TableColumn) {
+function onEllipsisEnter(event: Event) {
+  const el = event.currentTarget as HTMLElement | null;
+  if (!el) {
+    hoverTip.value = '';
+    return;
+  }
+  const text = (el.innerText || el.textContent || '').trim();
+  if (!text || text === '—') {
+    hoverTip.value = '';
+    return;
+  }
+  hoverTip.value = hasOverflowingContent(el) ? text : '';
+}
+
+function cellStyle(column: TableColumn<T>) {
   const size = column.width ?? column.minWidth;
   if (size == null) return undefined;
   return { width: `${size}px` };
+}
+
+function cellRowSpan(column: TableColumn<T>, row: T, rowIndex: number): number {
+  const span = column.rowSpan?.(row, rowIndex);
+  return Number.isInteger(span) && span != null && span >= 0 ? span : 1;
 }
 
 const ids = computed(() => props.rows.map((row) => rowId(row)));
@@ -127,6 +235,9 @@ function onRowKeydown(event: KeyboardEvent, row: T) {
 
 function onScroll() {
   scrolled.value = (scroller.value?.scrollTop ?? 0) > 0;
+  if (props.virtual) {
+    scrollTop.value = scroller.value?.scrollTop ?? 0;
+  }
 }
 
 watch(
@@ -165,7 +276,7 @@ watch(
             ]"
             :style="cellStyle(column)"
           >
-            <ATooltip :content="column.label" :disabled="column.label.length < 6">
+            <ATooltip :content="column.label">
               <template #trigger>
                 <span class="a-table__ellipsis">{{ column.label }}</span>
               </template>
@@ -174,8 +285,15 @@ watch(
         </tr>
       </thead>
       <tbody v-if="rows.length">
+        <!-- 顶部占位行：撑开被虚拟跳过的行的空间 -->
         <tr
-          v-for="row in rows"
+          v-if="spacerTopHeight > 0"
+          class="a-table__spacer"
+          :style="{ height: `${spacerTopHeight}px` }"
+          aria-hidden="true"
+        />
+        <tr
+          v-for="(row, i) in visibleRows"
           :key="rowId(row)"
           :data-row-key="rowId(row)"
           :class="{ 'a-table__row--selected': selectedKey === rowId(row) }"
@@ -183,45 +301,58 @@ watch(
           @click="onRowClick(row)"
           @keydown="onRowKeydown($event, row)"
         >
-          <td
-            v-for="column in columns"
-            :key="column.key"
-            :class="[
-              `a-table__cell--${column.align ?? 'center'}`,
-              {
-                'a-table__cell--fixed': column.fixed === 'end',
-                'a-table__cell--mono': column.mono,
-              },
-            ]"
-            :style="cellStyle(column)"
-          >
-            <slot
-              v-if="isActionColumn(column)"
-              :name="`cell-${column.key}`"
-              :row="row"
-              :column="column"
-              :value="cellValue(row, column)"
-            />
-            <ATooltip
-              v-else
-              :content="hoverTip"
-              :disabled="!hoverTip"
+          <template v-for="column in columns" :key="column.key">
+            <td
+              v-if="cellRowSpan(column, row, virtualRange.start + i) !== 0"
+              :class="[
+                `a-table__cell--${column.align ?? 'center'}`,
+                {
+                  'a-table__cell--fixed': column.fixed === 'end',
+                  'a-table__cell--mono': column.mono,
+                },
+              ]"
+              :rowspan="
+                cellRowSpan(column, row, virtualRange.start + i) > 1
+                  ? cellRowSpan(column, row, virtualRange.start + i)
+                  : undefined
+              "
+              :style="cellStyle(column)"
             >
-              <template #trigger>
-                <div class="a-table__ellipsis" @mouseenter="onEllipsisEnter">
-                  <slot
-                    :name="`cell-${column.key}`"
-                    :row="row"
-                    :column="column"
-                    :value="cellValue(row, column)"
-                  >
-                    {{ displayText(row, column) }}
-                  </slot>
-                </div>
-              </template>
-            </ATooltip>
-          </td>
+              <slot
+                v-if="isActionColumn(column)"
+                :name="`cell-${column.key}`"
+                :row="row"
+                :column="column"
+                :value="cellValue(row, column)"
+              />
+              <ATooltip
+                v-else
+                :content="column.ellipsis ? tooltipText(row, column) : hoverTip"
+                :disabled="column.ellipsis ? !tooltipText(row, column) : !hoverTip"
+              >
+                <template #trigger>
+                  <div class="a-table__ellipsis" @mouseenter="onEllipsisEnter">
+                    <slot
+                      :name="`cell-${column.key}`"
+                      :row="row"
+                      :column="column"
+                      :value="cellValue(row, column)"
+                    >
+                      {{ displayText(row, column) }}
+                    </slot>
+                  </div>
+                </template>
+              </ATooltip>
+            </td>
+          </template>
         </tr>
+        <!-- 底部占位行：撑开末尾被虚拟跳过的行的空间 -->
+        <tr
+          v-if="spacerBottomHeight > 0"
+          class="a-table__spacer"
+          :style="{ height: `${spacerBottomHeight}px` }"
+          aria-hidden="true"
+        />
       </tbody>
     </table>
     <div v-if="!rows.length && !loading" class="a-table__empty">
@@ -374,5 +505,15 @@ tbody tr:hover .a-table__cell--fixed,
   tbody tr {
     transition: none;
   }
+}
+
+/* 虚拟滚动占位行：不显示分隔线，不响应 hover/选中/斑马纹 */
+.a-table__spacer {
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.a-table__spacer td {
+  box-shadow: none;
 }
 </style>

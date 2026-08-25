@@ -20,7 +20,8 @@ public sealed record MachineSchematicReportSection(
 public sealed record MachineSchematicReportMachineBlock(
     [property: JsonPropertyName("machineName")] string? MachineName,
     [property: JsonPropertyName("rows")] IReadOnlyList<MachineSchematicReportRow>? Rows,
-    [property: JsonPropertyName("images")] IReadOnlyList<MachineSchematicReportImage>? Images);
+    [property: JsonPropertyName("images")] IReadOnlyList<MachineSchematicReportImage>? Images,
+    [property: JsonPropertyName("sensors")] IReadOnlyList<MachineSchematicReportSensor>? Sensors);
 
 public sealed record MachineSchematicReportRow(
     [property: JsonPropertyName("id")] int Id,
@@ -31,7 +32,15 @@ public sealed record MachineSchematicReportRow(
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("desc")] string? Desc,
     [property: JsonPropertyName("note")] string? Note,
+    [property: JsonPropertyName("sensorIds")] IReadOnlyList<int>? SensorIds,
     [property: JsonPropertyName("image")] MachineSchematicReportImage? Image);
+
+public sealed record MachineSchematicReportSensor(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("sensorType")] string? SensorType,
+    [property: JsonPropertyName("brand")] string? Brand,
+    [property: JsonPropertyName("model")] string? Model,
+    [property: JsonPropertyName("spec")] string? Spec);
 
 public sealed record MachineSchematicReportImage(
     [property: JsonPropertyName("dataUrl")] string? DataUrl,

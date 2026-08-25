@@ -54,8 +54,8 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             "store.entity-groups.reorder",
             target: target,
             detail: payload.ValueKind == JsonValueKind.Array
-                ? $"{payload.GetArrayLength()} 个分类"
-                : null,
+                ? $"数据类型：数组；分类数：{payload.GetArrayLength()}"
+                : $"数据类型：{JsonKind(payload.ValueKind)}",
             success: result.Success,
             error: result.Error);
         if (!result.Success)
@@ -77,7 +77,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             : 0;
         await audit.WriteAsync(
             "store.replace-all",
-            detail: $"{keyCount} 个 key",
+            detail: $"数据类型：{JsonKind(payload.ValueKind)}；key数：{keyCount}",
             success: result.Success,
             error: result.Error);
         if (!result.Success)
@@ -98,7 +98,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         await audit.WriteAsync(
             "store.upsert",
             target: key,
-            detail: $"{itemCount} 条记录",
+            detail: $"数据类型：{JsonKind(value.ValueKind)}；记录数：{itemCount}",
             success: result.Success,
             error: result.Error);
         if (!result.Success)
@@ -118,6 +118,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         await audit.WriteAsync(
             "store.delete",
             target: key,
+            detail: result.Found ? $"删除目标：{key}" : "删除目标不存在",
             success: result.Found,
             error: result.Found ? null : "key 不存在");
         if (!result.Found)
@@ -126,5 +127,19 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         }
 
         return Ok(new { ok = true });
+    }
+
+    private static string JsonKind(JsonValueKind kind)
+    {
+        return kind switch
+        {
+            JsonValueKind.Array => "数组",
+            JsonValueKind.Object => "对象",
+            JsonValueKind.String => "字符串",
+            JsonValueKind.Number => "数字",
+            JsonValueKind.True or JsonValueKind.False => "布尔值",
+            JsonValueKind.Null => "空值",
+            _ => "未定义",
+        };
     }
 }

@@ -4,7 +4,6 @@ import { computed, ref, watch } from 'vue';
 
 import {
   CONTROLLED_FILE_RULES,
-  formatLocalDate,
   formatLocalDateTime,
   type SensorSopItem,
 } from '@/domain';
@@ -59,7 +58,7 @@ async function onFiles(picked: File[]) {
       mimeType: file.type || 'application/pdf',
       size: file.size,
       title: file.name.replace(/\.pdf$/i, ''),
-      uploadedAt: formatLocalDate(new Date()),
+      uploadedAt: new Date().toISOString(),
     });
     toastResult(result, 'SOP 已上传', {
       size: '文件大小超出 8 MB 限制',

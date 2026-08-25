@@ -11,6 +11,7 @@ import {
   AField,
   APagination,
   ASelect,
+  ASheet,
   ATable,
   type SelectOption,
   type TableColumn,
@@ -51,6 +52,8 @@ const items = ref<AuditLogItem[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
+const detailOpen = ref(false);
+const selectedLog = ref<AuditLogItem | null>(null);
 const filters = reactive({
   action: '' as string | null,
   dateRange: null as [string | null, string | null] | null,
@@ -62,11 +65,11 @@ const columns: TableColumn[] = [
   { key: 'timestamp', label: '时间', width: 180 },
   { key: 'username', label: '用户', width: 120 },
   { key: 'action', label: '操作', width: 120 },
-  { key: 'target', label: '目标', minWidth: 140, ellipsis: true },
-  { key: 'detail', label: '详情', minWidth: 180, ellipsis: true },
+  { key: 'target', label: '目标', minWidth: 180, ellipsis: true, align: 'start' },
+  { key: 'detail', label: '详情', width: 96 },
   { key: 'result', label: '结果', width: 88 },
-  { key: 'error', label: '说明', minWidth: 140, ellipsis: true },
-  { key: 'ip', label: 'IP', width: 130 },
+  { key: 'error', label: '说明', minWidth: 180, ellipsis: true, align: 'start' },
+  { key: 'ip', label: 'IP', width: 120 },
 ];
 
 watch([page, pageSize], loadData);
@@ -77,10 +80,27 @@ function actionLabel(action: string) {
   return ACTION_LABELS[action] ?? action;
 }
 
+function openDetail(log: AuditLogItem) {
+  selectedLog.value = log;
+  detailOpen.value = true;
+}
+
 function resultFilter(): boolean | undefined {
   if (filters.result === 'true') return true;
   if (filters.result === 'false') return false;
   return undefined;
+}
+
+function toIsoStart(dateStr: string | null): string | undefined {
+  if (!dateStr) return undefined;
+  const date = new Date(`${dateStr}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function toIsoEnd(dateStr: string | null): string | undefined {
+  if (!dateStr) return undefined;
+  const date = new Date(`${dateStr}T23:59:59.999`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 async function loadData() {
@@ -89,11 +109,11 @@ async function loadData() {
     const [from, to] = filters.dateRange ?? [null, null];
     const pageData = await api.listAuditLogs({
       action: filters.action || undefined,
-      from: from ? `${from}T00:00:00.000Z` : undefined,
+      from: toIsoStart(from),
       page: page.value,
       pageSize: pageSize.value,
       result: resultFilter(),
-      to: to ? `${to}T23:59:59.999Z` : undefined,
+      to: toIsoEnd(to),
       username: filters.username.trim() || undefined,
     });
     items.value = pageData.items;
@@ -148,6 +168,7 @@ function search() {
       empty-text="暂无日志"
       :loading="loading"
       striped
+      virtual
     >
       <template #cell-timestamp="{ row }">
         {{ formatLocalDateTime(new Date(row.timestamp)) }}
@@ -155,7 +176,11 @@ function search() {
       <template #cell-username="{ value }">{{ value || '—' }}</template>
       <template #cell-action="{ row }">{{ actionLabel(row.action) }}</template>
       <template #cell-target="{ value }">{{ value || '—' }}</template>
-      <template #cell-detail="{ value }">{{ value || '—' }}</template>
+      <template #cell-detail="{ row }">
+        <AButton size="small" variant="tinted" @click.stop="openDetail(row)">
+          查看
+        </AButton>
+      </template>
       <template #cell-result="{ row }">
         <ABadge
           :label="row.result ? '成功' : '失败'"
@@ -166,5 +191,92 @@ function search() {
       <template #cell-ip="{ value }">{{ value || '—' }}</template>
     </ATable>
     <APagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <ASheet v-model:open="detailOpen" title="操作详情" :width="640">
+      <dl v-if="selectedLog" class="audit-detail">
+        <div class="audit-detail__row">
+          <dt>日志编号</dt>
+          <dd>#{{ selectedLog.id }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>时间</dt>
+          <dd>{{ formatLocalDateTime(new Date(selectedLog.timestamp)) }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>用户</dt>
+          <dd>{{ selectedLog.username || '—' }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>操作</dt>
+          <dd>{{ actionLabel(selectedLog.action) }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>操作编码</dt>
+          <dd>{{ selectedLog.action }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>目标</dt>
+          <dd>{{ selectedLog.target || '—' }}</dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>结果</dt>
+          <dd>
+            <ABadge
+              :label="selectedLog.result ? '成功' : '失败'"
+              :tone="selectedLog.result ? 'green' : 'red'"
+            />
+          </dd>
+        </div>
+        <div class="audit-detail__row">
+          <dt>IP</dt>
+          <dd>{{ selectedLog.ip || '—' }}</dd>
+        </div>
+        <div class="audit-detail__row audit-detail__row--wide">
+          <dt>业务详情</dt>
+          <dd>{{ selectedLog.detail || '—' }}</dd>
+        </div>
+        <div class="audit-detail__row audit-detail__row--wide">
+          <dt>说明</dt>
+          <dd>{{ selectedLog.error || '—' }}</dd>
+        </div>
+      </dl>
+    </ASheet>
   </section>
 </template>
+
+<style scoped>
+.audit-detail {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.audit-detail__row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-height: var(--control-height-md);
+  padding-bottom: var(--space-3);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.audit-detail__row--wide {
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+.audit-detail dt {
+  color: var(--label-2);
+  font: var(--text-control-em);
+}
+
+.audit-detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--label);
+  font: var(--text-control);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+</style>

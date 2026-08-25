@@ -25,12 +25,25 @@ const percent = computed(() => `${Math.round(zoom.value * 100)}%`);
 
 let activeDoc: PdfDocument | null = null;
 let token = 0;
+let currentRenderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
 
 function clampZoom(value: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(value.toFixed(2))));
 }
 
+function cancelRender() {
+  if (currentRenderTask) {
+    try {
+      currentRenderTask.cancel();
+    } catch {
+      // ignore
+    }
+    currentRenderTask = null;
+  }
+}
+
 async function release() {
+  cancelRender();
   const doc = activeDoc;
   activeDoc = null;
   await destroyPdf(doc);
@@ -41,30 +54,56 @@ async function renderPage(currentToken: number) {
     return;
   }
 
-  const pdfPage = await activeDoc.getPage(page.value);
-  if (currentToken !== token) {
-    pdfPage.cleanup();
-    return;
-  }
+  cancelRender();
 
-  const viewport = pdfPage.getViewport({
-    scale: fitScale.value * zoom.value,
-  });
-  const canvas = canvasEl.value;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    pdfPage.cleanup();
-    return;
-  }
+  let pdfPage: Awaited<ReturnType<PdfDocument['getPage']>> | null = null;
+  try {
+    pdfPage = await activeDoc.getPage(page.value);
+    if (currentToken !== token || !activeDoc) {
+      pdfPage.cleanup();
+      return;
+    }
 
-  canvas.width = Math.floor(viewport.width);
-  canvas.height = Math.floor(viewport.height);
-  await pdfPage.render({
-    canvas,
-    canvasContext: context,
-    viewport,
-  }).promise;
-  pdfPage.cleanup();
+    const viewport = pdfPage.getViewport({
+      scale: fitScale.value * zoom.value,
+    });
+    const canvas = canvasEl.value;
+    if (!canvas) {
+      pdfPage.cleanup();
+      return;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      pdfPage.cleanup();
+      return;
+    }
+
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    const task = pdfPage.render({
+      canvas,
+      canvasContext: context,
+      viewport,
+    });
+    currentRenderTask = task;
+    await task.promise;
+  } catch (renderError) {
+    if (
+      renderError &&
+      typeof renderError === 'object' &&
+      'name' in renderError &&
+      renderError.name === 'RenderingCancelledException'
+    ) {
+      return;
+    }
+    if (currentToken === token) {
+      error.value =
+        renderError instanceof Error ? renderError.message : '页面渲染失败';
+    }
+  } finally {
+    pdfPage?.cleanup();
+  }
 }
 
 async function load(src: string) {

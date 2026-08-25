@@ -56,7 +56,7 @@ backend/                              后端（ASP.NET Core + SQLite）
   Saa.SensorSelection.Api/            Web API
   Saa.SensorSelection.Api.Tests/      集成测试
   scripts/backup-db.mjs               数据库备份
-scripts/deploy-iis.ps1                IIS 静态站点打包
+scripts/deploy-iis.ps1                IIS 前后端未压缩发布目录打包
 scripts/selection-contract-test.cjs   领域合同回归
 ```
 

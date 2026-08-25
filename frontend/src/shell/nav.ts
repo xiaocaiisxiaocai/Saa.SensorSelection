@@ -33,7 +33,7 @@ export const selectionNav: NavGroup = {
     { to: '/selection/customer', label: '客户管理', icon: Building2 },
     { to: '/selection/process', label: '制程管理', icon: Factory },
     { to: '/selection/machine', label: '机型结构', icon: Cpu },
-    { to: '/selection/sensor', label: 'Sensor 型号字典', icon: ListFilter },
+    { to: '/selection/sensor', label: 'Sensor型号', icon: ListFilter },
     { to: '/selection/dictionary', label: '数据字典', icon: BookType },
   ],
 };

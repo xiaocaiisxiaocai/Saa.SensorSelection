@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { STORAGE_KEY } from './keys';
 import { buildDefaultStore } from './repository';
+import { migrateSelectionSeedStore } from './seed-migration';
 import { CRUD_DEFAULTS, SEED_VERSION, SENSOR_DATA } from './seed';
 import { BackendStorage } from './storage';
-import type { BackendStoreTransport, PersistedStore, StorageLike } from './types';
+import type { BackendStoreTransport, StorageLike } from './types';
 
 function createFakeTransport(
   initial: Record<string, unknown[]>,
@@ -110,26 +111,31 @@ describe('BackendStorage', () => {
     expect([...transport.calls.writes].sort()).toEqual(['a', 'c']);
   });
 
-  it('rolls an optimistic write back after transport failure', async () => {
+  it('marks the backend offline after a write failure without saving local data', async () => {
     let writeFailureMsg = '';
+    const localMemory = new Map<string, string>();
     const transport = createFakeTransport({ a: [{ v: 1 }] }, { failKeys: ['a'] });
     const bridge = new BackendStorage({
       transport,
-      local: makeLocal(new Map()),
+      local: makeLocal(localMemory),
       onWriteFailure: (message) => {
         writeFailureMsg = message;
       },
     });
     await bridge.init();
+    const localSnapshot = localMemory.get(STORAGE_KEY);
     expect(bridge.setItem('a', JSON.stringify([{ v: 2 }]))).toBe(true);
     expect(bridge.getItem('a')).toBe('[{"v":2}]');
     await bridge.queue;
-    expect(bridge.getItem('a')).toBe('[{"v":1}]');
+    expect(bridge.status).toBe('offline');
+    expect(bridge.getItem('a')).toBeNull();
+    expect(localMemory.get(STORAGE_KEY)).toBe(localSnapshot);
     expect(writeFailureMsg).toMatch(/write blocked/);
   });
 
-  it('falls back to local read-write when fetch fails', async () => {
+  it('does not read or write local data when fetch fails', async () => {
     const localMemory = new Map<string, string>();
+    localMemory.set(STORAGE_KEY, JSON.stringify({ cached: [{ id: 1 }] }));
     const transport = createFakeTransport(
       {},
       { fetchError: new Error('network down') },
@@ -140,12 +146,14 @@ describe('BackendStorage', () => {
     });
     const offline = await bridge.init();
     expect(offline.status).toBe('offline');
-    expect(bridge.setItem('x', JSON.stringify([1]))).toBe(true);
-    expect(bridge.getItem('x')).toBe('[1]');
-    expect(localMemory.get('x')).toBe('[1]');
+    expect(bridge.getItem(STORAGE_KEY)).toBeNull();
+    expect(bridge.setItem('x', JSON.stringify([1]))).toBe(false);
+    expect(localMemory.get(STORAGE_KEY)).toBe(
+      JSON.stringify({ cached: [{ id: 1 }] }),
+    );
   });
 
-  it('rejects writes and reads local snapshot when unauthorized', async () => {
+  it('rejects writes and local reads when unauthorized', async () => {
     const unauthorized = Object.assign(new Error('token expired'), {
       kind: 'unauthorized',
     });
@@ -161,10 +169,8 @@ describe('BackendStorage', () => {
     const authState = await bridge.init();
     expect(authState.status).toBe('unauthorized');
     expect(bridge.setItem('y', JSON.stringify([1]))).toBe(false);
-    const localRead = JSON.parse(bridge.getItem(STORAGE_KEY) || '{}') as PersistedStore;
-    expect(localRead['customer-req:庆鼎']).toEqual([
-      { id: 1, content: '本地旧数据' },
-    ]);
+    expect(bridge.getItem(STORAGE_KEY)).toBeNull();
+    expect(localMemory.get(STORAGE_KEY)).toContain('本地旧数据');
   });
 
   it('backfills missing seed keys without overwriting user data', async () => {
@@ -191,6 +197,82 @@ describe('BackendStorage', () => {
     expect(transport.remote.get('b')).toEqual([2]);
   });
 
+  it('persists the production seed migration before advancing its version', async () => {
+    const transport = createFakeTransport({
+      'meta:seed-version': [{ version: 1 }],
+      'customer-req:庆鼎': [
+        {
+          id: 1,
+          type: '输送段',
+          machine: 'ALL',
+          process: '',
+          content: '板件有无检测，检测距离不大于 300mm',
+          source: '验收规范',
+          note: 'OMRON E3Z-D61 或同等级',
+        },
+      ],
+      'customer-req:景旺': [
+        {
+          id: 9,
+          type: '特殊要求',
+          machine: '专用机',
+          process: '压合',
+          content: '景旺专属要求',
+          source: '客户要求',
+          note: '',
+        },
+      ],
+    });
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+      seedDefaults: { 'meta:seed-version': [{ version: 2 }] },
+      seedMigration: migrateSelectionSeedStore,
+    } as ConstructorParameters<typeof BackendStorage>[0]);
+
+    await bridge.init();
+
+    expect(transport.remote.get('customer-req:庆鼎')).toEqual([]);
+    expect(transport.remote.get('customer-req:景旺')).toEqual([
+      expect.objectContaining({ id: 9, content: '景旺专属要求' }),
+    ]);
+    expect(transport.remote.get('meta:seed-version')).toEqual([{ version: 2 }]);
+  });
+
+  it('persists the limited initial customer data when upgrading from version 2', async () => {
+    const defaultStore = buildDefaultStore({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
+    });
+    const transport = createFakeTransport({
+      'meta:seed-version': [{ version: 2 }],
+      'customer-req:庆鼎': [],
+      'customer-req:景旺': [],
+    });
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+      seedDefaults: defaultStore,
+      seedMigration: migrateSelectionSeedStore,
+    });
+
+    await bridge.init();
+
+    expect(transport.remote.get('customer-req:庆鼎')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: '进板前确认板件到位后再启动输送' }),
+      ]),
+    );
+    expect(transport.remote.get('customer-req:景旺')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: '中段与末端均需设置掉板检测' }),
+      ]),
+    );
+    expect(transport.remote.get('meta:seed-version')).toEqual([
+      { version: SEED_VERSION },
+    ]);
+  });
+
   it('seeds an empty remote from buildDefaultStore', async () => {
     const defaultStore = buildDefaultStore({
       crudDefaults: CRUD_DEFAULTS,
@@ -198,7 +280,17 @@ describe('BackendStorage', () => {
     });
     expect(defaultStore['entity-groups:customer']).toHaveLength(3);
     expect(defaultStore['machine-global-sections:all']).toHaveLength(4);
+    expect(defaultStore['customer-req:庆鼎']).toHaveLength(2);
+    expect(defaultStore['customer-req:景旺']).toHaveLength(2);
+    expect(defaultStore['customer-req:健鼎']).toBeUndefined();
     expect(defaultStore['meta:seed-version']).toEqual([{ version: SEED_VERSION }]);
+    expect(
+      Object.keys(defaultStore).some((key) =>
+        /^(customer-(req|proc|feedback)|process-(feat|sensor)|machine-section-rows):/.test(
+          key,
+        ),
+      ),
+    ).toBe(true);
 
     const transport = createFakeTransport({});
     const bridge = new BackendStorage({

@@ -58,11 +58,11 @@ const filtered = computed(() => {
 });
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '制程分类', width: 120 },
-    { key: 'role', label: '制程作用', minWidth: 140, ellipsis: true },
-    { key: 'feature', label: '制程特性', minWidth: 140, ellipsis: true },
-    { key: 'sensorNote', label: 'sensor使用注意事项', minWidth: 180, ellipsis: true },
-    { key: 'note', label: '备注', minWidth: 120, ellipsis: true },
+    { key: 'type', label: '制程分类', width: 90 },
+    { key: 'role', label: '制程作用', minWidth: 150, ellipsis: true },
+    { key: 'feature', label: '制程特性', minWidth: 150, ellipsis: true },
+    { key: 'sensorNote', label: 'sensor使用注意事项', minWidth: 190, ellipsis: true },
+    { key: 'note', label: '备注', minWidth: 130, ellipsis: true },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });

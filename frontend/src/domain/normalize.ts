@@ -5,6 +5,7 @@ import type {
   CrudRecord,
   DictionaryItem,
   EntityGroup,
+  FeedbackMeasureHistoryEntry,
   MachineRowImage,
   MachineSectionItem,
   MachineSectionRow,
@@ -57,6 +58,55 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asList(source: unknown): unknown[] {
   return Array.isArray(source) ? source : [];
+}
+
+function normalizeFeedbackMeasureHistory(
+  item: Record<string, unknown>,
+): FeedbackMeasureHistoryEntry[] {
+  const latestMeasure = storedText(item.measure);
+  const latestDate = storedText(item.date);
+  const history = asList(item.measureHistory)
+    .filter(isRecord)
+    .map((entry) => ({
+      measure: storedText(entry.measure),
+      date: storedText(entry.date),
+      status: entry.status === '已作废' ? ('已作废' as const) : ('现行' as const),
+    }));
+
+  let currentIndex = -1;
+  history.forEach((entry, index) => {
+    if (entry.status === '现行') currentIndex = index;
+  });
+  history.forEach((entry, index) => {
+    entry.status = index === currentIndex ? '现行' : '已作废';
+  });
+
+  const current = currentIndex >= 0 ? history[currentIndex] : undefined;
+  const hasLatestFields =
+    Object.hasOwn(item, 'measure') || Object.hasOwn(item, 'date');
+  const latestHasContent = Boolean(latestMeasure.trim() || latestDate.trim());
+  if (
+    current &&
+    hasLatestFields &&
+    (current.measure !== latestMeasure || current.date !== latestDate)
+  ) {
+    current.status = '已作废';
+    if (latestHasContent) {
+      history.push({
+        measure: latestMeasure,
+        date: latestDate,
+        status: '现行',
+      });
+    }
+  } else if (!current && latestHasContent) {
+    history.push({
+      measure: latestMeasure,
+      date: latestDate,
+      status: '现行',
+    });
+  }
+
+  return history;
 }
 
 export function nextAvailableId(items: Array<{ id: number }>): number {
@@ -138,14 +188,19 @@ export function normalizeCrudItems(
           storedText(item.type).trim() ||
           createDictionaryDefaults('customer-feedback')[0]?.name ||
           '';
+        const measureHistory = normalizeFeedbackMeasureHistory(item);
+        const currentMeasure = [...measureHistory]
+          .reverse()
+          .find((entry) => entry.status === '现行');
         return {
           id,
           type,
           machine: storedText(item.machine),
           problem: storedText(item.problem),
-          measure: storedText(item.measure),
-          date: storedText(item.date),
+          measure: currentMeasure?.measure ?? '',
+          date: currentMeasure?.date ?? '',
           status,
+          measureHistory,
         };
       }
 

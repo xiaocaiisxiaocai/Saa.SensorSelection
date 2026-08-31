@@ -127,6 +127,7 @@ describe('MachinePage', () => {
       .findAllComponents(ASelect)
       .find((component) => component.props('placeholder') === '选择制程');
     expect(processSelect).toBeDefined();
+    expect(processSelect?.props('filterable')).toBe(true);
     expect(processSelect?.props('options')).toEqual([
       { label: '制程1', value: 1 },
       { label: '制程2', value: 2 },

@@ -394,7 +394,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter"
           :placeholder="
             isStructure
-              ? '搜索功能作用、传感器类型、规格、作用或备注'
+              ? '搜索功能作用、工艺制程、传感器类型、规格、作用或备注'
               : '搜索注意分类、事项名称、说明或备注'
           "
         />

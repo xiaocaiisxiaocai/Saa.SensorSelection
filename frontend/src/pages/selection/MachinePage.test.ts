@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { ASelect, ATokenField } from '@/ui';
+import { ASearchField, ASelect, ATokenField } from '@/ui';
 import { toast, useToastState } from '@/ui/toast';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
@@ -329,6 +329,55 @@ describe('MachinePage', () => {
         ),
     ).toBe(false);
     notesPanel.unmount();
+  });
+
+  it('searches structure records by their linked process step', async () => {
+    window.localStorage.clear();
+    const wrapper = await mountPage();
+    const selectionStore = useSelectionStore();
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const machineName = panel.props('machineName') as string;
+    const section = panel.props('section') as { id: number; kind: string };
+    const [firstProcessStep, secondProcessStep] = selectionStore.processSteps;
+    const sensor = selectionStore.sensors[0];
+
+    expect(section.kind).toBe('structure');
+    expect(firstProcessStep).toBeDefined();
+    expect(secondProcessStep).toBeDefined();
+    expect(sensor).toBeDefined();
+    if (!firstProcessStep || !secondProcessStep || !sensor) return;
+
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        note: '',
+        processStepId: firstProcessStep.id,
+        purpose: '',
+        role: '制程搜索-不匹配',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        note: '',
+        processStepId: secondProcessStep.id,
+        purpose: '',
+        role: '制程搜索-匹配',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    await flushPromises();
+
+    const search = panel.getComponent(ASearchField);
+    expect(search.props('placeholder')).toBe(
+      '搜索功能作用、工艺制程、传感器类型、规格、作用或备注',
+    );
+
+    search.vm.$emit('update:modelValue', secondProcessStep.name);
+    await flushPromises();
+
+    expect(panel.text()).toContain('制程搜索-匹配');
+    expect(panel.text()).not.toContain('制程搜索-不匹配');
+    wrapper.unmount();
   });
 
   it('keeps structure labels compact and gives specifications more room', async () => {

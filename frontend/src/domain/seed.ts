@@ -803,7 +803,7 @@ export function createProcessStepDefaults(): ProcessStepItem[] {
   return steps;
 }
 
-export const SEED_VERSION = 9;
+export const SEED_VERSION = 10;
 
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
@@ -820,7 +820,12 @@ export const FEEDBACK_TYPE_OPTIONS = [
   '其他',
 ];
 
-export const FEEDBACK_STATUS_OPTIONS = ['待处理', '处理中', '测试中', '已解决'];
+export const FEEDBACK_STATUS_OPTIONS = [
+  '01 待处理',
+  '02 处理中',
+  '03 测试中',
+  '04 已解决',
+];
 
 export const CUSTOMER_REQ_SOURCE_OPTIONS = [
   '验收规范',

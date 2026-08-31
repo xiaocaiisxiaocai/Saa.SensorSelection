@@ -30,7 +30,7 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 1. **写入失败必须回滚。** `persist()` 里 `setItem()` 返回 `false` 视为拒绝（未登录 / 离线写失败），内存快照回滚，返回 `{ ok: false, reason: 'storage' }`。UI 必须把这个失败提示给用户。
 2. **在线数据要快照到本地。** `BackendStorage.snapshotLocal()` 每次成功写入后把完整 store 写进 `localStorage`，后端挂掉后刷新页面仍可只读。
 3. **机型结构行以 `sensorIds` 为准。** `sensorType` / `spec` 是旧数据兼容字段，读取时容忍，新增/编辑时不作为数据源。
-4. **种子版本化回填。** `SEED_VERSION`（当前 `8`）落后时按迁移规则补种缺失数据，不覆盖用户业务记录。版本 8 移除历史全局机型 Tab 定义；旧行和图片内容保留但不再进入业务界面。改动默认数据时必须递增它。
+4. **种子版本化回填。** `SEED_VERSION`（当前 `10`）落后时按迁移规则补种缺失数据，不覆盖用户业务记录。版本 8 移除历史全局机型 Tab 定义；版本 9 将机型目录拆分为结构与专案机型；版本 10 以 `01–04` 编号状态为厂外反馈唯一标准，并迁移历史同义状态。改动默认数据时必须递增它。
 
 ---
 
@@ -53,14 +53,14 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | `sensor-sop-file:all` | Sensor SOP 文件库（PDF，不参与型号关联） |
 | `sensor-sop:all` | Sensor 资料文件（历史兼容键，当前为 PDF 资料） |
 | `sensor-3d:all` | Sensor 3D 文件（暂为 PDF） |
-| `machine-extra-sections:{机型名}` | 当前机型的用户自定义 tab（机构/结构或机型注意事项） |
+| `machine-extra-sections:{机型名}` | 当前机型的用户自定义 tab（结构或机型注意事项） |
 | `machine-section-rows:{sectionId}:{机型名}` | 结构/注意事项行 |
 | `machine-section-images:{sectionId}:{机型名}` | 结构示意图（最多 2 张） |
 
 文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF、图片和 3D 文件仅在预览或下载时按需请求，避免登录阶段传输文件正文。
 | `meta:seed-version` | 种子版本号 |
 
-历史遗留 key（只在读取或种子迁移时处理，不再作为活动配置写入）：`machine-conveyor:*` → `machine-section-rows:1:*`、`machine-arm:*` → `:2:`、`machine-platform:*` → `:3:`、`machine-notes:*` → `:4:`、`dict-feedback-type:all` → `dict:customer-feedback`。版本 8 删除 `dict:machine-section`、`machine-global-sections:all`、`general-structure-labels:all` 定义键，但保留旧 `machine-section-rows/images:*` 内容。
+历史遗留 key（只在读取或种子迁移时处理，不再作为活动配置写入）：`machine-conveyor:*` → `machine-section-rows:1:*`、`machine-arm:*` → `:2:`、`machine-platform:*` → `:3:`、`machine-notes:*` → `:4:`、`dict-feedback-type:all` → `dict:customer-feedback`。版本 8 删除 `dict:machine-section`、`machine-global-sections:all`、`general-structure-labels:all` 定义键，但保留旧 `machine-section-rows/images:*` 内容。版本 10 保留编号反馈状态的既有 id，删除四个无编号同义项，并将 `customer-feedback:*` 历史状态映射为编号名称；无关自定义状态保持不变。
 
 Token 键：**`symtek_token`**（不可改）。
 

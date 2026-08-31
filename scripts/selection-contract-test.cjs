@@ -407,10 +407,10 @@ async function run() {
   assert.deepEqual(
     statusTypes.map(({ name, sort }) => ({ name, sort })),
     [
-      { name: '待处理', sort: 1 },
-      { name: '处理中', sort: 2 },
-      { name: '测试中', sort: 3 },
-      { name: '已解决', sort: 4 },
+      { name: '01 待处理', sort: 1 },
+      { name: '02 处理中', sort: 2 },
+      { name: '03 测试中', sort: 3 },
+      { name: '04 已解决', sort: 4 },
     ],
   )
 
@@ -420,7 +420,7 @@ async function run() {
     problem: '字典分类验证',
     measure: '更换真空表头',
     date: '2026-08-11',
-    status: '待处理',
+    status: '01 待处理',
   })
   assert.equal(savedFeedback.ok, true)
   assert.equal(savedFeedback.item.problem, '字典分类验证')
@@ -458,7 +458,7 @@ async function run() {
     problem: '  ',
     measure: '',
     date: '2026-08-12',
-    status: '待处理',
+    status: '01 待处理',
   })
   assert.deepEqual(missingProblem, { ok: false, reason: 'validation' })
 
@@ -468,7 +468,7 @@ async function run() {
     problem: '仅问题点',
     measure: '',
     date: '',
-    status: '处理中',
+    status: '02 处理中',
   })
   assert.equal(optionalFields.ok, true)
   assert.equal(optionalFields.item.machine, '')
@@ -489,14 +489,14 @@ async function run() {
 
   const renamedStatus = repository.saveDictionaryItem(
     'customer-feedback-status',
-    { name: '待处理-改', sort: 1 },
+    { name: '01 待处理-改', sort: 1 },
     statusTypes[0].id,
   )
   assert.equal(renamedStatus.ok, true)
   assert.equal(
     repository
       .getCrud('customer-feedback', customer)
-      .some((item) => item.status === '待处理-改'),
+      .some((item) => item.status === '01 待处理-改'),
     true,
   )
 

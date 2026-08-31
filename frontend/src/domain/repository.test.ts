@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { STORAGE_KEY, keyFor } from './keys';
 import { createSelectionRepository } from './repository';
-import { CRUD_DEFAULTS, SENSOR_DATA } from './seed';
+import { CRUD_DEFAULTS, FEEDBACK_STATUS_OPTIONS, SENSOR_DATA } from './seed';
 import type { StorageLike } from './types';
 
 function createMemory(): { storage: StorageLike; reads: string[] } {
@@ -139,7 +139,7 @@ describe('entity-scoped business data', () => {
     const statusOnly = repo.saveCrud(
       'customer-feedback',
       '庆鼎',
-      { ...changed.item, status: '处理中' },
+      { ...changed.item, status: FEEDBACK_STATUS_OPTIONS[1] },
       changed.item.id,
     );
     expect(statusOnly.ok).toBe(true);

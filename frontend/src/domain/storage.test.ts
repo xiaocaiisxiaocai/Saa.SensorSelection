@@ -335,6 +335,46 @@ describe('BackendStorage', () => {
     ]);
   });
 
+  it('persists numbered feedback statuses and historical row mappings before version 10', async () => {
+    const defaultStore = buildDefaultStore({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
+    });
+    const transport = createFakeTransport({
+      'meta:seed-version': [{ version: 9 }],
+      'dict:customer-feedback-status': [
+        { id: 5, name: '待处理', sort: 1 },
+        { id: 8, name: '已解决', sort: 2 },
+        { id: 1, name: '01 待处理', sort: 3 },
+        { id: 4, name: '04 已解决', sort: 4 },
+      ],
+      'customer-feedback:庆鼎': [
+        { id: 1, problem: '历史问题', status: '已解决' },
+      ],
+    });
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+      seedDefaults: defaultStore,
+      seedMigration: migrateSelectionSeedStore,
+    });
+
+    await bridge.init();
+
+    expect(transport.remote.get('dict:customer-feedback-status')).toEqual([
+      { id: 1, name: '01 待处理', sort: 1 },
+      { id: 9, name: '02 处理中', sort: 2 },
+      { id: 10, name: '03 测试中', sort: 3 },
+      { id: 4, name: '04 已解决', sort: 4 },
+    ]);
+    expect(transport.remote.get('customer-feedback:庆鼎')).toEqual([
+      { id: 1, problem: '历史问题', status: '04 已解决' },
+    ]);
+    expect(transport.remote.get('meta:seed-version')).toEqual([
+      { version: 10 },
+    ]);
+  });
+
   it('seeds an empty remote from buildDefaultStore', async () => {
     const defaultStore = buildDefaultStore({
       crudDefaults: CRUD_DEFAULTS,

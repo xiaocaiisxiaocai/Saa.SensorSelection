@@ -7,6 +7,7 @@ import {
 } from './normalize';
 import { migrateSelectionSeedStore } from './seed-migration';
 import {
+  FEEDBACK_STATUS_OPTIONS,
   INITIAL_CRUD_DATA,
   LEGACY_DEMO_CRUD_DEFAULTS,
   MACHINE_SECTION_LEGACY_MAP,
@@ -282,6 +283,83 @@ describe('migrateSelectionSeedStore', () => {
         items: ['CSL(U)R-802（插框机）'],
         machineType: 'project',
       },
+    ]);
+  });
+
+  it('keeps numbered feedback statuses and remaps historical synonyms once', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 9 }],
+      'dict:customer-feedback-status': [
+        { id: 5, name: '待处理', sort: 1 },
+        { id: 6, name: '处理中', sort: 2 },
+        { id: 7, name: '测试中', sort: 3 },
+        { id: 8, name: '已解决', sort: 4 },
+        { id: 1, name: '01 待处理', sort: 5 },
+        { id: 2, name: '02 处理中', sort: 6 },
+        { id: 3, name: '03 测试中', sort: 7 },
+        { id: 4, name: '04 已解决', sort: 8 },
+        { id: 9, name: '等待客户确认', sort: 9 },
+      ],
+      'customer-feedback:测试客户': [
+        { id: 1, problem: 'A', status: '待处理' },
+        { id: 2, problem: 'B', status: 'processing' },
+        { id: 3, problem: 'C', status: '03 测试中' },
+        { id: 4, problem: 'D', status: '已解决' },
+        { id: 5, problem: 'E', status: '等待客户确认' },
+      ],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 9, 10);
+
+    expect(FEEDBACK_STATUS_OPTIONS).toEqual([
+      '01 待处理',
+      '02 处理中',
+      '03 测试中',
+      '04 已解决',
+    ]);
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['dict:customer-feedback-status']).toEqual([
+      { id: 1, name: '01 待处理', sort: 1 },
+      { id: 2, name: '02 处理中', sort: 2 },
+      { id: 3, name: '03 测试中', sort: 3 },
+      { id: 4, name: '04 已解决', sort: 4 },
+      { id: 9, name: '等待客户确认', sort: 5 },
+    ]);
+    expect(
+      migrated.store['customer-feedback:测试客户']?.map(
+        (item) => (item as { status?: unknown }).status,
+      ),
+    ).toEqual([
+      '01 待处理',
+      '02 处理中',
+      '03 测试中',
+      '04 已解决',
+      '等待客户确认',
+    ]);
+
+    const rerun = migrateSelectionSeedStore(migrated.store, 10, 10);
+    expect(rerun.changed).toBe(false);
+    expect(rerun.store).toEqual(migrated.store);
+  });
+
+  it('numbers a legacy-only feedback dictionary while preserving its item ids', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 9 }],
+      'dict:customer-feedback-status': [
+        { id: 11, name: '待处理', sort: 1 },
+        { id: 12, name: '处理中', sort: 2 },
+        { id: 13, name: '测试中', sort: 3 },
+        { id: 14, name: '已解决', sort: 4 },
+      ],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 9, 10);
+
+    expect(migrated.store['dict:customer-feedback-status']).toEqual([
+      { id: 11, name: '01 待处理', sort: 1 },
+      { id: 12, name: '02 处理中', sort: 2 },
+      { id: 13, name: '03 测试中', sort: 3 },
+      { id: 14, name: '04 已解决', sort: 4 },
     ]);
   });
 });

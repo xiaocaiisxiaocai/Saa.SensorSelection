@@ -24,6 +24,13 @@ const SENSOR_3D_CATALOG_VERSION = 6;
 const MACHINE_HIERARCHY_VERSION = 7;
 const USER_DEFINED_MACHINE_TABS_VERSION = 8;
 const MACHINE_CATALOG_SPLIT_VERSION = 9;
+const NUMBERED_FEEDBACK_STATUS_VERSION = 10;
+const LEGACY_FEEDBACK_STATUS_OPTIONS = [
+  '待处理',
+  '处理中',
+  '测试中',
+  '已解决',
+];
 
 function mergeMachineHierarchy(source: unknown) {
   const current = normalizeEntityGroups(source, 'machine');
@@ -151,10 +158,10 @@ function withoutLegacyRows(rows: unknown[], demoRows: unknown[]): unknown[] {
 
 function migrateFeedbackStatusDictionary(source: unknown[]) {
   const normalized = normalizeDictionaryItems(source);
-  const canonicalNames = new Set(FEEDBACK_STATUS_OPTIONS);
+  const canonicalNames = new Set(LEGACY_FEEDBACK_STATUS_OPTIONS);
   let nextId = Math.max(0, ...normalized.map((item) => item.id)) + 1;
 
-  const canonical = FEEDBACK_STATUS_OPTIONS.map((name, index) => {
+  const canonical = LEGACY_FEEDBACK_STATUS_OPTIONS.map((name, index) => {
     const existing = normalized.find((item) => item.name === name);
     return {
       id: existing?.id ?? nextId++,
@@ -166,10 +173,80 @@ function migrateFeedbackStatusDictionary(source: unknown[]) {
     .filter((item) => !canonicalNames.has(item.name))
     .map((item, index) => ({
       ...item,
-      sort: FEEDBACK_STATUS_OPTIONS.length + index + 1,
+      sort: LEGACY_FEEDBACK_STATUS_OPTIONS.length + index + 1,
     }));
 
   return [...canonical, ...custom];
+}
+
+function feedbackStatusBase(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  const aliases: Record<string, string> = {
+    pending: '待处理',
+    processing: '处理中',
+    testing: '测试中',
+    resolved: '已解决',
+  };
+  return aliases[raw.toLocaleLowerCase('en-US')] ||
+    raw.replace(/^\d+\s*[.、_\-:：]?\s*/, '').trim();
+}
+
+function migrateNumberedFeedbackStatuses(store: PersistedStore): boolean {
+  const dictionaryKey = 'dict:customer-feedback-status';
+  const current = Array.isArray(store[dictionaryKey])
+    ? store[dictionaryKey]
+    : [];
+  const normalized = normalizeDictionaryItems(current);
+  const canonicalByBase = new Map(
+    FEEDBACK_STATUS_OPTIONS.map((name) => [feedbackStatusBase(name), name]),
+  );
+  let nextId = Math.max(0, ...normalized.map((item) => item.id)) + 1;
+  const canonical = FEEDBACK_STATUS_OPTIONS.map((name, index) => {
+    const base = feedbackStatusBase(name);
+    const matches = normalized.filter(
+      (item) => feedbackStatusBase(item.name) === base,
+    );
+    const existing =
+      matches.find((item) => item.name === name) ||
+      matches.find((item) => /^\s*\d+/.test(item.name)) ||
+      matches[0];
+    return {
+      id: existing?.id ?? nextId++,
+      name,
+      sort: index + 1,
+    };
+  });
+  const custom = normalized
+    .filter((item) => !canonicalByBase.has(feedbackStatusBase(item.name)))
+    .map((item, index) => ({
+      ...item,
+      sort: FEEDBACK_STATUS_OPTIONS.length + index + 1,
+    }));
+  const nextDictionary = [...canonical, ...custom];
+  let changed = false;
+
+  if (!sameRecord(current, nextDictionary)) {
+    store[dictionaryKey] = nextDictionary;
+    changed = true;
+  }
+
+  for (const [key, rows] of Object.entries(store)) {
+    if (!key.startsWith('customer-feedback:')) continue;
+    let rowsChanged = false;
+    const nextRows = rows.map((row) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+      const record = row as Record<string, unknown>;
+      const canonicalName = canonicalByBase.get(feedbackStatusBase(record.status));
+      if (!canonicalName || record.status === canonicalName) return row;
+      rowsChanged = true;
+      return { ...record, status: canonicalName };
+    });
+    if (!rowsChanged) continue;
+    store[key] = nextRows;
+    changed = true;
+  }
+
+  return changed;
 }
 
 export function migrateSelectionSeedStore(
@@ -292,6 +369,14 @@ export function migrateSelectionSeedStore(
       store['entity-groups:machine'] = next;
       changed = true;
     }
+  }
+
+  if (
+    currentVersion < NUMBERED_FEEDBACK_STATUS_VERSION &&
+    targetVersion >= NUMBERED_FEEDBACK_STATUS_VERSION &&
+    migrateNumberedFeedbackStatuses(store)
+  ) {
+    changed = true;
   }
 
   return { changed, store };

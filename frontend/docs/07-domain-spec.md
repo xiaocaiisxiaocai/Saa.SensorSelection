@@ -127,7 +127,7 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `sensor-sop-file:all` | | Sensor SOP 文件库（独立 PDF，不参与型号关联） |
 | `sensor-sop:all` | | Sensor 资料（历史兼容键） |
 | `sensor-3d:all` | | Sensor 3D 文件 |
-| `machine-extra-sections:{机型名}` | | 当前机型的用户自定义 Tab（机构/结构或机型注意事项） |
+| `machine-extra-sections:{机型名}` | | 当前机型的用户自定义 Tab（结构或机型注意事项） |
 | `machine-section-rows:{sectionId}:{机型名}` | 专用函数，**不用** `keyFor` | 结构/注意事项行 |
 | `machine-section-images:{sectionId}:{机型名}` | 专用函数 | 结构示意图（最多 2 张） |
 | `meta:seed-version` | | `[{ version: number }]` |
@@ -211,7 +211,7 @@ Token 键 `symtek_token` 不属于领域 store。
 
 **`customer-feedback`**
 
-- `status`：`pending→待处理`，`processing→处理中`，`resolved→已解决`；否则 trim 后原文；空则字典 `customer-feedback-status` 第一项名，再退回 `'待处理'`。
+- `status`：`pending→01 待处理`，`processing→02 处理中`，`testing→03 测试中`，`resolved→04 已解决`；否则 trim 后原文；空则字典 `customer-feedback-status` 第一项名，再退回 `'01 待处理'`。
 - `type`：trim 后空则字典 `customer-feedback` 第一项名，再 `''`。
 - 字段：`id, type, machine, problem, measure, date, status`（均 `storedText`，status/type 按上）。
 
@@ -881,7 +881,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 ## 10. 种子（`seed.ts`）
 
-`SEED_VERSION = 8`。版本 7 补充「分类 → 配置 → 机型」目录；版本 8 删除历史全局机型 Tab、通用结构标签和对应字典定义键，但不删除旧行或图片内容。新安装不再内置机型 Tab，由用户逐机型新增。`专案机型` 无配置层。改默认数据必须递增。
+`SEED_VERSION = 10`。版本 7 补充「分类 → 配置 → 机型」目录；版本 8 删除历史全局机型 Tab、通用结构标签和对应字典定义键，但不删除旧行或图片内容；版本 9 将机型目录持久化分类为结构与专案机型；版本 10 将厂外反馈状态统一为 `01 待处理`、`02 处理中`、`03 测试中`、`04 已解决`，优先保留已有编号项 id，并同步迁移历史反馈状态。新安装不再内置机型 Tab，由用户逐机型新增。`专案机型` 无配置层。改默认数据必须递增。
 
 必须与旧 `data.js` **值等价**的导出：
 
@@ -891,7 +891,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 - `CRUD_DEFAULTS`（`customer-req|proc|feedback` 及四条 legacy `machine-*` 工厂）
 - `SENSOR_STATUS_OPTIONS = ['现用','备选','停用']`
 - `SENSOR_TYPE_OPTIONS = Object.keys(SENSOR_DATA)`
-- `FEEDBACK_TYPE_OPTIONS`、`FEEDBACK_STATUS_OPTIONS`、`CUSTOMER_REQ_SOURCE_OPTIONS`
+- `FEEDBACK_TYPE_OPTIONS`、`FEEDBACK_STATUS_OPTIONS = ['01 待处理','02 处理中','03 测试中','04 已解决']`、`CUSTOMER_REQ_SOURCE_OPTIONS`
 - `CRUD_TYPE_OPTIONS`
 - `PROCESS_LAYER_OPTIONS = ['内层','外层']`
 - `MACHINE_SECTION_SEED`、`GENERAL_STRUCTURE_CATEGORY`、`GENERAL_STRUCTURE_SECTION_LABELS` 仅保留给旧数据兼容，不进入新页面和新种子

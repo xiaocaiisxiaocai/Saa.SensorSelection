@@ -1,4 +1,8 @@
-import { MACHINE_ROW_IMAGE_RULES, createDictionaryDefaults } from './seed';
+import {
+  FEEDBACK_STATUS_OPTIONS,
+  MACHINE_ROW_IMAGE_RULES,
+  createDictionaryDefaults,
+} from './seed';
 import type {
   ControlledFileAttachment,
   ControlledFileItem,
@@ -218,9 +222,10 @@ export function normalizeCrudItems(
 
       if (listId === 'customer-feedback') {
         const statusAliases: Record<string, string> = {
-          pending: '待处理',
-          processing: '处理中',
-          resolved: '已解决',
+          pending: FEEDBACK_STATUS_OPTIONS[0] || '01 待处理',
+          processing: FEEDBACK_STATUS_OPTIONS[1] || '02 处理中',
+          testing: FEEDBACK_STATUS_OPTIONS[2] || '03 测试中',
+          resolved: FEEDBACK_STATUS_OPTIONS[3] || '04 已解决',
         };
         const rawStatus = storedText(item.status).trim();
         const status =

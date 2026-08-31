@@ -87,7 +87,9 @@ describe('normalizeCrudItems', () => {
         date: '2026-08-20',
       },
     ]);
-    expect(item && 'status' in item ? item.status : undefined).toBe('待处理');
+    expect(item && 'status' in item ? item.status : undefined).toBe(
+      createDictionaryDefaults('customer-feedback-status')[0]?.name,
+    );
     expect(item && 'type' in item ? item.type : undefined).toBe(
       createDictionaryDefaults('customer-feedback')[0]?.name,
     );

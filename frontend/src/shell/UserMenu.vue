@@ -153,6 +153,16 @@ async function onSelect(id: string) {
   background: var(--fill-3);
   border: 0;
   border-radius: var(--radius-pill);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (width < 560px) {
+  .user-chip {
+    max-width: 4rem;
+  }
 }
 
 .user-chip--menu {

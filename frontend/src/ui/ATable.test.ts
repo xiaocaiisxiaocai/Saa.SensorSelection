@@ -171,6 +171,31 @@ describe('ATable', () => {
 
     wrapper.unmount();
   });
+
+  it('announces and exposes keyboard scrolling when columns overflow', async () => {
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: { columns, rows, rowKey: 'id' },
+    });
+    const scroller = wrapper.get('.a-table');
+    Object.defineProperty(scroller.element, 'clientWidth', {
+      value: 320,
+      configurable: true,
+    });
+    Object.defineProperty(scroller.element, 'scrollWidth', {
+      value: 720,
+      configurable: true,
+    });
+
+    await scroller.trigger('scroll');
+    expect(scroller.attributes('tabindex')).toBe('0');
+    expect(scroller.attributes('aria-label')).toContain('横向滚动');
+    expect(scroller.classes()).toContain('a-table--overflow-end');
+
+    await scroller.trigger('keydown', { key: 'ArrowRight' });
+    expect(scroller.element.scrollLeft).toBeGreaterThan(0);
+    wrapper.unmount();
+  });
   it('renders only the visible window of rows when virtual=true', async () => {
     // 生成 100 行数据
     const manyRows = Array.from({ length: 100 }, (_, i) => ({

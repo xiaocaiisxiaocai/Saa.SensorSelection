@@ -252,6 +252,13 @@ const reportSections = computed<MachineReportSection[]>(() => {
       }),
     }));
 });
+const hasReportContent = computed(() =>
+  reportSections.value.some((section) =>
+    section.blocks.some(
+      (block) => block.rows.length > 0 || (block.images?.length ?? 0) > 0,
+    ),
+  ),
+);
 
 function addMachineContextQuery(
   query: Record<string, string>,
@@ -518,9 +525,16 @@ function ensureSelected() {
   return false;
 }
 
+function ensureReportContent() {
+  if (hasReportContent.value) return true;
+  toast.warning('所选机型暂无可生成的内容');
+  return false;
+}
+
 function previewReport() {
   if (!auth.isAuthenticated) return;
   if (!ensureSelected()) return;
+  if (!ensureReportContent()) return;
   const opened = openMachineSchematicReport(
     selectedMachineNames.value,
     reportSections.value,
@@ -533,6 +547,7 @@ function previewReport() {
 async function generateReport() {
   if (!auth.isAuthenticated) return;
   if (!ensureSelected()) return;
+  if (!ensureReportContent()) return;
   reportGenerating.value = true;
   try {
     const blob = await api.downloadMachineSchematicReport({
@@ -717,7 +732,7 @@ async function closeTab(value: string) {
         <AEmptyState
           v-else
           title="暂无 Tab"
-          description="请新增“机构/结构”或“机型注意事项”Tab"
+          description="请新增“结构”或“机型注意事项”Tab"
         >
           <template v-if="writable" #action>
             <AButton variant="filled" @click="openAddTab">新增 Tab</AButton>
@@ -795,7 +810,7 @@ async function closeTab(value: string) {
           <ASelect
             v-model="form.kind"
             :options="[
-              { label: '机构/结构', value: 'structure' },
+              { label: '结构', value: 'structure' },
               { label: '机型注意事项', value: 'notes' },
             ]"
           />
@@ -911,5 +926,41 @@ async function closeTab(value: string) {
 .machine-process-form h3 {
   margin: 0;
   font: var(--text-control-em);
+}
+
+@media (width < 60rem) {
+  .machine-source-stack {
+    width: 100%;
+    height: 100%;
+  }
+
+  .machine-process-context {
+    gap: var(--space-1);
+    padding: 0;
+  }
+
+  .machine-process-context__select {
+    width: auto;
+    min-width: 0;
+  }
+
+  .machine-process-context__manage {
+    padding-inline: var(--space-2);
+  }
+
+  .machine-report {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  .machine-report .selection-toolbar__count {
+    grid-column: 1 / -1;
+    margin-right: 0;
+  }
+
+  .machine-report :deep(.a-button) {
+    width: 100%;
+  }
 }
 </style>

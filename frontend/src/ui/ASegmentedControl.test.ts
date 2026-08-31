@@ -1,7 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import ASegmentedControl from './ASegmentedControl.vue';
+
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ASegmentedControl.vue'),
+  'utf8',
+);
 
 const segments = [
   { label: '要求', value: 'req' },
@@ -38,5 +47,9 @@ describe('ASegmentedControl', () => {
 
     await wrapper.get('[role="tablist"]').trigger('keydown', { key: 'ArrowRight' });
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['proc']);
+  });
+
+  it('keeps long tab sets horizontally scrollable instead of clipping them', () => {
+    expect(source).toMatch(/\.a-segmented\s*\{[^}]*overflow:\s*auto hidden;/s);
   });
 });

@@ -66,4 +66,27 @@ describe('tokens.css', () => {
     expect(tokens).toContain("'Inter'");
     expect(tokens).toContain("'Noto Sans SC'");
   });
+
+  it('keeps light-theme semantic colors readable on white surfaces', () => {
+    const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const getHex = (name: string) =>
+      light.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1] ?? '';
+    const luminance = (hex: string) => {
+      const channels = hex
+        .slice(1)
+        .match(/.{2}/g)!
+        .map((part) => Number.parseInt(part, 16) / 255)
+        .map((value) =>
+          value <= 0.04045
+            ? value / 12.92
+            : ((value + 0.055) / 1.055) ** 2.4,
+        );
+      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+    };
+    const contrastOnWhite = (hex: string) => 1.05 / (luminance(hex) + 0.05);
+
+    for (const name of ['--sys-blue', '--sys-green', '--sys-red', '--sys-orange']) {
+      expect(contrastOnWhite(getHex(name)), name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });

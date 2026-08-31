@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import {
   ChevronDown,
   ChevronRight,
@@ -87,6 +87,8 @@ const emit = defineEmits<{
 }>();
 
 const query = ref('');
+const tree = ref<HTMLElement | null>(null);
+const focusedItemKey = ref('');
 const width = ref(props.defaultWidth);
 const openGroups = ref(new Set(props.groups.map((group) => group.name)));
 const openConfigurations = ref(
@@ -193,6 +195,108 @@ const visibleGroups = computed(() => {
         (group.configurations?.length ?? 0) > 0,
     );
 });
+const visibleItemKeys = computed(() =>
+  visibleGroups.value.flatMap((group) => [
+    ...(group.configurations ?? []).flatMap((configuration) =>
+      configuration.items.map((item) =>
+        itemKey(group.name, configuration.name, item),
+      ),
+    ),
+    ...group.items.map((item) => itemKey(group.name, null, item)),
+  ]),
+);
+
+function rowTabIndex(category: string, configuration: string | null, item: string) {
+  const key = itemKey(category, configuration, item);
+  const activeKey =
+    focusedItemKey.value ||
+    props.selectedKey ||
+    visibleItemKeys.value.find((candidate) => {
+      if (!props.selected) return false;
+      return candidate.endsWith(`"${props.selected}"]`);
+    }) ||
+    visibleItemKeys.value[0];
+  return key === activeKey ? 0 : -1;
+}
+
+function focusItem(key: string) {
+  focusedItemKey.value = key;
+  void nextTick(() => {
+    const row = [...(tree.value?.querySelectorAll<HTMLElement>('[data-tree-key]') ?? [])]
+      .find((candidate) => candidate.dataset.treeKey === key);
+    row?.focus();
+  });
+}
+
+function onItemKeydown(
+  event: KeyboardEvent,
+  category: string,
+  configuration: string | null,
+  item: string,
+) {
+  if (event.target !== event.currentTarget) return;
+  const payload = { category, configuration, item };
+  const key = itemKey(category, configuration, item);
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    emit('select', payload);
+    return;
+  }
+  if (event.key === ' ' && props.checkedItems) {
+    event.preventDefault();
+    emit('toggleCheck', {
+      ...payload,
+      checked: !props.checkedItems.includes(key),
+    });
+    return;
+  }
+  if (event.key === 'F2' && props.editable) {
+    event.preventDefault();
+    emit('editItem', payload);
+    return;
+  }
+  if (event.key === 'Delete' && props.editable) {
+    event.preventDefault();
+    emit('deleteItem', payload);
+    return;
+  }
+  if (
+    event.altKey &&
+    canSort.value &&
+    (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+  ) {
+    const group = props.groups.find((candidate) => candidate.name === category);
+    const siblings = configuration
+      ? group?.configurations?.find(
+          (candidate) => candidate.name === configuration,
+        )?.items
+      : group?.items;
+    const oldIndex = siblings?.indexOf(item) ?? -1;
+    const newIndex =
+      event.key === 'ArrowDown' ? oldIndex + 1 : oldIndex - 1;
+    if (siblings && oldIndex >= 0 && newIndex >= 0 && newIndex < siblings.length) {
+      event.preventDefault();
+      emit('reorderItems', { category, configuration, oldIndex, newIndex });
+    }
+    return;
+  }
+  const index = visibleItemKeys.value.indexOf(key);
+  const nextIndex =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? visibleItemKeys.value.length - 1
+        : event.key === 'ArrowDown'
+          ? Math.min(visibleItemKeys.value.length - 1, index + 1)
+          : event.key === 'ArrowUp'
+            ? Math.max(0, index - 1)
+            : -1;
+  const nextKey = visibleItemKeys.value[nextIndex];
+  if (nextIndex >= 0 && nextKey) {
+    event.preventDefault();
+    focusItem(nextKey);
+  }
+}
 
 function toggleGroup(name: string) {
   const next = new Set(openGroups.value);
@@ -490,7 +594,7 @@ onMounted(restoreWidth);
         <Plus :size="14" />机型
       </button>
     </div>
-    <div class="machine-source__tree">
+    <div ref="tree" class="machine-source__tree">
       <section
         v-for="group in visibleGroups"
         :key="group.name"
@@ -505,6 +609,7 @@ onMounted(restoreWidth);
             v-if="canSort"
             class="machine-tree-row__handle"
             type="button"
+            tabindex="-1"
             :aria-label="`拖拽排序分类 ${group.name}`"
             draggable="true"
             @click.stop
@@ -567,6 +672,7 @@ onMounted(restoreWidth);
                 v-if="canSort"
                 class="machine-tree-row__handle"
                 type="button"
+                tabindex="-1"
                 :aria-label="`拖拽排序配置 ${configuration.name}`"
                 draggable="true"
                 @click.stop
@@ -663,20 +769,28 @@ onMounted(restoreWidth);
                 :data-category="group.name"
                 :data-configuration="configuration.name"
                 :data-item="item"
+                :data-tree-key="itemKey(group.name, configuration.name, item)"
+                :tabindex="rowTabIndex(group.name, configuration.name, item)"
+                role="button"
+                :aria-current="isSelected(group.name, configuration.name, item) ? 'true' : undefined"
+                aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
                 @dragover="allowDrop"
                 @drop="onItemDrop($event, group.name, configuration.name, item)"
                 @click="
+                  focusedItemKey = itemKey(group.name, configuration.name, item);
                   emit('select', {
                     category: group.name,
                     configuration: configuration.name,
                     item,
                   })
                 "
+                @keydown="onItemKeydown($event, group.name, configuration.name, item)"
               >
                 <button
                   v-if="canSort"
                   class="machine-tree-row__handle"
                   type="button"
+                  tabindex="-1"
                   :aria-label="`拖拽排序机型 ${item}`"
                   draggable="true"
                   @click.stop
@@ -695,6 +809,7 @@ onMounted(restoreWidth);
                 <input
                   v-if="checkedItems"
                   type="checkbox"
+                  tabindex="-1"
                   :aria-label="`选择 ${item}`"
                   :checked="
                     checkedItems.includes(
@@ -716,6 +831,7 @@ onMounted(restoreWidth);
                   <button
                     class="machine-tree-row__tool"
                     type="button"
+                    tabindex="-1"
                     :aria-label="`编辑机型 ${item}`"
                     @click.stop="
                       emit('editItem', {
@@ -730,6 +846,7 @@ onMounted(restoreWidth);
                   <button
                     class="machine-tree-row__tool"
                     type="button"
+                    tabindex="-1"
                     :aria-label="`删除机型 ${item}`"
                     @click.stop="
                       emit('deleteItem', {
@@ -757,20 +874,28 @@ onMounted(restoreWidth);
             :data-category="group.name"
             data-configuration=""
             :data-item="item"
+            :data-tree-key="itemKey(group.name, null, item)"
+            :tabindex="rowTabIndex(group.name, null, item)"
+            role="button"
+            :aria-current="isSelected(group.name, null, item) ? 'true' : undefined"
+            aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
             @dragover="allowDrop"
             @drop="onItemDrop($event, group.name, null, item)"
             @click="
+              focusedItemKey = itemKey(group.name, null, item);
               emit('select', {
                 category: group.name,
                 configuration: null,
                 item,
               })
             "
+            @keydown="onItemKeydown($event, group.name, null, item)"
           >
             <button
               v-if="canSort"
               class="machine-tree-row__handle"
               type="button"
+              tabindex="-1"
               :aria-label="`拖拽排序机型 ${item}`"
               draggable="true"
               @click.stop
@@ -782,6 +907,7 @@ onMounted(restoreWidth);
             <input
               v-if="checkedItems"
               type="checkbox"
+              tabindex="-1"
               :aria-label="`选择 ${item}`"
               :checked="checkedItems.includes(itemKey(group.name, null, item))"
               @click.stop
@@ -799,6 +925,7 @@ onMounted(restoreWidth);
               <button
                 class="machine-tree-row__tool"
                 type="button"
+                tabindex="-1"
                 :aria-label="`编辑机型 ${item}`"
                 @click.stop="
                   emit('editItem', {
@@ -813,6 +940,7 @@ onMounted(restoreWidth);
               <button
                 class="machine-tree-row__tool"
                 type="button"
+                tabindex="-1"
                 :aria-label="`删除机型 ${item}`"
                 @click.stop="
                   emit('deleteItem', {

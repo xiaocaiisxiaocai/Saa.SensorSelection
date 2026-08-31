@@ -21,6 +21,7 @@ import { ABanner, ASpinner, ATooltip } from '@/ui';
 import { toast } from '@/ui/toast';
 
 const SIDEBAR_STORAGE_KEY = 'apple-frontend:sidebar-collapsed';
+const COMPACT_MEDIA_QUERY = '(width < 960px)';
 
 const route = useRoute();
 const router = useRouter();
@@ -29,6 +30,8 @@ const auth = useAuthStore();
 const selection = useSelectionStore();
 
 const collapsed = ref(readCollapsed());
+const compactViewport = ref(false);
+const mobileSidebarOpen = ref(false);
 const contentScrolled = ref(false);
 const searchQuery = ref('');
 const searchInput = ref<HTMLInputElement | null>(null);
@@ -40,6 +43,10 @@ const searchHotkey = /Mac|iPhone|iPad/i.test(navigator.platform)
 const groups = computed(() => navGroupsFor(auth.permissions));
 
 const connecting = computed(() => selection.backendStatus === 'connecting');
+const sidebarExpanded = computed(() =>
+  compactViewport.value ? mobileSidebarOpen.value : !collapsed.value,
+);
+let compactMedia: MediaQueryList | null = null;
 
 const themeOptions: {
   icon: typeof Sun;
@@ -60,6 +67,10 @@ function readCollapsed() {
 }
 
 function toggleSidebar() {
+  if (compactViewport.value) {
+    mobileSidebarOpen.value = !mobileSidebarOpen.value;
+    return;
+  }
   collapsed.value = !collapsed.value;
 
   try {
@@ -67,6 +78,15 @@ function toggleSidebar() {
   } catch {
     /* private browsing */
   }
+}
+
+function updateCompactViewport(matches: boolean) {
+  compactViewport.value = matches;
+  if (!matches) mobileSidebarOpen.value = false;
+}
+
+function onCompactMediaChange(event: MediaQueryListEvent) {
+  updateCompactViewport(event.matches);
 }
 
 function onContentScroll(event: Event) {
@@ -106,15 +126,22 @@ function onSearchHotkey(event: KeyboardEvent) {
 onMounted(() => {
   selection.ensureBackendInit();
   window.addEventListener('keydown', onSearchHotkey);
+  compactMedia = window.matchMedia?.(COMPACT_MEDIA_QUERY) ?? null;
+  if (compactMedia) {
+    updateCompactViewport(compactMedia.matches);
+    compactMedia.addEventListener('change', onCompactMediaChange);
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onSearchHotkey);
+  compactMedia?.removeEventListener('change', onCompactMediaChange);
 });
 
 watch(
   () => [route.path, route.query.q] as const,
   ([path, q]) => {
+    mobileSidebarOpen.value = false;
     if (path === '/selection/search') {
       searchQuery.value = String(q || '');
     }
@@ -137,15 +164,22 @@ watch(
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'app-shell--collapsed': collapsed }">
+  <div
+    class="app-shell"
+    :class="{
+      'app-shell--collapsed': !compactViewport && collapsed,
+      'app-shell--compact': compactViewport,
+      'app-shell--drawer-open': compactViewport && mobileSidebarOpen,
+    }"
+  >
     <header class="toolbar material-toolbar" :class="{ 'toolbar--scrolled': contentScrolled }">
       <div class="toolbar__start">
         <button
           class="icon-button"
           type="button"
-          :aria-expanded="!collapsed"
+          :aria-expanded="sidebarExpanded"
           aria-controls="app-sidebar"
-          :aria-label="collapsed ? '展开侧栏' : '折叠侧栏'"
+          :aria-label="sidebarExpanded ? '折叠侧栏' : '展开侧栏'"
           @click="toggleSidebar"
         >
           <PanelLeft :size="18" :stroke-width="1.5" />
@@ -209,30 +243,40 @@ watch(
         id="app-sidebar"
         class="sidebar material-sidebar"
         aria-label="主导航"
+        :aria-hidden="compactViewport && !mobileSidebarOpen ? true : undefined"
+        :inert="compactViewport && !mobileSidebarOpen ? true : undefined"
       >
         <section v-for="group in groups" :key="group.id" class="nav-group">
-          <h2 v-if="!collapsed" class="nav-group__label">{{ group.label }}</h2>
+          <h2 v-if="sidebarExpanded" class="nav-group__label">{{ group.label }}</h2>
           <ATooltip
             v-for="item in group.items"
             :key="item.to"
             :content="item.label"
             side="right"
-            :disabled="!collapsed"
+            :disabled="sidebarExpanded"
           >
             <template #trigger>
               <RouterLink
                 class="nav-item"
                 :class="{ 'nav-item--active': isActive(item.to) }"
                 :to="item.to"
-                :title="collapsed ? item.label : undefined"
+                :title="sidebarExpanded ? undefined : item.label"
               >
                 <component :is="item.icon" class="nav-item__icon" :size="18" :stroke-width="1.5" />
-                <span v-if="!collapsed" class="nav-item__label">{{ item.label }}</span>
+                <span v-if="sidebarExpanded" class="nav-item__label">{{ item.label }}</span>
               </RouterLink>
             </template>
           </ATooltip>
         </section>
       </nav>
+
+      <button
+        v-if="compactViewport && mobileSidebarOpen"
+        class="sidebar-backdrop"
+        type="button"
+        aria-label="关闭导航"
+        @click="mobileSidebarOpen = false"
+      />
 
       <main class="content" @scroll="onContentScroll">
         <div v-if="connecting" class="content__loading">
@@ -255,7 +299,7 @@ watch(
 
 .toolbar {
   position: relative;
-  z-index: 2;
+  z-index: 30;
   display: grid;
   flex-shrink: 0;
   grid-template-columns: 1fr minmax(0, 28rem) 1fr;
@@ -413,6 +457,7 @@ watch(
 }
 
 .body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -530,13 +575,80 @@ watch(
 }
 
 @media (width < 960px) {
+  .toolbar {
+    grid-template-columns: auto minmax(8rem, 1fr) auto;
+    gap: var(--space-3);
+    padding: 0 var(--space-3);
+  }
+
+  .toolbar__start,
+  .toolbar__end {
+    gap: var(--space-2);
+  }
+
+  .brand__name,
   .search kbd {
     display: none;
+  }
+
+  .sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(var(--sidebar-width), calc(100vw - 48px));
+    padding: var(--space-3);
+    box-shadow: var(--shadow-4);
+    transform: translateX(-105%);
+    transition: transform var(--dur-3) var(--ease-sheet);
+  }
+
+  .app-shell--drawer-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    padding: 0;
+    background: var(--overlay);
+    border: 0;
+    backdrop-filter: var(--overlay-blur);
+  }
+
+  .content {
+    padding: var(--space-5);
+  }
+}
+
+@media (width < 560px) {
+  .toolbar {
+    gap: var(--space-2);
+    padding: 0 var(--space-2);
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .search {
+    height: var(--control-height-md);
+    padding: 0 var(--space-3);
+  }
+
+  .theme-switch {
+    gap: 0;
+    padding: 0;
+  }
+
+  .content {
+    padding: var(--space-3);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
+  .sidebar-backdrop,
   .nav-item {
     transition: none;
   }

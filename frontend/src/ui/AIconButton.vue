@@ -107,6 +107,15 @@ function onClick(event: MouseEvent) {
   transform: translate(-50%, -50%);
 }
 
+.a-icon-button--small::before {
+  position: absolute;
+  inset: 50%;
+  width: 36px;
+  height: 36px;
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
 .a-icon-button--borderless {
   color: var(--label-2);
   background: transparent;

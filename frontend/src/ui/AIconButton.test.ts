@@ -1,8 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { defineComponent, markRaw } from 'vue';
 import { describe, expect, it } from 'vitest';
 
 import AIconButton from './AIconButton.vue';
+
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'AIconButton.vue'),
+  'utf8',
+);
 
 const IconStub = markRaw(
   defineComponent({
@@ -29,11 +38,12 @@ describe('AIconButton', () => {
     ).toThrow(/label/);
   });
 
-  it('does not expand the hit area for the small table size', () => {
+  it('expands the hit area for the small table size without enlarging the icon', () => {
     const wrapper = mount(AIconButton, {
       props: { icon: IconStub, label: '删除', size: 'small' },
     });
 
     expect(wrapper.get('button').classes()).toContain('a-icon-button--small');
+    expect(source).toMatch(/\.a-icon-button--small::before\s*\{/);
   });
 });

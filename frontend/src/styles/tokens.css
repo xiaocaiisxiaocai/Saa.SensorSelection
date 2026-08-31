@@ -1,22 +1,22 @@
 :root {
   color-scheme: light;
 
-  --sys-blue: #007aff;
-  --sys-green: #34c759;
-  --sys-red: #ff3b30;
-  --sys-orange: #ff9500;
+  --sys-blue: #0066cc;
+  --sys-green: #16733c;
+  --sys-red: #c9182b;
+  --sys-orange: #9a4d00;
   --sys-yellow: #ffcc00;
   --sys-teal: #30b0c7;
   --sys-indigo: #5856d6;
   --sys-purple: #af52de;
   --sys-pink: #ff2d55;
   --sys-gray: #8e8e93;
-  --sys-blue-fill: rgb(0 122 255 / 12%);
-  --sys-blue-fill-strong: rgb(0 122 255 / 18%);
-  --sys-green-fill: rgb(52 199 89 / 14%);
-  --sys-red-fill: rgb(255 59 48 / 14%);
-  --sys-red-fill-strong: rgb(255 59 48 / 18%);
-  --sys-orange-fill: rgb(255 149 0 / 14%);
+  --sys-blue-fill: rgb(0 102 204 / 12%);
+  --sys-blue-fill-strong: rgb(0 102 204 / 18%);
+  --sys-green-fill: rgb(22 115 60 / 14%);
+  --sys-red-fill: rgb(201 24 43 / 14%);
+  --sys-red-fill-strong: rgb(201 24 43 / 18%);
+  --sys-orange-fill: rgb(154 77 0 / 14%);
   --sys-yellow-fill: rgb(255 204 0 / 18%);
   --sys-teal-fill: rgb(48 176 199 / 14%);
   --sys-indigo-fill: rgb(88 86 214 / 14%);

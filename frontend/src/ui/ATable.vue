@@ -45,6 +45,8 @@ const selectedKey = defineModel<string | number | null>('selectedKey', {
 
 const scroller = ref<HTMLElement | null>(null);
 const scrolled = ref(false);
+const canScrollStart = ref(false);
+const canScrollEnd = ref(false);
 const focusedKey = ref<string | number | null>(null);
 
 // ─── 虚拟滚动状态 ────────────────────────────────────────────────
@@ -100,10 +102,13 @@ function setupResizeObserver() {
 
 onMounted(() => {
   if (props.virtual) setupResizeObserver();
+  void nextTick(updateOverflowMetrics);
+  window.addEventListener('resize', updateOverflowMetrics);
 });
 
 onUnmounted(() => {
   resizeObserver?.disconnect();
+  window.removeEventListener('resize', updateOverflowMetrics);
 });
 
 watch(
@@ -235,9 +240,28 @@ function onRowKeydown(event: KeyboardEvent, row: T) {
 
 function onScroll() {
   scrolled.value = (scroller.value?.scrollTop ?? 0) > 0;
+  updateOverflowMetrics();
   if (props.virtual) {
     scrollTop.value = scroller.value?.scrollTop ?? 0;
   }
+}
+
+function updateOverflowMetrics() {
+  const element = scroller.value;
+  if (!element) return;
+  const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+  canScrollStart.value = element.scrollLeft > 1;
+  canScrollEnd.value = element.scrollLeft < maxScrollLeft - 1;
+}
+
+function onScrollerKeydown(event: KeyboardEvent) {
+  if (event.target !== scroller.value) return;
+  const element = scroller.value;
+  if (!element || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  const direction = event.key === 'ArrowRight' ? 1 : -1;
+  element.scrollLeft += direction * Math.max(120, element.clientWidth * 0.6);
+  updateOverflowMetrics();
 }
 
 watch(
@@ -260,9 +284,14 @@ watch(
       'a-table--loose': rowHeight === 'loose',
       'a-table--striped': striped,
       'a-table--virtual': virtual,
+      'a-table--overflow-start': canScrollStart,
+      'a-table--overflow-end': canScrollEnd,
     }"
     :aria-busy="loading ? true : undefined"
+    :aria-label="canScrollStart || canScrollEnd ? '数据表格，可使用左右方向键横向滚动' : undefined"
+    :tabindex="canScrollStart || canScrollEnd ? 0 : undefined"
     @scroll="onScroll"
+    @keydown="onScrollerKeydown"
   >
     <table>
       <thead>
@@ -374,8 +403,38 @@ watch(
 .a-table {
   position: relative;
   min-width: 0;
-  overflow: hidden auto;
+  overflow: auto;
   background: var(--bg-content);
+}
+
+.a-table--overflow-end {
+  box-shadow: inset -14px 0 12px -14px var(--label-2);
+}
+
+.a-table--overflow-start {
+  box-shadow: inset 14px 0 12px -14px var(--label-2);
+}
+
+.a-table--overflow-start.a-table--overflow-end {
+  box-shadow:
+    inset 14px 0 12px -14px var(--label-2),
+    inset -14px 0 12px -14px var(--label-2);
+}
+
+.a-table:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
+}
+
+.a-table::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.a-table::-webkit-scrollbar-thumb {
+  background: var(--fill-1);
+  border: 2px solid var(--bg-content);
+  border-radius: var(--radius-pill);
 }
 
 table {

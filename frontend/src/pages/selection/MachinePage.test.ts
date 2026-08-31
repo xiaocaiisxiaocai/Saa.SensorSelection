@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { ASelect, ATokenField } from '@/ui';
+import { toast, useToastState } from '@/ui/toast';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
 
@@ -22,6 +23,7 @@ const selectionPageCss = readFileSync(
   ),
   'utf8',
 );
+const machinePageSource = readFileSync(fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'), 'utf8');
 
 async function mountPage(
   authenticated = false,
@@ -59,6 +61,10 @@ async function mountPage(
 }
 
 describe('MachinePage', () => {
+  afterEach(() => {
+    toast.clear();
+    vi.restoreAllMocks();
+  });
   it('separates mechanism and project machines under every process', async () => {
     const wrapper = await mountPage(true, true);
     const catalogTabs = wrapper.get('.machine-catalog-tabs');
@@ -218,10 +224,30 @@ describe('MachinePage', () => {
       );
     expect(typeSelect).toBeDefined();
     expect(typeSelect?.props('options')).toEqual([
-      { label: '机构/结构', value: 'structure' },
+      { label: '结构', value: 'structure' },
       { label: '机型注意事项', value: 'notes' },
     ]);
 
+    wrapper.unmount();
+  });
+
+  it('explains why a selected machine with no rows or images cannot be reported', async () => {
+    const wrapper = await mountPage(true);
+    const checkbox = wrapper.get('input[aria-label="选择 01 单段输送段（搭配）"]');
+    await checkbox.setValue(true);
+    await flushPromises();
+
+    const openSpy = vi.spyOn(window, 'open');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '预览 / 打印 PDF')
+      ?.trigger('click');
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(useToastState().items.value.at(-1)).toMatchObject({
+      tone: 'warning',
+      message: '所选机型暂无可生成的内容',
+    });
     wrapper.unmount();
   });
 
@@ -361,6 +387,21 @@ describe('MachinePage', () => {
     );
     expect(selectionPageCss).not.toMatch(
       /\.machine-images \.a-file-drop\s*\{[^}]*width:\s*calc\(100% \+[^}]*\}/s,
+    );
+  });
+
+  it('stacks the source tree above content with a bounded height on narrow screens', () => {
+    expect(selectionPageCss).toMatch(
+      /@media \(width < 60rem\)[\s\S]*\.selection-split\s*\{[^}]*grid-template-rows:\s*minmax\(12rem,\s*42vh\)\s+minmax\(0,\s*1fr\);/s,
+    );
+    expect(selectionPageCss).toMatch(
+      /@media \(width < 60rem\)[\s\S]*\.entity-source\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
+    );
+    expect(machinePageSource).toMatch(
+      /@media \(width < 60rem\)[\s\S]*\.machine-source-stack\s*\{[^}]*width:\s*100%;/s,
+    );
+    expect(machinePageSource).toMatch(
+      /@media \(width < 60rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/s,
     );
   });
 

@@ -33,6 +33,7 @@ function updateThumb() {
   }
   thumbX.value = selected.offsetLeft;
   thumbWidth.value = selected.offsetWidth;
+  selected.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
 function select(value: string) {
@@ -132,8 +133,20 @@ watch(
   width: max-content;
   max-width: 100%;
   padding: var(--space-1);
+  overflow: auto hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
   background: var(--fill-1);
   border-radius: var(--radius-lg);
+}
+
+.a-segmented::-webkit-scrollbar {
+  height: var(--space-2);
+}
+
+.a-segmented::-webkit-scrollbar-thumb {
+  background: var(--fill-1);
+  border-radius: var(--radius-pill);
 }
 
 .a-segmented__thumb {

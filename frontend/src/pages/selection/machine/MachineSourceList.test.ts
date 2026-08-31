@@ -148,6 +148,70 @@ describe('MachineSourceList', () => {
     shown.unmount();
   });
 
+  it('keeps drag and row action affordances out of the normal tab sequence', () => {
+    const wrapper = mountList();
+
+    expect(
+      wrapper
+        .findAll('[aria-label^="拖拽排序"]')
+        .every((handle) => handle.attributes('tabindex') === '-1'),
+    ).toBe(true);
+    expect(
+      wrapper
+        .findAll('.machine-tree-row--item .machine-tree-row__tools button')
+        .every((button) => button.attributes('tabindex') === '-1'),
+    ).toBe(true);
+    expect(
+      wrapper.findAll('[data-node-kind="item"][tabindex="0"]'),
+    ).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('supports selecting and checking a machine from its keyboard row', async () => {
+    const wrapper = mountList({ checkedItems: [] });
+    const row = wrapper.get(
+      '[data-node-kind="item"][data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
+    );
+
+    await row.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('select')?.at(-1)).toEqual([
+      {
+        category: '分类甲',
+        configuration: '配置甲',
+        item: '配置机型一',
+      },
+    ]);
+
+    await row.trigger('keydown', { key: ' ' });
+    expect(wrapper.emitted('toggleCheck')?.at(-1)).toEqual([
+      {
+        category: '分类甲',
+        configuration: '配置甲',
+        item: '配置机型一',
+        checked: true,
+      },
+    ]);
+    wrapper.unmount();
+  });
+
+  it('reorders sibling machines with Alt plus arrow keys', async () => {
+    const wrapper = mountList();
+    const row = wrapper.get(
+      '[data-node-kind="item"][data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
+    );
+
+    await row.trigger('keydown', { key: 'ArrowDown', altKey: true });
+    expect(wrapper.emitted('reorderItems')?.at(-1)).toEqual([
+      {
+        category: '分类甲',
+        configuration: '配置甲',
+        oldIndex: 0,
+        newIndex: 1,
+      },
+    ]);
+    wrapper.unmount();
+  });
+
   it('emits exact source and target indexes for every hierarchy level', async () => {
     const wrapper = mountList();
     const transfer = dataTransfer();

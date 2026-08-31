@@ -651,7 +651,6 @@ async function closeTab(value: string) {
             v-model="processSelection"
             class="machine-process-context__select"
             :options="processOptions"
-            filterable
             placeholder="选择制程"
           />
           <AButton

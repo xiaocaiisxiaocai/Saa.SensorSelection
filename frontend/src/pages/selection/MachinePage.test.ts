@@ -127,7 +127,6 @@ describe('MachinePage', () => {
       .findAllComponents(ASelect)
       .find((component) => component.props('placeholder') === '选择制程');
     expect(processSelect).toBeDefined();
-    expect(processSelect?.props('filterable')).toBe(true);
     expect(processSelect?.props('options')).toEqual([
       { label: '制程1', value: 1 },
       { label: '制程2', value: 2 },
@@ -378,6 +377,68 @@ describe('MachinePage', () => {
 
     expect(panel.text()).toContain('制程搜索-匹配');
     expect(panel.text()).not.toContain('制程搜索-不匹配');
+    wrapper.unmount();
+  });
+
+  it('filters structure records from a searchable process-step dropdown', async () => {
+    window.localStorage.clear();
+    const wrapper = await mountPage();
+    const selectionStore = useSelectionStore();
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const machineName = panel.props('machineName') as string;
+    const section = panel.props('section') as { id: number; kind: string };
+    const [firstProcessStep, secondProcessStep] = selectionStore.processSteps;
+    const sensor = selectionStore.sensors[0];
+
+    expect(section.kind).toBe('structure');
+    expect(firstProcessStep).toBeDefined();
+    expect(secondProcessStep).toBeDefined();
+    expect(sensor).toBeDefined();
+    if (!firstProcessStep || !secondProcessStep || !sensor) return;
+
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        note: '',
+        processStepId: firstProcessStep.id,
+        purpose: '',
+        role: '制程下拉-不匹配',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        note: '',
+        processStepId: secondProcessStep.id,
+        purpose: '',
+        role: '制程下拉-匹配',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    await flushPromises();
+
+    const processFilter = panel
+      .findAllComponents(ASelect)
+      .find((component) => component.props('placeholder') === '工艺制程');
+    expect(processFilter).toBeDefined();
+    expect(processFilter?.props('filterable')).toBe(true);
+    expect(processFilter?.props('clearable')).toBe(true);
+    expect(processFilter?.props('options')).toEqual(
+      selectionStore.processSteps.map((item) => ({
+        label: `${item.layer} · ${item.name}`,
+        value: item.id,
+      })),
+    );
+
+    processFilter?.vm.$emit('update:modelValue', secondProcessStep.id);
+    await flushPromises();
+
+    expect(panel.text()).toContain('制程下拉-匹配');
+    expect(panel.text()).not.toContain('制程下拉-不匹配');
+
+    await panel.get('button[aria-label="重置筛选"]').trigger('click');
+    await flushPromises();
+    expect(processFilter?.props('modelValue')).toBeNull();
+    expect(panel.text()).toContain('制程下拉-不匹配');
     wrapper.unmount();
   });
 

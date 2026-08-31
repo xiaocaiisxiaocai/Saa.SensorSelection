@@ -50,6 +50,7 @@ const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
 const sensorTypeFilters = ref<Array<string | number>>([]);
+const processStepFilter = ref<string | number | null>(null);
 const preview = ref<MachineRowImage | null>(null);
 const imageOpen = computed({
   get: () => Boolean(preview.value),
@@ -110,7 +111,10 @@ const items = computed(() =>
 );
 const hasTabContent = computed(() => items.value.length > 0);
 const hasActiveFilters = computed(
-  () => Boolean(query.value.trim()) || sensorTypeFilters.value.length > 0,
+  () =>
+    Boolean(query.value.trim()) ||
+    sensorTypeFilters.value.length > 0 ||
+    processStepFilter.value !== null,
 );
 const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
@@ -121,6 +125,13 @@ const filtered = computed(() => {
       !sensorRecords(item).some((sensor) =>
         sensorTypeFilters.value.includes(sensor.sensorType),
       )
+    ) {
+      return false;
+    }
+    if (
+      isStructure.value &&
+      processStepFilter.value !== null &&
+      item.processStepId !== Number(processStepFilter.value)
     ) {
       return false;
     }
@@ -195,12 +206,13 @@ watch(
   () => {
     query.value = '';
     sensorTypeFilters.value = [];
+    processStepFilter.value = null;
     page.value = 1;
     dialogOpen.value = false;
     preview.value = null;
   },
 );
-watch([query, sensorTypeFilters, pageSize], () => {
+watch([query, sensorTypeFilters, processStepFilter, pageSize], () => {
   page.value = 1;
 });
 
@@ -213,6 +225,7 @@ function sensorRecords(item: MachineSectionRow): SensorItem[] {
 function resetFilters() {
   query.value = '';
   sensorTypeFilters.value = [];
+  processStepFilter.value = null;
   page.value = 1;
 }
 
@@ -389,6 +402,15 @@ async function removeImage(index: number) {
           placeholder="传感器类型"
           :max-visible-tokens="1"
         />
+        <ASelect
+          v-if="isStructure"
+          v-model="processStepFilter"
+          class="selection-toolbar__filter"
+          :options="processStepOptions"
+          placeholder="工艺制程"
+          filterable
+          clearable
+        />
         <ASearchField
           v-model="query"
           class="selection-toolbar__filter"
@@ -408,7 +430,9 @@ async function removeImage(index: number) {
         :rows="tableData"
         row-key="displayId"
         :empty-text="
-          query.trim() || sensorTypeFilters.length
+          query.trim() ||
+            sensorTypeFilters.length ||
+            processStepFilter !== null
             ? '没有匹配的记录'
             : '暂无记录'
         "

@@ -33,21 +33,252 @@ export const PROCESS_GROUPS: EntityGroup[] = [
 
 export const MACHINE_GROUPS: EntityGroup[] = [
   {
-    name: '中间段',
-    items: ['中间六轴机', '中间翻板机', '中间输送机', '龙门式传送机'],
-  },
-  {
-    name: '常规投收板机',
-    items: [
-      '单边投板机',
-      '单边收板机',
-      '双边投板机',
-      '双边收板机',
-      '盒装投板机',
+    name: '输送机构',
+    items: [],
+    configurations: [
+      {
+        name: '标准输送段配置',
+        items: [
+          '01 单段输送段（搭配）',
+          '02 多段输送段（搭配）',
+          '03 单段输送机（PLC）',
+          '04 多段输送机（PLC）',
+        ],
+      },
+      {
+        name: '收板机配置',
+        items: [
+          '01 入料输送（L-RACK）',
+          '02 入料输送（平板/BOX）',
+          '03 入料输送（上顶平板）',
+          '04 入料输送（ESG拍板区）',
+          '05 入料输送（ESG组合区）',
+          '06 入料输送（三点寻边）',
+          '07 入料输送（五点寻边）',
+          '08 入料输送（小板件）',
+        ],
+      },
+      {
+        name: '放板机配置',
+        items: [
+          '01 出料输送（L-RACK）',
+          '02 出料输送（平板/BOX）',
+          '03 出料输送（上顶平板）',
+          '04 出料输送（ESG拍板区）',
+          '05 出料输送（ESG组合区）',
+          '06 出料输送（反转NG）',
+          '07 出料输送（读码触发）',
+          '08 出料输送（小板件）',
+        ],
+      },
+      {
+        name: '标准中间段配置',
+        items: [
+          '01 可掀式（CSC5）',
+          '02 太阳式翻板机（SB-100）',
+          '03 翻板机（SB-309G）',
+          '04 转向机（ST-103）',
+          '05 转角机（ST-201）',
+        ],
+      },
+      { name: '特殊制程配置', items: ['01 电镀区配置要求', '02 近接安装规范'] },
+      { name: '客户特殊配置', items: ['01 宏恒胜', '02 庆鼎HC厂'] },
     ],
   },
-  { name: '特殊机型', items: ['AOI专用机', '压合专用机'] },
-  { name: '通用结构', items: ['标准输送段', '六轴机械手', '台车系统'] },
+  {
+    name: '拍板机构',
+    items: [],
+    configurations: [
+      {
+        name: '无刷拍板',
+        items: ['01 中心拍板', '02 靠边拍板', '03 序列拍板'],
+      },
+      {
+        name: '伺服拍板',
+        items: ['01 中心拍板', '02 靠边拍板', '03 序列拍板'],
+      },
+      {
+        name: '寻边定位',
+        items: ['01 单点寻边', '02 三点寻边', '03 五点寻边'],
+      },
+      { name: '特殊定位', items: ['01 气浮平台'] },
+    ],
+  },
+  {
+    name: '吸盘机构',
+    items: [],
+    configurations: [
+      {
+        name: '标准收板机',
+        items: [
+          '01 取板手臂（常规）',
+          '02 取板手臂（电镀）',
+          '03 取板手臂（集成式）',
+          '04 取纸手臂（收）',
+          '05 取板吸tray手臂（收）',
+          '06 勾tray手臂（ESG）',
+        ],
+      },
+      {
+        name: '标准放板机',
+        items: [
+          '01 取板手臂（常规）',
+          '02 取板手臂（电镀）',
+          '03 取板手臂（集成式）',
+          '04 取板手臂（隔纸）',
+          '05 取纸手臂（放）',
+          '06 取板吸tray手臂（放）',
+          '07 取板吸纸手臂（放）',
+          '08 勾tray手臂（ESG）',
+        ],
+      },
+      { name: '特殊客户', items: ['01 宏恒胜', '02 庆鼎HC'] },
+    ],
+  },
+  {
+    name: '完板方式',
+    items: [],
+    configurations: [
+      {
+        name: 'L-RACK',
+        items: [
+          '01 板架有孔，无法安装镜片',
+          '02 板架有孔，可安装镜片',
+          '03 板架无孔',
+        ],
+      },
+      {
+        name: '平板',
+        items: [
+          '01 平板有孔，无法安装镜片',
+          '02 平板有孔，可安装镜片',
+          '03 平板无孔，金属材质',
+          '04 平板无孔，电木材质',
+        ],
+      },
+      { name: 'BOX', items: ['01 BOX'] },
+    ],
+  },
+  {
+    name: '伺服模组机构',
+    items: [],
+    configurations: [
+      { name: '横移机构', items: ['01 手臂横移'] },
+      {
+        name: '升降机构',
+        items: [
+          '01 手臂升降（标准模组）',
+          '02 手臂升降（自制模组）',
+          '03 牙叉升降',
+          '04 暂存牙叉升降',
+          '05 勾tray升降模组（ESG）',
+          '06 龙门升降模组（台达版）',
+          '07 龙门升降模组（汇川版）',
+        ],
+      },
+      {
+        name: '调宽机构',
+        items: [
+          '01 伺服调宽（标准）',
+          '02 伺服调宽（特殊）',
+          '03 电缸调宽（标准）',
+        ],
+      },
+      {
+        name: '移栽机构',
+        items: ['01 平台移栽（标准）', '02 平台移栽（多定点）'],
+      },
+    ],
+  },
+  {
+    name: '工位升降机构',
+    items: [],
+    configurations: [
+      {
+        name: '伺服升降',
+        items: ['01 牙叉升降', '02 牙叉暂存升降', '03 滚筒输送升降'],
+      },
+      {
+        name: '马达升降',
+        items: [
+          '01 台车升降（三相马达）',
+          '02 纸/板台升降（单相马达）',
+          '03 纸/板台升降（三相马达）',
+        ],
+      },
+    ],
+  },
+  {
+    name: '台车工位机构',
+    items: [],
+    configurations: [
+      {
+        name: '台车确认',
+        items: [
+          '01 固定台车（外部对接）',
+          '02 固定台车（内部对接）',
+          '03 AGV对接',
+        ],
+      },
+    ],
+  },
+  {
+    name: '板架工位机构',
+    items: [],
+    configurations: [
+      {
+        name: '板架确认',
+        items: [
+          '01 L-RACK（扣锁）',
+          '02 L-RACK（PIN定位）',
+          '03 平板',
+          '04 BOX',
+          '05 TRAY',
+          '06 L插架',
+        ],
+      },
+      {
+        name: '载具共用',
+        items: [
+          '01 L插架&L-Rack 判别',
+          '02 tray/BOX判别',
+          '03 多种tray（ESG）',
+        ],
+      },
+    ],
+  },
+  {
+    name: '暂存机构',
+    items: [],
+    configurations: [
+      {
+        name: 'NG暂存机构',
+        items: [
+          '01 NG板架（斜立式）',
+          '02 NG板架（平板）',
+          '03 NG板架（拉门）',
+        ],
+      },
+      {
+        name: 'DM机构',
+        items: ['01 DM板架（斜立式）', '02 DM板架（平板）', '03 DM滑台'],
+      },
+      { name: '多层架', items: ['01 多层暂存架'] },
+    ],
+  },
+  {
+    name: '专案机型',
+    items: [
+      'CSL(U)R-802（插框机）',
+      'CSZR-102（ESG设备）',
+      'CSL(U)R-605（L-RACK）',
+      'CSL(U)R-625（tray式）',
+      'CSL(U)R-638（L插架）',
+      'CSC-371（LDI移栽）',
+      'CSL(U)R-247（四轴）',
+      'CSL(U)-713（U型架）',
+    ],
+  },
 ];
 
 export const PROCESS_DETAILS: Record<string, EntityDetail> = {
@@ -231,11 +462,18 @@ function cloneMachineRows(
   rows: Array<
     Pick<
       MachineSectionRow,
-      'id' | 'role' | 'sensorType' | 'spec' | 'purpose' | 'name' | 'desc' | 'note'
+      | 'id'
+      | 'role'
+      | 'sensorType'
+      | 'spec'
+      | 'purpose'
+      | 'name'
+      | 'desc'
+      | 'note'
     >
   >,
 ): MachineSectionRow[] {
-  return rows.map((row) => ({ ...row, sensorIds: [] }));
+  return rows.map((row) => ({ ...row, processStepId: null, sensorIds: [] }));
 }
 
 export const LEGACY_DEMO_CRUD_DEFAULTS: CrudDefaults = {
@@ -538,8 +776,7 @@ function initialCrudRows(listId: string, entityName: string): CrudRecord[] {
 // 正式业务数据按客户独立初始化；运行时缺失键仍然保持为空，不会回退到其他客户。
 export const CRUD_DEFAULTS: CrudDefaults = {
   'customer-req': (entityName) => initialCrudRows('customer-req', entityName),
-  'customer-proc': (entityName) =>
-    initialCrudRows('customer-proc', entityName),
+  'customer-proc': (entityName) => initialCrudRows('customer-proc', entityName),
   'customer-feedback': (entityName) =>
     initialCrudRows('customer-feedback', entityName),
 };
@@ -566,7 +803,7 @@ export function createProcessStepDefaults(): ProcessStepItem[] {
   return steps;
 }
 
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 9;
 
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
@@ -583,7 +820,7 @@ export const FEEDBACK_TYPE_OPTIONS = [
   '其他',
 ];
 
-export const FEEDBACK_STATUS_OPTIONS = ['待处理', '处理中', '已解决'];
+export const FEEDBACK_STATUS_OPTIONS = ['待处理', '处理中', '测试中', '已解决'];
 
 export const CUSTOMER_REQ_SOURCE_OPTIONS = [
   '验收规范',
@@ -711,15 +948,6 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
     catalog: 'sensor',
     defaults: SENSOR_TYPE_OPTIONS,
   },
-  {
-    code: 'machine-section',
-    title: '机型结构 Tab',
-    description: '机型详情全局 Tab；注意事项锁定且无附加图片',
-    field: 'type',
-    listIds: [],
-    catalog: 'machine-section',
-    defaults: MACHINE_SECTION_SEED.map((item) => item.name),
-  },
 ];
 
 export const ENTITY_KIND_DEFINITIONS: EntityKindDefinition[] = [
@@ -747,6 +975,14 @@ export function createEntityGroupDefaults(kind: EntityKind): EntityGroup[] {
   return definition.seedGroups.map((group) => ({
     name: group.name,
     items: [...group.items],
+    ...(group.configurations
+      ? {
+          configurations: group.configurations.map((configuration) => ({
+            name: configuration.name,
+            items: [...configuration.items],
+          })),
+        }
+      : {}),
   }));
 }
 

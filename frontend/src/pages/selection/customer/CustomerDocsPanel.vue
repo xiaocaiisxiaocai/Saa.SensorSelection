@@ -142,10 +142,14 @@ async function remove(item: ControlledFileItem) {
     <ASheet
       :open="Boolean(preview)"
       title="预览 PDF"
-      :width="720"
+      viewport
       @update:open="(open) => { if (!open) preview = null }"
     >
-      <APdfViewer v-if="preview" :src="preview.dataUrl" />
+      <APdfViewer
+        v-if="preview"
+        class="a-pdf-viewer--large"
+        :src="preview.dataUrl"
+      />
     </ASheet>
   </div>
 </template>

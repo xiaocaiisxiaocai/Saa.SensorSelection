@@ -177,7 +177,7 @@ columns: Array<{
   width?: number
   minWidth?: number
   align?: 'start' | 'center' | 'end'
-  ellipsis?: boolean          // 溢出省略 + 悬停 tooltip
+  ellipsis?: boolean          // 正文自动换行；开启时保留全文 tooltip
   mono?: boolean              // 等宽字体（料号/时间）
   fixed?: 'end'               // 固定右侧（操作列）
 }>
@@ -190,12 +190,13 @@ rowHeight?: 'compact' | 'loose'   // 32px / 40px
 ```
 
 视觉：
-- 表头：`--text-control-em`、`--label-2` 色、`--bg-content` 底、`position: sticky`，底部一条发丝线；滚动时表头下方出现 `--shadow-1`。
-- 行：高 32px，行间发丝线（`inset 0 -0.5px`），**不画竖线**。
+- 对齐：表头与正文单元格默认左对齐；列通过 `align` 显式指定时按列配置覆盖。
+- 表头：`--text-control-em`、`--label` 色、`--bg-content` 底、`position: sticky`，底部一条发丝线；滚动时表头下方出现 `--shadow-1`。
+- 行：最小高 40px，正文超出列宽时自动换行并撑高整行；行间使用发丝线（`inset 0 -0.5px`），**不画竖线**。
 - 悬停：`--fill-4` 底。选中（如有）：`--sys-blue` 12% 底。
 - 斑马纹默认关闭 —— Apple 的列表靠发丝线分隔，斑马纹是 Element 的习惯。旧前端部分表开了 `stripe`，新前端统一关闭。
 - 操作列 `fixed="end"`：右侧固定，左侧有一条发丝线和 8px 渐变遮罩表示内容被遮挡。
-- 溢出列：`text-overflow: ellipsis`，悬停 `ATooltip` 显示全文（替代 `show-overflow-tooltip`）。
+- 正文单元格：`overflow-wrap: anywhere` + `white-space: normal`，长文本自动换行；`ellipsis` 列仍可通过 `ATooltip` 查看全文。表头保持单行省略。虚拟滚动依赖固定行高，因此显式 `virtual` 模式仍保持正文单行。
 
 插槽：`cell-{key}` 自定义单元格，`empty` 自定义空状态。
 

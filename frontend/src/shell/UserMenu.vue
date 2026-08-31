@@ -5,12 +5,10 @@ import { useRouter } from 'vue-router';
 
 import { api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
-import { useSelectionStore } from '@/stores/selection';
 import { AButton, AField, AFormRow, AMenu, ASheet } from '@/ui';
 import { toast } from '@/ui/toast';
 
 const auth = useAuthStore();
-const selection = useSelectionStore();
 const router = useRouter();
 
 const passwordOpen = ref(false);
@@ -83,7 +81,6 @@ async function onSelect(id: string) {
   }
   if (id !== 'logout') return;
   auth.logout();
-  await selection.initBackend();
   await router.replace('/selection/customer');
 }
 </script>

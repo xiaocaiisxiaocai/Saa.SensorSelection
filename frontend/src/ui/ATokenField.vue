@@ -179,15 +179,20 @@ function remove(value: string | number, event: Event) {
 
 .a-token-field__trigger {
   position: relative;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  height: auto;
+  height: var(--control-height-lg);
   min-height: var(--control-height-lg);
-  padding-block: var(--space-1);
+  overflow: hidden;
   padding-inline-end: calc(var(--space-4) + var(--space-5));
   cursor: pointer;
+}
+
+.a-token-field__trigger.a-control--small {
+  height: var(--control-height-sm);
+  min-height: var(--control-height-sm);
 }
 
 .a-token-field__trigger.a-control--disabled {
@@ -209,11 +214,13 @@ function remove(value: string | number, event: Event) {
 }
 
 .a-token-field__chip {
-  max-width: calc(100% - var(--space-8));
+  flex: 1 1 auto;
+  max-width: 100%;
   padding: 0 var(--space-1) 0 var(--space-3);
 }
 
 .a-token-field__chip-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -221,6 +228,7 @@ function remove(value: string | number, event: Event) {
 
 .a-token-field__chip-remove {
   display: grid;
+  flex: 0 0 var(--control-height-sm);
   place-items: center;
   width: var(--control-height-sm);
   height: var(--control-height-sm);
@@ -236,11 +244,17 @@ function remove(value: string | number, event: Event) {
 }
 
 .a-token-field__more {
+  flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);
+  white-space: nowrap;
 }
 
 .a-token-field__placeholder {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--label-3);
 }
 

@@ -71,6 +71,29 @@ function makeLocal(memory: Map<string, string>): StorageLike {
 }
 
 describe('BackendStorage', () => {
+  it('stops retrying a local snapshot after storage quota is exhausted', async () => {
+    let snapshotAttempts = 0;
+    const transport = createFakeTransport({ a: [1] });
+    const bridge = new BackendStorage({
+      transport,
+      local: {
+        getItem: () => null,
+        setItem: () => {
+          snapshotAttempts += 1;
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        },
+      },
+    });
+
+    await bridge.init();
+    expect(bridge.setItem('a', JSON.stringify([2]))).toBe(true);
+    await bridge.queue;
+    expect(bridge.setItem('a', JSON.stringify([3]))).toBe(true);
+    await bridge.queue;
+
+    expect(snapshotAttempts).toBe(1);
+  });
+
   it('migrates local data into an empty remote store', async () => {
     const localMemory = new Map<string, string>();
     localMemory.set(
@@ -111,10 +134,44 @@ describe('BackendStorage', () => {
     expect([...transport.calls.writes].sort()).toEqual(['a', 'c']);
   });
 
+  it('replaces an uploaded data URL with the detached value returned by the backend', async () => {
+    const localMemory = new Map<string, string>();
+    const fileUrl = '/api/files/11111111-1111-1111-1111-111111111111/content';
+    const transport = createFakeTransport({});
+    transport.writeKey = async (key, value) => {
+      const normalized = (value as Array<Record<string, unknown>>).map((item) => ({
+        ...item,
+        dataUrl: fileUrl,
+        fileId: '11111111-1111-1111-1111-111111111111',
+      }));
+      transport.remote.set(key, normalized);
+      transport.calls.writes.push(key);
+      return normalized;
+    };
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(localMemory),
+    });
+    await bridge.init();
+
+    bridge.setItem(
+      'sensor-sop:all',
+      JSON.stringify([{ id: 1, dataUrl: 'data:application/pdf;base64,YQ==' }]),
+    );
+    await bridge.queue;
+
+    expect(bridge.getItem('sensor-sop:all')).toContain(fileUrl);
+    expect(bridge.getItem('sensor-sop:all')).not.toContain('base64');
+    expect(localMemory.get(STORAGE_KEY)).not.toContain('base64');
+  });
+
   it('marks the backend offline after a write failure without saving local data', async () => {
     let writeFailureMsg = '';
     const localMemory = new Map<string, string>();
-    const transport = createFakeTransport({ a: [{ v: 1 }] }, { failKeys: ['a'] });
+    const transport = createFakeTransport(
+      { a: [{ v: 1 }] },
+      { failKeys: ['a'] },
+    );
     const bridge = new BackendStorage({
       transport,
       local: makeLocal(localMemory),
@@ -160,7 +217,9 @@ describe('BackendStorage', () => {
     const localMemory = new Map<string, string>();
     localMemory.set(
       STORAGE_KEY,
-      JSON.stringify({ 'customer-req:庆鼎': [{ id: 1, content: '本地旧数据' }] }),
+      JSON.stringify({
+        'customer-req:庆鼎': [{ id: 1, content: '本地旧数据' }],
+      }),
     );
     const bridge = new BackendStorage({
       transport: createFakeTransport({}, { fetchError: unauthorized }),
@@ -190,7 +249,10 @@ describe('BackendStorage', () => {
       },
     });
     await bridge.init();
-    expect([...transport.calls.writes].sort()).toEqual(['b', 'meta:seed-version']);
+    expect([...transport.calls.writes].sort()).toEqual([
+      'b',
+      'meta:seed-version',
+    ]);
     expect(transport.remote.get('dict:sensor-type')).toEqual([
       { id: 1, name: '旧类型' },
     ]);
@@ -279,11 +341,15 @@ describe('BackendStorage', () => {
       sensorData: SENSOR_DATA,
     });
     expect(defaultStore['entity-groups:customer']).toHaveLength(3);
-    expect(defaultStore['machine-global-sections:all']).toHaveLength(4);
+    expect(defaultStore['machine-global-sections:all']).toBeUndefined();
+    expect(defaultStore['general-structure-labels:all']).toBeUndefined();
+    expect(defaultStore['dict:machine-section']).toBeUndefined();
     expect(defaultStore['customer-req:庆鼎']).toHaveLength(2);
     expect(defaultStore['customer-req:景旺']).toHaveLength(2);
     expect(defaultStore['customer-req:健鼎']).toBeUndefined();
-    expect(defaultStore['meta:seed-version']).toEqual([{ version: SEED_VERSION }]);
+    expect(defaultStore['meta:seed-version']).toEqual([
+      { version: SEED_VERSION },
+    ]);
     expect(
       Object.keys(defaultStore).some((key) =>
         /^(customer-(req|proc|feedback)|process-(feat|sensor)|machine-section-rows):/.test(
@@ -300,7 +366,11 @@ describe('BackendStorage', () => {
       seedDefaults: defaultStore,
     });
     const seeded = await bridge.init();
-    expect(seeded).toMatchObject({ status: 'online', seeded: true, migrated: false });
+    expect(seeded).toMatchObject({
+      status: 'online',
+      seeded: true,
+      migrated: false,
+    });
     expect(transport.calls.writeAlls).toBe(1);
   });
 });

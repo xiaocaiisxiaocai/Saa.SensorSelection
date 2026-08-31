@@ -26,6 +26,7 @@ public sealed record MachineSchematicReportMachineBlock(
 public sealed record MachineSchematicReportRow(
     [property: JsonPropertyName("id")] int Id,
     [property: JsonPropertyName("role")] string? Role,
+    [property: JsonPropertyName("processStepName")] string? ProcessStepName,
     [property: JsonPropertyName("sensorType")] string? SensorType,
     [property: JsonPropertyName("spec")] string? Spec,
     [property: JsonPropertyName("purpose")] string? Purpose,

@@ -9,26 +9,32 @@ export type SaveFailure =
   | 'validation';
 
 export type SaveResult<T> =
-  | { item: T; ok: true }
-  | { ok: false; reason: SaveFailure };
+  { item: T; ok: true } | { ok: false; reason: SaveFailure };
 
 export type DeleteResult =
-  | { ok: false; reason: Exclude<SaveFailure, 'duplicate'> }
-  | { ok: true };
+  { ok: false; reason: Exclude<SaveFailure, 'duplicate'> } | { ok: true };
 
 export type ReorderResult =
-  | { ok: false; reason: 'stale' | 'storage' | 'validation' }
-  | { ok: true };
+  { ok: false; reason: 'stale' | 'storage' | 'validation' } | { ok: true };
 
 export type EntityKind = 'customer' | 'machine';
+export type MachineCatalogKind = 'mechanism' | 'project';
 
-export interface EntityGroup {
+export interface EntityConfiguration {
   name: string;
   items: string[];
 }
 
+export interface EntityGroup {
+  name: string;
+  items: string[];
+  configurations?: EntityConfiguration[];
+  machineType?: MachineCatalogKind;
+}
+
 export interface EntityTreeItem {
   category: string;
+  configuration?: string | null;
   name: string;
 }
 
@@ -77,10 +83,7 @@ export interface TimelineItem {
 }
 
 export type CrudRecord =
-  | CrudItem
-  | CustomerProcItem
-  | CustomerReqItem
-  | TimelineItem;
+  CrudItem | CustomerProcItem | CustomerReqItem | TimelineItem;
 
 export type CrudSeedRow = CrudRecord | MachineSectionRow;
 
@@ -110,13 +113,14 @@ export interface SensorItem {
   feature: string;
   scene: string;
   sopId: null | number;
+  model3dId: null | number;
   replacesId: null | number;
   replacedById: null | number;
   problemNote: string;
   replacedAt: string;
 }
 
-export interface SensorSopItem {
+export interface SensorFileItem {
   id: number;
   title: string;
   dataUrl: string;
@@ -125,6 +129,10 @@ export interface SensorSopItem {
   size: number;
   uploadedAt: string;
 }
+
+export type SensorSopItem = SensorFileItem;
+export type SensorSopFileItem = SensorFileItem;
+export type Sensor3dFileItem = SensorFileItem;
 
 export interface SensorTypeDefinition {
   desc: string;
@@ -148,10 +156,17 @@ export interface ControlledFileAttachment {
 
 export interface ControlledFileItem extends ControlledFileAttachment {
   id: number;
-  kind: 'pdf' | 'word';
+  kind: 'pdf' | 'ppt' | 'word';
 }
 
 export type MachineSectionKind = 'notes' | 'structure';
+
+export interface MachineProcessItem {
+  id: number;
+  name: string;
+  sort: number;
+  locked?: boolean;
+}
 
 export interface MachineSectionItem {
   id: number;
@@ -172,6 +187,7 @@ export interface MachineRowImage {
 export interface MachineSectionRow {
   id: number;
   role: string;
+  processStepId: number | null;
   sensorIds: number[];
   sensorType: string;
   spec: string;
@@ -189,7 +205,7 @@ export interface DictionaryDefinition {
   listIds: string[];
   defaults: string[];
   field?: 'layer' | 'sensorType' | 'source' | 'status' | 'type';
-  catalog?: 'machine-section' | 'process-step' | 'sensor';
+  catalog?: 'process-step' | 'sensor';
 }
 
 export interface EntityKindDefinition {
@@ -218,14 +234,11 @@ export interface StorageLike {
 }
 
 export type BackendSyncStatus =
-  | 'connecting'
-  | 'offline'
-  | 'online'
-  | 'unauthorized';
+  'connecting' | 'offline' | 'online' | 'unauthorized';
 
 export interface BackendStoreTransport {
   fetchStore(): Promise<Record<string, unknown[]>>;
-  writeKey(key: string, value: unknown[]): Promise<void>;
+  writeKey(key: string, value: unknown[]): Promise<unknown[] | void>;
   deleteKey?(key: string): Promise<void>;
   writeAll(store: Record<string, unknown[]>): Promise<void>;
 }
@@ -251,4 +264,7 @@ export interface BackendInitResult {
   status: BackendSyncStatus;
 }
 
-export type CrudDefaults = Record<string, (entityName: string) => CrudSeedRow[]>;
+export type CrudDefaults = Record<
+  string,
+  (entityName: string) => CrudSeedRow[]
+>;

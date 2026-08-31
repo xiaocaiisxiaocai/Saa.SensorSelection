@@ -257,11 +257,15 @@ export const api = {
     return request<Record<string, unknown[]>>('/store');
   },
 
-  async putKey(key: string, value: unknown[]): Promise<void> {
-    await request(`/store/${encodeURIComponent(key)}`, {
-      method: 'PUT',
-      body: JSON.stringify(value),
-    });
+  async putKey(key: string, value: unknown[]): Promise<unknown[]> {
+    const result = await request<{ value: unknown[] }>(
+      `/store/by-key?key=${encodeURIComponent(key)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(value),
+      },
+    );
+    return result.value;
   },
 
   async putEntityGroups(
@@ -275,7 +279,9 @@ export const api = {
   },
 
   async deleteKey(key: string): Promise<void> {
-    await request(`/store/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    await request(`/store/by-key?key=${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
   },
 
   async replaceAll(store: Record<string, unknown[]>): Promise<void> {

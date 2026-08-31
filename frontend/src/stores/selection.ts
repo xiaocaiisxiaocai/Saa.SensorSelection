@@ -9,6 +9,7 @@ import {
   createSelectionRepository,
   CRUD_DEFAULTS,
   MACHINE_DETAILS,
+  listEntityGroupItems,
   migrateSelectionSeedStore,
   SENSOR_DATA,
   STORAGE_KEY,
@@ -18,13 +19,17 @@ import {
   type CustomerReqItem,
   type DictionaryItem,
   type EntityKind,
+  type MachineCatalogKind,
   type MachineRowImage,
+  type MachineProcessItem,
   type MachineSectionItem,
   type MachineSectionRow,
   type ProcessStepItem,
   type SaveFailure,
   type SearchItem,
   type SensorItem,
+  type Sensor3dFileItem,
+  type SensorSopFileItem,
   type SensorSopItem,
   type StorageLike,
   type TimelineItem,
@@ -36,7 +41,9 @@ type Repository = ReturnType<typeof createSelectionRepository>;
 const browserStorage: StorageLike | undefined =
   typeof window === 'undefined' ? undefined : window.localStorage;
 
-function createLocalRepository(storage: StorageLike | undefined = browserStorage) {
+function createLocalRepository(
+  storage: StorageLike | undefined = browserStorage,
+) {
   return createSelectionRepository({
     crudDefaults: CRUD_DEFAULTS,
     sensorData: SENSOR_DATA,
@@ -69,6 +76,11 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getGlobalMachineSections();
   });
 
+  const machineProcesses = computed(() => {
+    void revision.value;
+    return repository.getMachineProcesses();
+  });
+
   const generalStructureLabelMap = computed(() => {
     void revision.value;
     return repository.getGeneralStructureLabelMap();
@@ -84,33 +96,48 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getSensorSops();
   });
 
+  const sensorSopFiles = computed(() => {
+    void revision.value;
+    return repository.getSensorSopFiles();
+  });
+
+  const sensor3dFiles = computed(() => {
+    void revision.value;
+    return repository.getSensor3dFiles();
+  });
+
   const searchIndex = computed<SearchItem[]>(() => {
     void revision.value;
     const machineGroups = repository.getEntityGroups('machine');
     const machineSectionHits: SearchItem[] = [];
-    for (const group of machineGroups) {
-      for (const machineName of group.items) {
-        for (const section of repository.listResolvedMachineSections(
-          machineName,
-        )) {
-          for (const row of repository.getMachineSectionRows(
-            section.id,
+    for (const process of repository.getMachineProcesses()) {
+      for (const group of machineGroups) {
+        for (const machineName of listEntityGroupItems(group)) {
+          for (const section of repository.listResolvedMachineSections(
             machineName,
+            process.id,
           )) {
-            machineSectionHits.push({
-              type: 'machine',
-              title: row.sensorType || row.name || row.role,
-              category: group.name,
-              sub: [machineName, section.name, row.role]
-                .filter(Boolean)
-                .join(' · '),
-              path: '/selection/machine',
-              query: {
+            for (const row of repository.getMachineSectionRows(
+              section.id,
+              machineName,
+              process.id,
+            )) {
+              machineSectionHits.push({
+                type: 'machine',
+                title: row.sensorType || row.name || row.role,
                 category: group.name,
-                item: machineName,
-                section: String(section.id),
-              },
-            });
+                sub: [process.name, machineName, section.name, row.role]
+                  .filter(Boolean)
+                  .join(' · '),
+                path: '/selection/machine',
+                query: {
+                  category: group.name,
+                  item: machineName,
+                  section: String(section.id),
+                  ...(process.id === 1 ? {} : { process: String(process.id) }),
+                },
+              });
+            }
           }
         }
       }
@@ -179,27 +206,40 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getControlledDocuments(entityName);
   }
 
-  function extraMachineSections(machineName: string) {
+  function extraMachineSections(machineName: string, processId = 1) {
     void revision.value;
-    return repository.getExtraMachineSections(machineName);
+    return repository.getExtraMachineSections(machineName, processId);
   }
 
-  function resolvedMachineSections(machineName: string) {
+  function resolvedMachineSections(machineName: string, processId = 1) {
     void revision.value;
-    return repository.listResolvedMachineSections(machineName);
+    return repository.listResolvedMachineSections(machineName, processId);
   }
 
-  function machineSectionRows(sectionId: number, machineName: string) {
+  function machineSectionRows(
+    sectionId: number,
+    machineName: string,
+    processId = 1,
+  ) {
     void revision.value;
-    return repository.getMachineSectionRows(sectionId, machineName);
+    return repository.getMachineSectionRows(sectionId, machineName, processId);
   }
 
-  function machineSectionImages(sectionId: number, machineName: string) {
+  function machineSectionImages(
+    sectionId: number,
+    machineName: string,
+    processId = 1,
+  ) {
     void revision.value;
-    return repository.getMachineSectionImages(sectionId, machineName);
+    return repository.getMachineSectionImages(
+      sectionId,
+      machineName,
+      processId,
+    );
   }
 
-  async function initBackend(): Promise<void> {
+  function initBackend(): Promise<void> {
+    if (initPromise) return initPromise;
     const running = (async () => {
       backendStatus.value = 'connecting';
       backendMessage.value = '';
@@ -255,16 +295,11 @@ export const useSelectionStore = defineStore('selection', () => {
     initPromise = running.catch(() => {
       /* status is reported via callbacks */
     });
-    await running;
+    return initPromise;
   }
 
   function ensureBackendInit(): Promise<void> {
-    if (!initPromise) {
-      initPromise = initBackend().catch(() => {
-        /* status is reported via callbacks */
-      });
-    }
-    return initPromise;
+    return initBackend();
   }
 
   function reconnect() {
@@ -285,25 +320,50 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() => repository.deleteDictionaryItem(code, id)),
     deleteEntityGroup: (kind: EntityKind, name: string) =>
       mutate(() => repository.deleteEntityGroup(kind, name)),
-    deleteEntityItem: (kind: EntityKind, name: string) =>
-      mutate(() => repository.deleteEntityItem(kind, name)),
-    deleteExtraMachineSection: (machineName: string, id: number) =>
-      mutate(() => repository.deleteExtraMachineSection(machineName, id)),
+    deleteEntityItem: (
+      kind: EntityKind,
+      name: string,
+      category?: string,
+      configuration?: string | null,
+    ) =>
+      mutate(() =>
+        repository.deleteEntityItem(kind, name, category, configuration),
+      ),
+    deleteExtraMachineSection: (
+      machineName: string,
+      id: number,
+      processId = 1,
+    ) =>
+      mutate(() =>
+        repository.deleteExtraMachineSection(machineName, id, processId),
+      ),
     deleteGlobalMachineSection: (id: number) =>
       mutate(() => repository.deleteGlobalMachineSection(id)),
+    deleteMachineProcess: (id: number) =>
+      mutate(() => repository.deleteMachineProcess(id)),
     deleteMachineSectionRow: (
       sectionId: number,
       machineName: string,
       id: number,
+      processId = 1,
     ) =>
       mutate(() =>
-        repository.deleteMachineSectionRow(sectionId, machineName, id),
+        repository.deleteMachineSectionRow(
+          sectionId,
+          machineName,
+          id,
+          processId,
+        ),
       ),
     deleteProcessIntroFile: (id: number) =>
       mutate(() => repository.deleteProcessIntroFile(id)),
     deleteProcessStep: (id: number) =>
       mutate(() => repository.deleteProcessStep(id)),
     deleteSensor: (id: number) => mutate(() => repository.deleteSensor(id)),
+    deleteSensor3dFile: (id: number) =>
+      mutate(() => repository.deleteSensor3dFile(id)),
+    deleteSensorSopFile: (id: number) =>
+      mutate(() => repository.deleteSensorSopFile(id)),
     deleteSensorSop: (id: number) =>
       mutate(() => repository.deleteSensorSop(id)),
     dictionaryItems,
@@ -318,6 +378,7 @@ export const useSelectionStore = defineStore('selection', () => {
     lastFailure,
     machineSectionImages,
     machineSectionRows,
+    machineProcesses,
     processIntroFiles,
     processSteps,
     reconnect,
@@ -325,16 +386,22 @@ export const useSelectionStore = defineStore('selection', () => {
       kind: EntityKind,
       oldIndex: number,
       newIndex: number,
-    ) =>
-      mutate(() => repository.reorderEntityGroups(kind, oldIndex, newIndex)),
+    ) => mutate(() => repository.reorderEntityGroups(kind, oldIndex, newIndex)),
     reorderEntityItems: (
       kind: EntityKind,
       groupName: string,
       oldIndex: number,
       newIndex: number,
+      configurationName?: string | null,
     ) =>
       mutate(() =>
-        repository.reorderEntityItems(kind, groupName, oldIndex, newIndex),
+        repository.reorderEntityItems(
+          kind,
+          groupName,
+          oldIndex,
+          newIndex,
+          configurationName,
+        ),
       ),
     replaceSensorCurrent: (
       alternateId: number,
@@ -371,39 +438,77 @@ export const useSelectionStore = defineStore('selection', () => {
     ) => mutate(() => repository.saveDictionaryItem(code, payload, editId)),
     saveEntityGroup: (
       kind: EntityKind,
-      payload: { name: string },
+      payload: {
+        name: string;
+        sort?: number;
+        machineType?: MachineCatalogKind;
+      },
       editName?: string,
     ) => mutate(() => repository.saveEntityGroup(kind, payload, editName)),
+    saveMachineConfiguration: (
+      category: string,
+      payload: { name: string; sort?: number },
+      editName?: string,
+    ) =>
+      mutate(() =>
+        repository.saveMachineConfiguration(category, payload, editName),
+      ),
+    deleteMachineConfiguration: (category: string, name: string) =>
+      mutate(() => repository.deleteMachineConfiguration(category, name)),
     saveEntityItem: (
       kind: EntityKind,
-      payload: { category: string; name: string },
+      payload: {
+        category: string;
+        configuration?: string | null;
+        name: string;
+        previousCategory?: string;
+        previousConfiguration?: string | null;
+        sort?: number;
+      },
       editName?: string,
     ) => mutate(() => repository.saveEntityItem(kind, payload, editName)),
     saveExtraMachineSection: (
       machineName: string,
       payload: Partial<MachineSectionItem>,
       editId?: number,
+      processId = 1,
     ) =>
       mutate(() =>
-        repository.saveExtraMachineSection(machineName, payload, editId),
+        repository.saveExtraMachineSection(
+          machineName,
+          payload,
+          editId,
+          processId,
+        ),
       ),
     saveGlobalMachineSection: (
       payload: Partial<MachineSectionItem>,
       editId?: number,
     ) => mutate(() => repository.saveGlobalMachineSection(payload, editId)),
+    saveMachineProcess: (
+      payload: Partial<MachineProcessItem>,
+      editId?: number,
+    ) => mutate(() => repository.saveMachineProcess(payload, editId)),
     saveMachineSectionImages: (
       sectionId: number,
       machineName: string,
       images: MachineRowImage[],
+      processId = 1,
     ) =>
       mutate(() =>
-        repository.saveMachineSectionImages(sectionId, machineName, images),
+        repository.saveMachineSectionImages(
+          sectionId,
+          machineName,
+          images,
+          processId,
+        ),
       ),
     saveMachineSectionRow: (
       sectionId: number,
       machineName: string,
       payload: Partial<MachineSectionRow>,
       editId?: number,
+      processId = 1,
     ) =>
       mutate(() =>
         repository.saveMachineSectionRow(
@@ -411,6 +516,7 @@ export const useSelectionStore = defineStore('selection', () => {
           machineName,
           payload,
           editId,
+          processId,
         ),
       ),
     saveProcessIntroFile: (attachment: {
@@ -424,10 +530,16 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() => repository.saveProcessStep(payload, editId)),
     saveSensor: (payload: Partial<SensorItem>, editId?: number) =>
       mutate(() => repository.saveSensor(payload, editId)),
+    saveSensor3dFile: (payload: Partial<Sensor3dFileItem>, editId?: number) =>
+      mutate(() => repository.saveSensor3dFile(payload, editId)),
+    saveSensorSopFile: (payload: Partial<SensorSopFileItem>, editId?: number) =>
+      mutate(() => repository.saveSensorSopFile(payload, editId)),
     saveSensorSop: (payload: Partial<SensorSopItem>, editId?: number) =>
       mutate(() => repository.saveSensorSop(payload, editId)),
     searchIndex,
     sensors,
+    sensor3dFiles,
+    sensorSopFiles,
     sensorSops,
   };
 });

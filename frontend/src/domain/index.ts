@@ -1,7 +1,15 @@
-export { STORAGE_KEY, keyFor, machineSectionImagesKey, machineSectionRowsKey } from './keys';
+export {
+  STORAGE_KEY,
+  keyFor,
+  machineSectionImagesKey,
+  machineSectionRowsKey,
+} from './keys';
 export {
   CONTROLLED_FILE_ACCEPT,
+  CONTROLLED_FILE_KINDS,
   CONTROLLED_FILE_RULES,
+  PROCESS_INTRO_FILE_KINDS,
+  SENSOR_3D_FILE_RULES,
   createDefaultControlledDocuments,
   createSensorCatalogDefaults,
   detectControlledFileKind,
@@ -14,22 +22,38 @@ export {
   normalizeEntityGroups,
   normalizeFeedbackTypes,
   normalizeMachineRowImage,
+  normalizeMachineProcesses,
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,
   normalizeProcessSteps,
   normalizeSensorItems,
+  normalizeSensor3dFiles,
   normalizeSensorSops,
   parsePersistedStore,
   storedText,
   validateControlledUpload,
+  validateSensor3dUpload,
   validateMachineRowImage,
 } from './normalize';
-export {
-  buildDefaultStore,
-  createSelectionRepository,
-} from './repository';
+export { buildDefaultStore, createSelectionRepository } from './repository';
 export { buildSearchIndex } from './search';
+export {
+  entityTreeItemKey,
+  filterMachineGroups,
+  findEntityTreeItem,
+  listEntityGroupItems,
+  listEntityTreeItems,
+  machineCatalogKind,
+  PROJECT_MACHINE_CATEGORY,
+} from './entity-tree';
+export {
+  findSensorStatusName,
+  isSensorStatus,
+  sensorStatusKind,
+  sensorStatusRank,
+} from './sensor-status';
+export type { SensorStatusKind } from './sensor-status';
 export { migrateSelectionSeedStore } from './seed-migration';
 export {
   buildMachineSchematicReportHtml,

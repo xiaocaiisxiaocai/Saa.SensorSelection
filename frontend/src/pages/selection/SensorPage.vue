@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { ExternalLink, Pencil, Replace, Trash2 } from 'lucide-vue-next';
+import { Download, Eye, Pencil, Replace, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import type { SensorItem } from '@/domain';
+import {
+  findSensorStatusName,
+  isSensorStatus,
+  sensorStatusRank,
+  type SensorFileItem,
+  type SensorItem,
+} from '@/domain';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import SensorSopPanel from '@/pages/selection/sensor/SensorSopPanel.vue';
+import SensorSopFilePanel from '@/pages/selection/sensor/SensorSopFilePanel.vue';
+import Sensor3dPanel from '@/pages/selection/sensor/Sensor3dPanel.vue';
+import { downloadSensorExcel } from '@/pages/selection/sensor/sensor-excel';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { toast } from '@/ui/toast';
@@ -14,16 +23,19 @@ import {
   ABadge,
   AButton,
   AField,
+  AFilterResetButton,
   AFormGrid,
   AFormRow,
   AIconButton,
   APagination,
+  APdfViewer,
   ASearchField,
   ASegmentedControl,
   ASelect,
   ASheet,
   ATable,
   ATextArea,
+  ATokenField,
   type BadgeTone,
   type SegmentOption,
   type SelectOption,
@@ -32,8 +44,6 @@ import {
 
 import '../shared/selection-page.css';
 
-const STATUS_TAB_ORDER = ['现用', '备选', '停用'];
-
 const route = useRoute();
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -41,11 +51,16 @@ const writable = computed(() => canWrite('selection:write'));
 
 const mainTab = ref(initialTab());
 const query = ref(String(route.query.model || ''));
-const sensorTypeFilter = ref<string | null>(null);
+const sensorTypeFilters = ref<Array<string | number>>(initialSensorTypeFilters());
 const dialogOpen = ref(false);
 const replaceOpen = ref(false);
 const editId = ref<number>();
 const focusSopId = ref<null | number>(initialSopId());
+const focusModel3dId = ref<null | number>(initialModel3dId());
+const linkedPreview = ref<{
+  file: SensorFileItem;
+  kind: '3D' | '型录';
+} | null>(null);
 const replaceSource = ref<SensorItem | null>(null);
 const replaceTargetId = ref<number | null>(null);
 const replaceNote = ref('');
@@ -59,6 +74,7 @@ const form = reactive({
   scene: '',
   sensorType: '',
   sopId: null as number | null,
+  model3dId: null as number | null,
   spec: '',
   status: '',
 });
@@ -66,12 +82,7 @@ const form = reactive({
 const statusNames = computed(() => {
   const names = store.dictionaryNames('sensor-status');
   return [...names].sort((left, right) => {
-    const ia = STATUS_TAB_ORDER.indexOf(left);
-    const ib = STATUS_TAB_ORDER.indexOf(right);
-    if (ia < 0 && ib < 0) return 0;
-    if (ia < 0) return 1;
-    if (ib < 0) return -1;
-    return ia - ib;
+    return sensorStatusRank(left) - sensorStatusRank(right);
   });
 });
 const typeOptions = computed<SelectOption[]>(() =>
@@ -87,8 +98,13 @@ const statusFilterOptions = computed<SelectOption[]>(() => [
 const sopOptions = computed<SelectOption[]>(() =>
   store.sensorSops.map((item) => ({ label: item.title, value: item.id })),
 );
+const model3dOptions = computed<SelectOption[]>(() =>
+  store.sensor3dFiles.map((item) => ({ label: item.title, value: item.id })),
+);
 const tabs = computed<SegmentOption[]>(() => [
-  { label: 'SOP', value: 'sop' },
+  { label: 'SOP', value: 'sop-library' },
+  { label: '型录', value: 'sop' },
+  { label: '3D', value: '3d' },
   ...statusNames.value.map((name) => ({ label: name, value: name })),
   { label: '全部', value: '全部' },
 ]);
@@ -97,20 +113,34 @@ const sensorById = computed(() => {
   for (const item of store.sensors) map.set(item.id, item);
   return map;
 });
-const showProblemColumn = computed(() => mainTab.value === '停用');
+const showDisabledDetails = computed(() =>
+  isSensorStatus(mainTab.value, 'disabled'),
+);
 const statusFilter = computed({
-  get: () => (mainTab.value === 'sop' ? '全部' : mainTab.value),
+  get: () =>
+    (['sop-library', 'sop', '3d'].includes(mainTab.value)
+      ? '全部'
+      : mainTab.value),
   set: (value: string | number | null) => {
     mainTab.value = String(value || '全部');
   },
 });
+const hasActiveFilters = computed(
+  () =>
+    mainTab.value !== '全部' ||
+    sensorTypeFilters.value.length > 0 ||
+    Boolean(query.value.trim()),
+);
 
 const items = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   const status = mainTab.value === '全部' ? '全部' : mainTab.value;
   return store.sensors.filter((item) => {
     if (status !== '全部' && item.status !== status) return false;
-    if (sensorTypeFilter.value && item.sensorType !== sensorTypeFilter.value) {
+    if (
+      sensorTypeFilters.value.length > 0 &&
+      !sensorTypeFilters.value.includes(item.sensorType)
+    ) {
       return false;
     }
     const related = relatedSensor(item);
@@ -128,6 +158,7 @@ const items = computed(() => {
       related?.brand,
       related?.partNumber,
       sopTitle(item.sopId),
+      model3dTitle(item.model3dId),
     ]
       .join(' ')
       .toLocaleLowerCase('zh-CN');
@@ -145,14 +176,23 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'sensorType', label: '感应器类型', width: 120 },
     { key: 'brand', label: '品牌', width: 88 },
     { key: 'model', label: '型号', width: 140, mono: true },
-    { key: 'sop', label: '关联 SOP', minWidth: 140 },
-    ...(showProblemColumn.value
-      ? [{ key: 'problemNote', label: '问题点', minWidth: 140, ellipsis: true }]
+    ...(showDisabledDetails.value
+      ? [
+          { key: 'replacedAt', label: '停用时间', width: 112 },
+          {
+            key: 'problemNote',
+            label: '停用原因',
+            minWidth: 180,
+            ellipsis: true,
+          },
+        ]
       : []),
     { key: 'relation', label: '替换关系', minWidth: 180 },
     { key: 'spec', label: '规格参数', minWidth: 140, ellipsis: true },
     { key: 'feature', label: '特性与注意', minWidth: 140, ellipsis: true },
     { key: 'scene', label: '适用场景', minWidth: 120, ellipsis: true },
+    { key: 'sop', label: '关联型录', minWidth: 140 },
+    { key: 'model3d', label: '关联 3D', minWidth: 140 },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
@@ -163,7 +203,7 @@ const replaceCandidates = computed<SelectOption[]>(() => {
   const source = replaceSource.value;
   if (!source) return [];
   const currents = store.sensors.filter(
-    (item) => item.status === '现用' && item.id !== source.id,
+    (item) => isSensorStatus(item.status, 'current') && item.id !== source.id,
   );
   return currents.map((item) => ({
     value: item.id,
@@ -172,15 +212,29 @@ const replaceCandidates = computed<SelectOption[]>(() => {
 });
 
 useSyncedQuery(() => {
+  if (mainTab.value === 'sop-library') {
+    return { tab: 'sop-library' };
+  }
   if (mainTab.value === 'sop') {
     return {
       tab: 'sop',
       sopId: focusSopId.value ? String(focusSopId.value) : undefined,
     };
   }
+  if (mainTab.value === '3d') {
+    return {
+      tab: '3d',
+      model3dId: focusModel3dId.value
+        ? String(focusModel3dId.value)
+        : undefined,
+    };
+  }
   return {
-    tab: mainTab.value === '现用' ? undefined : mainTab.value,
+    tab: isSensorStatus(mainTab.value, 'current') ? undefined : mainTab.value,
     model: query.value.trim() || undefined,
+    sensorTypes: sensorTypeFilters.value.length
+      ? sensorTypeFilters.value.map(String).join(',')
+      : undefined,
   };
 });
 
@@ -193,15 +247,33 @@ watch(
   },
 );
 watch(
-  () => [route.query.tab, route.query.sopId] as const,
-  ([tab, sopId]) => {
-    if (String(tab || '') !== 'sop') return;
-    mainTab.value = 'sop';
-    const id = Number(sopId);
-    focusSopId.value = Number.isSafeInteger(id) && id > 0 ? id : null;
+  () => String(route.query.sensorTypes || ''),
+  (sensorTypes) => {
+    const next = parseSensorTypeFilters(sensorTypes);
+    if (next.join(',') !== sensorTypeFilters.value.map(String).join(',')) {
+      sensorTypeFilters.value = next;
+    }
   },
 );
-watch([query, sensorTypeFilter, mainTab, pageSize], () => {
+watch(
+  () => [route.query.tab, route.query.sopId, route.query.model3dId] as const,
+  ([tab, sopId, model3dId]) => {
+    const nextTab = String(tab || '');
+    if (nextTab === 'sop-library') {
+      mainTab.value = 'sop-library';
+    } else if (nextTab === 'sop') {
+      mainTab.value = 'sop';
+      const id = Number(sopId);
+      focusSopId.value = Number.isSafeInteger(id) && id > 0 ? id : null;
+    }
+    if (nextTab === '3d') {
+      mainTab.value = '3d';
+      const id = Number(model3dId);
+      focusModel3dId.value = Number.isSafeInteger(id) && id > 0 ? id : null;
+    }
+  },
+);
+watch([query, sensorTypeFilters, mainTab, pageSize], () => {
   page.value = 1;
 });
 watch(
@@ -213,10 +285,27 @@ watch(
 );
 
 function initialTab() {
-  if (String(route.query.tab || '') === 'sop') return 'sop';
+  if (['sop-library', 'sop', '3d'].includes(String(route.query.tab || ''))) {
+    return String(route.query.tab);
+  }
   if (route.query.model) return '全部';
   const tab = String(route.query.tab || '');
-  return tab || '现用';
+  return (
+    tab ||
+    findSensorStatusName(store.dictionaryNames('sensor-status'), 'current') ||
+    '全部'
+  );
+}
+
+function parseSensorTypeFilters(value: string) {
+  const allowed = new Set(store.dictionaryNames('sensor-type'));
+  return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].filter(
+    (item) => allowed.has(item),
+  );
+}
+
+function initialSensorTypeFilters() {
+  return parseSensorTypeFilters(String(route.query.sensorTypes || ''));
 }
 
 function initialSopId() {
@@ -224,9 +313,19 @@ function initialSopId() {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+function initialModel3dId() {
+  const id = Number(route.query.model3dId);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 function sopTitle(sopId: null | number | undefined) {
   if (!sopId) return '';
   return store.sensorSops.find((item) => item.id === sopId)?.title || '';
+}
+
+function model3dTitle(model3dId: null | number | undefined) {
+  if (!model3dId) return '';
+  return store.sensor3dFiles.find((item) => item.id === model3dId)?.title || '';
 }
 
 function relatedSensor(item: SensorItem) {
@@ -255,9 +354,10 @@ function relationText(item: SensorItem) {
 }
 
 function statusTone(status: string): BadgeTone {
-  if (status === '现用') return 'green';
-  if (status === '备选') return 'blue';
-  return 'orange';
+  if (isSensorStatus(status, 'current')) return 'green';
+  if (isSensorStatus(status, 'alternate')) return 'yellow';
+  if (isSensorStatus(status, 'disabled')) return 'red';
+  return 'neutral';
 }
 
 function resetForm() {
@@ -270,9 +370,67 @@ function resetForm() {
     scene: '',
     sensorType: typeOptions.value[0]?.value ?? '',
     sopId: null,
+    model3dId: null,
     spec: '',
     status: statusNames.value[0] || '现用',
   });
+}
+
+function resetFilters() {
+  mainTab.value = '全部';
+  sensorTypeFilters.value = [];
+  query.value = '';
+  page.value = 1;
+}
+
+function exportCell(item: SensorItem, key: string) {
+  const empty = '—';
+  switch (key) {
+    case 'status':
+      return item.status || empty;
+    case 'partNumber':
+      return item.partNumber || empty;
+    case 'sensorType':
+      return item.sensorType || empty;
+    case 'brand':
+      return item.brand || empty;
+    case 'model':
+      return item.model || empty;
+    case 'replacedAt':
+      return item.replacedAt || empty;
+    case 'problemNote':
+      return item.problemNote || empty;
+    case 'relation':
+      return relationText(item) || empty;
+    case 'spec':
+      return item.spec || empty;
+    case 'feature':
+      return item.feature || empty;
+    case 'scene':
+      return item.scene || empty;
+    case 'sop':
+      return sopTitle(item.sopId) || '未关联';
+    case 'model3d':
+      return model3dTitle(item.model3dId) || '未关联';
+    default:
+      return empty;
+  }
+}
+
+function exportExcel() {
+  if (items.value.length === 0) {
+    toast.error('当前条件下没有可导出的型号');
+    return;
+  }
+  const exportColumns = columns.value.filter((column) => column.key !== 'actions');
+  downloadSensorExcel({
+    pageName: mainTab.value,
+    headers: exportColumns.map((column) => column.label),
+    rows: items.value.map((item) =>
+      exportColumns.map((column) => exportCell(item, column.key)),
+    ),
+  });
+  toast.success(`已导出 ${items.value.length} 条 Sensor 型号`);
 }
 
 function addItem() {
@@ -290,6 +448,7 @@ function editItem(item: SensorItem) {
     scene: item.scene,
     sensorType: item.sensorType,
     sopId: item.sopId,
+    model3dId: item.model3dId,
     spec: item.spec,
     status: item.status,
   });
@@ -307,6 +466,7 @@ function saveItem() {
       scene: form.scene.trim(),
       spec: form.spec.trim(),
       sopId: form.sopId,
+      model3dId: form.model3dId,
     },
     editId.value,
   );
@@ -327,10 +487,61 @@ async function deleteItem(item: SensorItem) {
   toastResult(store.deleteSensor(item.id), '型号已删除');
 }
 
+function copyWithSelection(value: string) {
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.setAttribute('readonly', '');
+  input.style.position = 'fixed';
+  input.style.inset = '0 auto auto -9999px';
+  document.body.append(input);
+  input.select();
+
+  try {
+    return document.execCommand?.('copy') ?? false;
+  } finally {
+    input.remove();
+  }
+}
+
+async function copyPartNumber(value: unknown) {
+  const partNumber = String(value ?? '').trim();
+  if (!partNumber) return;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(partNumber);
+      } catch {
+        if (!copyWithSelection(partNumber)) throw new Error('clipboard unavailable');
+      }
+    } else if (!copyWithSelection(partNumber)) {
+      throw new Error('clipboard unavailable');
+    }
+
+    toast.success(`料号已复制：${partNumber}`);
+  } catch {
+    toast.error('复制失败，请手动选择料号复制');
+  }
+}
+
 function openLinkedSop(sopId: null | number) {
   if (!sopId) return;
-  focusSopId.value = sopId;
-  mainTab.value = 'sop';
+  const file = store.sensorSops.find((item) => item.id === sopId);
+  if (!file) {
+    toast.error('关联型录不存在或已被删除');
+    return;
+  }
+  linkedPreview.value = { file, kind: '型录' };
+}
+
+function openLinkedModel3d(model3dId: null | number) {
+  if (!model3dId) return;
+  const file = store.sensor3dFiles.find((item) => item.id === model3dId);
+  if (!file) {
+    toast.error('关联 3D 文件不存在或已被删除');
+    return;
+  }
+  linkedPreview.value = { file, kind: '3D' };
 }
 
 function openRelatedSensor(item: SensorItem) {
@@ -369,7 +580,8 @@ function saveReplace() {
     })
   ) {
     replaceOpen.value = false;
-    mainTab.value = '现用';
+    mainTab.value =
+      findSensorStatusName(statusNames.value, 'current') || '全部';
   }
 }
 </script>
@@ -377,10 +589,16 @@ function saveReplace() {
 <template>
   <section class="selection-page">
     <ASegmentedControl v-model="mainTab" :segments="tabs" />
+    <SensorSopFilePanel v-if="mainTab === 'sop-library'" />
     <SensorSopPanel
-      v-if="mainTab === 'sop'"
+      v-else-if="mainTab === 'sop'"
       :focus-sop-id="focusSopId"
       @previewed="focusSopId = $event"
+    />
+    <Sensor3dPanel
+      v-else-if="mainTab === '3d'"
+      :focus-model3d-id="focusModel3dId"
+      @previewed="focusModel3dId = $event"
     />
     <div v-else class="selection-panel">
       <div class="selection-toolbar">
@@ -389,18 +607,23 @@ function saveReplace() {
           class="selection-toolbar__filter"
           :options="statusFilterOptions"
         />
-        <ASelect
-          v-model="sensorTypeFilter"
+        <ATokenField
+          v-model="sensorTypeFilters"
           class="selection-toolbar__filter"
           :options="typeOptions"
           placeholder="感应器类型"
-          clearable
+          :max-visible-tokens="1"
         />
         <ASearchField
           v-model="query"
           class="selection-toolbar__filter"
           placeholder="搜索类型、品牌、型号、料号、停用或问题点"
         />
+        <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
+        <AButton aria-label="导出 Excel" @click="exportExcel">
+          <Download :size="14" :stroke-width="1.75" aria-hidden="true" />
+          导出 Excel
+        </AButton>
         <AButton v-if="writable" variant="filled" @click="addItem">新增型号</AButton>
       </div>
       <ATable
@@ -413,19 +636,52 @@ function saveReplace() {
         <template #cell-status="{ row }">
           <ABadge :label="row.status" :tone="statusTone(row.status)" />
         </template>
-        <template #cell-partNumber="{ value }">{{ value || '—' }}</template>
+        <template #cell-partNumber="{ value }">
+          <span
+            v-if="value"
+            class="sensor-part-number"
+            role="button"
+            tabindex="0"
+            :aria-label="`复制料号 ${value}`"
+            title="双击复制料号"
+            @dblclick.stop="copyPartNumber(value)"
+            @keydown.enter.prevent.stop="copyPartNumber(value)"
+          >
+            {{ value }}
+          </span>
+          <span v-else>—</span>
+        </template>
         <template #cell-sop="{ row }">
           <button
             v-if="row.sopId"
-            class="link-button"
+            class="sensor-file-link"
             type="button"
+            :aria-label="`预览型录：${sopTitle(row.sopId)}`"
+            :title="`预览型录：${sopTitle(row.sopId)}`"
             @click="openLinkedSop(row.sopId)"
           >
-            <ExternalLink :size="14" :stroke-width="1.5" />
-            {{ sopTitle(row.sopId) }}
+            <Eye :size="14" :stroke-width="1.75" aria-hidden="true" />
+            <span class="sensor-file-link__text">{{ sopTitle(row.sopId) }}</span>
           </button>
           <span v-else>未关联</span>
         </template>
+        <template #cell-model3d="{ row }">
+          <button
+            v-if="row.model3dId"
+            class="sensor-file-link"
+            type="button"
+            :aria-label="`预览 3D：${model3dTitle(row.model3dId)}`"
+            :title="`预览 3D：${model3dTitle(row.model3dId)}`"
+            @click="openLinkedModel3d(row.model3dId)"
+          >
+            <Eye :size="14" :stroke-width="1.75" aria-hidden="true" />
+            <span class="sensor-file-link__text">
+              {{ model3dTitle(row.model3dId) }}
+            </span>
+          </button>
+          <span v-else>未关联</span>
+        </template>
+        <template #cell-replacedAt="{ value }">{{ value || '—' }}</template>
         <template #cell-problemNote="{ value }">{{ value || '—' }}</template>
         <template #cell-relation="{ row }">
           <button
@@ -442,7 +698,7 @@ function saveReplace() {
           <div class="table-actions">
             <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
             <AIconButton
-              v-if="row.status === '备选'"
+              v-if="isSensorStatus(row.status, 'alternate')"
               :icon="Replace"
               label="替换现用"
               size="small"
@@ -460,6 +716,18 @@ function saveReplace() {
       </ATable>
       <APagination v-model:page="page" v-model:page-size="pageSize" :total="items.length" />
     </div>
+    <ASheet
+      :open="Boolean(linkedPreview)"
+      :title="linkedPreview ? `${linkedPreview.kind} · ${linkedPreview.file.title}` : '预览 PDF'"
+      viewport
+      @update:open="(open) => { if (!open) linkedPreview = null }"
+    >
+      <APdfViewer
+        v-if="linkedPreview"
+        class="a-pdf-viewer--large"
+        :src="linkedPreview.file.dataUrl"
+      />
+    </ASheet>
     <ASheet
       v-model:open="dialogOpen"
       :title="editId ? '编辑 Sensor 型号' : '新增 Sensor 型号'"
@@ -484,15 +752,25 @@ function saveReplace() {
           <AField v-model="form.model" :maxlength="100" />
         </AFormRow>
       </AFormGrid>
-      <AFormGrid :columns="1">
-        <AFormRow label="关联 SOP">
+      <AFormGrid>
+        <AFormRow label="关联型录">
           <ASelect
             v-model="form.sopId"
             :options="sopOptions"
-            placeholder="可选，关联一份 SOP PDF"
+            placeholder="可选，关联一份 PDF 型录"
             clearable
           />
         </AFormRow>
+        <AFormRow label="关联 3D">
+          <ASelect
+            v-model="form.model3dId"
+            :options="model3dOptions"
+            placeholder="可选，关联一个 3D 文件"
+            clearable
+          />
+        </AFormRow>
+      </AFormGrid>
+      <AFormGrid :columns="1">
         <AFormRow label="规格参数">
           <ATextArea v-model="form.spec" :rows="2" :maxlength="500" />
         </AFormRow>

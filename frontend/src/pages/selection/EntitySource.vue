@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
-import type { EntityKind } from '@/domain';
+import {
+  filterMachineGroups,
+  type EntityKind,
+  type MachineCatalogKind,
+} from '@/domain';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -12,6 +16,7 @@ import {
   ASelect,
   ASheet,
   ASourceList,
+  AStepper,
   type SourceGroup,
 } from '@/ui';
 import {
@@ -22,16 +27,28 @@ import {
   SOURCE_LIST_MAX_WIDTH,
   SOURCE_LIST_MIN_WIDTH,
 } from '@/ui/source-list';
+import MachineSourceList from './machine/MachineSourceList.vue';
 
 const props = defineProps<{
   kind: EntityKind;
   selected: string;
+  selectedKey?: string;
   checkedItems?: string[];
+  machineType?: MachineCatalogKind;
 }>();
 
 const emit = defineEmits<{
-  select: [payload: { category: string; item: string }];
-  toggleCheck: [payload: { item: string; checked: boolean }];
+  select: [
+    payload: { category: string; configuration?: string | null; item: string },
+  ];
+  toggleCheck: [
+    payload: {
+      category?: string;
+      configuration?: string | null;
+      item: string;
+      checked: boolean;
+    },
+  ];
 }>();
 
 const store = useSelectionStore();
@@ -41,9 +58,7 @@ const writable = computed(() => canWrite('selection:write'));
 const groupLabel = computed(() =>
   props.kind === 'customer' ? '区域' : '分类',
 );
-const itemLabel = computed(() =>
-  props.kind === 'customer' ? '客户' : '机型',
-);
+const itemLabel = computed(() => (props.kind === 'customer' ? '客户' : '机型'));
 
 const groups = computed<SourceGroup[]>(() =>
   store.entityGroups(props.kind).map((group) => ({
@@ -51,13 +66,29 @@ const groups = computed<SourceGroup[]>(() =>
     items: group.items,
   })),
 );
+const allMachineGroups = computed(() => store.entityGroups('machine'));
+const machineGroups = computed(() =>
+  props.machineType
+    ? filterMachineGroups(allMachineGroups.value, props.machineType)
+    : allMachineGroups.value,
+);
 
 const groupOpen = ref(false);
 const itemOpen = ref(false);
+const configurationOpen = ref(false);
 const editingGroup = ref<string>();
 const editingItem = ref<string>();
-const groupForm = reactive({ name: '' });
-const itemForm = reactive({ category: '', name: '' });
+const editingItemCategory = ref<string>();
+const editingItemConfiguration = ref<string | null>();
+const editingConfiguration = ref<string>();
+const groupForm = reactive({ name: '', sort: 1 });
+const configurationForm = reactive({ category: '', name: '', sort: 1 });
+const itemForm = reactive({
+  category: '',
+  configuration: '',
+  name: '',
+  sort: 1,
+});
 const listMinWidth = computed(() =>
   props.kind === 'machine'
     ? MACHINE_SOURCE_LIST_MIN_WIDTH
@@ -74,9 +105,36 @@ const listDefaultWidth = computed(() =>
     : SOURCE_LIST_DEFAULT_WIDTH,
 );
 const categoryOptions = computed(() =>
-  store
-    .entityGroups(props.kind)
+  (props.kind === 'machine'
+    ? machineGroups.value
+    : store.entityGroups(props.kind)
+  )
     .map((group) => ({ label: group.name, value: group.name })),
+);
+const configurationOptions = computed(() => [
+  { label: '无配置（直接归入分类）', value: '' },
+  ...(
+    store
+      .entityGroups('machine')
+      .find((group) => group.name === itemForm.category)?.configurations ?? []
+  ).map((configuration) => ({
+    label: configuration.name,
+    value: configuration.name,
+  })),
+]);
+
+watch(
+  () => itemForm.category,
+  () => {
+    if (
+      itemForm.configuration &&
+      !configurationOptions.value.some(
+        (option) => option.value === itemForm.configuration,
+      )
+    ) {
+      itemForm.configuration = '';
+    }
+  },
 );
 
 function movedIndex(prev: string[], next: string[]) {
@@ -92,44 +150,160 @@ function movedIndex(prev: string[], next: string[]) {
 function openCreateGroup() {
   editingGroup.value = undefined;
   groupForm.name = '';
+  groupForm.sort = store.entityGroups(props.kind).length + 1;
   groupOpen.value = true;
 }
 
 function openEditGroup(name: string) {
   editingGroup.value = name;
   groupForm.name = name;
+  groupForm.sort =
+    store.entityGroups(props.kind).findIndex((group) => group.name === name) +
+    1;
   groupOpen.value = true;
 }
 
-function openCreateItem(group?: string) {
+function openCreateConfiguration(category?: string) {
+  const target = category || machineGroups.value[0]?.name || '';
+  editingConfiguration.value = undefined;
+  configurationForm.category = target;
+  configurationForm.name = '';
+  configurationForm.sort =
+    (machineGroups.value.find((group) => group.name === target)?.configurations
+      ?.length ?? 0) + 1;
+  configurationOpen.value = true;
+}
+
+function openEditConfiguration(payload: {
+  category: string;
+  configuration: string;
+}) {
+  editingConfiguration.value = payload.configuration;
+  configurationForm.category = payload.category;
+  configurationForm.name = payload.configuration;
+  configurationForm.sort =
+    (machineGroups.value
+      .find((group) => group.name === payload.category)
+      ?.configurations?.findIndex(
+        (configuration) => configuration.name === payload.configuration,
+      ) ?? 0) + 1;
+  configurationOpen.value = true;
+}
+
+function openCreateItem(
+  payload?: string | { category: string; configuration: string | null },
+) {
   editingItem.value = undefined;
-  itemForm.category = group || store.entityGroups(props.kind)[0]?.name || '';
+  editingItemCategory.value = undefined;
+  editingItemConfiguration.value = undefined;
+  itemForm.category =
+    (typeof payload === 'string' ? payload : payload?.category) ||
+    (props.kind === 'machine'
+      ? machineGroups.value[0]?.name
+      : store.entityGroups(props.kind)[0]?.name) ||
+    '';
+  itemForm.configuration =
+    typeof payload === 'object' ? payload.configuration || '' : '';
   itemForm.name = '';
+  const group = store
+    .entityGroups(props.kind)
+    .find((item) => item.name === itemForm.category);
+  const items = itemForm.configuration
+    ? group?.configurations?.find(
+        (configuration) => configuration.name === itemForm.configuration,
+      )?.items
+    : group?.items;
+  itemForm.sort = (items?.length ?? 0) + 1;
   itemOpen.value = true;
 }
 
-function openEditItem(payload: { group: string; item: string }) {
+function openEditItem(payload: {
+  group?: string;
+  category?: string;
+  configuration?: string | null;
+  item: string;
+}) {
   editingItem.value = payload.item;
-  itemForm.category = payload.group;
+  itemForm.category = payload.category || payload.group || '';
+  itemForm.configuration = payload.configuration || '';
+  editingItemCategory.value = itemForm.category;
+  editingItemConfiguration.value = payload.configuration || null;
   itemForm.name = payload.item;
+  const group = store
+    .entityGroups(props.kind)
+    .find((item) => item.name === itemForm.category);
+  const items = itemForm.configuration
+    ? group?.configurations?.find(
+        (configuration) => configuration.name === itemForm.configuration,
+      )?.items
+    : group?.items;
+  itemForm.sort = Math.max(1, (items?.indexOf(payload.item) ?? 0) + 1);
   itemOpen.value = true;
 }
 
 function saveGroup() {
   const result = store.saveEntityGroup(
     props.kind,
-    { name: groupForm.name.trim() },
+    {
+      name: groupForm.name.trim(),
+      sort: groupForm.sort,
+      ...(props.kind === 'machine' && props.machineType
+        ? { machineType: props.machineType }
+        : {}),
+    },
     editingGroup.value,
   );
   if (
-    toastResult(result, editingGroup.value ? `${groupLabel.value}已更新` : `${groupLabel.value}已新增`, {
-      duplicate: `该${groupLabel.value}已存在`,
-      validation: `请填写${groupLabel.value}名称`,
-      'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
-    })
+    toastResult(
+      result,
+      editingGroup.value
+        ? `${groupLabel.value}已更新`
+        : `${groupLabel.value}已新增`,
+      {
+        duplicate: `该${groupLabel.value}已存在`,
+        validation: `请填写${groupLabel.value}名称`,
+        'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
+      },
+    )
   ) {
     groupOpen.value = false;
   }
+}
+
+function saveConfiguration() {
+  const result = store.saveMachineConfiguration(
+    configurationForm.category,
+    { name: configurationForm.name.trim(), sort: configurationForm.sort },
+    editingConfiguration.value,
+  );
+  if (
+    toastResult(
+      result,
+      editingConfiguration.value ? '配置已更新' : '配置已新增',
+      {
+        duplicate: '该配置已存在',
+        validation: '请填写配置名称并选择分类',
+      },
+    )
+  ) {
+    configurationOpen.value = false;
+  }
+}
+
+async function removeConfiguration(payload: {
+  category: string;
+  configuration: string;
+}) {
+  const ok = await confirmDelete(
+    '删除配置',
+    `确认删除“${payload.configuration}”吗？请先清空其下全部机型。`,
+  );
+  if (!ok) return;
+  toastResult(
+    store.deleteMachineConfiguration(payload.category, payload.configuration),
+    '配置已删除',
+    { 'not-empty': '请先清空该配置下的全部机型' },
+  );
 }
 
 async function removeGroup(name: string) {
@@ -138,22 +312,42 @@ async function removeGroup(name: string) {
     `确认删除“${name}”吗？请先清空其下全部${itemLabel.value}。`,
   );
   if (!ok) return;
-  toastResult(store.deleteEntityGroup(props.kind, name), `${groupLabel.value}已删除`, {
-    'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
-  });
+  toastResult(
+    store.deleteEntityGroup(props.kind, name),
+    `${groupLabel.value}已删除`,
+    {
+      'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
+    },
+  );
 }
 
 function saveItem() {
   const previous = editingItem.value;
   const category = itemForm.category;
   const name = itemForm.name.trim();
-  const result = store.saveEntityItem(props.kind, { category, name }, previous);
+  const result = store.saveEntityItem(
+    props.kind,
+    {
+      category,
+      configuration:
+        props.kind === 'machine' ? itemForm.configuration || null : null,
+      name,
+      previousCategory: editingItemCategory.value,
+      previousConfiguration: editingItemConfiguration.value,
+      sort: itemForm.sort,
+    },
+    previous,
+  );
   if (
-    toastResult(result, previous ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`, {
-      duplicate: `该${itemLabel.value}已存在`,
-      validation: `请填写${itemLabel.value}名称并选择${groupLabel.value}`,
-      'in-use': `请先清空该${itemLabel.value}下的业务数据`,
-    })
+    toastResult(
+      result,
+      previous ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`,
+      {
+        duplicate: `该${itemLabel.value}已存在`,
+        validation: `请填写${itemLabel.value}名称并选择${groupLabel.value}`,
+        'in-use': `请先清空该${itemLabel.value}下的业务数据`,
+      },
+    )
   ) {
     itemOpen.value = false;
     // A new row lands in a group that may still be collapsed, and renaming the
@@ -164,15 +358,29 @@ function saveItem() {
   }
 }
 
-async function removeItem(payload: { group: string; item: string }) {
+async function removeItem(payload: {
+  group?: string;
+  category?: string;
+  configuration?: string | null;
+  item: string;
+}) {
   const ok = await confirmDelete(
     `删除${itemLabel.value}`,
     `确认删除“${payload.item}”吗？请先清空其下业务数据。`,
   );
   if (!ok) return;
-  toastResult(store.deleteEntityItem(props.kind, payload.item), `${itemLabel.value}已删除`, {
-    'in-use': `请先清空该${itemLabel.value}下的业务数据`,
-  });
+  toastResult(
+    store.deleteEntityItem(
+      props.kind,
+      payload.item,
+      payload.category || payload.group,
+      payload.configuration,
+    ),
+    `${itemLabel.value}已删除`,
+    {
+      'in-use': `请先清空该${itemLabel.value}下的业务数据`,
+    },
+  );
 }
 
 function onReorderGroups(names: string[]) {
@@ -201,11 +409,70 @@ function onReorderItems(payload: { group: string; items: string[] }) {
     '',
   );
 }
+
+function onReorderMachineGroups(payload: {
+  oldIndex: number;
+  newIndex: number;
+}) {
+  const oldName = machineGroups.value[payload.oldIndex]?.name;
+  const newName = machineGroups.value[payload.newIndex]?.name;
+  if (!oldName || !newName) return;
+  const oldIndex = allMachineGroups.value.findIndex(
+    (group) => group.name === oldName,
+  );
+  const newIndex = allMachineGroups.value.findIndex(
+    (group) => group.name === newName,
+  );
+  if (oldIndex < 0 || newIndex < 0) return;
+  toastResult(
+    store.reorderEntityGroups('machine', oldIndex, newIndex),
+    '',
+  );
+}
+
+function onReorderMachineConfigurations(payload: {
+  category: string;
+  oldIndex: number;
+  newIndex: number;
+}) {
+  const configuration = machineGroups.value.find(
+    (group) => group.name === payload.category,
+  )?.configurations?.[payload.oldIndex];
+  if (!configuration) return;
+
+  toastResult(
+    store.saveMachineConfiguration(
+      payload.category,
+      { name: configuration.name, sort: payload.newIndex + 1 },
+      configuration.name,
+    ),
+    '',
+  );
+}
+
+function onReorderMachineItems(payload: {
+  category: string;
+  configuration: string | null;
+  oldIndex: number;
+  newIndex: number;
+}) {
+  toastResult(
+    store.reorderEntityItems(
+      'machine',
+      payload.category,
+      payload.oldIndex,
+      payload.newIndex,
+      payload.configuration,
+    ),
+    '',
+  );
+}
 </script>
 
 <template>
   <div class="entity-source">
     <ASourceList
+      v-if="kind === 'customer'"
       :groups="groups"
       :selected="selected"
       :checked-items="checkedItems"
@@ -228,6 +495,34 @@ function onReorderItems(payload: { group: string; items: string[] }) {
       @reorder-groups="onReorderGroups"
       @reorder-items="onReorderItems"
     />
+    <MachineSourceList
+      v-else
+      :groups="machineGroups"
+      :selected="selected"
+      :selected-key="selectedKey"
+      :checked-items="checkedItems"
+      :editable="writable"
+      :sortable="writable"
+      :allow-configurations="machineType !== 'project'"
+      :min-width="listMinWidth"
+      :max-width="listMaxWidth"
+      :default-width="listDefaultWidth"
+      :storage-key="`selection:source-list-width:${kind}:v4`"
+      @select="emit('select', $event)"
+      @toggle-check="emit('toggleCheck', $event)"
+      @create-group="openCreateGroup"
+      @edit-group="openEditGroup"
+      @delete-group="removeGroup"
+      @create-configuration="openCreateConfiguration"
+      @edit-configuration="openEditConfiguration"
+      @delete-configuration="removeConfiguration"
+      @create-item="openCreateItem"
+      @edit-item="openEditItem"
+      @delete-item="removeItem"
+      @reorder-groups="onReorderMachineGroups"
+      @reorder-configurations="onReorderMachineConfigurations"
+      @reorder-items="onReorderMachineItems"
+    />
 
     <ASheet
       v-model:open="groupOpen"
@@ -237,9 +532,45 @@ function onReorderItems(payload: { group: string; items: string[] }) {
       <AFormRow :label="`${groupLabel}名称`" required>
         <AField v-model="groupForm.name" :maxlength="40" />
       </AFormRow>
+      <AFormRow label="排序" required>
+        <AStepper
+          v-model="groupForm.sort"
+          :min="1"
+          :max="
+            Math.max(
+              1,
+              store.entityGroups(kind).length + (editingGroup ? 0 : 1),
+            )
+          "
+        />
+      </AFormRow>
       <template #footer>
         <AButton @click="groupOpen = false">取消</AButton>
         <AButton variant="filled" @click="saveGroup">保存</AButton>
+      </template>
+    </ASheet>
+
+    <ASheet
+      v-if="kind === 'machine'"
+      v-model:open="configurationOpen"
+      :title="editingConfiguration ? '编辑配置' : '新建配置'"
+      :width="420"
+    >
+      <AFormRow label="分类" required>
+        <ASelect
+          v-model="configurationForm.category"
+          :options="categoryOptions"
+        />
+      </AFormRow>
+      <AFormRow label="配置名称" required>
+        <AField v-model="configurationForm.name" :maxlength="40" />
+      </AFormRow>
+      <AFormRow label="排序" required>
+        <AStepper v-model="configurationForm.sort" :min="1" />
+      </AFormRow>
+      <template #footer>
+        <AButton @click="configurationOpen = false">取消</AButton>
+        <AButton variant="filled" @click="saveConfiguration">保存</AButton>
       </template>
     </ASheet>
 
@@ -251,8 +582,20 @@ function onReorderItems(payload: { group: string; items: string[] }) {
       <AFormRow :label="groupLabel" required>
         <ASelect v-model="itemForm.category" :options="categoryOptions" />
       </AFormRow>
+      <AFormRow
+        v-if="kind === 'machine' && machineType !== 'project'"
+        label="配置（可选）"
+      >
+        <ASelect
+          v-model="itemForm.configuration"
+          :options="configurationOptions"
+        />
+      </AFormRow>
       <AFormRow :label="`${itemLabel}名称`" required>
         <AField v-model="itemForm.name" :maxlength="40" />
+      </AFormRow>
+      <AFormRow label="排序" required>
+        <AStepper v-model="itemForm.sort" :min="1" />
       </AFormRow>
       <template #footer>
         <AButton @click="itemOpen = false">取消</AButton>

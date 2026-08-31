@@ -7,6 +7,7 @@ export { default as ADatePicker } from './ADatePicker.vue';
 export { default as AEmptyState } from './AEmptyState.vue';
 export { default as AField } from './AField.vue';
 export { default as AFileDrop } from './AFileDrop.vue';
+export { default as AFilterResetButton } from './AFilterResetButton.vue';
 export { default as AFormGrid } from './AFormGrid.vue';
 export { default as AFormRow } from './AFormRow.vue';
 export { default as AIconButton } from './AIconButton.vue';

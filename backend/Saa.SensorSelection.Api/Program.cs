@@ -1,6 +1,8 @@
+using System.IO.Compression;
 using System.Text;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -96,6 +98,17 @@ builder.Services.AddCors(options =>
         }
     }));
 
+// JSON 元数据仍启用 gzip；PDF/图片正文由 /api/files 按需返回，不进入 /api/store。
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+        ["application/problem+json"]);
+});
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -143,6 +156,7 @@ builder.Services
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<DbInitializer>();
 builder.Services.AddScoped<StoreService>();
+builder.Services.AddScoped<StoredFileService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<RoleService>();
@@ -158,6 +172,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+app.UseResponseCompression();
 
 // IIS 单目录部署：前端构建产物由打包脚本复制到后端发布目录的 wwwroot。
 // 生产使用 hash 路由，因此不需要 URL Rewrite；默认文档负责提供 index.html。

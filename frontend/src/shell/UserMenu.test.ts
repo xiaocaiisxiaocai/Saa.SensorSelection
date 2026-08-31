@@ -89,4 +89,21 @@ describe('UserMenu', () => {
     });
     wrapper.unmount();
   });
+
+  it('logs out without reloading the full selection store', async () => {
+    const getStore = vi.spyOn(api, 'getStore').mockResolvedValue({});
+    const wrapper = await mountMenu();
+    await wrapper.get('.user-chip--menu').trigger('click');
+    await nextTick();
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (node) => node.textContent?.includes('退出登录'),
+    );
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('登录');
+    });
+    expect(getStore).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
 });

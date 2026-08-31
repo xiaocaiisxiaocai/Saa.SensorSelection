@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { api, ApiError } from '@/api';
 import {
-  GENERAL_STRUCTURE_CATEGORY,
+  entityTreeItemKey,
+  filterMachineGroups,
+  findEntityTreeItem,
+  listEntityGroupItems,
+  listEntityTreeItems,
+  machineCatalogKind,
+  type MachineCatalogKind,
   openMachineSchematicReport,
+  type MachineProcessItem,
   type MachineReportSection,
-  type MachineSectionItem,
+  type MachineSectionKind,
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
@@ -19,8 +27,12 @@ import {
   AButton,
   AEmptyState,
   AField,
+  AFormGrid,
   AFormRow,
+  AIconButton,
+  ASelect,
   ASheet,
+  AStepper,
   ATabBar,
   type TabItem,
 } from '@/ui';
@@ -35,79 +47,132 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
 const dialogOpen = ref(false);
+const processDialogOpen = ref(false);
 const editId = ref<number>();
-const form = reactive({ name: '' });
+const processEditId = ref<number>();
+const form = reactive({
+  kind: 'structure' as MachineSectionKind,
+  name: '',
+  sort: 1,
+});
+const processForm = reactive({
+  name: '',
+  sort: 1,
+});
 const activeSection = ref('');
-const checkedNames = ref<string[]>([]);
+const checkedMachineKeys = ref<string[]>([]);
 const reportGenerating = ref(false);
 
 const groups = computed(() => store.entityGroups('machine'));
-const availableMachineNames = computed(() =>
-  groups.value.flatMap((group) => group.items),
+const processes = computed(() => store.machineProcesses);
+const activeProcessId = computed(() => {
+  const requested = Number(route.query.process);
+  return processes.value.some((item) => item.id === requested)
+    ? requested
+    : (processes.value[0]?.id ?? 1);
+});
+const processOptions = computed(() =>
+  processes.value.map((item) => ({ label: item.name, value: item.id })),
+);
+const processSelection = computed({
+  get: () => activeProcessId.value,
+  set: (value: string | number | null) => selectProcess(Number(value)),
+});
+const activeMachineType = computed<MachineCatalogKind>(() => {
+  if (route.query.catalog === 'project') return 'project';
+  if (route.query.catalog === 'mechanism') return 'mechanism';
+  const requestedCategory = String(route.query.category || '');
+  const requestedItem = String(route.query.item || '');
+  const legacyGroup = groups.value.find(
+    (group) =>
+      group.name === requestedCategory ||
+      listEntityGroupItems(group).includes(requestedItem),
+  );
+  return legacyGroup ? machineCatalogKind(legacyGroup) : 'mechanism';
+});
+const machineCatalogTabs: TabItem[] = [
+  { label: '结构', value: 'mechanism' },
+  { label: '专案机型', value: 'project' },
+];
+const catalogGroups = computed(() =>
+  filterMachineGroups(groups.value, activeMachineType.value),
+);
+const availableMachineItems = computed(() =>
+  listEntityTreeItems(catalogGroups.value),
+);
+const availableMachineKeys = computed(() =>
+  availableMachineItems.value.map(entityTreeItemKey),
+);
+const selectedMachineItems = computed(() =>
+  availableMachineItems.value.filter((item) =>
+    checkedMachineKeys.value.includes(entityTreeItemKey(item)),
+  ),
 );
 const selectedMachineNames = computed(() =>
-  availableMachineNames.value.filter((name) => checkedNames.value.includes(name)),
+  selectedMachineItems.value.map((item) => item.name),
 );
 const selection = computed(() => {
   const requested = String(route.query.item || '');
-  for (const group of groups.value) {
-    if (group.items.includes(requested)) {
-      return { category: group.name, item: requested };
-    }
+  const requestedCategory = String(route.query.category || '');
+  const requestedConfiguration = String(route.query.configuration || '');
+  const found = catalogGroups.value
+    .flatMap((group) => [
+      ...group.items.map((name) => ({
+        category: group.name,
+        configuration: '',
+        name,
+      })),
+      ...(group.configurations ?? []).flatMap((configuration) =>
+        configuration.items.map((name) => ({
+          category: group.name,
+          configuration: configuration.name,
+          name,
+        })),
+      ),
+    ])
+    .find(
+      (item) =>
+        item.name === requested &&
+        (!requestedCategory || item.category === requestedCategory) &&
+        (!requestedConfiguration ||
+          item.configuration === requestedConfiguration),
+    );
+  if (found) {
+    return {
+      category: found.category,
+      configuration: found.configuration,
+      item: found.name,
+    };
   }
+  const first = findEntityTreeItem(
+    catalogGroups.value,
+    catalogGroups.value.flatMap((group) => listEntityGroupItems(group))[0] ?? '',
+  );
   return {
-    category: groups.value[0]?.name || '',
-    item: groups.value[0]?.items[0] || '',
+    category: first?.category || catalogGroups.value[0]?.name || '',
+    configuration: first?.configuration || '',
+    item: first?.name || '',
   };
 });
-const isGeneralStructure = computed(
-  () => selection.value.category === GENERAL_STRUCTURE_CATEGORY,
+const selectedMachineKey = computed(() =>
+  entityTreeItemKey({
+    category: selection.value.category,
+    configuration: selection.value.configuration || null,
+    name: selection.value.item,
+  }),
 );
-const generalItems = computed(
-  () =>
-    groups.value.find((group) => group.name === GENERAL_STRUCTURE_CATEGORY)
-      ?.items ?? [],
-);
-const labelMap = computed(() => store.generalStructureLabelMap);
 const displaySections = computed(() => {
   if (!selection.value.item) return [];
-  const resolved = store.resolvedMachineSections(selection.value.item);
-  if (!isGeneralStructure.value) {
-    return resolved.map((section) => ({ ...section, displayName: section.name }));
-  }
-  const notes = resolved.filter((item) => item.kind === 'notes');
-  const structureTabs = generalItems.value
-    .map((itemName) => {
-      const byLabel = Object.entries(labelMap.value).find(
-        ([, label]) => label === itemName,
-      );
-      const section = byLabel
-        ? resolved.find((item) => String(item.id) === byLabel[0])
-        : resolved.find(
-            (item) => item.kind === 'structure' && item.name === itemName,
-          );
-      return section ? { ...section, displayName: itemName } : null;
-    })
-    .filter((item): item is MachineSectionItem & { displayName: string } =>
-      Boolean(item),
-    );
-  return [
-    ...structureTabs,
-    ...notes.map((item) => ({ ...item, displayName: item.name })),
-  ];
+  return store
+    .resolvedMachineSections(selection.value.item, activeProcessId.value)
+    .map((section) => ({ ...section, displayName: section.name }));
 });
 const tabs = computed<TabItem[]>(() =>
   displaySections.value.map((section) => ({
     label: section.displayName,
     value: String(section.id),
-    closable:
-      writable.value &&
-      !isGeneralStructure.value &&
-      section.scope === 'machine',
-    renamable:
-      writable.value &&
-      !isGeneralStructure.value &&
-      section.scope === 'machine',
+    closable: writable.value,
+    renamable: writable.value,
   })),
 );
 const activeSectionItem = computed(() =>
@@ -118,14 +183,15 @@ const reportSections = computed<MachineReportSection[]>(() => {
   const resolvedByMachine = new Map(
     machineNames.map((machineName) => [
       machineName,
-      store.resolvedMachineSections(machineName),
+      store.resolvedMachineSections(machineName, activeProcessId.value),
     ]),
   );
-  const sectionMap = new Map<number, MachineReportSection>();
+  const sectionMap = new Map<string, MachineReportSection>();
   for (const sectionsForMachine of resolvedByMachine.values()) {
     for (const section of sectionsForMachine) {
-      if (!sectionMap.has(section.id)) {
-        sectionMap.set(section.id, {
+      const key = `${section.kind}:${section.name.toLocaleLowerCase('zh-CN')}`;
+      if (!sectionMap.has(key)) {
+        sectionMap.set(key, {
           ...section,
           displayName: section.name,
           blocks: [],
@@ -140,16 +206,40 @@ const reportSections = computed<MachineReportSection[]>(() => {
       blocks: machineNames.flatMap((machineName) => {
         const machineSection = resolvedByMachine
           .get(machineName)
-          ?.find((candidate) => candidate.id === section.id);
+          ?.find(
+            (candidate) =>
+              candidate.kind === section.kind &&
+              candidate.name.toLocaleLowerCase('zh-CN') ===
+                section.name.toLocaleLowerCase('zh-CN'),
+          );
         if (!machineSection) return [];
-        const rows = store.machineSectionRows(section.id, machineName);
+        const rows = store.machineSectionRows(
+          machineSection.id,
+          machineName,
+          activeProcessId.value,
+        );
+        const reportRows = rows.map((row) => {
+          const processStep = store.processSteps.find(
+            (item) => item.id === row.processStepId,
+          );
+          return {
+            ...row,
+            processStepName: processStep
+              ? `${processStep.layer} · ${processStep.name}`
+              : '',
+          };
+        });
         return [
           {
             machineName,
-            rows,
+            rows: reportRows,
             images:
               section.kind === 'structure'
-                ? store.machineSectionImages(section.id, machineName)
+                ? store.machineSectionImages(
+                    machineSection.id,
+                    machineName,
+                    activeProcessId.value,
+                  )
                 : [],
             sensors:
               section.kind === 'structure'
@@ -163,11 +253,23 @@ const reportSections = computed<MachineReportSection[]>(() => {
     }));
 });
 
+function addMachineContextQuery(
+  query: Record<string, string>,
+  processId = activeProcessId.value,
+  catalog = activeMachineType.value,
+) {
+  if (processId !== 1) query.process = String(processId);
+  if (catalog === 'project') query.catalog = catalog;
+  return query;
+}
+
 watch(
-  () => availableMachineNames.value.join(','),
+  () => availableMachineKeys.value.join('\u0001'),
   () => {
-    const available = new Set(availableMachineNames.value);
-    checkedNames.value = checkedNames.value.filter((name) => available.has(name));
+    const available = new Set(availableMachineKeys.value);
+    checkedMachineKeys.value = checkedMachineKeys.value.filter((key) =>
+      available.has(key),
+    );
   },
   { immediate: true },
 );
@@ -175,17 +277,43 @@ watch(
 watch(
   () => auth.isAuthenticated,
   (isAuthenticated) => {
-    if (!isAuthenticated) checkedNames.value = [];
+    if (!isAuthenticated) checkedMachineKeys.value = [];
   },
 );
 
 watch(
-  () => [route.query.item, route.query.category, groups.value] as const,
+  () =>
+    [
+      route.query.item,
+      route.query.category,
+      route.query.configuration,
+      route.query.process,
+      route.query.catalog,
+      groups.value,
+      processes.value,
+    ] as const,
   () => {
-    const { category, item } = selection.value;
+    const { category, configuration, item } = selection.value;
     if (!item) return;
-    if (route.query.item === item && route.query.category === category) return;
-    const query: Record<string, string> = { category, item };
+    const requestedProcess = String(route.query.process || '');
+    const canonicalProcess =
+      activeProcessId.value === 1 ? '' : String(activeProcessId.value);
+    const canonicalCatalog =
+      activeMachineType.value === 'project' ? 'project' : '';
+    if (
+      route.query.item === item &&
+      route.query.category === category &&
+      String(route.query.configuration || '') === configuration &&
+      requestedProcess === canonicalProcess &&
+      String(route.query.catalog || '') === canonicalCatalog
+    ) {
+      return;
+    }
+    const query: Record<string, string> = addMachineContextQuery({
+      category,
+      item,
+    });
+    if (configuration) query.configuration = configuration;
     const section = String(route.query.section || '');
     if (section) query.section = section;
     void router.replace({ path: route.path, query });
@@ -198,6 +326,8 @@ watch(
     [
       selection.value.item,
       selection.value.category,
+      selection.value.configuration,
+      activeProcessId.value,
       route.query.section,
       displaySections.value.map((item) => item.id).join(','),
     ] as const,
@@ -210,98 +340,176 @@ watch(
     const match = displaySections.value.find(
       (item) => String(item.id) === requested,
     );
-    const mappedId = isGeneralStructure.value
-      ? sectionIdForGeneralItem(selection.value.item)
-      : '';
-    const mappedSection = mappedId
-      ? displaySections.value.find((item) => String(item.id) === mappedId)
-      : undefined;
-    let next = String((match || displaySections.value[0])?.id ?? '');
-    if (mappedSection && isGeneralStructure.value) {
-      const requestedIsPaired = Boolean(
-        requested && generalItemForSectionId(requested),
-      );
-      next = String(
-        !requested || requestedIsPaired
-          ? mappedSection.id
-          : (match || mappedSection).id,
-      );
-    }
+    const next = String((match || displaySections.value[0])?.id ?? '');
     activeSection.value = next;
     if (
       route.query.item === selection.value.item &&
       route.query.category === selection.value.category &&
+      String(route.query.configuration || '') ===
+        selection.value.configuration &&
+      String(route.query.process || '') ===
+        (activeProcessId.value === 1 ? '' : String(activeProcessId.value)) &&
+      String(route.query.catalog || '') ===
+        (activeMachineType.value === 'project' ? 'project' : '') &&
       route.query.section === next
     ) {
       return;
     }
     void router.replace({
       path: route.path,
-      query: {
+      query: addMachineContextQuery({
         category: selection.value.category,
         item: selection.value.item,
         section: next,
-      },
+        ...(selection.value.configuration
+          ? { configuration: selection.value.configuration }
+          : {}),
+      }),
     });
   },
   { immediate: true },
 );
 
-function sectionIdForGeneralItem(itemName: string) {
-  const byLabel = Object.entries(labelMap.value).find(
-    ([, label]) => label === itemName,
-  );
-  if (byLabel) return byLabel[0];
-  const section = store.globalMachineSections.find(
-    (item) => item.kind === 'structure' && item.name === itemName,
-  );
-  return section ? String(section.id) : '';
-}
-
-function generalItemForSectionId(sectionId: string) {
-  const id = Number(sectionId);
-  if (labelMap.value[id]) return labelMap.value[id];
-  const section = store.globalMachineSections.find((item) => item.id === id);
-  return section?.kind === 'structure' ? section.name : '';
-}
-
-function selectEntity(payload: { category: string; item: string }) {
-  const query: Record<string, string> = {
+function selectEntity(payload: {
+  category: string;
+  configuration?: string | null;
+  item: string;
+}) {
+  const query: Record<string, string> = addMachineContextQuery({
     category: payload.category,
     item: payload.item,
-  };
-  if (payload.category === GENERAL_STRUCTURE_CATEGORY) {
-    const sectionId = sectionIdForGeneralItem(payload.item);
-    if (sectionId) query.section = sectionId;
-  }
+  });
+  if (payload.configuration) query.configuration = payload.configuration;
   void router.replace({ path: route.path, query });
 }
 
 function onTabChange(sectionId: string) {
   activeSection.value = sectionId;
-  const query: Record<string, string> = {
+  const query: Record<string, string> = addMachineContextQuery({
     category: selection.value.category,
     item: selection.value.item,
     section: sectionId,
-  };
-  if (selection.value.category === GENERAL_STRUCTURE_CATEGORY) {
-    const itemName = generalItemForSectionId(sectionId);
-    const group = groups.value.find(
-      (entry) => entry.name === GENERAL_STRUCTURE_CATEGORY,
-    );
-    if (itemName && group?.items.includes(itemName)) {
-      query.item = itemName;
-    }
+  });
+  if (selection.value.configuration) {
+    query.configuration = selection.value.configuration;
   }
   void router.replace({ path: route.path, query });
 }
 
-function onToggleCheck(payload: { item: string; checked: boolean }) {
+function selectProcess(processId: number) {
+  if (
+    !Number.isSafeInteger(processId) ||
+    !processes.value.some((item) => item.id === processId) ||
+    processId === activeProcessId.value
+  ) {
+    return;
+  }
+  const query: Record<string, string> = addMachineContextQuery(
+    {
+      category: selection.value.category,
+      item: selection.value.item,
+      ...(selection.value.configuration
+        ? { configuration: selection.value.configuration }
+        : {}),
+    },
+    processId,
+  );
+  void router.replace({ path: route.path, query });
+}
+
+function selectMachineCatalog(value: string) {
+  if (
+    (value !== 'mechanism' && value !== 'project') ||
+    value === activeMachineType.value
+  ) {
+    return;
+  }
+  void router.replace({
+    path: route.path,
+    query: addMachineContextQuery({}, activeProcessId.value, value),
+  });
+}
+
+function resetProcessForm() {
+  processEditId.value = undefined;
+  Object.assign(processForm, {
+    name: '',
+    sort: processes.value.length + 1,
+  });
+}
+
+function openProcessManager() {
+  resetProcessForm();
+  processDialogOpen.value = true;
+}
+
+function editProcess(item: MachineProcessItem) {
+  processEditId.value = item.id;
+  Object.assign(processForm, { name: item.name, sort: item.sort });
+}
+
+function saveProcess() {
+  const result = store.saveMachineProcess(
+    { name: processForm.name.trim(), sort: processForm.sort },
+    processEditId.value,
+  );
+  if (
+    toastResult(result, processEditId.value ? '制程已更新' : '制程已新增', {
+      duplicate: '该制程名称已存在',
+      validation: '请填写制程名称',
+      stale: '该制程已被删除，请刷新后重试',
+    })
+  ) {
+    resetProcessForm();
+  }
+}
+
+async function removeProcess(item: MachineProcessItem) {
+  const ok = await confirmDelete(
+    '删除制程',
+    `确认删除“${item.name}”吗？请先清空该制程下全部机型的 Tab 和内容。`,
+  );
+  if (!ok) return;
+  const wasActive = activeProcessId.value === item.id;
+  const result = store.deleteMachineProcess(item.id);
+  if (
+    toastResult(result, '制程已删除', {
+      validation: '默认制程不能删除',
+      'not-empty': '请先清空该制程下全部机型的 Tab、内容和示意图',
+      stale: '该制程已被删除，请刷新后重试',
+    }) &&
+    wasActive
+  ) {
+    void router.replace({
+      path: route.path,
+      query: addMachineContextQuery({
+        category: selection.value.category,
+        item: selection.value.item,
+        ...(selection.value.configuration
+          ? { configuration: selection.value.configuration }
+          : {}),
+      }),
+    });
+  }
+}
+
+function onToggleCheck(payload: {
+  category?: string;
+  configuration?: string | null;
+  item: string;
+  checked: boolean;
+}) {
   if (!auth.isAuthenticated) return;
-  const next = new Set(checkedNames.value);
-  if (payload.checked) next.add(payload.item);
-  else next.delete(payload.item);
-  checkedNames.value = [...next];
+  if (!payload.category) return;
+  const key = entityTreeItemKey({
+    category: payload.category,
+    configuration: payload.configuration ?? null,
+    name: payload.item,
+  });
+  const next = new Set(checkedMachineKeys.value);
+  if (payload.checked) next.add(key);
+  else next.delete(key);
+  checkedMachineKeys.value = [...next];
 }
 
 function ensureSelected() {
@@ -351,15 +559,25 @@ async function generateReport() {
 
 function openAddTab() {
   editId.value = undefined;
-  form.name = '';
+  Object.assign(form, {
+    kind: 'structure' as MachineSectionKind,
+    name: '',
+    sort: displaySections.value.length + 1,
+  });
   dialogOpen.value = true;
 }
 
 function openRenameTab(value: string) {
-  const section = displaySections.value.find((item) => String(item.id) === value);
+  const section = displaySections.value.find(
+    (item) => String(item.id) === value,
+  );
   if (!section) return;
   editId.value = section.id;
-  form.name = section.name;
+  Object.assign(form, {
+    kind: section.kind,
+    name: section.name,
+    sort: section.sort,
+  });
   dialogOpen.value = true;
 }
 
@@ -368,13 +586,15 @@ function saveTab() {
   if (!machineName) return;
   const result = store.saveExtraMachineSection(
     machineName,
-    { name: form.name.trim() },
+    { kind: form.kind, name: form.name.trim(), sort: form.sort },
     editId.value,
+    activeProcessId.value,
   );
   if (
     toastResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
       duplicate: '该 Tab 名称已存在',
       validation: '请填写 Tab 名称',
+      'not-empty': '请先清空该 Tab 的数据和示意图后再修改类型',
       stale: '该 Tab 已被删除，请刷新后重试',
     })
   ) {
@@ -383,7 +603,9 @@ function saveTab() {
 }
 
 async function closeTab(value: string) {
-  const section = displaySections.value.find((item) => String(item.id) === value);
+  const section = displaySections.value.find(
+    (item) => String(item.id) === value,
+  );
   if (!section) return;
   const ok = await confirmDelete(
     '删除 Tab',
@@ -391,7 +613,11 @@ async function closeTab(value: string) {
   );
   if (!ok) return;
   toastResult(
-    store.deleteExtraMachineSection(selection.value.item, section.id),
+    store.deleteExtraMachineSection(
+      selection.value.item,
+      section.id,
+      activeProcessId.value,
+    ),
     'Tab 已删除',
     {
       'not-empty': '请先清空该 Tab 下的全部数据后再删除',
@@ -404,32 +630,61 @@ async function closeTab(value: string) {
 <template>
   <section class="selection-page">
     <div class="selection-split">
-      <EntitySource
-        kind="machine"
-        :selected="selection.item"
-        :checked-items="auth.isAuthenticated ? checkedNames : undefined"
-        @select="selectEntity"
-        @toggle-check="onToggleCheck"
-      />
+      <div class="machine-source-stack">
+        <div class="machine-process-context" aria-label="当前制程">
+          <ASelect
+            v-model="processSelection"
+            class="machine-process-context__select"
+            :options="processOptions"
+            placeholder="选择制程"
+          />
+          <AButton
+            v-if="writable"
+            class="machine-process-context__manage"
+            variant="borderless"
+            @click="openProcessManager"
+          >
+            管理制程
+          </AButton>
+        </div>
+        <ATabBar
+          class="machine-catalog-tabs"
+          :model-value="activeMachineType"
+          :tabs="machineCatalogTabs"
+          @update:model-value="selectMachineCatalog"
+        />
+        <EntitySource
+          kind="machine"
+          :machine-type="activeMachineType"
+          :selected="selection.item"
+          :selected-key="selectedMachineKey"
+          :checked-items="auth.isAuthenticated ? checkedMachineKeys : undefined"
+          @select="selectEntity"
+          @toggle-check="onToggleCheck"
+        />
+      </div>
       <div v-if="selection.item" class="selection-panel">
         <div v-if="auth.isAuthenticated" class="machine-report">
           <span class="selection-toolbar__count">
-            已选 {{ selectedMachineNames.length }} /
-            {{ availableMachineNames.length }} 个机型
+            已选 {{ selectedMachineItems.length }} /
+            {{ availableMachineItems.length }} 个机型
           </span>
-          <AButton variant="borderless" @click="checkedNames = [...availableMachineNames]">
+          <AButton
+            variant="borderless"
+            @click="checkedMachineKeys = [...availableMachineKeys]"
+          >
             全选机型
           </AButton>
           <AButton
             variant="borderless"
-            :disabled="selectedMachineNames.length === 0"
-            @click="checkedNames = []"
+            :disabled="selectedMachineItems.length === 0"
+            @click="checkedMachineKeys = []"
           >
             清空
           </AButton>
           <AButton
             variant="filled"
-            :disabled="selectedMachineNames.length === 0"
+            :disabled="selectedMachineItems.length === 0"
             :loading="reportGenerating"
             @click="generateReport"
           >
@@ -437,7 +692,7 @@ async function closeTab(value: string) {
           </AButton>
           <AButton
             variant="borderless"
-            :disabled="selectedMachineNames.length === 0"
+            :disabled="selectedMachineItems.length === 0"
             @click="previewReport"
           >
             预览 / 打印 PDF
@@ -446,8 +701,8 @@ async function closeTab(value: string) {
         <ATabBar
           :model-value="activeSection"
           :tabs="tabs"
-          :addable="writable && !isGeneralStructure"
-          add-label="本机 Tab"
+          :addable="writable"
+          add-label="新增 Tab"
           @update:model-value="onTabChange"
           @add="openAddTab"
           @rename="openRenameTab"
@@ -456,19 +711,99 @@ async function closeTab(value: string) {
         <MachineSectionPanel
           v-if="activeSectionItem"
           :machine-name="selection.item"
+          :process-id="activeProcessId"
           :section="activeSectionItem"
         />
+        <AEmptyState
+          v-else
+          title="暂无 Tab"
+          description="请新增“机构/结构”或“机型注意事项”Tab"
+        >
+          <template v-if="writable" #action>
+            <AButton variant="filled" @click="openAddTab">新增 Tab</AButton>
+          </template>
+        </AEmptyState>
       </div>
       <AEmptyState v-else title="暂无机型，请在左侧新建分类和机型" />
     </div>
+    <ASheet v-model:open="processDialogOpen" title="管理制程" :width="520">
+      <div class="machine-process-list">
+        <div
+          v-for="item in processes"
+          :key="item.id"
+          class="machine-process-list__item"
+        >
+          <div class="machine-process-list__name">
+            <strong>{{ item.name }}</strong>
+            <span v-if="!item.locked">排序 {{ item.sort }}</span>
+          </div>
+          <div class="machine-process-list__actions">
+            <AIconButton
+              :icon="Pencil"
+              label="编辑制程"
+              size="small"
+              @click="editProcess(item)"
+            />
+            <AIconButton
+              v-if="!item.locked"
+              :icon="Trash2"
+              label="删除制程"
+              size="small"
+              tone="danger"
+              @click="removeProcess(item)"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="machine-process-form">
+        <h3>{{ processEditId ? '编辑制程' : '新增制程' }}</h3>
+        <AFormGrid :columns="2">
+          <AFormRow label="制程名称" required>
+            <AField
+              v-model="processForm.name"
+              :maxlength="40"
+              placeholder="例如：制程2"
+            />
+          </AFormRow>
+          <AFormRow label="排序">
+            <AStepper v-model="processForm.sort" :min="1" />
+          </AFormRow>
+        </AFormGrid>
+        <div class="machine-process-form__actions">
+          <AButton v-if="processEditId" @click="resetProcessForm">
+            取消编辑
+          </AButton>
+          <AButton variant="filled" @click="saveProcess">
+            {{ processEditId ? '保存修改' : '新增制程' }}
+          </AButton>
+        </div>
+      </div>
+      <template #footer>
+        <AButton @click="processDialogOpen = false">完成</AButton>
+      </template>
+    </ASheet>
     <ASheet
       v-model:open="dialogOpen"
-      :title="editId ? '重命名本机 Tab' : '新增本机 Tab'"
+      :title="editId ? '编辑 Tab' : '新增 Tab'"
       :width="420"
     >
-      <AFormRow label="名称" required>
-        <AField v-model="form.name" :maxlength="40" />
-      </AFormRow>
+      <AFormGrid :columns="1">
+        <AFormRow label="Tab 名称" required>
+          <AField v-model="form.name" :maxlength="40" />
+        </AFormRow>
+        <AFormRow label="Tab 类型" required>
+          <ASelect
+            v-model="form.kind"
+            :options="[
+              { label: '机构/结构', value: 'structure' },
+              { label: '机型注意事项', value: 'notes' },
+            ]"
+          />
+        </AFormRow>
+        <AFormRow label="排序">
+          <AStepper v-model="form.sort" :min="1" />
+        </AFormRow>
+      </AFormGrid>
       <template #footer>
         <AButton @click="dialogOpen = false">取消</AButton>
         <AButton variant="filled" @click="saveTab">保存</AButton>
@@ -476,3 +811,105 @@ async function closeTab(value: string) {
     </ASheet>
   </section>
 </template>
+
+<style scoped>
+.machine-source-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.machine-source-stack > .entity-source {
+  flex: 1;
+  height: auto;
+}
+
+.machine-process-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+}
+
+.machine-process-context__select {
+  flex: 1;
+  width: 150px;
+  min-width: 120px;
+}
+
+.machine-process-context__manage {
+  flex: none;
+}
+
+.machine-catalog-tabs {
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+.machine-catalog-tabs :deep(.a-tab-bar__tab) {
+  flex: 1;
+  justify-content: center;
+}
+
+.machine-process-list {
+  display: grid;
+  gap: 8px;
+}
+
+.machine-process-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--fill-4);
+}
+
+.machine-process-list__name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.machine-process-list__name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-process-list__name span {
+  color: var(--label-2);
+  font: var(--text-caption);
+}
+
+.machine-process-list__actions,
+.machine-process-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.machine-process-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--separator);
+}
+
+.machine-process-form h3 {
+  margin: 0;
+  font: var(--text-control-em);
+}
+</style>

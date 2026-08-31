@@ -7,6 +7,9 @@ namespace Saa.SensorSelection.Api.Tests;
 
 public class RbacTests
 {
+    private static string StoreRoute(string key) =>
+        $"/api/store/by-key?key={Uri.EscapeDataString(key)}";
+
     private static async Task<string> LoginTokenAsync(
         HttpClient client,
         string username = "admin",
@@ -130,14 +133,14 @@ public class RbacTests
 
         // 写：403 + JSON 提示（不应是登录失效）
         var write = await viewer.PutAsJsonAsync(
-            "/api/store/customer-req:测试",
+            StoreRoute("customer-req:测试"),
             JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
         var body = await write.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("无权限执行此操作", body.GetProperty("message").GetString());
 
         // 删除：403
-        var delete = await viewer.DeleteAsync("/api/store/customer-req:测试");
+        var delete = await viewer.DeleteAsync(StoreRoute("customer-req:测试"));
         Assert.Equal(HttpStatusCode.Forbidden, delete.StatusCode);
 
         // RBAC 管理接口：403
@@ -196,6 +199,48 @@ public class RbacTests
         // 删除用户
         var delete = await admin.DeleteAsync($"/api/rbac/users/{userId}");
         Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+    }
+
+    [Fact]
+    public async Task User_CreateAndUpdate_RejectMoreThanOneRole()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var viewerRoleId = await GetRoleIdAsync(admin, "viewer");
+        var editorRoleId = await GetRoleIdAsync(admin, "editor");
+
+        var create = await admin.PostAsJsonAsync(
+            "/api/rbac/users",
+            new
+            {
+                username = "single-role-create",
+                password = "pass123456",
+                displayName = "单角色创建测试",
+                roleIds = new[] { viewerRoleId, editorRoleId },
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+        var createBody = await create.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(
+            "每个用户最多只能绑定一个角色",
+            createBody.GetProperty("message").GetString());
+
+        var userId = await CreateUserAsync(
+            admin,
+            "single-role-update",
+            roleIds: [viewerRoleId]);
+        var update = await admin.PutAsJsonAsync(
+            $"/api/rbac/users/{userId}",
+            new
+            {
+                displayName = "单角色更新测试",
+                isActive = true,
+                roleIds = new[] { viewerRoleId, editorRoleId },
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, update.StatusCode);
+        var updateBody = await update.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(
+            "每个用户最多只能绑定一个角色",
+            updateBody.GetProperty("message").GetString());
     }
 
     [Fact]

@@ -30,7 +30,7 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 1. **写入失败必须回滚。** `persist()` 里 `setItem()` 返回 `false` 视为拒绝（未登录 / 离线写失败），内存快照回滚，返回 `{ ok: false, reason: 'storage' }`。UI 必须把这个失败提示给用户。
 2. **在线数据要快照到本地。** `BackendStorage.snapshotLocal()` 每次成功写入后把完整 store 写进 `localStorage`，后端挂掉后刷新页面仍可只读。
 3. **机型结构行以 `sensorIds` 为准。** `sensorType` / `spec` 是旧数据兼容字段，读取时容忍，新增/编辑时不作为数据源。
-4. **种子版本化回填。** `SEED_VERSION`（当前 `1`）落后时只补种缺失的默认 key，不覆盖用户已改数据。改动 `data.js` 默认数据时必须递增它。
+4. **种子版本化回填。** `SEED_VERSION`（当前 `8`）落后时按迁移规则补种缺失数据，不覆盖用户业务记录。版本 8 移除历史全局机型 Tab 定义；旧行和图片内容保留但不再进入业务界面。改动默认数据时必须递增它。
 
 ---
 
@@ -42,23 +42,25 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 
 | 业务 key 模式 | 内容 |
 | --- | --- |
-| `entity-groups:customer` / `entity-groups:machine` | 分组与条目顺序 |
+| `entity-groups:customer` / `entity-groups:machine` | 分组与条目顺序；machine 可含有序 `configurations: [{ name, items }]` |
 | `customer-req:{客户名}` | 客户通用要求 |
 | `customer-proc:{客户名}` | 制程注意事项 |
 | `customer-feedback:{客户名}` | 厂外反馈问题项 |
-| `controlled-docs:{客户名}` | 受控文档（PDF/Word，base64 dataUrl） |
-| `dict:{字典code}` | 9 类数据字典 |
+| `controlled-docs:{客户名}` | 受控文档（PDF/Word；上传时为 data URL，保存后替换为独立文件 URL） |
+| `dict:{字典code}` | 8 类数据字典 |
 | `process-steps:all` | 工艺制程 |
 | `sensor-catalog:all` | Sensor 型号目录 |
-| `sensor-sop:all` | Sensor SOP 文件 |
-| `machine-global-sections:all` | 全局结构 tab |
-| `machine-extra-sections:{机型名}` | 本机附加 tab |
+| `sensor-sop-file:all` | Sensor SOP 文件库（PDF，不参与型号关联） |
+| `sensor-sop:all` | Sensor 资料文件（历史兼容键，当前为 PDF 资料） |
+| `sensor-3d:all` | Sensor 3D 文件（暂为 PDF） |
+| `machine-extra-sections:{机型名}` | 当前机型的用户自定义 tab（机构/结构或机型注意事项） |
 | `machine-section-rows:{sectionId}:{机型名}` | 结构/注意事项行 |
 | `machine-section-images:{sectionId}:{机型名}` | 结构示意图（最多 2 张） |
-| `general-structure-labels:all` | 通用结构 tab 显示名映射 |
+
+文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF、图片和 3D 文件仅在预览或下载时按需请求，避免登录阶段传输文件正文。
 | `meta:seed-version` | 种子版本号 |
 
-历史遗留 key（`domain.js` 只在读取时迁移，不再写入）：`machine-conveyor:*` → `machine-section-rows:1:*`、`machine-arm:*` → `:2:`、`machine-platform:*` → `:3:`、`machine-notes:*` → `:4:`、`dict-feedback-type:all` → `dict:customer-feedback`。
+历史遗留 key（只在读取或种子迁移时处理，不再作为活动配置写入）：`machine-conveyor:*` → `machine-section-rows:1:*`、`machine-arm:*` → `:2:`、`machine-platform:*` → `:3:`、`machine-notes:*` → `:4:`、`dict-feedback-type:all` → `dict:customer-feedback`。版本 8 删除 `dict:machine-section`、`machine-global-sections:all`、`general-structure-labels:all` 定义键，但保留旧 `machine-section-rows/images:*` 内容。
 
 Token 键：**`symtek_token`**（不可改）。
 
@@ -105,11 +107,11 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 | 方法 | 路径 | 鉴权 |
 | --- | --- | --- |
 | GET | `/store` | **匿名可读** |
-| GET | `/store/{key}` | 匿名可读 |
+| GET | `/store/by-key?key={key}` | 匿名可读（代理安全的单 key 契约） |
 | PUT | `/store` | `selection:write`（全量替换，迁移用） |
-| PUT | `/store/{key}` | `selection:write` |
+| PUT | `/store/by-key?key={key}` | `selection:write`（前端增量同步使用） |
 | PUT | `/store/entity-groups/{customer\|machine}` | `selection:write`（分组顺序专用契约） |
-| DELETE | `/store/{key}` | `selection:write` |
+| DELETE | `/store/by-key?key={key}` | `selection:write`（前端增量同步使用） |
 
 写入成功返回 `{ ok: true }`；校验失败 `400` + `{ ok: false, reason: 'validation', message }`。
 
@@ -216,7 +218,7 @@ JWT 里权限码在 `perm` 声明，后端授权策略按它校验。前端把 `
 | --- | --- |
 | Sensor 状态 | 现用、备选、停用 |
 | 制程分层 | 内层、外层 |
-| 反馈状态 | 待处理、处理中、已解决 |
+| 反馈状态 | 待处理、处理中、测试中、已解决 |
 | 反馈问题分类 | 感应器异常、测板厚异常、智能化异常、选型配置异常、客户要求、料件损坏、厂外改善、其他 |
 | 要求来源 | 验收规范、厂外改善、客户要求、产品更新迭代、其他 |
 | 要求分类 | 输送段、掉板检测、真空吸附、位置确认、AOI段、特殊要求 |

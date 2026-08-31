@@ -12,6 +12,7 @@ import { useSelectionStore } from '@/stores/selection';
 import {
   AButton,
   AField,
+  AFilterResetButton,
   AFormGrid,
   AFormRow,
   AIconButton,
@@ -61,6 +62,9 @@ const layerOptions = computed<SelectOption[]>(() =>
   layerNames.value.map((name) => ({ label: name, value: name })),
 );
 const defaultLayer = computed(() => layerNames.value[0] || '内层');
+const hasActiveFilters = computed(
+  () => Boolean(query.value.trim()) || Boolean(layerFilter.value),
+);
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
@@ -134,6 +138,12 @@ function resetForm() {
   });
 }
 
+function resetFilters() {
+  query.value = '';
+  layerFilter.value = null;
+  page.value = 1;
+}
+
 function addItem() {
   resetForm();
   dialogOpen.value = true;
@@ -202,6 +212,7 @@ async function deleteItem(item: ProcessStepItem) {
           class="selection-toolbar__filter"
           placeholder="搜索制程、工艺、作用、特性或备注"
         />
+        <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
         <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
       </div>
       <ATable

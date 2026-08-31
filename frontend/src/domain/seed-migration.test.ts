@@ -11,6 +11,7 @@ import {
   LEGACY_DEMO_CRUD_DEFAULTS,
   MACHINE_SECTION_LEGACY_MAP,
   SENSOR_DATA,
+  MACHINE_GROUPS,
 } from './seed';
 import type { PersistedStore } from './types';
 
@@ -60,10 +61,7 @@ describe('migrateSelectionSeedStore', () => {
     };
     const source: PersistedStore = {
       'meta:seed-version': [{ version: 1 }],
-      'customer-req:庆鼎': [
-        ...demoRows('customer-req', '庆鼎'),
-        custom,
-      ],
+      'customer-req:庆鼎': [...demoRows('customer-req', '庆鼎'), custom],
     };
 
     const migrated = migrateSelectionSeedStore(source, 1, 2);
@@ -141,10 +139,7 @@ describe('migrateSelectionSeedStore', () => {
     };
     const source: PersistedStore = {
       'meta:seed-version': [{ version: 3 }],
-      'customer-req:庆鼎': [
-        INITIAL_CRUD_DATA['customer-req:庆鼎'][0],
-        custom,
-      ],
+      'customer-req:庆鼎': [INITIAL_CRUD_DATA['customer-req:庆鼎'][0], custom],
     };
 
     const migrated = migrateSelectionSeedStore(source, 3, 4);
@@ -153,6 +148,140 @@ describe('migrateSelectionSeedStore', () => {
       INITIAL_CRUD_DATA['customer-req:庆鼎'][0],
       custom,
       INITIAL_CRUD_DATA['customer-req:庆鼎'][1],
+    ]);
+  });
+
+  it('inserts 测试中 as the third feedback status and moves 已解决 to fourth', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 4 }],
+      'dict:customer-feedback-status': [
+        { id: 1, name: '待处理', sort: 1 },
+        { id: 2, name: '处理中', sort: 2 },
+        { id: 3, name: '已解决', sort: 3 },
+      ],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 4, 5);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['dict:customer-feedback-status']).toEqual([
+      { id: 1, name: '待处理', sort: 1 },
+      { id: 2, name: '处理中', sort: 2 },
+      { id: 4, name: '测试中', sort: 3 },
+      { id: 3, name: '已解决', sort: 4 },
+    ]);
+
+    const rerun = migrateSelectionSeedStore(migrated.store, 5, 5);
+    expect(rerun.changed).toBe(false);
+    expect(rerun.store['dict:customer-feedback-status']).toEqual(
+      migrated.store['dict:customer-feedback-status'],
+    );
+  });
+
+  it('adds the 3D file catalog without changing existing sensor data', () => {
+    const sensors = [{ id: 1, model: 'E3Z-D61', sopId: 9 }];
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 5 }],
+      'sensor-catalog:all': sensors,
+      'sensor-sop:all': [{ id: 9, title: '旧资料' }],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 5, 6);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['sensor-3d:all']).toEqual([]);
+    expect(migrated.store['sensor-catalog:all']).toEqual(sensors);
+    expect(migrated.store['sensor-sop:all']).toEqual(source['sensor-sop:all']);
+  });
+
+  it('adds the machine hierarchy catalog without overwriting existing machines', () => {
+    const existing = [{ name: '既有分类', items: ['已维护机型'] }];
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 6 }],
+      'entity-groups:machine': existing,
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 6, 7);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['entity-groups:machine']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ...existing[0],
+          machineType: 'mechanism',
+        }),
+      ]),
+    );
+    expect(migrated.store['entity-groups:machine']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: '输送机构',
+          configurations: expect.arrayContaining([
+            expect.objectContaining({ name: '标准输送段配置' }),
+          ]),
+        }),
+        expect.objectContaining({
+          name: '专案机型',
+          items: expect.arrayContaining(['CSL(U)R-802（插框机）']),
+        }),
+      ]),
+    );
+    expect(
+      MACHINE_GROUPS.find((group) => group.name === '专案机型')?.configurations,
+    ).toBeUndefined();
+  });
+
+  it('removes historical global machine-tab definitions without deleting row content', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 7 }],
+      'dict:machine-section': [{ id: 1, name: '输送机构', sort: 1 }],
+      'machine-global-sections:all': [
+        {
+          id: 1,
+          name: '输送机构',
+          sort: 1,
+          kind: 'structure',
+          scope: 'global',
+        },
+      ],
+      'general-structure-labels:all': [{ id: 1, name: '输送机构' }],
+      'machine-section-rows:1:既有机型': [{ id: 9, role: '真实资料' }],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 7, 8);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['dict:machine-section']).toBeUndefined();
+    expect(migrated.store['machine-global-sections:all']).toBeUndefined();
+    expect(migrated.store['general-structure-labels:all']).toBeUndefined();
+    expect(migrated.store['machine-section-rows:1:既有机型']).toEqual([
+      { id: 9, role: '真实资料' },
+    ]);
+  });
+
+  it('classifies legacy machine categories into mechanism and project catalogs', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 8 }],
+      'entity-groups:machine': [
+        { name: '输送机构', items: ['标准输送段'] },
+        { name: '专案机型', items: ['CSL(U)R-802（插框机）'] },
+      ],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 8, 9);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['entity-groups:machine']).toEqual([
+      {
+        name: '输送机构',
+        items: ['标准输送段'],
+        machineType: 'mechanism',
+      },
+      {
+        name: '专案机型',
+        items: ['CSL(U)R-802（插框机）'],
+        machineType: 'project',
+      },
     ]);
   });
 });

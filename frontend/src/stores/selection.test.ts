@@ -9,7 +9,7 @@ describe('selection store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     window.localStorage.clear();
-    vi.spyOn(api, 'putKey').mockResolvedValue(undefined);
+    vi.spyOn(api, 'putKey').mockResolvedValue([]);
     vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
     vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
     vi.spyOn(api, 'deleteKey').mockResolvedValue(undefined);
@@ -37,6 +37,26 @@ describe('selection store', () => {
     const store = useSelectionStore();
     await store.initBackend();
     expect(store.backendStatus).toBe('online');
+  });
+
+  it('deduplicates concurrent backend initialization', async () => {
+    let resolveStore!: (store: Record<string, unknown[]>) => void;
+    const getStore = vi.spyOn(api, 'getStore').mockImplementation(
+      () =>
+        new Promise<Record<string, unknown[]>>((resolve) => {
+          resolveStore = resolve;
+        }),
+    );
+    const store = useSelectionStore();
+
+    const first = store.initBackend();
+    const second = store.initBackend();
+    const ensured = store.ensureBackendInit();
+    await vi.waitFor(() => expect(getStore).toHaveBeenCalledTimes(1));
+    resolveStore({ 'entity-groups:customer': [] });
+    await Promise.all([first, second, ensured]);
+
+    expect(getStore).toHaveBeenCalledTimes(1);
   });
 
   it('does not expose browser local data when the backend is unreachable', async () => {

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // Browser end-to-end regression: drives every business CRUD flow through the real UI
 // against a running frontend (5178) + backend (5080), then audits UI details
 // (fonts, spacing, hit targets, focus rings, overflow, console errors).
@@ -11,6 +11,9 @@ import { mkdirSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5178'
+const API = process.env.API_BASE ?? 'http://localhost:5080/api'
+const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
 const ARTIFACT_DIR = new URL('./artifacts/', import.meta.url).pathname.replace(/^\//, '')
 const HEADED = process.argv.includes('--headed')
 const SLOW = process.argv.includes('--slow')
@@ -289,7 +292,7 @@ async function runLogin() {
   await check('The login page renders and rejects bad credentials', async () => {
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' })
     await page.getByRole('button', { name: '登 录' }).waitFor({ state: 'visible', timeout: 15000 })
-    await page.locator('input[autocomplete="username"]').fill('admin')
+    await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
     await page.locator('input[autocomplete="current-password"]').fill('wrong-password')
     await page.getByRole('button', { name: '登 录' }).click()
     await expectToast('用户名或密码错误')
@@ -297,7 +300,7 @@ async function runLogin() {
   })
 
   await check('Signing in as admin lands on the customer page', async () => {
-    await page.locator('input[autocomplete="current-password"]').fill('admin123')
+    await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
     await page.getByRole('button', { name: '登 录' }).click()
     await page.waitForURL('**/selection/customer**', { timeout: 20000 })
     await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
@@ -316,7 +319,7 @@ async function runLogin() {
 
   await check('Admin sees both the business and the system nav groups', async () => {
     const nav = page.getByRole('navigation', { name: '主导航' })
-    for (const label of ['客户管理', '制程管理', '机型结构', 'Sensor 型号字典', '数据字典']) {
+    for (const label of ['客户管理', '制程管理', '机型结构', 'Sensor型号', '数据字典']) {
       assert(await nav.getByRole('link', { name: label, exact: true }).isVisible(), `missing nav item ${label}`)
     }
     for (const label of ['用户管理', '角色管理', '组织架构', '操作日志']) {
@@ -613,7 +616,7 @@ async function runProcessCrud() {
 
 async function runSensorCrud() {
   section('Sensor catalogue CRUD')
-  await navTo('Sensor 型号字典')
+  await navTo('Sensor型号')
 
   await check('Sensor: create a model', async () => {
     await page.getByRole('button', { name: '新增型号', exact: true }).click()
@@ -668,7 +671,7 @@ async function runSensorCrud() {
   })
 
   await check('Sensor: status tabs switch the visible set', async () => {
-    await page.getByRole('tab', { name: '停用', exact: true }).click()
+    await page.getByRole('tab', { name: '03 停用', exact: true }).click()
     await settle()
     assertEqual(await tableRow(NAMES.sensorModel).count(), 0, 'a 现用 model must not show under 停用')
     await page.getByRole('tab', { name: '全部', exact: true }).click()
@@ -731,32 +734,49 @@ async function runMachineCrud() {
   await navTo('机型结构')
 
   await check('Machine: create a category and a machine', async () => {
-    await page.getByRole('button', { name: '新建分类', exact: true }).click()
+    await page.getByRole('button', { name: '分类', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '分类名称', NAMES.machineCategory)
     await saveSheet()
     await expectToast('分类已新增')
 
-    await page.getByRole('button', { name: '新建机型', exact: true }).click()
+    await page.getByRole('button', { name: '机型', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await pickSelect(sheet(), '分类', NAMES.machineCategory)
     await fillField(sheet(), '机型名称', NAMES.machine)
     await saveSheet()
     await expectToast('机型已新增')
-    await page.locator('.a-source-list__item', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
+    await page.getByPlaceholder('搜索分类、配置或机型…').fill(NAMES.machine)
+    await settle()
+    await page.locator('.machine-tree-row--item', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
   })
 
   await check('Machine: selecting it shows the structure tabs', async () => {
-    await page.locator('.a-source-list__item', { hasText: NAMES.machine }).first().click()
+    await page.locator('.machine-tree-row--item', { hasText: NAMES.machine }).first().click()
     await settle()
-    const tabs = page.locator('[role="tab"]')
-    assert((await tabs.count()) > 0, 'no structure tabs rendered')
+
+    await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), 'Tab 名称', `${TAG}机构`)
+    await pickSelect(sheet(), 'Tab 类型', '机构/结构')
+    await saveSheet()
+    await expectToast('Tab 已新增')
+
+    await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), 'Tab 名称', `${TAG}注意事项`)
+    await pickSelect(sheet(), 'Tab 类型', '机型注意事项')
+    await saveSheet()
+    await expectToast('Tab 已新增')
+
+    assert(await page.getByRole('tab', { name: `${TAG}机构` }).isVisible(), 'structure tab missing')
+    assert(await page.getByRole('tab', { name: `${TAG}注意事项` }).isVisible(), 'notes tab missing')
   })
 
   // The 机型注意事项 tab is the locked notes tab: its form is plain text only,
   // whereas structure tabs additionally require an associated sensor.
   await check('Machine: create, edit and delete a 注意事项 row', async () => {
-    await page.getByRole('tab', { name: '机型注意事项' }).click()
+    await page.getByRole('tab', { name: `${TAG}注意事项` }).click()
     await settle()
     await page.getByRole('button', { name: '新增', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
@@ -787,8 +807,7 @@ async function runMachineCrud() {
   })
 
   await check('Machine: a structure row requires an associated sensor', async () => {
-    const structureTab = page.locator('[role="tab"]').filter({ hasNotText: '机型注意事项' }).first()
-    await structureTab.click()
+    await page.getByRole('tab', { name: `${TAG}机构` }).click()
     await settle()
     await page.getByRole('button', { name: '新增', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
@@ -1006,7 +1025,7 @@ async function runSystemCrud() {
     // The table renders friendly Chinese labels, not the raw action codes.
     const body = await page.locator('.content').innerText()
     assert(/创建用户|创建角色|创建组织|写入数据|登录/.test(body), `no audit rows from this run: ${body.slice(0, 200)}`)
-    assert(body.includes('admin'), 'audit rows do not mention the acting user')
+    assert(body.includes(ADMIN_USERNAME), 'audit rows do not mention the acting user')
   })
 }
 
@@ -1063,8 +1082,8 @@ async function runUiAudit() {
 
   // sign back in so the audit covers the full authenticated UI
   await goto('/login')
-  await page.locator('input[autocomplete="username"]').fill('admin')
-  await page.locator('input[autocomplete="current-password"]').fill('admin123')
+  await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
+  await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
   await page.getByRole('button', { name: '登 录' }).click()
   await page.waitForURL('**/selection/customer**', { timeout: 20000 })
   await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
@@ -1222,7 +1241,7 @@ async function runUiAudit() {
   })
 
   await check('Tooltips appear on hover over an icon button', async () => {
-    await navTo('Sensor 型号字典')
+    await navTo('Sensor型号')
     await settle()
     const iconButton = page.locator('.a-table tbody .a-icon-button').first()
     if ((await iconButton.count()) === 0) {
@@ -1300,8 +1319,6 @@ async function teardown() {
   if (browser) await browser.close().catch(() => {})
 }
 
-const API = 'http://localhost:5080/api'
-
 async function api(method, path, token, body) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`
@@ -1324,14 +1341,21 @@ async function api(method, path, token, body) {
 }
 
 async function loginApi() {
-  const res = await api('POST', '/auth/login', null, { username: 'admin', password: 'admin123' })
+  const res = await api('POST', '/auth/login', null, {
+    username: ADMIN_USERNAME,
+    password: ADMIN_PASSWORD,
+  })
   if (res.status !== 200) throw new Error(`teardown login failed with ${res.status}`)
   return res.data.token
 }
 
+function storeRoute(key) {
+  return `/store/by-key?key=${encodeURIComponent(key)}`
+}
+
 async function deleteEntity(token, kind, groupName, itemName) {
   const key = `entity-groups:${kind}`
-  const current = await api('GET', `/store/${encodeURIComponent(key)}`, token)
+  const current = await api('GET', storeRoute(key), token)
   if (current.status !== 200 || !Array.isArray(current.data)) return
   const next = current.data
     .filter((group) => group.name !== groupName)
@@ -1349,7 +1373,7 @@ async function cleanupStoreKeys(token) {
     (key) => key.includes(NAMES.customer) || key.includes(NAMES.machine) || key.includes(TAG + '-'),
   )
   for (const key of stale) {
-    await api('DELETE', `/store/${encodeURIComponent(key)}`, token)
+    await api('DELETE', storeRoute(key), token)
   }
 }
 

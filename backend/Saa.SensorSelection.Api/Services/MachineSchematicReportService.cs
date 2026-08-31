@@ -110,12 +110,13 @@ public sealed class MachineSchematicReportService
     private static NormalizedRow NormalizeRow(MachineSchematicReportRow row)
     {
         var image = row.Image;
-        var imageData = image is not null && IsSafeImageDataUrl(image.DataUrl)
+        var imageData = image is not null && IsSafeImageSource(image.DataUrl)
             && image.DataUrl!.Length <= MaxImageDataLength
             ? image.DataUrl
             : null;
         return new NormalizedRow(
             Normalize(row.Role, MaxTextLength),
+            Normalize(row.ProcessStepName, MaxTextLength),
             Normalize(row.SensorType, MaxTextLength),
             Normalize(row.Spec, MaxTextLength),
             Normalize(row.Purpose, MaxTextLength),
@@ -146,18 +147,19 @@ public sealed class MachineSchematicReportService
 
     private static NormalizedImage? NormalizeImage(MachineSchematicReportImage image)
     {
-        var data = IsSafeImageDataUrl(image.DataUrl) && image.DataUrl!.Length <= MaxImageDataLength
+        var data = IsSafeImageSource(image.DataUrl) && image.DataUrl!.Length <= MaxImageDataLength
             ? image.DataUrl
             : null;
         return data is null ? null : new NormalizedImage(data, Normalize(image.FileName, 120));
     }
 
-    private static bool IsSafeImageDataUrl(string? value) =>
+    private static bool IsSafeImageSource(string? value) =>
         value is not null &&
         (value.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase) ||
          value.StartsWith("data:image/jpeg;base64,", StringComparison.OrdinalIgnoreCase) ||
          value.StartsWith("data:image/jpg;base64,", StringComparison.OrdinalIgnoreCase) ||
-         value.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase));
+         value.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase) ||
+         (StoredFileService.TryParseContentUrl(value, out _)));
 
     private static string Normalize(string? value, int maxLength) =>
         (value ?? string.Empty).Trim().Length <= maxLength
@@ -168,17 +170,6 @@ public sealed class MachineSchematicReportService
 
     private static string Render(IReadOnlyList<NormalizedSection> sections)
     {
-        var imageMarkup = string.Join(
-            string.Empty,
-            sections
-                .Where(section => section.Kind == "structure")
-                .SelectMany(section => section.Blocks)
-                .SelectMany(block => block.Images)
-                .Select(image =>
-                    $"<img class=\"report-structure-image\" src=\"{H(image.DataUrl)}\" alt=\"{H(image.FileName)}\" />"));
-        var imageOverview = imageMarkup.Length > 0
-            ? $"<section class=\"report-image-overview\" aria-label=\"结构示意图\">{imageMarkup}</section>"
-            : string.Empty;
         var sectionMarkup = string.Join(
             string.Empty,
             sections.Select((section, index) => RenderSection(section, index + 1)));
@@ -192,15 +183,13 @@ public sealed class MachineSchematicReportService
     <title>机型结构示意图报告</title>
     <style>
       @page { size: A4 landscape; margin: 12mm; }
-      :root { color-scheme: light; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #172033; background: #eef2f6; }
+      :root { color-scheme: light; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #172033; background: #fff; }
       * { box-sizing: border-box; }
-      body { margin: 0; padding: 24px; }
+      body { margin: 0; padding: 24px; background: #eef2f6; }
       .report-shell { max-width: 1180px; margin: 0 auto; background: #fff; padding: 30px 34px 40px; box-shadow: 0 12px 38px rgba(19,35,58,.12); }
       .report-actions { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 18px; }
       .report-actions button { border: 0; border-radius: 6px; padding: 9px 16px; color: #fff; background: #b45309; cursor: pointer; font-size: 14px; }
       .report-actions button.secondary { color: #344054; background: #eef2f6; }
-      .report-image-overview { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0 12px 22px; }
-      .report-image-overview img { display: block; width: 100%; height: 180px; object-fit: contain; border: 1px solid #e4e7ec; border-radius: 6px; background: #fafbfc; break-inside: avoid; }
       .report-section { break-inside: avoid; margin: 0 0 26px; }
       .report-section__heading { display: flex; gap: 12px; align-items: flex-start; border-bottom: 1px solid #d8dee8; padding-bottom: 10px; }
       .report-section__number { display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 50%; color: #fff; background: #b45309; font-size: 14px; font-weight: 700; }
@@ -209,18 +198,25 @@ public sealed class MachineSchematicReportService
       .report-section__content { padding-top: 12px; }
       .report-machine-block { margin-bottom: 18px; break-inside: avoid; }
       .report-machine-block > h3 { margin: 0; padding: 8px 12px; border-left: 3px solid #b45309; background: #fff7ed; color: #92400e; font-size: 16px; }
-      .report-machine-block__content { padding: 0 12px; }
+      .report-machine-block__layout { padding: 10px 12px 0; }
+      .report-machine-block__layout--with-image { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+      .report-machine-block__layout--full { display: block; }
+      .report-machine-block__images { display: grid; gap: 8px; min-width: 0; }
+      .report-machine-block__images img { display: block; width: 100%; max-height: 300px; object-fit: contain; border: 1px solid #e4e7ec; border-radius: 6px; background: #fafbfc; break-inside: avoid; }
+      .report-machine-block__content { min-width: 0; }
       .report-row { display: grid; grid-template-columns: 30px 1fr; gap: 14px; border-bottom: 1px solid #edf0f4; padding: 12px 0; break-inside: avoid; }
       .report-row__index { color: #98a2b3; font-size: 13px; padding-top: 3px; text-align: center; }
-      .report-structure-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
-      .report-structure-table th, .report-structure-table td { padding: 7px 9px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: middle; line-height: 1.45; word-break: break-word; }
+      .report-structure-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+      .report-structure-table th, .report-structure-table td { padding: 7px 8px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: middle; line-height: 1.5; word-break: break-word; }
       .report-structure-table th { color: #667085; background: #f8fafc; font-weight: 600; }
-      .report-structure-table th:nth-child(1), .report-structure-table td:nth-child(1) { width: 42px; text-align: center; color: #98a2b3; }
-      .report-structure-table th:nth-child(2), .report-structure-table td:nth-child(2) { width: 15%; }
-      .report-structure-table th:nth-child(3), .report-structure-table td:nth-child(3) { width: 14%; }
-      .report-structure-table th:nth-child(4), .report-structure-table td:nth-child(4) { width: 26%; }
-      .report-structure-table th:nth-child(5), .report-structure-table td:nth-child(5) { width: 17%; }
-      .report-structure-table th:nth-child(6), .report-structure-table td:nth-child(6) { width: 18%; }
+      .report-structure-table__serial-col { width: 42px; }
+      .report-structure-table__role-col { width: 13%; }
+      .report-structure-table__process-col { width: 14%; }
+      .report-structure-table__sensor-col { width: 12%; }
+      .report-structure-table__spec-col { width: 22%; }
+      .report-structure-table__purpose-col { width: 15%; }
+      .report-structure-table__note-col { width: 17%; }
+      .report-structure-table__serial { text-align: center !important; color: #98a2b3; }
       .report-structure-table tbody tr:last-child td { border-bottom-color: #d8dee8; }
       .report-row h4, .report-note-row h4 { margin: 0 0 7px; font-size: 15px; color: #172033; }
       dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 24px; margin: 0; }
@@ -231,14 +227,13 @@ public sealed class MachineSchematicReportService
       .report-note-row small { color: #667085; }
       .report-muted, .report-empty { color: #98a2b3; font-size: 13px; }
       .report-empty { margin: 8px 0; }
-      @media (max-width: 700px) { body { padding: 0; } .report-shell { padding: 20px; box-shadow: none; } .report-row { grid-template-columns: 24px 1fr; gap: 9px; } .report-structure-table { font-size: 12px; } .report-structure-table th, .report-structure-table td { padding: 6px; } dl { grid-template-columns: 1fr; } }
-      @media print { body { padding: 0; background: #fff; } .report-shell { max-width: none; padding: 0; box-shadow: none; } .report-actions { display: none; } }
+      @media (max-width: 700px) { body { padding: 0; } .report-shell { padding: 20px; box-shadow: none; } .report-row { grid-template-columns: 24px 1fr; gap: 9px; } .report-machine-block__layout--with-image { grid-template-columns: 1fr; } .report-machine-block__images img { max-height: 240px; } .report-structure-table { font-size: 12px; } .report-structure-table th, .report-structure-table td { padding: 5px 6px; } dl { grid-template-columns: 1fr; } }
+      @media print { body { padding: 0; background: #fff; } .report-shell { max-width: none; padding: 0; box-shadow: none; } .report-actions { display: none; } .report-structure-table { font-size: 14px; } }
     </style>
   </head>
   <body>
     <main class="report-shell">
       <div class="report-actions"><button class="secondary" type="button" onclick="window.close()">关闭</button><button type="button" onclick="window.print()">打印 / 保存 PDF</button></div>
-      {{imageOverview}}
       {{sectionMarkup}}
     </main>
   </body>
@@ -256,12 +251,23 @@ public sealed class MachineSchematicReportService
 
     private static string RenderBlock(NormalizedBlock block, bool notes)
     {
+        var images = string.Join(
+            string.Empty,
+            block.Images.Select(image =>
+                $"<img class=\"report-structure-image\" src=\"{H(image.DataUrl)}\" alt=\"{H(image.FileName)}\" />"));
+        var hasImages = images.Length > 0;
+        var layoutClass = hasImages
+            ? "report-machine-block__layout--with-image"
+            : "report-machine-block__layout--full";
+        var imageColumn = hasImages
+            ? $"<div class=\"report-machine-block__images\" aria-label=\"结构示意图\">{images}</div>"
+            : string.Empty;
         var rows = block.Rows.Count == 0
             ? "<p class=\"report-empty\">此机型在该模块暂无记录。</p>"
             : notes
                 ? string.Join(string.Empty, block.Rows.Select((row, index) => RenderNotesRow(row, index + 1)))
                 : RenderStructureTable(block);
-        return $"<article class=\"report-machine-block\"><h3>{H(block.MachineName)}</h3><div class=\"report-machine-block__content\">{rows}</div></article>";
+        return $"<article class=\"report-machine-block\"><h3>{H(block.MachineName)}</h3><div class=\"report-machine-block__layout {layoutClass}\">{imageColumn}<div class=\"report-machine-block__content\">{rows}</div></div></article>";
     }
 
     private static string RenderNotesRow(NormalizedRow row, int index)
@@ -298,16 +304,16 @@ public sealed class MachineSchematicReportService
                         ? string.Join(" ", new[] { sensor.Brand, sensor.Model }.Where(value => !string.IsNullOrWhiteSpace(value)))
                         : sensor.Spec;
                 var leadingCells = sensorIndex == 0
-                    ? $"<td rowspan=\"{rowSpan}\">{index + 1}</td><td rowspan=\"{rowSpan}\">{Value(string.IsNullOrWhiteSpace(row.Role) ? sensorType : row.Role)}</td>"
+                    ? $"<td class=\"report-structure-table__serial\" rowspan=\"{rowSpan}\">{index + 1}</td><td class=\"report-structure-table__role\" rowspan=\"{rowSpan}\">{Value(string.IsNullOrWhiteSpace(row.Role) ? sensorType : row.Role)}</td><td class=\"report-structure-table__process\" rowspan=\"{rowSpan}\">{Value(row.ProcessStepName)}</td>"
                     : string.Empty;
                 var trailingCells = sensorIndex == 0
-                    ? $"<td rowspan=\"{rowSpan}\">{Value(row.Purpose)}</td><td rowspan=\"{rowSpan}\">{Value(row.Note)}</td>"
+                    ? $"<td class=\"report-structure-table__purpose\" rowspan=\"{rowSpan}\">{Value(row.Purpose)}</td><td class=\"report-structure-table__note\" rowspan=\"{rowSpan}\">{Value(row.Note)}</td>"
                     : string.Empty;
-                rows.Append($"<tr>{leadingCells}<td>{Value(sensorType)}</td><td>{Value(spec)}</td>{trailingCells}</tr>");
+                rows.Append($"<tr>{leadingCells}<td class=\"report-structure-table__sensor\">{Value(sensorType)}</td><td class=\"report-structure-table__spec\">{Value(spec)}</td>{trailingCells}</tr>");
             }
         }
 
-        return $"<table class=\"report-structure-table\"><thead><tr><th>序号</th><th>功能作用</th><th>传感器类型</th><th>规格</th><th>作用</th><th>备注</th></tr></thead><tbody>{rows}</tbody></table>";
+        return $"<table class=\"report-structure-table\"><colgroup><col class=\"report-structure-table__serial-col\" /><col class=\"report-structure-table__role-col\" /><col class=\"report-structure-table__process-col\" /><col class=\"report-structure-table__sensor-col\" /><col class=\"report-structure-table__spec-col\" /><col class=\"report-structure-table__purpose-col\" /><col class=\"report-structure-table__note-col\" /></colgroup><thead><tr><th class=\"report-structure-table__serial\">序号</th><th>功能作用</th><th>工艺制程</th><th>传感器类型</th><th>规格</th><th>作用</th><th>备注</th></tr></thead><tbody>{rows}</tbody></table>";
     }
 
     private static string Value(string value) => string.IsNullOrWhiteSpace(value) ? "-" : H(value);
@@ -316,7 +322,7 @@ public sealed class MachineSchematicReportService
     private sealed record NormalizedBlock(string MachineName, IReadOnlyList<NormalizedRow> Rows, IReadOnlyList<NormalizedImage> Images, IReadOnlyList<NormalizedSensor> Sensors);
     private sealed record NormalizedImage(string DataUrl, string FileName);
     private sealed record NormalizedSensor(int Id, string SensorType, string Brand, string Model, string Spec);
-    private sealed record NormalizedRow(string Role, string SensorType, string Spec, string Purpose, string Name, string Desc, string Note, IReadOnlyList<int> SensorIds, string? ImageDataUrl, string ImageFileName);
+    private sealed record NormalizedRow(string Role, string ProcessStepName, string SensorType, string Spec, string Purpose, string Name, string Desc, string Note, IReadOnlyList<int> SensorIds, string? ImageDataUrl, string ImageFileName);
 }
 
 public sealed record ReportBuildResult(bool Success, string? Html, string? Error)

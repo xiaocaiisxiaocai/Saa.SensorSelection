@@ -259,6 +259,7 @@ watch(
       'a-table--scrolled': scrolled,
       'a-table--loose': rowHeight === 'loose',
       'a-table--striped': striped,
+      'a-table--virtual': virtual,
     }"
     :aria-busy="loading ? true : undefined"
     @scroll="onScroll"
@@ -271,14 +272,14 @@ watch(
             :key="column.key"
             scope="col"
             :class="[
-              `a-table__cell--${column.align ?? 'center'}`,
+              `a-table__cell--${column.align ?? 'start'}`,
               { 'a-table__cell--fixed': column.fixed === 'end' },
             ]"
             :style="cellStyle(column)"
           >
             <ATooltip :content="column.label">
               <template #trigger>
-                <span class="a-table__ellipsis">{{ column.label }}</span>
+                <span class="a-table__ellipsis a-table__header-content">{{ column.label }}</span>
               </template>
             </ATooltip>
           </th>
@@ -305,7 +306,7 @@ watch(
             <td
               v-if="cellRowSpan(column, row, virtualRange.start + i) !== 0"
               :class="[
-                `a-table__cell--${column.align ?? 'center'}`,
+                `a-table__cell--${column.align ?? 'start'}`,
                 {
                   'a-table__cell--fixed': column.fixed === 'end',
                   'a-table__cell--mono': column.mono,
@@ -331,7 +332,10 @@ watch(
                 :disabled="column.ellipsis ? !tooltipText(row, column) : !hoverTip"
               >
                 <template #trigger>
-                  <div class="a-table__ellipsis" @mouseenter="onEllipsisEnter">
+                  <div
+                    class="a-table__ellipsis a-table__body-content"
+                    @mouseenter="onEllipsisEnter"
+                  >
                     <slot
                       :name="`cell-${column.key}`"
                       :row="row"
@@ -383,12 +387,11 @@ table {
 th,
 td {
   height: var(--row-height);
-  padding: 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
   overflow: hidden;
   font: var(--text-control);
   color: var(--label);
   text-align: center;
-  white-space: nowrap;
   vertical-align: middle;
   box-shadow: inset 0 -0.5px 0 var(--separator);
 }
@@ -398,7 +401,8 @@ th {
   top: 0;
   z-index: 1;
   font: var(--text-control-em);
-  color: var(--label-2);
+  color: var(--label);
+  white-space: nowrap;
   background: var(--bg-content);
 }
 
@@ -483,6 +487,27 @@ tbody tr:hover .a-table__cell--fixed,
 .a-table__ellipsis {
   display: block;
   max-width: 100%;
+}
+
+.a-table__header-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-table__body-content {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* 虚拟滚动依赖固定行高；显式启用时保留单行模式，避免占位高度漂移。 */
+.a-table--virtual th,
+.a-table--virtual td {
+  padding-block: 0;
+}
+
+.a-table--virtual .a-table__body-content {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

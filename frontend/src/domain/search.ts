@@ -1,4 +1,5 @@
 import type { EntityGroup, ProcessStepItem, SearchItem, SensorItem } from './types';
+import { listEntityTreeItems } from './entity-tree';
 
 export function buildSearchIndex({
   customerGroups,
@@ -35,15 +36,17 @@ export function buildSearchIndex({
       query: { tab: 'steps', q: item.name },
     }),
   );
-  const machines = machineGroups.flatMap((group) =>
-    group.items.map((title) => ({
+  const machines = listEntityTreeItems(machineGroups).map(
+    ({ category, configuration, name: title }) => ({
       type: 'machine' as const,
       title,
-      category: group.name,
-      sub: `${group.name} · ${machineDetails[title]?.desc || '机型结构'}`,
+      category,
+      sub: [category, configuration, machineDetails[title]?.desc || '机型结构']
+        .filter(Boolean)
+        .join(' · '),
       path: '/selection/machine',
-      query: { category: group.name, item: title },
-    })),
+      query: { category, item: title },
+    }),
   );
   const machineRows = (
     Array.isArray(machineSectionHits) ? machineSectionHits : []

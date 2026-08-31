@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   ChevronDown,
+  ChevronsDown,
+  ChevronsUp,
   GripVertical,
   Pencil,
   Plus,
@@ -78,6 +80,11 @@ const canSort = computed(
 const visibleGroups = computed(() =>
   filterSourceGroups(props.groups, query.value),
 );
+const allGroupsExpanded = computed(
+  () =>
+    props.groups.length > 0 &&
+    props.groups.every((group) => expanded.value.has(group.name)),
+);
 
 function isExpanded(name: string) {
   return expanded.value.has(name);
@@ -99,6 +106,12 @@ function toggleGroup(name: string) {
     next.add(name);
   }
   expanded.value = next;
+}
+
+function toggleAllGroups() {
+  expanded.value = allGroupsExpanded.value
+    ? new Set()
+    : new Set(props.groups.map((group) => group.name));
 }
 
 function groupCount(group: SourceGroup) {
@@ -300,6 +313,14 @@ onMounted(restoreWidth);
         size="small"
         :placeholder="`搜索${itemLabel}...`"
         :aria-label="`搜索${itemLabel}`"
+      />
+      <AIconButton
+        :icon="allGroupsExpanded ? ChevronsUp : ChevronsDown"
+        :label="`${allGroupsExpanded ? '折叠' : '展开'}全部${groupLabel}`"
+        size="small"
+        side="bottom"
+        :disabled="groups.length === 0"
+        @click="toggleAllGroups"
       />
     </div>
     <div v-if="editable" class="a-source-list__toolbar">
@@ -527,6 +548,10 @@ onMounted(restoreWidth);
 .a-source-list__search :deep(.a-control) {
   flex: 1;
   width: 100%;
+}
+
+.a-source-list__search :deep(.a-icon-button-host) {
+  flex-shrink: 0;
 }
 
 .a-source-list__groups {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw } from 'lucide-vue-next';
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { Minus, Plus, RotateCcw } from 'lucide-vue-next';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
 import AIconButton from './AIconButton.vue';
 import { destroyPdf, getDocument, type PdfDocument } from './pdf';
@@ -13,96 +13,116 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.25;
 
-const canvasEl = ref<HTMLCanvasElement | null>(null);
+const canvasEls = ref<HTMLCanvasElement[]>([]);
 const stageEl = ref<HTMLElement | null>(null);
 const loading = ref(false);
 const error = ref('');
 const pageCount = ref(0);
-const page = ref(1);
 const zoom = ref(1);
 const fitScale = ref(1);
 const percent = computed(() => `${Math.round(zoom.value * 100)}%`);
 
 let activeDoc: PdfDocument | null = null;
 let token = 0;
-let currentRenderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
+let renderToken = 0;
+const currentRenderTasks = new Set<{
+  cancel: () => void;
+  promise: Promise<unknown>;
+}>();
 
 function clampZoom(value: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(value.toFixed(2))));
 }
 
 function cancelRender() {
-  if (currentRenderTask) {
+  for (const task of currentRenderTasks) {
     try {
-      currentRenderTask.cancel();
+      task.cancel();
     } catch {
       // ignore
     }
-    currentRenderTask = null;
   }
+  currentRenderTasks.clear();
 }
 
 async function release() {
+  renderToken += 1;
   cancelRender();
   const doc = activeDoc;
   activeDoc = null;
   await destroyPdf(doc);
 }
 
-async function renderPage(currentToken: number) {
-  if (!activeDoc || !canvasEl.value || currentToken !== token) {
+async function renderPages(currentToken: number) {
+  if (!activeDoc || currentToken !== token) {
     return;
   }
 
+  const currentRender = (renderToken += 1);
   cancelRender();
 
-  let pdfPage: Awaited<ReturnType<PdfDocument['getPage']>> | null = null;
-  try {
-    pdfPage = await activeDoc.getPage(page.value);
-    if (currentToken !== token || !activeDoc) {
-      pdfPage.cleanup();
-      return;
-    }
-
-    const viewport = pdfPage.getViewport({
-      scale: fitScale.value * zoom.value,
-    });
-    const canvas = canvasEl.value;
-    if (!canvas) {
-      pdfPage.cleanup();
-      return;
-    }
-    const context = canvas.getContext('2d');
-    if (!context) {
-      pdfPage.cleanup();
-      return;
-    }
-
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-
-    const task = pdfPage.render({
-      canvas,
-      canvasContext: context,
-      viewport,
-    });
-    currentRenderTask = task;
-    await task.promise;
-  } catch (renderError) {
+  for (let pageNumber = 1; pageNumber <= pageCount.value; pageNumber += 1) {
     if (
-      renderError &&
-      typeof renderError === 'object' &&
-      'name' in renderError &&
-      renderError.name === 'RenderingCancelledException'
+      currentToken !== token ||
+      currentRender !== renderToken ||
+      !activeDoc
     ) {
       return;
     }
-    if (currentToken === token) {
-      error.value =
-        renderError instanceof Error ? renderError.message : '页面渲染失败';
+
+    let pdfPage: Awaited<ReturnType<PdfDocument['getPage']>> | null = null;
+    try {
+      pdfPage = await activeDoc.getPage(pageNumber);
+      if (
+        currentToken !== token ||
+        currentRender !== renderToken ||
+        !activeDoc
+      ) {
+        return;
+      }
+
+      const viewport = pdfPage.getViewport({
+        scale: fitScale.value * zoom.value,
+      });
+      const canvas = canvasEls.value[pageNumber - 1];
+      if (!canvas) {
+        continue;
+      }
+      const context = canvas.getContext('2d');
+      if (!context) {
+        continue;
+      }
+
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+
+      const task = pdfPage.render({
+        canvas,
+        canvasContext: context,
+        viewport,
+      });
+      currentRenderTasks.add(task);
+      await task.promise;
+      currentRenderTasks.delete(task);
+    } catch (renderError) {
+      if (
+        renderError &&
+        typeof renderError === 'object' &&
+        'name' in renderError &&
+        renderError.name === 'RenderingCancelledException'
+      ) {
+        currentRenderTasks.clear();
+        return;
+      }
+      currentRenderTasks.clear();
+      if (currentToken === token && currentRender === renderToken) {
+        error.value =
+          renderError instanceof Error ? renderError.message : '页面渲染失败';
+      }
+      return;
+    } finally {
+      pdfPage?.cleanup();
     }
-  } finally {
-    pdfPage?.cleanup();
   }
 }
 
@@ -110,7 +130,6 @@ async function load(src: string) {
   const current = (token += 1);
   loading.value = true;
   error.value = '';
-  page.value = 1;
   zoom.value = 1;
   await release();
 
@@ -130,12 +149,13 @@ async function load(src: string) {
 
     activeDoc = doc;
     pageCount.value = doc.numPages;
+    await nextTick();
     const first = await doc.getPage(1);
     const viewport = first.getViewport({ scale: 1 });
     first.cleanup();
     const width = Math.max(stageEl.value?.clientWidth ?? 0, 320);
-    fitScale.value = Math.min(1.35, width / viewport.width);
-    await renderPage(current);
+    fitScale.value = Math.min(1.75, width / viewport.width);
+    await renderPages(current);
   } catch (loadError) {
     if (current !== token) {
       return;
@@ -150,23 +170,14 @@ async function load(src: string) {
   }
 }
 
-async function goTo(next: number) {
-  if (pageCount.value === 0) {
-    return;
-  }
-
-  page.value = Math.min(pageCount.value, Math.max(1, next));
-  await renderPage(token);
-}
-
 function zoomBy(delta: number) {
   zoom.value = clampZoom(zoom.value + delta);
-  void renderPage(token);
+  void renderPages(token);
 }
 
 function fitWidth() {
   zoom.value = 1;
-  void renderPage(token);
+  void renderPages(token);
 }
 
 watch(
@@ -186,32 +197,7 @@ onUnmounted(() => {
 <template>
   <div class="a-pdf-viewer">
     <header class="a-pdf-viewer__toolbar">
-      <div class="a-pdf-viewer__pager">
-        <AIconButton
-          :icon="ChevronLeft"
-          label="上一页"
-          size="small"
-          :disabled="page <= 1 || loading"
-          @click="goTo(page - 1)"
-        />
-        <input
-          class="a-pdf-viewer__page-input"
-          type="text"
-          inputmode="numeric"
-          aria-label="页码"
-          :value="page"
-          :disabled="loading || pageCount === 0"
-          @change="goTo(Number(($event.target as HTMLInputElement).value) || page)"
-        >
-        <span class="a-pdf-viewer__count">/ {{ pageCount }}</span>
-        <AIconButton
-          :icon="ChevronRight"
-          label="下一页"
-          size="small"
-          :disabled="page >= pageCount || loading"
-          @click="goTo(page + 1)"
-        />
-      </div>
+      <span v-if="pageCount" class="a-pdf-viewer__count">共 {{ pageCount }} 页</span>
       <span class="a-pdf-viewer__zoom">
         <AIconButton
           :icon="Minus"
@@ -241,8 +227,21 @@ onUnmounted(() => {
         {{ error }}
       </span>
     </header>
-    <div ref="stageEl" class="a-pdf-viewer__stage">
-      <canvas ref="canvasEl" />
+    <div
+      ref="stageEl"
+      class="a-pdf-viewer__stage"
+      role="region"
+      tabindex="0"
+      :aria-label="`PDF 连续预览，共 ${pageCount} 页`"
+    >
+      <figure
+        v-for="pageNumber in pageCount"
+        :key="pageNumber"
+        class="a-pdf-viewer__page"
+        :aria-label="`第 ${pageNumber} 页`"
+      >
+        <canvas ref="canvasEls" />
+      </figure>
     </div>
   </div>
 </template>
@@ -258,6 +257,11 @@ onUnmounted(() => {
   box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
+.a-pdf-viewer--large {
+  height: min(calc(var(--space-9) * 16), calc(100dvh - 152px));
+  min-height: min(calc(var(--space-9) * 11), calc(100dvh - 152px));
+}
+
 .a-pdf-viewer__toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -269,33 +273,11 @@ onUnmounted(() => {
   box-shadow: var(--hairline);
 }
 
-.a-pdf-viewer__pager,
 .a-pdf-viewer__zoom {
   display: flex;
   gap: var(--space-2);
   align-items: center;
-}
-
-.a-pdf-viewer__zoom {
   margin-left: auto;
-}
-
-.a-pdf-viewer__page-input {
-  width: var(--space-9);
-  height: var(--control-height-sm);
-  padding: 0;
-  font: var(--text-control);
-  color: var(--label);
-  text-align: center;
-  background: var(--fill-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-}
-
-.a-pdf-viewer__page-input:focus,
-.a-pdf-viewer__page-input:focus-visible {
-  background: var(--bg-content);
-  box-shadow: var(--focus-ring);
 }
 
 .a-pdf-viewer__count,
@@ -318,13 +300,20 @@ onUnmounted(() => {
 }
 
 .a-pdf-viewer__stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  align-items: center;
   overflow: auto;
   padding: var(--space-4);
 }
 
-.a-pdf-viewer__stage canvas {
+.a-pdf-viewer__page {
+  margin: 0;
+}
+
+.a-pdf-viewer__page canvas {
   display: block;
-  margin: 0 auto;
   background: var(--bg-content);
   box-shadow: var(--shadow-2);
 }

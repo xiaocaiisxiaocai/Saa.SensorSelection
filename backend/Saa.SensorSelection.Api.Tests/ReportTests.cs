@@ -64,7 +64,7 @@ public class ReportTests
                             new
                             {
                                 machineName = "中间翻板机",
-                                images = new[]
+                                images = new object[]
                                 {
                                     new
                                     {
@@ -74,12 +74,14 @@ public class ReportTests
                                         size = 4,
                                     },
                                 },
-                                rows = new[]
+                                rows = new object[]
                                 {
                                     new
                                     {
                                         id = 1,
                                         role = "进板检测",
+                                        processStepName = "内层 · DES 显影",
+                                        sensorIds = new[] { 1, 2 },
                                         sensorType = "漫反射传感器",
                                         spec = "OMRON E3Z-D61",
                                         purpose = "安装于进板口",
@@ -89,6 +91,47 @@ public class ReportTests
                                         image = (object?)null,
                                     },
                                 },
+                                sensors = new object[]
+                                {
+                                    new
+                                    {
+                                        id = 1,
+                                        sensorType = "漫反射传感器",
+                                        brand = "OMRON",
+                                        model = "E3Z-D61",
+                                        spec = "OMRON E3Z-D61 · 检测距离 0~300mm",
+                                    },
+                                    new
+                                    {
+                                        id = 2,
+                                        sensorType = "对射传感器",
+                                        brand = "OMRON",
+                                        model = "E3Z-T61",
+                                        spec = "检测距离 0~10m",
+                                    },
+                                },
+                            },
+                            new
+                            {
+                                machineName = "双边投板机",
+                                images = Array.Empty<object>(),
+                                rows = new object[]
+                                {
+                                    new
+                                    {
+                                        id = 2,
+                                        role = "出板检测",
+                                        sensorIds = Array.Empty<int>(),
+                                        sensorType = "光纤式",
+                                        spec = "检测距离 4mm",
+                                        purpose = "确认出板",
+                                        name = "",
+                                        desc = "",
+                                        note = "",
+                                        image = (object?)null,
+                                    },
+                                },
+                                sensors = Array.Empty<object>(),
                             },
                         },
                     },
@@ -103,14 +146,47 @@ public class ReportTests
         Assert.Contains("中间翻板机", html);
         Assert.Contains("输送机构", html);
         Assert.Contains("OMRON E3Z-D61", html);
+        Assert.Contains("<th>工艺制程</th>", html);
+        Assert.Contains("内层 &#183; DES 显影", html);
+        Assert.Contains(
+            "<tr><td class=\"report-structure-table__sensor\">对射传感器</td><td class=\"report-structure-table__spec\">检测距离 0~10m</td></tr>",
+            html);
+        Assert.Contains("class=\"report-structure-table__serial\" rowspan=\"2\"", html);
+        Assert.Contains("<col class=\"report-structure-table__sensor-col\" />", html);
+        Assert.DoesNotContain(".report-structure-table td:nth-child(1)", html);
         Assert.Contains("输送机构示意图.png", html);
-        Assert.Contains("report-image-overview", html);
+        Assert.Contains("report-machine-block__layout--with-image", html);
+        Assert.Contains("report-machine-block__layout--full", html);
+        Assert.DoesNotContain("report-image-overview", html);
+        Assert.Contains(
+            "grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr);",
+            html);
+        Assert.Contains(
+            ".report-machine-block__images img { display: block; width: 100%;",
+            html);
+        Assert.Contains(
+            ".report-structure-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }",
+            html);
+        Assert.Contains(
+            ".report-structure-table th, .report-structure-table td { padding: 7px 8px;",
+            html);
+        Assert.Contains("vertical-align: middle;", html);
+        Assert.DoesNotContain("vertical-align: top;", html);
+        Assert.Contains("line-height: 1.5;", html);
+        Assert.Contains("@media print {", html);
+        Assert.Contains(
+            ":root { color-scheme: light; font-family: \"Microsoft YaHei\", \"PingFang SC\", sans-serif; color: #172033; background: #fff; }",
+            html);
+        Assert.Contains("body { margin: 0; padding: 24px; background: #eef2f6; }", html);
+        Assert.Contains(".report-structure-table { font-size: 14px; }", html);
         Assert.DoesNotContain("SAA · SENSOR SELECTION", html);
         Assert.DoesNotContain("已选机型：", html);
         Assert.DoesNotContain("按“结构模块 → 机型 → 传感器记录”拼接生成", html);
-        Assert.True(
-            html.IndexOf("<section class=\"report-image-overview\"", StringComparison.Ordinal)
-            < html.IndexOf("<section class=\"report-section\"", StringComparison.Ordinal));
+        var firstMachineIndex = html.IndexOf("中间翻板机", StringComparison.Ordinal);
+        var imageIndex = html.IndexOf("class=\"report-structure-image\"", StringComparison.Ordinal);
+        var firstTableIndex = html.IndexOf("class=\"report-structure-table\"", StringComparison.Ordinal);
+        Assert.True(firstMachineIndex < imageIndex);
+        Assert.True(imageIndex < firstTableIndex);
         Assert.Equal(1, CountOccurrences(html, "data:image/png;base64,AAAA"));
     }
 

@@ -1,9 +1,14 @@
-import type { MachineSectionRow, SensorItem } from '@/domain';
+import type {
+  MachineSectionRow,
+  ProcessStepItem,
+  SensorItem,
+} from '@/domain';
 
 export interface MachineTableRow extends MachineSectionRow {
   displayId: string;
   groupSize: number;
   groupStart: boolean;
+  processStepName: string;
   sensor: SensorItem | null;
   source: MachineSectionRow;
 }
@@ -16,6 +21,7 @@ export function buildMachineTableRows(
   items: MachineSectionRow[],
   sensors: SensorItem[],
   isStructure: boolean,
+  processSteps: ProcessStepItem[] = [],
 ): MachineTableRow[] {
   return items.flatMap((item) => {
     const records = isStructure
@@ -26,11 +32,19 @@ export function buildMachineTableRows(
     const displaySensors: Array<SensorItem | null> =
       records.length > 0 ? records : [null];
 
+    const processStep = isStructure
+      ? processSteps.find((candidate) => candidate.id === item.processStepId)
+      : undefined;
+    const processStepName = processStep
+      ? `${processStep.layer} · ${processStep.name}`
+      : '—';
+
     return displaySensors.map((sensor, index) => ({
       ...item,
       displayId: `${item.id}-${index}-${sensor?.id ?? 'legacy'}`,
       groupSize: displaySensors.length,
       groupStart: index === 0,
+      processStepName,
       sensor,
       source: item,
       sensorType: sensor?.sensorType ?? item.sensorType,

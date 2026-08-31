@@ -13,6 +13,9 @@ namespace Saa.SensorSelection.Api.Tests;
 
 public class AuditTests
 {
+    private static string StoreRoute(string key) =>
+        $"/api/store/by-key?key={Uri.EscapeDataString(key)}";
+
     [Fact]
     public void AuditLogIpNormalization_UsesIpv4LoopbackForIpv6Loopback()
     {
@@ -150,13 +153,13 @@ public class AuditTests
 
         // 成功写入
         var write = await admin.PutAsJsonAsync(
-            "/api/store/customer-req:测试客户",
+            StoreRoute("customer-req:测试客户"),
             JsonSerializer.Deserialize<JsonElement>("[{\"id\":1,\"name\":\"测试\"}]"));
         Assert.Equal(HttpStatusCode.OK, write.StatusCode);
 
         // 校验失败写入（非数组）→ 400，仍要记失败审计
         var invalid = await admin.PutAsJsonAsync(
-            "/api/store/customer-req:测试客户",
+            StoreRoute("customer-req:测试客户"),
             JsonSerializer.Deserialize<JsonElement>("{\"not\":\"array\"}"));
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
 
@@ -183,13 +186,13 @@ public class AuditTests
         using var admin = await CreateAdminClientAsync(factory);
 
         await admin.PutAsJsonAsync(
-            "/api/store/customer-req:待删除",
+            StoreRoute("customer-req:待删除"),
             JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
-        var deleted = await admin.DeleteAsync("/api/store/customer-req:待删除");
+        var deleted = await admin.DeleteAsync(StoreRoute("customer-req:待删除"));
         Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
 
         // 删除不存在的 key → 404，也记失败
-        var missing = await admin.DeleteAsync("/api/store/customer-req:不存在");
+        var missing = await admin.DeleteAsync(StoreRoute("customer-req:不存在"));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
 
         var page = await QueryAuditLogsAsync(admin, "?action=store.delete&username=admin");
@@ -289,7 +292,7 @@ public class AuditTests
         for (var i = 0; i < 5; i++)
         {
             var write = await admin.PutAsJsonAsync(
-                $"/api/store/customer-req:客户{i}",
+                StoreRoute($"customer-req:客户{i}"),
                 JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
             Assert.Equal(HttpStatusCode.OK, write.StatusCode);
         }

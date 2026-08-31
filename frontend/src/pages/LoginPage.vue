@@ -20,6 +20,7 @@ const router = useRouter();
 
 const loading = ref(false);
 const form = reactive({ username: '', password: '' });
+let backendReady: null | Promise<void> = null;
 
 const themeOptions: {
   icon: typeof Sun;
@@ -39,10 +40,15 @@ async function enter() {
   await router.replace(targetPath());
 }
 
+function prepareBackend() {
+  backendReady ??= selection.ensureBackendInit();
+  return backendReady;
+}
+
 async function enterAsGuest() {
   if (loading.value) return;
   auth.clearSession();
-  await selection.initBackend();
+  await prepareBackend();
   await enter();
 }
 
@@ -72,18 +78,22 @@ async function submit() {
       form.password = '';
       return;
     }
-    toast.success('登录成功');
-    await selection.initBackend();
+    await prepareBackend();
     await enter();
+    toast.success('登录成功');
   } finally {
     loading.value = false;
   }
 }
 
 onMounted(async () => {
+  const ready = prepareBackend();
   if (!getStoredToken()) return;
   await auth.ensureProfile();
-  if (auth.profile) await enter();
+  if (auth.profile) {
+    await ready;
+    await enter();
+  }
 });
 </script>
 
@@ -124,6 +134,7 @@ onMounted(async () => {
               :prefix-icon="User"
               autocomplete="username"
               :maxlength="64"
+              :clearable="false"
               :disabled="loading"
               placeholder="请输入用户名"
             />
@@ -134,6 +145,7 @@ onMounted(async () => {
               :prefix-icon="Lock"
               type="password"
               autocomplete="current-password"
+              :clearable="false"
               :disabled="loading"
               placeholder="请输入密码"
             />

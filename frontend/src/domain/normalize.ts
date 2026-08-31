@@ -5,16 +5,20 @@ import type {
   CrudRecord,
   DictionaryItem,
   EntityGroup,
+  EntityKind,
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
+  MachineProcessItem,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
   ProcessStepItem,
   SensorItem,
+  Sensor3dFileItem,
   SensorSopItem,
   SensorTypeDefinition,
 } from './types';
+import { isSensorStatus } from './sensor-status';
 
 export const CONTROLLED_FILE_RULES = {
   pdf: {
@@ -33,14 +37,40 @@ export const CONTROLLED_FILE_RULES = {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ],
   },
+  ppt: {
+    accept:
+      '.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    extensions: ['.ppt', '.pptx'],
+    maxBytes: 8 * 1024 * 1024,
+    mimeTypes: [
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ],
+  },
 } as const;
+
+type FileKind = keyof typeof CONTROLLED_FILE_RULES;
+
+export const CONTROLLED_FILE_KINDS = [
+  'pdf',
+  'word',
+] as const satisfies readonly FileKind[];
+export const PROCESS_INTRO_FILE_KINDS = [
+  ...CONTROLLED_FILE_KINDS,
+  'ppt',
+] as const satisfies readonly FileKind[];
 
 export const CONTROLLED_FILE_ACCEPT = [
   CONTROLLED_FILE_RULES.pdf.accept,
   CONTROLLED_FILE_RULES.word.accept,
 ].join(',');
 
-type FileKind = keyof typeof CONTROLLED_FILE_RULES;
+export const SENSOR_3D_FILE_RULES = {
+  accept: '.pdf,application/pdf',
+  extensions: ['.pdf'],
+  maxBytes: 8 * 1024 * 1024,
+  mimeTypes: ['application/pdf'],
+} as const;
 
 function emptyStore(): PersistedStore {
   return Object.create(null) as PersistedStore;
@@ -60,6 +90,17 @@ function asList(source: unknown): unknown[] {
   return Array.isArray(source) ? source : [];
 }
 
+const STORED_FILE_SOURCE =
+  /^\/api\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/content$/i;
+
+/** 上传前接受 data URL；持久化后接受后端返回的按需文件 URL。 */
+export function isStoredFileSource(
+  value: string,
+  dataPrefix = 'data:',
+): boolean {
+  return value.startsWith(dataPrefix) || STORED_FILE_SOURCE.test(value);
+}
+
 function normalizeFeedbackMeasureHistory(
   item: Record<string, unknown>,
 ): FeedbackMeasureHistoryEntry[] {
@@ -70,7 +111,8 @@ function normalizeFeedbackMeasureHistory(
     .map((entry) => ({
       measure: storedText(entry.measure),
       date: storedText(entry.date),
-      status: entry.status === '已作废' ? ('已作废' as const) : ('现行' as const),
+      status:
+        entry.status === '已作废' ? ('已作废' as const) : ('现行' as const),
     }));
 
   let currentIndex = -1;
@@ -136,7 +178,9 @@ function fileExtension(fileName: string): string {
   return index === -1 ? '' : fileName.slice(index).toLowerCase();
 }
 
-export function parsePersistedStore(rawValue: null | string | undefined): PersistedStore {
+export function parsePersistedStore(
+  rawValue: null | string | undefined,
+): PersistedStore {
   if (!rawValue) return emptyStore();
   try {
     const parsed: unknown = JSON.parse(rawValue);
@@ -288,6 +332,7 @@ export function normalizeSensorItems(
         feature: storedText(item.feature),
         scene: storedText(item.scene),
         sopId: optionalPositiveId(item.sopId),
+        model3dId: optionalPositiveId(item.model3dId),
         replacesId: optionalPositiveId(item.replacesId),
         replacedById: optionalPositiveId(item.replacedById),
         problemNote: storedText(item.problemNote).trim(),
@@ -312,6 +357,7 @@ export function createSensorCatalogDefaults(
       feature: [definition.desc, definition.notes].filter(Boolean).join('；'),
       scene: definition.scenes.join('、'),
       sopId: null,
+      model3dId: null,
       replacesId: null,
       replacedById: null,
       problemNote: '',
@@ -359,13 +405,14 @@ export function formatLocalDateTime(date: Date): string {
 export function detectControlledFileKind(
   fileName: string,
   mimeType: string,
+  allowedKinds: readonly FileKind[] = CONTROLLED_FILE_KINDS,
 ): FileKind | null {
-  for (const kind of ['pdf', 'word'] as const) {
+  for (const kind of allowedKinds) {
     const rules = CONTROLLED_FILE_RULES[kind];
     const extension = fileExtension(fileName);
     const normalizedMime = storedText(mimeType).toLowerCase();
     const mimeAllowed =
-      !normalizedMime ||
+      Boolean(normalizedMime) &&
       rules.mimeTypes.some((item) => normalizedMime.includes(item));
     const extensionAllowed = (rules.extensions as readonly string[]).includes(
       extension,
@@ -391,7 +438,7 @@ export function normalizeSensorSops(sourceItems: unknown): SensorSopItem[] {
         fileName.replace(/\.pdf$/i, '');
       if (
         !fileName ||
-        !dataUrl.startsWith('data:') ||
+        !isStoredFileSource(dataUrl) ||
         !Number.isFinite(size) ||
         size <= 0
       ) {
@@ -410,6 +457,63 @@ export function normalizeSensorSops(sourceItems: unknown): SensorSopItem[] {
       };
     })
     .filter((item): item is SensorSopItem => Boolean(item));
+}
+
+export function validateSensor3dUpload(
+  fileName: string,
+  mimeType: string,
+  size: number,
+): { ok: false; reason: 'size' | 'type' } | { ok: true } {
+  if (
+    !Number.isFinite(size) ||
+    size <= 0 ||
+    size > SENSOR_3D_FILE_RULES.maxBytes
+  ) {
+    return { ok: false, reason: 'size' };
+  }
+  const extension = fileExtension(fileName);
+  const normalizedMime = storedText(mimeType).toLowerCase();
+  const extensionAllowed = (
+    SENSOR_3D_FILE_RULES.extensions as readonly string[]
+  ).includes(extension);
+  const mimeAllowed = SENSOR_3D_FILE_RULES.mimeTypes.some(
+    (item) => normalizedMime === item,
+  );
+  return extensionAllowed || mimeAllowed
+    ? { ok: true }
+    : { ok: false, reason: 'type' };
+}
+
+export function normalizeSensor3dFiles(
+  sourceItems: unknown,
+): Sensor3dFileItem[] {
+  const usedIds = new Set<number>();
+  const nextIdRef = { value: 1 };
+  return asList(sourceItems)
+    .filter(isRecord)
+    .map((item) => {
+      const id = allocateId(item.id, usedIds, nextIdRef);
+      const fileName = storedText(item.fileName).trim().slice(0, 200);
+      const mimeType = storedText(item.mimeType).trim().slice(0, 120);
+      const dataUrl = storedText(item.dataUrl);
+      const size = Number(item.size);
+      const title =
+        storedText(item.title).trim().slice(0, 80) ||
+        fileName.replace(/\.pdf$/i, '');
+      if (!fileName || !isStoredFileSource(dataUrl)) return null;
+      if (!validateSensor3dUpload(fileName, mimeType, size).ok) return null;
+      return {
+        id,
+        title,
+        fileName,
+        mimeType: mimeType || 'application/pdf',
+        dataUrl,
+        size,
+        uploadedAt:
+          storedText(item.uploadedAt).trim() || formatLocalDate(new Date()),
+      };
+    })
+    .filter((item): item is Sensor3dFileItem => Boolean(item));
 }
 
 export function normalizeMachineSections(
@@ -456,6 +560,36 @@ export function normalizeMachineSections(
   return unique;
 }
 
+export function normalizeMachineProcesses(
+  source: unknown,
+): MachineProcessItem[] {
+  const usedIds = new Set<number>();
+  const nextIdRef = { value: 1 };
+  const seenNames = new Set<string>();
+
+  return asList(source)
+    .filter(isRecord)
+    .map((item, index) => {
+      const id = allocateId(item.id, usedIds, nextIdRef);
+      const name = storedText(item.name).trim().slice(0, 40);
+      const sort = Number(item.sort);
+      return {
+        id,
+        name,
+        sort: Number.isFinite(sort) ? sort : index + 1,
+        locked: item.locked === true || id === 1 ? true : undefined,
+      } satisfies MachineProcessItem;
+    })
+    .filter((item) => item.name)
+    .filter((item) => {
+      const key = item.name.toLocaleLowerCase('zh-CN');
+      if (seenNames.has(key)) return false;
+      seenNames.add(key);
+      return true;
+    })
+    .sort((left, right) => left.sort - right.sort || left.id - right.id);
+}
+
 export function validateMachineRowImage(
   fileName: string,
   mimeType: string,
@@ -485,7 +619,7 @@ export function normalizeMachineRowImage(raw: unknown): MachineRowImage | null {
   const size = Number(raw.size);
   if (
     !fileName ||
-    !dataUrl.startsWith('data:image/') ||
+    !isStoredFileSource(dataUrl, 'data:image/') ||
     !Number.isFinite(size) ||
     size <= 0 ||
     size > MACHINE_ROW_IMAGE_RULES.maxBytes
@@ -497,7 +631,9 @@ export function normalizeMachineRowImage(raw: unknown): MachineRowImage | null {
   return { dataUrl, fileName, mimeType, size };
 }
 
-export function normalizeMachineSectionImages(source: unknown): MachineRowImage[] {
+export function normalizeMachineSectionImages(
+  source: unknown,
+): MachineRowImage[] {
   const seen = new Set<string>();
   return asList(source)
     .map((item) => normalizeMachineRowImage(item))
@@ -545,7 +681,7 @@ function normalizeSensorIds(
   );
   if (exact.length > 0) return exact.map((sensor) => sensor.id);
   const sameTypeCurrent = sensorItems.find(
-    (sensor) => typeMatches(sensor) && sensor.status === '现用',
+    (sensor) => typeMatches(sensor) && isSensorStatus(sensor.status, 'current'),
   );
   return sameTypeCurrent ? [sameTypeCurrent.id] : [];
 }
@@ -563,9 +699,16 @@ export function normalizeMachineSectionRows(
     .filter(isRecord)
     .map((item) => {
       const id = allocateId(item.id, usedIds, nextIdRef);
+      const processStepId = Number(item.processStepId);
       const row: MachineSectionRow = {
         id,
         role: storedText(item.role),
+        processStepId:
+          allowImage &&
+          Number.isSafeInteger(processStepId) &&
+          processStepId > 0
+            ? processStepId
+            : null,
         sensorIds: normalizeSensorIds(item, sensorItems),
         sensorType: storedText(item.sensorType),
         spec: storedText(item.spec),
@@ -599,7 +742,7 @@ function normalizeFileAttachment(
   const uploadedAt = storedText(raw.uploadedAt);
   if (
     !fileName ||
-    !dataUrl.startsWith('data:') ||
+    !isStoredFileSource(dataUrl) ||
     !Number.isFinite(size) ||
     size <= 0
   ) {
@@ -612,15 +755,23 @@ function normalizeControlledFileItem(
   raw: unknown,
   usedIds: Set<number>,
   nextIdRef: { value: number },
+  allowedKinds: readonly FileKind[],
 ): ControlledFileItem | null {
   if (!isRecord(raw)) return null;
   const attachment = normalizeFileAttachment(raw);
   if (!attachment) return null;
 
+  const storedKind =
+    typeof raw.kind === 'string' && allowedKinds.includes(raw.kind as FileKind)
+      ? (raw.kind as FileKind)
+      : null;
   const kind =
-    raw.kind === 'pdf' || raw.kind === 'word'
-      ? raw.kind
-      : detectControlledFileKind(attachment.fileName, attachment.mimeType);
+    storedKind ||
+    detectControlledFileKind(
+      attachment.fileName,
+      attachment.mimeType,
+      allowedKinds,
+    );
   if (!kind) return null;
 
   const id = allocateId(raw.id, usedIds, nextIdRef);
@@ -633,6 +784,7 @@ export function createDefaultControlledDocuments(): ControlledFileItem[] {
 
 export function normalizeControlledDocuments(
   sourceItems: unknown,
+  allowedKinds: readonly FileKind[] = CONTROLLED_FILE_KINDS,
 ): ControlledFileItem[] {
   if (!Array.isArray(sourceItems)) return [];
 
@@ -656,6 +808,7 @@ export function normalizeControlledDocuments(
           { ...(isRecord(raw) ? raw : {}), kind },
           usedIds,
           nextIdRef,
+          allowedKinds,
         );
         if (normalized) items.push(normalized);
       }
@@ -664,7 +817,12 @@ export function normalizeControlledDocuments(
   }
 
   for (const raw of sourceItems) {
-    const normalized = normalizeControlledFileItem(raw, usedIds, nextIdRef);
+    const normalized = normalizeControlledFileItem(
+      raw,
+      usedIds,
+      nextIdRef,
+      allowedKinds,
+    );
     if (normalized) items.push(normalized);
   }
   return items;
@@ -684,7 +842,7 @@ export function validateControlledUpload(
   const extension = fileExtension(fileName);
   const normalizedMime = storedText(mimeType).toLowerCase();
   const mimeAllowed =
-    !normalizedMime ||
+    Boolean(normalizedMime) &&
     rules.mimeTypes.some((item) => normalizedMime.includes(item));
   const extensionAllowed = (rules.extensions as readonly string[]).includes(
     extension,
@@ -695,7 +853,9 @@ export function validateControlledUpload(
   return { ok: true };
 }
 
-export function normalizeDictionaryItems(sourceItems: unknown): DictionaryItem[] {
+export function normalizeDictionaryItems(
+  sourceItems: unknown,
+): DictionaryItem[] {
   const usedIds = new Set<number>();
   const nextIdRef = { value: 1 };
   const normalized = asList(sourceItems)
@@ -725,7 +885,10 @@ export function normalizeDictionaryItems(sourceItems: unknown): DictionaryItem[]
   return unique;
 }
 
-export function normalizeEntityGroups(sourceGroups: unknown): EntityGroup[] {
+export function normalizeEntityGroups(
+  sourceGroups: unknown,
+  kind?: EntityKind,
+): EntityGroup[] {
   const usedGroupNames = new Set<string>();
   const usedItemNames = new Set<string>();
   return asList(sourceGroups)
@@ -746,7 +909,49 @@ export function normalizeEntityGroups(sourceGroups: unknown): EntityGroup[] {
         usedItemNames.add(itemKey);
         items.push(item);
       }
-      return { name, items };
+
+      const usedConfigurationNames = new Set<string>();
+      const configurations = asList(group.configurations)
+        .filter(isRecord)
+        .map((rawConfiguration) => {
+          const configurationName = storedText(rawConfiguration.name)
+            .trim()
+            .slice(0, 40);
+          if (!configurationName) return null;
+          const configurationKey = configurationName.toLocaleLowerCase('zh-CN');
+          if (usedConfigurationNames.has(configurationKey)) return null;
+          usedConfigurationNames.add(configurationKey);
+
+          const configurationItems: string[] = [];
+          const usedConfigurationItemNames = new Set<string>();
+          for (const rawItem of asList(rawConfiguration.items)) {
+            const item = storedText(rawItem).trim().slice(0, 40);
+            if (!item) continue;
+            const itemKey = item.toLocaleLowerCase('zh-CN');
+            if (usedConfigurationItemNames.has(itemKey)) continue;
+            usedConfigurationItemNames.add(itemKey);
+            configurationItems.push(item);
+          }
+          return { name: configurationName, items: configurationItems };
+        })
+        .filter((item): item is { name: string; items: string[] } =>
+          Boolean(item),
+        );
+
+      const machineType =
+        kind === 'machine'
+          ? group.machineType === 'project' || group.machineType === 'mechanism'
+            ? group.machineType
+            : name === '专案机型'
+              ? 'project'
+              : 'mechanism'
+          : undefined;
+      return {
+        name,
+        items,
+        ...(configurations.length > 0 ? { configurations } : {}),
+        ...(machineType ? { machineType } : {}),
+      };
     })
     .filter((group): group is EntityGroup => Boolean(group));
 }

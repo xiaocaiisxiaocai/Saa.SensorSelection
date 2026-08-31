@@ -18,6 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -80,6 +82,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(log => log.Timestamp);
             entity.HasIndex(log => log.Username);
             entity.HasIndex(log => log.Action);
+        });
+
+        modelBuilder.Entity<StoredFile>(entity =>
+        {
+            entity.HasKey(file => file.Id);
+            entity.Property(file => file.FileName).HasMaxLength(200).IsRequired();
+            entity.Property(file => file.MimeType).HasMaxLength(120).IsRequired();
+            entity.Property(file => file.Content).HasColumnType("BLOB").IsRequired();
+            entity.HasIndex(file => file.CreatedAt);
         });
 
         // 多对多：User ↔ Role、Role ↔ Permission（EF 自动建中间表）

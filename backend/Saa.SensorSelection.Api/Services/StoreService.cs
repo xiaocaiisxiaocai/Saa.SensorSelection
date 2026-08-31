@@ -10,7 +10,7 @@ using Saa.SensorSelection.Api.Models;
 namespace Saa.SensorSelection.Api.Services;
 
 /// <summary>数据仓库业务逻辑：key → JSON 数组的读、写、整体替换与删除。</summary>
-public class StoreService(AppDbContext db)
+public class StoreService(AppDbContext db, StoredFileService storedFiles)
 {
     private static readonly HashSet<string> EntityKinds =
         new(StringComparer.OrdinalIgnoreCase) { "customer", "machine" };
@@ -61,6 +61,14 @@ public class StoreService(AppDbContext db)
             submittedKeys.Add(property.Name);
         }
 
+        var detached = new Dictionary<string, FileDetachmentResult>();
+        foreach (var property in store.EnumerateObject())
+        {
+            var result = storedFiles.Detach(property.Value);
+            if (!result.Success) return StoreWriteResult.Validation(result.Error!);
+            detached[property.Name] = result;
+        }
+
         var now = DateTime.UtcNow;
         var existing = await db.StoreEntries
             .Where(e => submittedKeys.Contains(e.Key))
@@ -68,7 +76,9 @@ public class StoreService(AppDbContext db)
 
         foreach (var property in store.EnumerateObject())
         {
-            var json = property.Value.GetRawText();
+            var result = detached[property.Name];
+            var json = result.Json!;
+            db.StoredFiles.AddRange(result.Files);
             if (existing.TryGetValue(property.Name, out var entry))
             {
                 entry.Json = json;
@@ -91,6 +101,7 @@ public class StoreService(AppDbContext db)
             .ExecuteDeleteAsync();
 
         await db.SaveChangesAsync();
+        await storedFiles.DeleteOrphansAsync();
         return StoreWriteResult.Ok();
     }
 
@@ -107,7 +118,14 @@ public class StoreService(AppDbContext db)
             return StoreWriteResult.Validation("值必须是 JSON 数组");
         }
 
-        var json = value.GetRawText();
+        var detached = storedFiles.Detach(value);
+        if (!detached.Success)
+        {
+            return StoreWriteResult.Validation(detached.Error!);
+        }
+
+        var json = detached.Json!;
+        db.StoredFiles.AddRange(detached.Files);
         var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key);
         if (entry == null)
         {
@@ -143,7 +161,8 @@ public class StoreService(AppDbContext db)
             await db.SaveChangesAsync();
         }
 
-        return StoreWriteResult.Ok();
+        await storedFiles.DeleteOrphansAsync();
+        return StoreWriteResult.Ok(json);
     }
 
     /// <summary>
@@ -187,6 +206,22 @@ public class StoreService(AppDbContext db)
                 return StoreWriteResult.Validation($"分类重复: {name}");
             }
 
+            string? machineType = null;
+            if (normalizedKind == "machine")
+            {
+                machineType = name == "专案机型" ? "project" : "mechanism";
+                if (group.TryGetProperty("machineType", out var machineTypeProperty))
+                {
+                    if (machineTypeProperty.ValueKind != JsonValueKind.String ||
+                        machineTypeProperty.GetString() is not ("mechanism" or "project"))
+                    {
+                        return StoreWriteResult.Validation("机型分类类型必须是 mechanism 或 project");
+                    }
+
+                    machineType = machineTypeProperty.GetString();
+                }
+            }
+
             if (!group.TryGetProperty("items", out var itemsProperty) ||
                 itemsProperty.ValueKind != JsonValueKind.Array)
             {
@@ -215,7 +250,71 @@ public class StoreService(AppDbContext db)
                 items.Add(itemName);
             }
 
-            groups.Add(new EntityGroupPayload(name, items));
+            List<EntityConfigurationPayload>? configurations = null;
+            if (group.TryGetProperty("configurations", out var configurationsProperty))
+            {
+                if (normalizedKind != "machine")
+                {
+                    return StoreWriteResult.Validation("只有机型分类支持配置层级");
+                }
+
+                if (configurationsProperty.ValueKind != JsonValueKind.Array)
+                {
+                    return StoreWriteResult.Validation($"配置必须是数组: {name}");
+                }
+
+                configurations = new List<EntityConfigurationPayload>();
+                var configurationNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var configuration in configurationsProperty.EnumerateArray())
+                {
+                    if (configuration.ValueKind != JsonValueKind.Object ||
+                        !configuration.TryGetProperty("name", out var configurationNameProperty) ||
+                        configurationNameProperty.ValueKind != JsonValueKind.String ||
+                        !configuration.TryGetProperty("items", out var configurationItemsProperty) ||
+                        configurationItemsProperty.ValueKind != JsonValueKind.Array)
+                    {
+                        return StoreWriteResult.Validation($"配置必须包含 name 字符串和 items 数组: {name}");
+                    }
+
+                    var configurationName = configurationNameProperty.GetString()?.Trim() ?? string.Empty;
+                    if (configurationName.Length == 0 || configurationName.Length > 40)
+                    {
+                        return StoreWriteResult.Validation("配置名称长度必须为 1-40 个字符");
+                    }
+
+                    if (!configurationNames.Add(configurationName))
+                    {
+                        return StoreWriteResult.Validation($"配置重复: {configurationName}");
+                    }
+
+                    var configurationItems = new List<string>();
+                    var configurationItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var item in configurationItemsProperty.EnumerateArray())
+                    {
+                        if (item.ValueKind != JsonValueKind.String)
+                        {
+                            return StoreWriteResult.Validation($"配置条目必须是字符串: {configurationName}");
+                        }
+
+                        var itemName = item.GetString()?.Trim() ?? string.Empty;
+                        if (itemName.Length == 0 || itemName.Length > 40)
+                        {
+                            return StoreWriteResult.Validation("条目名称长度必须为 1-40 个字符");
+                        }
+
+                        if (!configurationItemNames.Add(itemName))
+                        {
+                            return StoreWriteResult.Validation($"条目重复: {itemName}");
+                        }
+
+                        configurationItems.Add(itemName);
+                    }
+
+                    configurations.Add(new EntityConfigurationPayload(configurationName, configurationItems));
+                }
+            }
+
+            groups.Add(new EntityGroupPayload(name, items, configurations, machineType));
         }
 
         if (groups.Count == 0)
@@ -238,6 +337,7 @@ public class StoreService(AppDbContext db)
 
         db.StoreEntries.Remove(entry);
         await db.SaveChangesAsync();
+        await storedFiles.DeleteOrphansAsync();
         return new StoreDeleteResult(true);
     }
 }
@@ -246,11 +346,11 @@ public class StoreService(AppDbContext db)
 public record StoreReadResult(bool Found, string? Json);
 
 /// <summary>写操作结果：Success=false 且 Error 非空表示校验失败。</summary>
-public record StoreWriteResult(bool Success, string? Error)
+public record StoreWriteResult(bool Success, string? Error, string? Json)
 {
-    public static StoreWriteResult Ok() => new(true, null);
+    public static StoreWriteResult Ok(string? json = null) => new(true, null, json);
 
-    public static StoreWriteResult Validation(string message) => new(false, message);
+    public static StoreWriteResult Validation(string message) => new(false, message, null);
 }
 
 /// <summary>删除结果：Found=false 表示 key 不存在。</summary>
@@ -258,5 +358,16 @@ public record StoreDeleteResult(bool Found);
 
 /// <summary>实体分类排序的后端存储形状。</summary>
 public sealed record EntityGroupPayload(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("items")] IReadOnlyList<string> Items,
+    [property: JsonPropertyName("configurations"),
+     JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<EntityConfigurationPayload>? Configurations = null,
+    [property: JsonPropertyName("machineType"),
+     JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? MachineType = null);
+
+/// <summary>机型分类下的配置层级，数组顺序即显示顺序。</summary>
+public sealed record EntityConfigurationPayload(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("items")] IReadOnlyList<string> Items);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORAGE_KEY } from './keys';
+import { STORAGE_KEY, keyFor } from './keys';
 import { createSelectionRepository } from './repository';
 import { CRUD_DEFAULTS, SENSOR_DATA } from './seed';
 import type { StorageLike } from './types';
@@ -37,7 +37,10 @@ describe('createSelectionRepository persist', () => {
       getItem: () => null,
       setItem: () => false,
     });
-    const result = repo.saveProcessStep({ name: '唯一工艺-回滚', layer: '内层' });
+    const result = repo.saveProcessStep({
+      name: '唯一工艺-回滚',
+      layer: '内层',
+    });
     expect(result).toEqual({ ok: false, reason: 'storage' });
     expect(
       repo.getProcessSteps().some((item) => item.name === '唯一工艺-回滚'),
@@ -57,9 +60,9 @@ describe('createSelectionRepository persist', () => {
       status: '现用',
     });
     expect(result).toEqual({ ok: false, reason: 'storage' });
-    expect(repo.getSensors().some((item) => item.model === 'THROW-ROLLBACK')).toBe(
-      false,
-    );
+    expect(
+      repo.getSensors().some((item) => item.model === 'THROW-ROLLBACK'),
+    ).toBe(false);
   });
 
   it('starts from an empty store when getItem throws', () => {
@@ -193,7 +196,10 @@ describe('entity-scoped business data', () => {
     );
     expect(repo.getCrud('customer-req', '景旺')).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 1, content: '中段与末端均需设置掉板检测' }),
+        expect.objectContaining({
+          id: 1,
+          content: '中段与末端均需设置掉板检测',
+        }),
       ]),
     );
   });
@@ -247,6 +253,90 @@ describe('entity-scoped business data', () => {
 });
 
 describe('sensors', () => {
+  it('stores SOP PDFs independently from 资料 files', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+
+    expect(
+      repo.saveSensorSopFile({
+        title: '错误格式',
+        fileName: 'work-instruction.docx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        dataUrl: 'data:application/octet-stream;base64,YQ==',
+        size: 12,
+        uploadedAt: '2026-08-27',
+      }),
+    ).toEqual({ ok: false, reason: 'type' });
+
+    const saved = repo.saveSensorSopFile({
+      title: '感应器安装 SOP',
+      fileName: 'sensor-sop.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'data:application/pdf;base64,YQ==',
+      size: 12,
+      uploadedAt: '2026-08-27',
+    });
+    if (!saved.ok) throw new Error(saved.reason);
+
+    expect(repo.getSensorSopFiles()).toEqual([saved.item]);
+    expect(repo.getSensorSops()).toEqual([]);
+    expect(
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['sensor-sop-file:all'],
+    ).toEqual([saved.item]);
+    expect(repo.deleteSensorSopFile(saved.item.id)).toEqual({ ok: true });
+  });
+
+  it('stores 3D files, links them to sensors, and blocks deleting files in use', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+
+    expect(
+      repo.saveSensor3dFile({
+        title: '错误格式',
+        fileName: 'robot.step',
+        mimeType: 'application/step',
+        dataUrl: 'data:application/step;base64,YQ==',
+        size: 12,
+        uploadedAt: '2026-08-27',
+      }),
+    ).toEqual({ ok: false, reason: 'type' });
+
+    const saved = repo.saveSensor3dFile({
+      title: '六轴机模型',
+      fileName: 'robot.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'data:application/pdf;base64,YQ==',
+      size: 12,
+      uploadedAt: '2026-08-27',
+    });
+    if (!saved.ok) throw new Error(saved.reason);
+    expect(repo.getSensor3dFiles()).toEqual([saved.item]);
+    expect(
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['sensor-3d:all'],
+    ).toEqual([saved.item]);
+
+    const sensor = repo.getSensors()[0];
+    if (!sensor) throw new Error('seed sensor missing');
+    const linked = repo.saveSensor(
+      { ...sensor, model3dId: saved.item.id },
+      sensor.id,
+    );
+    if (!linked.ok) throw new Error(linked.reason);
+    expect(linked.item.model3dId).toBe(saved.item.id);
+    expect(repo.deleteSensor3dFile(saved.item.id)).toEqual({
+      ok: false,
+      reason: 'in-use',
+    });
+
+    const unlinked = repo.saveSensor(
+      { ...linked.item, model3dId: null },
+      sensor.id,
+    );
+    if (!unlinked.ok) throw new Error(unlinked.reason);
+    expect(repo.deleteSensor3dFile(saved.item.id)).toEqual({ ok: true });
+  });
+
   it('rejects duplicate models using zh-CN case folding', () => {
     const repo = createRepo();
     const sensors = repo.getSensors();
@@ -289,7 +379,9 @@ describe('sensors', () => {
     if (!replaced.ok) throw new Error(replaced.reason);
     expect(replaced.item.status).toBe('现用');
     expect(replaced.item.replacesId).toBe(current.id);
-    expect(repo.getSensors().find((item) => item.id === current.id)).toMatchObject({
+    expect(
+      repo.getSensors().find((item) => item.id === current.id),
+    ).toMatchObject({
       status: '停用',
       replacedById: alternate.id,
       problemNote: '检测不稳定',
@@ -297,6 +389,71 @@ describe('sensors', () => {
     expect(repo.getMachineSectionRows(1, '中间翻板机')[0]?.sensorIds).toEqual([
       alternate.id,
     ]);
+  });
+
+  it('replaces sensors when status dictionary labels include numeric prefixes', () => {
+    const repo = createRepo();
+    const renamedStatuses = [
+      ['现用', '01 现用'],
+      ['备选', '02 备选'],
+      ['停用', '03 停用'],
+    ] as const;
+
+    for (const [previousName, nextName] of renamedStatuses) {
+      const item = repo
+        .getDictionaryItems('sensor-status')
+        .find((entry) => entry.name === previousName);
+      if (!item) throw new Error(`missing sensor status: ${previousName}`);
+      expect(
+        repo.saveDictionaryItem(
+          'sensor-status',
+          { name: nextName, sort: item.sort },
+          item.id,
+        ),
+      ).toMatchObject({ ok: true });
+    }
+
+    expect(
+      repo.getDictionaryItems('sensor-status').map((item) => item.name),
+    ).toEqual(['01 现用', '02 备选', '03 停用']);
+
+    const current = repo
+      .getSensors()
+      .find(
+        (item) => item.status === '01 现用' && item.sensorType === '漫反射',
+      );
+    const alternate = repo
+      .getSensors()
+      .find(
+        (item) => item.status === '02 备选' && item.sensorType === '漫反射',
+      );
+    if (!current || !alternate) throw new Error('renamed sensors missing');
+
+    const replaced = repo.replaceSensorCurrent(
+      alternate.id,
+      current.id,
+      '现用型号故障',
+    );
+    if (!replaced.ok) throw new Error(replaced.reason);
+
+    expect(replaced.item.status).toBe('01 现用');
+    expect(
+      repo.getSensors().find((item) => item.id === current.id)?.status,
+    ).toBe('03 停用');
+
+    const snapshot = repo.snapshotStore();
+    const statusKey = keyFor('dict', 'sensor-status');
+    snapshot[statusKey]?.push({ id: 99, name: '停用', sort: 99 });
+    let stored = JSON.stringify(snapshot);
+    const reloaded = createRepo({
+      getItem: (key) => (key === STORAGE_KEY ? stored : null),
+      setItem: (_key, value) => {
+        stored = value;
+      },
+    });
+    expect(
+      reloaded.getDictionaryItems('sensor-status').map((item) => item.name),
+    ).toEqual(['01 现用', '02 备选', '03 停用']);
   });
 
   it('rewrites sensor references in every persisted machine structure row', () => {
@@ -313,6 +470,7 @@ describe('sensors', () => {
     rows.push({
       id: 1,
       role: '历史结构行',
+      processStepId: null,
       sensorIds: [current.id],
       sensorType: current.sensorType,
       spec: current.spec,
@@ -329,9 +487,9 @@ describe('sensors', () => {
     );
     if (!replaced.ok) throw new Error(replaced.reason);
 
-    expect(repo.getMachineSectionRows(999, '中间翻板机')[0]?.sensorIds).toEqual([
-      alternate.id,
-    ]);
+    expect(repo.getMachineSectionRows(999, '中间翻板机')[0]?.sensorIds).toEqual(
+      [alternate.id],
+    );
   });
 
   it('removes sensorIds references from machine section rows when sensor is deleted', () => {
@@ -345,7 +503,9 @@ describe('sensors', () => {
       sensorIds: [sensor.id],
     });
     if (!saved.ok) throw new Error(saved.reason);
-    expect(repo.getMachineSectionRows(1, '中间翻板机')[0]?.sensorIds).toContain(sensor.id);
+    expect(repo.getMachineSectionRows(1, '中间翻板机')[0]?.sensorIds).toContain(
+      sensor.id,
+    );
 
     // 删除 Sensor 后，机型行引用应被级联清理
     const deleted = repo.deleteSensor(sensor.id);
@@ -362,6 +522,125 @@ describe('entity tree and dictionary', () => {
       ok: false,
       reason: 'not-empty',
     });
+  });
+
+  it('stores ordered machine configurations and allows direct project models', () => {
+    const repo = createRepo();
+    expect(repo.saveEntityGroup('machine', { name: '测试分类' })).toEqual(
+      expect.objectContaining({ ok: true }),
+    );
+    expect(
+      repo.saveMachineConfiguration('测试分类', {
+        name: '标准配置',
+        sort: 1,
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '测试分类',
+        configuration: '标准配置',
+        name: '02 多段',
+        sort: 1,
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '测试分类',
+        configuration: '标准配置',
+        name: '01 单段',
+        sort: 1,
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '测试分类',
+        configuration: null,
+        name: '直属专案机型',
+        sort: 1,
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+
+    const group = repo
+      .getEntityGroups('machine')
+      .find((item) => item.name === '测试分类');
+    expect(group).toEqual({
+      name: '测试分类',
+      items: ['直属专案机型'],
+      machineType: 'mechanism',
+      configurations: [{ name: '标准配置', items: ['01 单段', '02 多段'] }],
+    });
+  });
+
+  it('persists a project catalog classification when its category is renamed', () => {
+    const repo = createRepo();
+    expect(
+      repo.saveEntityGroup('machine', {
+        name: '客户专机',
+        machineType: 'project',
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityGroup(
+        'machine',
+        { name: '客户专机（新版）' },
+        '客户专机',
+      ),
+    ).toEqual(expect.objectContaining({ ok: true }));
+
+    expect(
+      repo
+        .getEntityGroups('machine')
+        .find((item) => item.name === '客户专机（新版）')?.machineType,
+    ).toBe('project');
+  });
+
+  it('persists drag-style ordering for machine configurations and nested models', () => {
+    const repo = createRepo();
+    expect(repo.saveEntityGroup('machine', { name: '排序测试分类' })).toEqual(
+      expect.objectContaining({ ok: true }),
+    );
+    expect(
+      repo.saveMachineConfiguration('排序测试分类', { name: '配置甲' }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveMachineConfiguration('排序测试分类', { name: '配置乙' }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '排序测试分类',
+        configuration: '配置甲',
+        name: '机型甲',
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '排序测试分类',
+        configuration: '配置甲',
+        name: '机型乙',
+      }),
+    ).toEqual(expect.objectContaining({ ok: true }));
+
+    expect(
+      repo.saveMachineConfiguration(
+        '排序测试分类',
+        { name: '配置乙', sort: 1 },
+        '配置乙',
+      ),
+    ).toEqual(expect.objectContaining({ ok: true }));
+    expect(
+      repo.reorderEntityItems('machine', '排序测试分类', 0, 1, '配置甲'),
+    ).toEqual({ ok: true });
+
+    const group = repo
+      .getEntityGroups('machine')
+      .find((item) => item.name === '排序测试分类');
+    expect(group?.configurations?.map((item) => item.name)).toEqual([
+      '配置乙',
+      '配置甲',
+    ]);
+    expect(
+      group?.configurations?.find((item) => item.name === '配置甲')?.items,
+    ).toEqual(['机型乙', '机型甲']);
   });
 
   it('keeps at least one dictionary item', () => {
@@ -382,6 +661,200 @@ describe('entity tree and dictionary', () => {
 });
 
 describe('machine sections', () => {
+  it('optionally persists process-step links for structure rows and clears them when the step is deleted', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+    const machineName = '01 单段输送段（搭配）';
+    const sensor = repo.getSensors()[0];
+    const processStep = repo.getProcessSteps()[0];
+    const structure = repo.saveExtraMachineSection(machineName, {
+      kind: 'structure',
+      name: '工艺绑定测试',
+      sort: 1,
+    });
+    const notes = repo.saveExtraMachineSection(machineName, {
+      kind: 'notes',
+      name: '注意事项测试',
+      sort: 2,
+    });
+    if (!sensor || !processStep || !structure.ok || !notes.ok) {
+      throw new Error('process-step fixture failed');
+    }
+
+    const linked = repo.saveMachineSectionRow(
+      structure.item.id,
+      machineName,
+      {
+        role: '进板检测',
+        sensorIds: [sensor.id],
+        processStepId: processStep.id,
+      },
+    );
+    expect(linked).toEqual(
+      expect.objectContaining({
+        ok: true,
+        item: expect.objectContaining({ processStepId: processStep.id }),
+      }),
+    );
+    expect(
+      repo.saveMachineSectionRow(structure.item.id, machineName, {
+        role: '无效工艺',
+        sensorIds: [sensor.id],
+        processStepId: 999_999,
+      }),
+    ).toEqual({ ok: false, reason: 'stale' });
+
+    const noteRow = repo.saveMachineSectionRow(notes.item.id, machineName, {
+      role: '安装注意',
+      name: '保持水平',
+      processStepId: processStep.id,
+    });
+    expect(noteRow).toEqual(
+      expect.objectContaining({
+        ok: true,
+        item: expect.objectContaining({ processStepId: null }),
+      }),
+    );
+
+    const reloaded = createRepo(storage);
+    expect(
+      reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
+    ).toEqual(expect.objectContaining({ processStepId: processStep.id }));
+
+    expect(reloaded.deleteProcessStep(processStep.id)).toEqual({ ok: true });
+    expect(
+      reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
+    ).toEqual(expect.objectContaining({ processStepId: null }));
+  });
+
+  it('keeps legacy machine content in the default process and isolates custom processes', () => {
+    const repo = createRepo();
+    const machineName = '01 单段输送段（搭配）';
+    const sensor = repo.getSensors()[0];
+
+    expect(repo.getMachineProcesses()).toEqual([
+      { id: 1, name: '制程1', sort: 1, locked: true },
+    ]);
+    const second = repo.saveMachineProcess({ name: '制程2', sort: 2 });
+    if (!second.ok || !sensor) throw new Error('process fixture failed');
+
+    const firstSection = repo.saveExtraMachineSection(machineName, {
+      kind: 'structure',
+      name: '默认制程内容',
+      sort: 1,
+    });
+    const secondSection = repo.saveExtraMachineSection(
+      machineName,
+      { kind: 'structure', name: '第二制程内容', sort: 1 },
+      undefined,
+      second.item.id,
+    );
+    if (!firstSection.ok || !secondSection.ok) {
+      throw new Error('machine section fixture failed');
+    }
+
+    expect(repo.listResolvedMachineSections(machineName)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: '默认制程内容' })]),
+    );
+    expect(repo.listResolvedMachineSections(machineName, second.item.id)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: '第二制程内容' })]),
+    );
+    expect(repo.listResolvedMachineSections(machineName, second.item.id)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: '默认制程内容' })]),
+    );
+
+    expect(
+      repo.saveMachineSectionRow(firstSection.item.id, machineName, {
+        role: '默认制程检测',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    expect(
+      repo.saveMachineSectionRow(
+        secondSection.item.id,
+        machineName,
+        { role: '第二制程检测', sensorIds: [sensor.id] },
+        undefined,
+        second.item.id,
+      ).ok,
+    ).toBe(true);
+
+    expect(repo.getMachineSectionRows(firstSection.item.id, machineName)[0]?.role).toBe(
+      '默认制程检测',
+    );
+    expect(
+      repo.getMachineSectionRows(
+        secondSection.item.id,
+        machineName,
+        second.item.id,
+      )[0]?.role,
+    ).toBe('第二制程检测');
+  });
+
+  it('protects the default process and refuses to delete a custom process with tabs', () => {
+    const repo = createRepo();
+    const second = repo.saveMachineProcess({ name: '客户制程', sort: 2 });
+    if (!second.ok) throw new Error(second.reason);
+    expect(
+      repo.saveExtraMachineSection(
+        '01 单段输送段（搭配）',
+        { kind: 'notes', name: '客户注意事项' },
+        undefined,
+        second.item.id,
+      ).ok,
+    ).toBe(true);
+
+    expect(repo.deleteMachineProcess(1)).toEqual({
+      ok: false,
+      reason: 'validation',
+    });
+    expect(repo.deleteMachineProcess(second.item.id)).toEqual({
+      ok: false,
+      reason: 'not-empty',
+    });
+  });
+
+  it('starts without global tabs and lets each machine own both tab kinds', () => {
+    const repo = createRepo();
+    const machineA = '01 单段输送段（搭配）';
+    const machineB = '02 多段输送段（搭配）';
+
+    expect(repo.listResolvedMachineSections(machineA)).toEqual([]);
+
+    const structure = repo.saveExtraMachineSection(machineA, {
+      kind: 'structure',
+      name: '输送机构',
+      sort: 2,
+    });
+    const notes = repo.saveExtraMachineSection(machineA, {
+      kind: 'notes',
+      name: '调试注意事项',
+      sort: 1,
+    });
+
+    expect(structure).toEqual(
+      expect.objectContaining({
+        ok: true,
+        item: expect.objectContaining({ kind: 'structure', scope: 'machine' }),
+      }),
+    );
+    expect(notes).toEqual(
+      expect.objectContaining({
+        ok: true,
+        item: expect.objectContaining({ kind: 'notes', scope: 'machine' }),
+      }),
+    );
+    expect(
+      repo
+        .listResolvedMachineSections(machineA)
+        .map((item) => [item.name, item.kind]),
+    ).toEqual([
+      ['调试注意事项', 'notes'],
+      ['输送机构', 'structure'],
+    ]);
+    expect(repo.listResolvedMachineSections(machineB)).toEqual([]);
+  });
+
   it('refuses to delete the locked notes tab', () => {
     const repo = createRepo();
     const notes = repo
@@ -396,37 +869,45 @@ describe('machine sections', () => {
 
   it('assigns extra tab ids from 1001', () => {
     const repo = createRepo();
-    const saved = repo.saveExtraMachineSection('中间翻板机', { name: '本机附加' });
+    const saved = repo.saveExtraMachineSection('中间翻板机', {
+      name: '本机附加',
+    });
     if (!saved.ok) throw new Error(saved.reason);
     expect(saved.item.id).toBe(1001);
     expect(saved.item.scope).toBe('machine');
   });
 
-  it('persists mistaken general-structure names back to seed names', () => {
-    const { storage } = createMemory();
-    storage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        'machine-global-sections:all': [
-          {
-            id: 1,
-            name: '标准输送段',
-            sort: 1,
-            kind: 'structure',
-            scope: 'global',
-          },
-        ],
-      }),
-    );
-    const repo = createRepo(storage);
-    expect(repo.getGlobalMachineSections().find((item) => item.id === 1)?.name).toBe(
-      '输送机构',
-    );
-    const persisted = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
+  it('rejects adding schematic images until the structure tab has content', () => {
+    const repo = createRepo();
+    const machineName = '01 单段输送段（搭配）';
+    const section = repo.saveExtraMachineSection(machineName, {
+      kind: 'structure',
+      name: '示意图前置测试',
+      sort: 1,
+    });
+    const sensor = repo.getSensors()[0];
+    const image = {
+      dataUrl: 'data:image/png;base64,YQ==',
+      fileName: 'structure.png',
+      mimeType: 'image/png',
+      size: 1,
+    };
+
+    if (!section.ok) throw new Error(section.reason);
+    expect(repo.saveMachineSectionImages(section.item.id, machineName, [image])).toEqual({
+      ok: false,
+      reason: 'validation',
+    });
+    if (!sensor) throw new Error('seed sensor missing');
     expect(
-      persisted['machine-global-sections:all'].find((item: { id: number }) => item.id === 1)
-        .name,
-    ).toBe('输送机构');
+      repo.saveMachineSectionRow(section.item.id, machineName, {
+        role: '到位检测',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    expect(repo.saveMachineSectionImages(section.item.id, machineName, [image])).toEqual(
+      expect.objectContaining({ ok: true }),
+    );
   });
 });
 
@@ -454,9 +935,9 @@ describe('controlled documents', () => {
     if (!saved.ok) throw new Error(saved.reason);
     expect(repo.getControlledDocuments('庆鼎')[0]?.kind).toBe('pdf');
     expect(repo.getControlledDocuments('景旺')).toEqual([]);
-    expect(JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎']).toEqual(
-      [saved.item],
-    );
+    expect(
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎'],
+    ).toEqual([saved.item]);
   });
 
   it('stores process intro files under process-intro:all', () => {
@@ -481,11 +962,40 @@ describe('controlled documents', () => {
     });
     if (!saved.ok) throw new Error(saved.reason);
     expect(repo.getProcessIntroFiles()[0]?.fileName).toBe('工艺规范.pdf');
-    expect(JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['process-intro:all']).toEqual(
-      [saved.item],
-    );
+    expect(
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['process-intro:all'],
+    ).toEqual([saved.item]);
 
     expect(repo.deleteProcessIntroFile(saved.item.id)).toEqual({ ok: true });
     expect(repo.getProcessIntroFiles()).toEqual([]);
+  });
+
+  it('stores PPT files for process intro without enabling them for customer documents', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+    const pptx = {
+      fileName: '制程介绍.pptx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      dataUrl:
+        'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,YQ==',
+      size: 12,
+      uploadedAt: '2024-01-01',
+    };
+
+    const saved = repo.saveProcessIntroFile(pptx);
+    expect(saved.ok).toBe(true);
+    expect(repo.getProcessIntroFiles()).toEqual([
+      expect.objectContaining({ fileName: '制程介绍.pptx', kind: 'ppt' }),
+    ]);
+    expect(repo.saveControlledFile('庆鼎', pptx)).toEqual({
+      ok: false,
+      reason: 'type',
+    });
+
+    const reloaded = createRepo(storage);
+    expect(reloaded.getProcessIntroFiles()).toEqual([
+      expect.objectContaining({ fileName: '制程介绍.pptx', kind: 'ppt' }),
+    ]);
   });
 });

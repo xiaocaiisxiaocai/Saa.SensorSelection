@@ -17,15 +17,21 @@ const props = withDefaults(
     title: string;
     width?: number | string;
     closeOnOverlay?: boolean;
+    viewport?: boolean;
   }>(),
   {
     closeOnOverlay: true,
+    viewport: false,
   },
 );
 
 const open = defineModel<boolean>('open', { default: false });
 
 const panelWidth = computed(() => {
+  if (props.viewport) {
+    return 'calc(100vw - var(--space-8))';
+  }
+
   if (props.width == null) {
     return 'calc(var(--space-9) * 13)';
   }
@@ -64,6 +70,7 @@ function onOpenAutoFocus(event: Event) {
       <DialogOverlay class="a-sheet__overlay" />
       <DialogContent
         class="a-sheet"
+        :class="{ 'a-sheet--viewport': viewport }"
         aria-modal="true"
         :aria-describedby="undefined"
         :style="{ width: panelWidth }"
@@ -111,6 +118,11 @@ function onOpenAutoFocus(event: Event) {
   animation: a-sheet-in var(--dur-3) var(--ease-sheet);
 }
 
+.a-sheet--viewport {
+  height: calc(100dvh - var(--space-8));
+  max-height: calc(100dvh - var(--space-8));
+}
+
 .a-sheet__header {
   position: relative;
   display: grid;
@@ -149,5 +161,19 @@ function onOpenAutoFocus(event: Event) {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-5) var(--space-6);
+}
+
+.a-sheet--viewport .a-sheet__body {
+  display: flex;
+  flex: 1;
+  padding: var(--space-3);
+  overflow: hidden;
+}
+
+.a-sheet--viewport .a-pdf-viewer {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 </style>

@@ -1,6 +1,8 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
+using Saa.SensorSelection.Api.Services;
+
 namespace Saa.SensorSelection.Api.Data;
 
 /// <summary>
@@ -9,6 +11,7 @@ namespace Saa.SensorSelection.Api.Data;
 /// </summary>
 public class DbInitializer(
     AppDbContext db,
+    StoredFileService storedFiles,
     IConfiguration configuration,
     IHostEnvironment environment)
 {
@@ -16,6 +19,7 @@ public class DbInitializer(
     {
         EnsureDataDirectory();
         DbSeeder.EnsureSeeded(db, configuration);
+        storedFiles.MigrateLegacyDataUrlsAsync().GetAwaiter().GetResult();
         // WAL：读写不互斥（持久设置，写入库文件）；busy_timeout 由连接拦截器按连接设置
         db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
     }

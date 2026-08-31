@@ -93,8 +93,8 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `TimelineItem`（厂外反馈） | `id`, `type`, `machine`, `problem`, `measure`, `date`, `status` |
 | `DictionaryItem` | `id`, `name`, `sort` |
 | `ProcessStepItem` | `id`, `layer`, `name`, `role`, `feature`, `note` |
-| `SensorItem` | `id`, `status`, `partNumber`, `sensorType`, `brand`, `model`, `spec`, `feature`, `scene`, `sopId: number \| null`, `replacesId: number \| null`, `replacedById: number \| null`, `problemNote`, `replacedAt` |
-| `SensorSopItem` | `id`, `title`, `dataUrl`, `fileName`, `mimeType`, `size`, `uploadedAt` |
+| `SensorItem` | `id`, `status`, `partNumber`, `sensorType`, `brand`, `model`, `spec`, `feature`, `scene`, `sopId: number \| null`, `model3dId: number \| null`, `replacesId: number \| null`, `replacedById: number \| null`, `problemNote`, `replacedAt` |
+| `SensorFileItem` | `id`, `title`, `dataUrl`, `fileName`, `mimeType`, `size`, `uploadedAt`；`SensorSopFileItem` / `SensorSopItem` / `Sensor3dFileItem` 为兼容别名 |
 | `SensorTypeDefinition` | `desc`, `notes`, `scenes: string[]`, `models: { brand, model, spec }[]` |
 | `ControlledFileAttachment` | `dataUrl`, `fileName`, `mimeType`, `size`, `uploadedAt` |
 | `ControlledFileItem` | 上表 + `id`, `kind: 'pdf' \| 'word'` |
@@ -106,7 +106,7 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `DictionaryDefinition` | `code`, `title`, `description`, `listIds`, `defaults: string[]`, `field?`, `catalog?` |
 | `EntityKindDefinition` | `kind`, `label`, `groupLabel`, `listIds`, `hasControlledFiles`, `seedGroups` |
 
-`sopId` / `replacesId` / `replacedById` 非法或缺失时为 `null`，不是 `0`。
+`sopId` / `model3dId` / `replacesId` / `replacedById` 非法或缺失时为 `null`，不是 `0`。
 
 ---
 
@@ -121,15 +121,15 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `customer-proc:{客户名}` | | 制程注意事项 |
 | `customer-feedback:{客户名}` | | 厂外反馈 |
 | `customer-sop:{客户名}` | `keyFor('customer-sop', name)` | 受控文档。**活键是 `customer-sop:`，不是 `04-data-api.md` 写的 `controlled-docs:`**（文档漂移，实现跟旧代码） |
-| `dict:{code}` | `keyFor('dict', code)` | 9 类数据字典 |
+| `dict:{code}` | `keyFor('dict', code)` | 8 类数据字典 |
 | `process-steps:all` | | 工艺制程 |
 | `sensor-catalog:all` | | Sensor 型号目录 |
-| `sensor-sop:all` | | Sensor SOP |
-| `machine-global-sections:all` | | 全局结构 Tab |
-| `machine-extra-sections:{机型名}` | | 本机附加 Tab |
+| `sensor-sop-file:all` | | Sensor SOP 文件库（独立 PDF，不参与型号关联） |
+| `sensor-sop:all` | | Sensor 资料（历史兼容键） |
+| `sensor-3d:all` | | Sensor 3D 文件 |
+| `machine-extra-sections:{机型名}` | | 当前机型的用户自定义 Tab（机构/结构或机型注意事项） |
 | `machine-section-rows:{sectionId}:{机型名}` | 专用函数，**不用** `keyFor` | 结构/注意事项行 |
 | `machine-section-images:{sectionId}:{机型名}` | 专用函数 | 结构示意图（最多 2 张） |
-| `general-structure-labels:all` | | `{ id, name }[]`，覆盖通用结构显示名 |
 | `meta:seed-version` | | `[{ version: number }]` |
 
 只读迁移、读取后不再写入：
@@ -238,7 +238,7 @@ Token 键 `symtek_token` 不属于领域 store。
 - `status`：trim 后若在 `allowedStatuses` 中则保留，否则 `allowedStatuses[0] || '现用'`。
 - `sensorType`：trim 后若在 `allowedTypes` 中则保留，否则 `allowedTypes[0] || ''`。
 - `partNumber`：`storedText().trim()`。
-- `sopId` / `replacesId` / `replacedById`：安全正整数否则 `null`。
+- `sopId` / `model3dId` / `replacesId` / `replacedById`：安全正整数否则 `null`。
 - `problemNote` / `replacedAt`：trim。
 - 其余文本字段 `storedText`（`brand/model/spec/feature/scene` 不 trim，与旧实现一致）。
 
@@ -257,6 +257,12 @@ Token 键 `symtek_token` 不属于领域 store。
 - `detectControlledFileKind !== 'pdf'` → 丢弃。
 - `uploadedAt` 空则 `formatLocalDate(new Date())`。
 - `mimeType` 空则 `'application/pdf'`。
+
+#### `normalizeSensor3dFiles(source)` / `validateSensor3dUpload(...)`
+
+- 暂仅支持 `.pdf`，单文件最大 8 MB；扩展名或 `application/pdf` MIME 任一匹配即可。
+- 缺 fileName、`dataUrl` 不以 `data:` 开头、大小非法/超限或格式不支持 → 丢弃。
+- title 空则移除 `.pdf` 扩展名；mimeType 空则 `'application/pdf'`。
 
 ### 6.8 `normalizeMachineSections(source, { allowNotes = true })`
 
@@ -354,7 +360,7 @@ Token 键 `symtek_token` 不属于领域 store。
 
 内存假 storage + 临时仓库，依次物化：
 
-`getEntityGroups('customer'|'machine')`、全部 `DICTIONARY_DEFINITIONS` 的 `getDictionaryItems`、`getProcessSteps`、`getGlobalMachineSections`、`getGeneralStructureLabelMap`、`getSensors`、`getSensorSops`。
+`getEntityGroups('customer'|'machine')`、全部 `DICTIONARY_DEFINITIONS` 的 `getDictionaryItems`、`getProcessSteps`、`getGlobalMachineSections`、`getGeneralStructureLabelMap`、`getSensors`、`getSensorSopFiles`、`getSensorSops`、`getSensor3dFiles`。
 
 然后 `snapshotStore()`，再设 `meta:seed-version = [{ version: SEED_VERSION }]`。
 
@@ -447,7 +453,7 @@ key `sensor-catalog:all`。缺失则 `createSensorCatalogDefaults(sensorData)`�
 | 其他记录（`id !== editId`）型号 zh-CN 小写相同 | `duplicate` |
 | `editId` 找不到 | `stale` |
 
-`sopId`：仅当 payload **自有**该键且非 null/undefined 时解析；必须是已存在 SOP 的正安全整数，否则写成 `null`。编辑时若未传 `sopId` / `partNumber` / `replacesId` / `replacedById` / `problemNote` / `replacedAt`，保留旧值。
+`sopId` / `model3dId`：仅当 payload **自有**对应键且非 null/undefined 时解析；必须分别指向已存在资料 / 3D 文件的正安全整数，否则写成 `null`。编辑时若未传 `sopId` / `model3dId` / `partNumber` / `replacesId` / `replacedById` / `problemNote` / `replacedAt`，保留旧值。
 
 **成功**：写入后调用 `syncMachineSensorSnapshots()`（所有机型结构行按 `sensorIds` 重写 `sensorType`/`spec` 快照并归一化），再 persist。
 
@@ -480,7 +486,11 @@ key `sensor-catalog:all`。缺失则 `createSensorCatalogDefaults(sensorData)`�
 
 ---
 
-### 7.4 Sensor SOP
+### 7.4 Sensor SOP、资料与 3D 文件
+
+#### `getSensorSopFiles()` / `saveSensorSopFile(payload, editId?)` / `deleteSensorSopFile(id)`
+
+使用独立键 `sensor-sop-file:all`。保存时校验标题、dataUrl、8 MB 上限及 PDF 格式；失败语义与资料文件一致。SOP 当前不与 Sensor 型号关联，删除只校验条目存在性。
 
 #### `getSensorSops()`
 
@@ -501,6 +511,10 @@ title 最长 80，fileName 200，mime 120。`uploadedAt` 空则当天日期。�
 #### `deleteSensorSop(id)`
 
 找不到 → `stale`。任一 sensor.`sopId === id` → **`in-use`**。否则删除。
+
+#### `getSensor3dFiles()` / `saveSensor3dFile(payload, editId?)` / `deleteSensor3dFile(id)`
+
+使用独立键 `sensor-3d:all`。保存时校验标题、dataUrl、8 MB 上限及 PDF 格式；失败语义与资料文件一致。删除时若任一 sensor.`model3dId === id` → **`in-use`**，否则删除。
 
 ---
 
@@ -669,11 +683,11 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 ### 7.10 数据字典
 
-九个 code：`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`process-layer`、`sensor-status`、`sensor-type`、`machine-section`。
+八个 code：`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`process-layer`、`sensor-status`、`sensor-type`。
 
 `dictionaryCodeForList(listId)`：定义里 `listIds` 包含该 list **且** `(field \|\| 'type') === 'type'` 的 code。因此 `customer-req-source`（field=`source`）不会当 CRUD 的 type 字典。
 
-**`machine-section` 特例（UI 层）**：字典页改全局 Tab 必须走 §7.6，不能只调 `saveDictionaryItem('machine-section')`。后者只改 `dict:machine-section`，**不会**同步 `machine-global-sections:all`。`renameDictionaryValue` 对 `catalog === 'machine-section'` **无**特殊分支。
+机型 Tab 不属于数据字典；由每台机型通过 `machine-extra-sections:{机型名}` 独立维护。
 
 #### `getDictionaryItems(code)`
 
@@ -722,7 +736,9 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 缺失或归一化后空 → `createEntityGroupDefaults(kind)`（种子组来自 `CUSTOMER_GROUPS` / `MACHINE_GROUPS`）。
 
-#### `saveEntityGroup(kind, { name }, editName?)`
+机型树兼容两种形态：普通分类 `{ name, items, configurations }` 与无配置分类 `{ name, items }`。`configurations` 中每项也是 `{ name, items }`。不同配置可包含同名机型，配置内仍去重。
+
+#### `saveEntityGroup(kind, { name, sort? }, editName?)`
 
 | 条件 | reason |
 | --- | --- |
@@ -730,7 +746,11 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 | 其他组（`group.name !== editName`）zh-CN 同名 | `duplicate` |
 | 编辑但找不到 `editName` 精确匹配 | `stale` |
 
-新建 `items: []`。改名**不**迁移条目数据（条目仍在该组数组里）。
+新建 `items: []`。改名保留 `items` 与 `configurations`；`sort` 为 1 起算并钳制到合法范围。
+
+#### `saveMachineConfiguration(category, { name, sort? }, editName?)`
+
+仅用于机型树。在分类内新增/改名配置，保留其机型，并按 1 起算的 `sort` 插入。配置名只在所属分类内去重。`deleteMachineConfiguration` 仅允许删除空配置。
 
 #### `deleteEntityGroup(kind, name)`
 
@@ -740,7 +760,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 索引必须是整数且都在 `[0, length)`。非法 → `validation`。`oldIndex === newIndex` → `{ ok: true }` **且不 persist**。
 
-#### `reorderEntityItems(kind, groupName, oldIndex, newIndex)`
+#### `reorderEntityItems(kind, groupName, oldIndex, newIndex, configurationName?)`
 
 找不到组（精确名）→ `stale`。索引非法 → `validation`。同索引 → `{ ok: true }` 不 persist。
 
@@ -749,17 +769,17 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 - machine：extra Tab 非空，或任一已解析 section 有行或图。
 - customer：`entityDataKeys` 里任一数组长度 > 0（含 `customer-sop`）。
 
-#### `saveEntityItem(kind, { category, name }, editName?)`
+#### `saveEntityItem(kind, { category, configuration?, name, sort? }, editName?)`
 
 | 条件 | reason |
 | --- | --- |
 | name 或 category 空（各 40） | `validation` |
 | 目标组（精确 `category`）不存在 | `validation` |
-| 任意组里其他条目（`!== editName`）zh-CN 同名 | `duplicate` |
+| 目标直属数组/配置数组里其他条目（`!== editName`）zh-CN 同名 | `duplicate` |
 | 编辑但 `editName` 不在树中 | `stale` |
 
-新建：推进目标组，并 `initEmptyEntityData`（机型：extra=`[]`，每个全局 section 的 rows=`[]`；客户：各 list + sop 置 `[]`）。  
-编辑：从原组移除；若改名则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再推进目标组。
+新建：按 1 起算的 `sort` 插入目标直属数组或配置数组，并 `initEmptyEntityData`（机型：extra=`[]`，每个全局 section 的 rows=`[]`；客户：各 list + sop 置 `[]`）。
+编辑：从原分类/配置移除；若改名则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再按排序插入目标位置。
 
 **persist 之后**（已落盘）：若 `kind==='machine' && category==='通用结构'`：新建调 `ensureGeneralStructureSection(name)`；改名再调 `syncGeneralStructureItemRename(editName, name)`。若同步失败，**返回该失败（树改动已 persist）**——与旧实现一致。
 
@@ -789,7 +809,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 内部：`cache`、`synced` 为 `Map<业务key, 数组>`。`status` 初值 `'connecting'`。`lastError`。
 
-**传输层路由不在本类**：`writeKey` 由调用方（未来 `stores/selection.ts`）实现：`entity-groups:customer|machine` → `PUT /store/entity-groups/{kind}`，其余 → `PUT /store/{key}`。
+**传输层路由不在本类**：`writeKey` 由调用方（未来 `stores/selection.ts`）实现：`entity-groups:customer|machine` → `PUT /store/entity-groups/{kind}`，其余 → `PUT /store/by-key?key={key}`。
 
 ### 8.2 状态
 
@@ -855,13 +875,13 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 - 结构行字段：role/sensorType/spec/purpose/note；注意事项：name/role/desc/note。
 - 空块文案：「已选机型在此模块暂无内容。」「此机型在该模块暂无记录。」「暂无已选择的机型。」
 - 页脚生成时间 `toLocaleString('zh-CN')`。
-- 内联 CSS 可保持与旧报告视觉等价（独立 HTML，不走应用 token）。
+- 内联 CSS 独立于应用 token；结构示意图使用更大的展示区域，感应器配置表采用紧凑字号与间距，前端预览和后端下载需保持一致。
 
 ---
 
 ## 10. 种子（`seed.ts`）
 
-`SEED_VERSION = 1`。改默认数据必须递增。
+`SEED_VERSION = 8`。版本 7 补充「分类 → 配置 → 机型」目录；版本 8 删除历史全局机型 Tab、通用结构标签和对应字典定义键，但不删除旧行或图片内容。新安装不再内置机型 Tab，由用户逐机型新增。`专案机型` 无配置层。改默认数据必须递增。
 
 必须与旧 `data.js` **值等价**的导出：
 
@@ -874,8 +894,8 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 - `FEEDBACK_TYPE_OPTIONS`、`FEEDBACK_STATUS_OPTIONS`、`CUSTOMER_REQ_SOURCE_OPTIONS`
 - `CRUD_TYPE_OPTIONS`
 - `PROCESS_LAYER_OPTIONS = ['内层','外层']`
-- `MACHINE_SECTION_SEED`（id 1–4：输送机构 / 手臂机构 / 台车工位结构 / 机型注意事项 locked notes）
-- `GENERAL_STRUCTURE_CATEGORY`、`GENERAL_STRUCTURE_SECTION_LABELS`、`MACHINE_SECTION_LEGACY_MAP`
+- `MACHINE_SECTION_SEED`、`GENERAL_STRUCTURE_CATEGORY`、`GENERAL_STRUCTURE_SECTION_LABELS` 仅保留给旧数据兼容，不进入新页面和新种子
+- `MACHINE_SECTION_LEGACY_MAP`
 - `MACHINE_ROW_IMAGE_RULES`
 - `DICTIONARY_DEFINITIONS`、`ENTITY_KIND_DEFINITIONS`
 - `createEntityGroupDefaults(kind)`、`createProcessStepDefaults()`

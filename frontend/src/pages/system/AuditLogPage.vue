@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { api, ApiError, type AuditLogItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
@@ -9,6 +9,7 @@ import {
   AButton,
   ADatePicker,
   AField,
+  AFilterResetButton,
   APagination,
   ASelect,
   ASheet,
@@ -60,6 +61,13 @@ const filters = reactive({
   result: '' as string | null,
   username: '',
 });
+const hasActiveFilters = computed(
+  () =>
+    Boolean(filters.username.trim()) ||
+    Boolean(filters.action) ||
+    Boolean(filters.result) ||
+    Boolean(filters.dateRange?.some(Boolean)),
+);
 
 const columns: TableColumn[] = [
   { key: 'timestamp', label: '时间', width: 180 },
@@ -129,6 +137,16 @@ function search() {
   page.value = 1;
   void loadData();
 }
+
+function resetFilters() {
+  const reloadOnCurrentPage = page.value === 1;
+  filters.username = '';
+  filters.action = '';
+  filters.result = '';
+  filters.dateRange = null;
+  page.value = 1;
+  if (reloadOnCurrentPage) void loadData();
+}
 </script>
 
 <template>
@@ -160,6 +178,7 @@ function search() {
         :placeholder="['开始时间', '结束时间']"
       />
       <AButton variant="filled" @click="search">筛选</AButton>
+      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
     </div>
     <ATable
       :columns="columns"

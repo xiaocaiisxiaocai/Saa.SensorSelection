@@ -36,11 +36,27 @@ describe('ATable', () => {
     expect(wrapper.get('table')).toBeTruthy();
     expect(wrapper.get('.a-table').classes()).toContain('a-table');
     expect(wrapper.get('th').attributes('scope')).toBe('col');
-    expect(wrapper.get('th').classes()).toContain('a-table__cell--center');
-    expect(wrapper.get('td').classes()).toContain('a-table__cell--center');
+    expect(wrapper.get('th').classes()).toContain('a-table__cell--start');
+    expect(wrapper.get('td').classes()).toContain('a-table__cell--start');
     expect(wrapper.get('td .a-table__ellipsis').text()).toContain('E3Z-D61');
     expect(wrapper.text()).toContain('型号');
     expect(wrapper.text()).toContain('E3Z-D61');
+  });
+
+  it('wraps body content while keeping table headers on one line', () => {
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: { columns, rows, rowKey: 'id' },
+    });
+
+    expect(wrapper.get('thead .a-table__ellipsis').classes()).toContain(
+      'a-table__header-content',
+    );
+    expect(wrapper.get('tbody .a-table__ellipsis').classes()).toContain(
+      'a-table__body-content',
+    );
+
+    wrapper.unmount();
   });
 
   it('uses start alignment when a column requests it', () => {

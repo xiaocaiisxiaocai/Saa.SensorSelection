@@ -35,7 +35,11 @@ describe('buildSearchIndex', () => {
       index.some((item) => item.title === '庆鼎' && item.category === '华东'),
     ).toBe(true);
     expect(
-      index.some((item) => item.title === 'AOI专用机' && item.category === '特殊机型'),
+      index.some(
+        (item) =>
+          item.title === '01 单段输送段（搭配）' &&
+          item.category === '输送机构',
+      ),
     ).toBe(true);
     expect(
       index.some((item) => item.title === 'AOI检测' && item.category === '内层'),

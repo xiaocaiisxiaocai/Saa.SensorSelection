@@ -55,7 +55,7 @@ dotnet run    # 默认 http://localhost:5080（launchSettings 的 http profile�
 | `RateLimit:WindowMinutes` | `10` | 登录限流统计窗口（分钟） |
 | `Audit:MaxEntries` | `50000` | 操作日志保留上限（条），超出自动清理最旧记录；`0`=不限制 |
 | `Cors:AllowedOrigins` | 空（任意来源，仅开发） | 允许跨域的来源，逗号分隔；生产必须配置，否则拒绝启动 |
-| `Kestrel:Limits:MaxRequestBodySize` | `104857600` (100MB) | 受控文档等 base64 文件较大，放宽默认 30MB |
+| `Kestrel:Limits:MaxRequestBodySize` | `104857600` (100MB) | 首次上传仍以 data URL 到达 API，放宽默认 30MB；落库前会立即剥离正文 |
 | `AllowedHosts` | `*` | 内网部署放开 |
 
 ## 生产密钥注入（重要）
@@ -219,12 +219,12 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 
 ## 数据存储结构
 
-存储结构 `key → JSON 数组`，key 形如 `customer-req:客户名`、`sensor-catalog:all`、`dict:xxx`，与前端 `symtek_crud_store` 一一对应。前端首次连接后端（空库）时，桥接层会自动处理：
+存储结构 `key → JSON 数组`，key 形如 `customer-req:客户名`、`sensor-catalog:all`、`dict:xxx`，与前端 `symtek_crud_store` 一一对应。PDF、图片等文件正文独立保存在 SQLite 的 `StoredFiles.Content` BLOB 中，Store JSON 只保留 `/api/files/{id}/content` 引用；启动时会幂等迁移历史 Base64 data URL，并清理失去引用的文件。前端首次连接后端（空库）时，桥接层会自动处理：
 
 1. 本地有旧数据 → 整体导入（`PUT /api/store`）；
 2. 本地也无数据（全新环境）→ 把前端内置基础数据（数据字典、客户/机型分组、制程步骤、机型结构、Sensor 型号目录）种子导入后端，保证任何客户端看到一致的基础数据；
 
-此后按 key 增量同步（`PUT/DELETE /api/store/{key}`）。
+此后按 key 增量同步（`PUT/DELETE /api/store/by-key?key={key}`）。key 统一放在查询参数中，避免 IIS 或反向代理将 `%2F` 等业务文本再次解码成路径分隔符；不再提供路径参数形式的单 key 接口。
 
 ## API 一览
 
@@ -234,10 +234,11 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | `GET` | `/api/auth/me` | Bearer | 当前用户资料（角色/权限/组织） |
 | `GET` | `/api/health` | 匿名 | 健康检查（含数据库连通性，DB 不可用返回 503） |
 | `GET` | `/api/store` | 匿名 | 全部 key → JSON 数组（匿名只读预览） |
-| `GET` | `/api/store/{key}` | 匿名 | 单个 key（匿名只读预览） |
+| `GET` | `/api/store/by-key?key={key}` | 匿名 | 单个 key（代理安全契约） |
 | `PUT` | `/api/store` | `selection:write` | 整体替换（迁移导入） |
-| `PUT` | `/api/store/{key}` | `selection:write` | 写入/覆盖单个 key |
-| `DELETE` | `/api/store/{key}` | `selection:write` | 删除单个 key |
+| `PUT` | `/api/store/by-key?key={key}` | `selection:write` | 写入/覆盖单个 key（前端使用） |
+| `DELETE` | `/api/store/by-key?key={key}` | `selection:write` | 删除单个 key（前端使用） |
+| `GET` | `/api/files/{id}/content` | 匿名 | 按需读取文件正文，支持缓存与 Range 请求 |
 | `GET` | `/api/rbac/users` | `rbac:view` | 用户列表（含角色/组织） |
 | `POST` | `/api/rbac/users` | `rbac:user:write` | 创建用户 |
 | `PUT` | `/api/rbac/users/{id}` | `rbac:user:write` | 更新用户 |

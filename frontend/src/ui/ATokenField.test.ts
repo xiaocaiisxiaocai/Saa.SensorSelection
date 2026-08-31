@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,6 +14,10 @@ const options: SelectOption[] = [
   { label: '对射 · KEYENCE PZ-G51N', value: 'pzg' },
   { label: '光纤 · SUNX FX-501', value: 'fx' },
 ];
+const tokenFieldSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ATokenField.vue'),
+  'utf8',
+);
 
 describe('ATokenField', () => {
   afterEach(() => {
@@ -54,6 +62,31 @@ describe('ATokenField', () => {
 
     expect(wrapper.text()).toContain('+1');
     expect(wrapper.text()).not.toContain('光纤 · SUNX FX-501');
+  });
+
+  it('keeps the visible token and overflow count on one line', () => {
+    const wrapper = mount(ATokenField, {
+      attachTo: document.body,
+      props: {
+        options,
+        modelValue: ['e3z', 'pzg', 'fx'],
+        maxVisibleTokens: 1,
+      },
+    });
+
+    expect(wrapper.find('.a-token-field__chip').exists()).toBe(true);
+    expect(wrapper.get('.a-token-field__more').text()).toBe('+2');
+    expect(tokenFieldSource).toMatch(
+      /\.a-token-field__trigger\s*\{[^}]*flex-wrap:\s*nowrap;/s,
+    );
+    expect(tokenFieldSource).toMatch(
+      /\.a-token-field__chip\s*\{[^}]*flex:\s*1 1 auto;/s,
+    );
+    expect(tokenFieldSource).toMatch(
+      /\.a-token-field__more\s*\{[^}]*flex:\s*0 0 auto;/s,
+    );
+
+    wrapper.unmount();
   });
 
   it('removes a token from the trigger without opening the menu', async () => {

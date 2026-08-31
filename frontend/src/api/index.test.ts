@@ -90,4 +90,23 @@ describe('api client', () => {
       expect((error as ApiError).kind).not.toBe('unauthorized');
     }
   });
+
+  it('sends store keys as query values so encoded slashes cannot become route segments', async () => {
+    storeToken('tok');
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse({ ok: true }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const key = 'machine-section-rows:2:06 入料输送（平板%2FBOX）';
+
+    await api.putKey(key, [{ id: 1 }]);
+    await api.deleteKey(key);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      `/store/by-key?key=${encodeURIComponent(key)}`,
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      `/store/by-key?key=${encodeURIComponent(key)}`,
+    );
+  });
 });

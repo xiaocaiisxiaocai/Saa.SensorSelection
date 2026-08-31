@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 
 import {
   CONTROLLED_FILE_RULES,
+  PROCESS_INTRO_FILE_KINDS,
   type ControlledFileItem,
   detectControlledFileKind,
   formatLocalDateTime,
@@ -41,7 +42,11 @@ const visible = computed(() => {
 
 async function onFiles(picked: File[]) {
   for (const file of picked) {
-    const kind = detectControlledFileKind(file.name, file.type);
+    const kind = detectControlledFileKind(
+      file.name,
+      file.type,
+      PROCESS_INTRO_FILE_KINDS,
+    );
     if (!kind) {
       continue;
     }
@@ -79,18 +84,20 @@ async function remove(item: ControlledFileItem) {
     </div>
     <AFileDrop
       v-if="writable"
-      :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept}`"
+      :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept},${CONTROLLED_FILE_RULES.ppt.accept}`"
       :max-bytes="CONTROLLED_FILE_RULES.pdf.maxBytes"
       :extensions="[
         ...CONTROLLED_FILE_RULES.pdf.extensions,
         ...CONTROLLED_FILE_RULES.word.extensions,
+        ...CONTROLLED_FILE_RULES.ppt.extensions,
       ]"
       :mime-types="[
         ...CONTROLLED_FILE_RULES.pdf.mimeTypes,
         ...CONTROLLED_FILE_RULES.word.mimeTypes,
+        ...CONTROLLED_FILE_RULES.ppt.mimeTypes,
       ]"
       multiple
-      hint="支持 PDF 与 Word，各不超过 8 MB"
+      hint="支持 PDF、Word 与 PPT，各不超过 8 MB"
       size-message="文件大小超出限制"
       type-message="文件类型不受支持"
       @files="onFiles"
@@ -126,10 +133,14 @@ async function remove(item: ControlledFileItem) {
     <ASheet
       :open="Boolean(preview)"
       title="预览 PDF"
-      :width="720"
+      viewport
       @update:open="(open) => { if (!open) preview = null }"
     >
-      <APdfViewer v-if="preview" :src="preview.dataUrl" />
+      <APdfViewer
+        v-if="preview"
+        class="a-pdf-viewer--large"
+        :src="preview.dataUrl"
+      />
     </ASheet>
   </div>
 </template>

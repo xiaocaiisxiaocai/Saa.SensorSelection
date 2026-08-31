@@ -8,7 +8,7 @@ namespace Saa.SensorSelection.Api.Services;
 
 /// <summary>
 /// 用户管理：创建/更新/删除/重置密码，以及角色、组织引用的合法性校验。
-/// 保护规则：用户名唯一；不能删除自己；至少保留一名系统管理员。
+/// 保护规则：用户名唯一；每名用户最多绑定一个角色；不能删除自己；至少保留一名系统管理员。
 /// 当前登录用户改自己的密码走 ChangeOwnPasswordAsync，需验证当前密码。
 /// </summary>
 public class UserService(AppDbContext db, ProfileService profiles)
@@ -71,8 +71,12 @@ public class UserService(AppDbContext db, ProfileService profiles)
         }
 
         var roleIds = request.RoleIds ?? [];
+        if (roleIds.Length > 1)
+        {
+            return RbacResult<UserListItem>.Fail("每个用户最多只能绑定一个角色");
+        }
         var roles = await ResolveRolesAsync(roleIds, ct);
-        if (roles.Count != roleIds.Distinct().Count())
+        if (roles.Count != roleIds.Length)
         {
             return RbacResult<UserListItem>.Fail("所选角色不存在");
         }
@@ -121,8 +125,12 @@ public class UserService(AppDbContext db, ProfileService profiles)
         }
 
         var roleIds = request.RoleIds ?? [];
+        if (roleIds.Length > 1)
+        {
+            return RbacResult<UserListItem>.Fail("每个用户最多只能绑定一个角色");
+        }
         var roles = await ResolveRolesAsync(roleIds, ct);
-        if (roles.Count != roleIds.Distinct().Count())
+        if (roles.Count != roleIds.Length)
         {
             return RbacResult<UserListItem>.Fail("所选角色不存在");
         }

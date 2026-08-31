@@ -5,6 +5,8 @@ import {
   machineSectionRowsKey,
 } from './keys';
 import {
+  CONTROLLED_FILE_KINDS,
+  PROCESS_INTRO_FILE_KINDS,
   detectControlledFileKind,
   formatLocalDate,
   nextAvailableId,
@@ -15,18 +17,22 @@ import {
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,
+  normalizeMachineProcesses,
   normalizeMachineRowImage,
   normalizeProcessSteps,
   normalizeSensorItems,
+  normalizeSensor3dFiles,
   normalizeSensorSops,
   parsePersistedStore,
   storedText,
   validateControlledUpload,
   validateMachineRowImage,
+  validateSensor3dUpload,
   createDefaultControlledDocuments,
   createSensorCatalogDefaults,
 } from './normalize';
 import { migrateSelectionSeedStore } from './seed-migration';
+import { findSensorStatusName, isSensorStatus } from './sensor-status';
 import {
   DICTIONARY_DEFINITIONS,
   ENTITY_KIND_DEFINITIONS,
@@ -52,6 +58,8 @@ import type {
   EntityTreeItem,
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
+  MachineCatalogKind,
+  MachineProcessItem,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
@@ -59,6 +67,8 @@ import type {
   ReorderResult,
   SaveResult,
   SensorItem,
+  Sensor3dFileItem,
+  SensorSopFileItem,
   SensorSopItem,
   SensorTypeDefinition,
   StorageLike,
@@ -116,10 +126,7 @@ export function createSelectionRepository({
 
   function persist(snapshot: PersistedStore): boolean {
     try {
-      const result = storage?.setItem?.(
-        STORAGE_KEY,
-        JSON.stringify(store),
-      );
+      const result = storage?.setItem?.(STORAGE_KEY, JSON.stringify(store));
       if (result === false) {
         store = snapshot;
         return false;
@@ -228,7 +235,9 @@ export function createSelectionRepository({
         previous && 'measure' in previous ? previous.measure : '';
       const previousDate = previous && 'date' in previous ? previous.date : '';
       const changed =
-        !previous || previousMeasure !== nextMeasure || previousDate !== nextDate;
+        !previous ||
+        previousMeasure !== nextMeasure ||
+        previousDate !== nextDate;
 
       if (changed) {
         measureHistory = measureHistory.map((entry) => ({
@@ -277,30 +286,146 @@ export function createSelectionRepository({
 
   function getSensors(): SensorItem[] {
     const key = keyFor('sensor-catalog', 'all');
-    if (!Array.isArray(store[key])) {
-      store[key] = createSensorCatalogDefaults(sensorData);
-    }
-    const typeNames = getDictionaryItems('sensor-type').map((item) => item.name);
+    const typeNames = getDictionaryItems('sensor-type').map(
+      (item) => item.name,
+    );
     const statusNames = getDictionaryItems('sensor-status').map(
       (item) => item.name,
     );
+    if (!Array.isArray(store[key])) {
+      store[key] = createSensorCatalogDefaults(sensorData).map((item) => ({
+        ...item,
+        status:
+          findSensorStatusName(
+            statusNames,
+            isSensorStatus(item.status, 'current') ? 'current' : 'alternate',
+          ) ?? item.status,
+      }));
+    }
     store[key] = normalizeSensorItems(store[key], typeNames, statusNames);
     return store[key] as SensorItem[];
   }
 
+  const defaultMachineProcess: MachineProcessItem = {
+    id: 1,
+    name: '制程1',
+    sort: 1,
+    locked: true,
+  };
+
+  function normalizeProcessId(processId: number | undefined): number {
+    const value = Number(processId);
+    return Number.isSafeInteger(value) && value > 0 ? value : 1;
+  }
+
+  function scopedMachineName(machineName: string, processId = 1): string {
+    const normalizedId = normalizeProcessId(processId);
+    return normalizedId === 1
+      ? machineName
+      : `@process:${normalizedId}:${machineName}`;
+  }
+
+  function parseScopedMachineName(value: string): {
+    machineName: string;
+    processId: number;
+  } {
+    const match = /^@process:(\d+):(.+)$/.exec(value);
+    return match
+      ? {
+          processId: normalizeProcessId(Number(match[1])),
+          machineName: match[2] || '',
+        }
+      : { processId: 1, machineName: value };
+  }
+
+  function getMachineProcesses(): MachineProcessItem[] {
+    const key = keyFor('machine-processes', 'all');
+    const source = Array.isArray(store[key])
+      ? store[key]
+      : [defaultMachineProcess];
+    let items = normalizeMachineProcesses(source);
+    const defaultIndex = items.findIndex((item) => item.id === 1);
+    if (defaultIndex === -1) {
+      items = normalizeMachineProcesses([defaultMachineProcess, ...items]);
+    } else {
+      items[defaultIndex] = { ...items[defaultIndex], locked: true };
+    }
+    store[key] = items;
+    return store[key] as MachineProcessItem[];
+  }
+
+  function saveMachineProcess(
+    payload: Partial<MachineProcessItem>,
+    editId?: number,
+  ): SaveResult<MachineProcessItem> {
+    const items = getMachineProcesses();
+    const name = storedText(payload.name).trim().slice(0, 40);
+    if (!name) return { ok: false, reason: 'validation' };
+    if (
+      items.some(
+        (item) => item.id !== editId && sameLocaleName(item.name, name),
+      )
+    ) {
+      return { ok: false, reason: 'duplicate' };
+    }
+
+    const snapshot = cloneStore(store);
+    const sort = Number(payload.sort);
+    const id = editId || nextAvailableId(items);
+    const index = items.findIndex((item) => item.id === id);
+    if (editId && index === -1) return { ok: false, reason: 'stale' };
+    const existing = index >= 0 ? items[index] : undefined;
+    const normalized = normalizeMachineProcesses([
+      {
+        id,
+        name,
+        sort: Number.isFinite(sort)
+          ? sort
+          : (existing?.sort ?? items.length + 1),
+        locked: existing?.locked === true || id === 1,
+      },
+    ])[0];
+    if (!normalized) return { ok: false, reason: 'validation' };
+    if (index >= 0) items.splice(index, 1, normalized);
+    else items.push(normalized);
+    store[keyFor('machine-processes', 'all')] =
+      normalizeMachineProcesses(items);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item: normalized };
+  }
+
+  function deleteMachineProcess(id: number): DeleteResult {
+    const numericId = normalizeProcessId(id);
+    const items = getMachineProcesses();
+    const index = items.findIndex((item) => item.id === numericId);
+    if (index === -1) return { ok: false, reason: 'stale' };
+    if (numericId === 1 || items[index]?.locked) {
+      return { ok: false, reason: 'validation' };
+    }
+
+    const marker = `:@process:${numericId}:`;
+    const scopedKeys = Object.keys(store).filter((key) => key.includes(marker));
+    if (
+      scopedKeys.some(
+        (key) => Array.isArray(store[key]) && store[key].length > 0,
+      )
+    ) {
+      return { ok: false, reason: 'not-empty' };
+    }
+
+    const snapshot = cloneStore(store);
+    items.splice(index, 1);
+    store = omitStoreKeys(store, scopedKeys);
+    store[keyFor('machine-processes', 'all')] =
+      normalizeMachineProcesses(items);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
   function listResolvedMachineSections(
     machineName: string,
+    processId = 1,
   ): MachineSectionItem[] {
-    const global = getGlobalMachineSections().map((item) => ({
-      ...item,
-      scope: 'global' as const,
-    }));
-    const extra = getExtraMachineSections(machineName).map((item) => ({
-      ...item,
-      kind: 'structure' as const,
-      scope: 'machine' as const,
-    }));
-    return [...global, ...extra];
+    return getExtraMachineSections(machineName, processId);
   }
 
   function forEachPersistedMachineStructureRows(
@@ -314,11 +439,12 @@ export function createSelectionRepository({
       if (separator <= 0) continue;
 
       const sectionId = Number(rest.slice(0, separator));
-      const machineName = rest.slice(separator + 1);
+      const scopedName = rest.slice(separator + 1);
+      const { machineName, processId } = parseScopedMachineName(scopedName);
       if (!Number.isSafeInteger(sectionId) || !machineName) continue;
-      if (!sectionAllowsImage(sectionId)) continue;
+      if (!sectionAllowsImage(sectionId, machineName, processId)) continue;
 
-      const rows = getMachineSectionRows(sectionId, machineName);
+      const rows = getMachineSectionRows(sectionId, machineName, processId);
       if (callback(rows)) {
         store[key] = normalizeMachineSectionRows(rows, {
           allowImage: true,
@@ -357,7 +483,9 @@ export function createSelectionRepository({
   ): SaveResult<SensorItem> {
     const items = getSensors();
     const model = storedText(payload.model).trim();
-    const typeNames = getDictionaryItems('sensor-type').map((item) => item.name);
+    const typeNames = getDictionaryItems('sensor-type').map(
+      (item) => item.name,
+    );
     const statusNames = getDictionaryItems('sensor-status').map(
       (item) => item.name,
     );
@@ -394,6 +522,21 @@ export function createSelectionRepository({
         sopId = requested;
       }
     }
+    let model3dId: null | number = null;
+    if (
+      Object.hasOwn(payload, 'model3dId') &&
+      payload.model3dId !== null &&
+      payload.model3dId !== undefined
+    ) {
+      const requested = Number(payload.model3dId);
+      if (
+        Number.isSafeInteger(requested) &&
+        requested > 0 &&
+        getSensor3dFiles().some((item) => item.id === requested)
+      ) {
+        model3dId = requested;
+      }
+    }
     const normalized = normalizeSensorItems(
       [
         {
@@ -406,6 +549,7 @@ export function createSelectionRepository({
           sensorType,
           status,
           sopId,
+          model3dId,
         },
       ],
       typeNames,
@@ -419,6 +563,9 @@ export function createSelectionRepository({
       if (!previous) return { ok: false, reason: 'stale' };
       if (!Object.hasOwn(payload, 'sopId')) {
         normalized.sopId = previous.sopId ?? null;
+      }
+      if (!Object.hasOwn(payload, 'model3dId')) {
+        normalized.model3dId = previous.model3dId ?? null;
       }
       if (!Object.hasOwn(payload, 'partNumber')) {
         normalized.partNumber = previous.partNumber || '';
@@ -465,15 +612,16 @@ export function createSelectionRepository({
     }
 
     const items = getSensors();
-    const typeNames = getDictionaryItems('sensor-type').map((item) => item.name);
+    const typeNames = getDictionaryItems('sensor-type').map(
+      (item) => item.name,
+    );
     const statusNames = getDictionaryItems('sensor-status').map(
       (item) => item.name,
     );
-    if (
-      !statusNames.includes('现用') ||
-      !statusNames.includes('备选') ||
-      !statusNames.includes('停用')
-    ) {
+    const currentStatus = findSensorStatusName(statusNames, 'current');
+    const alternateStatus = findSensorStatusName(statusNames, 'alternate');
+    const disabledStatus = findSensorStatusName(statusNames, 'disabled');
+    if (!currentStatus || !alternateStatus || !disabledStatus) {
       return { ok: false, reason: 'validation' };
     }
 
@@ -486,7 +634,10 @@ export function createSelectionRepository({
     const alternate = items[altIndex];
     const current = items[curIndex];
     if (!alternate || !current) return { ok: false, reason: 'stale' };
-    if (alternate.status !== '备选' || current.status !== '现用') {
+    if (
+      !isSensorStatus(alternate.status, 'alternate') ||
+      !isSensorStatus(current.status, 'current')
+    ) {
       return { ok: false, reason: 'validation' };
     }
 
@@ -496,7 +647,7 @@ export function createSelectionRepository({
       [
         {
           ...alternate,
-          status: '现用',
+          status: currentStatus,
           replacesId: curId,
           problemNote: note,
           replacedAt,
@@ -512,7 +663,7 @@ export function createSelectionRepository({
       [
         {
           ...current,
-          status: '停用',
+          status: disabledStatus,
           replacedById: altId,
           problemNote: note,
           replacedAt,
@@ -562,6 +713,74 @@ export function createSelectionRepository({
         }
       }
     }
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
+  function getSensorSopFiles(): SensorSopFileItem[] {
+    const key = keyFor('sensor-sop-file', 'all');
+    if (!Array.isArray(store[key])) {
+      store[key] = [];
+    }
+    store[key] = normalizeSensorSops(store[key]);
+    return store[key] as SensorSopFileItem[];
+  }
+
+  function saveSensorSopFile(
+    payload: Partial<SensorSopFileItem>,
+    editId?: number,
+  ): SaveResult<SensorSopFileItem> {
+    const items = getSensorSopFiles();
+    const title = storedText(payload.title).trim().slice(0, 80);
+    const fileName = storedText(payload.fileName).trim().slice(0, 200);
+    const mimeType = storedText(payload.mimeType).trim().slice(0, 120);
+    const dataUrl = storedText(payload.dataUrl);
+    const size = Number(payload.size);
+    const uploadedAt =
+      storedText(payload.uploadedAt).trim() || formatLocalDate(new Date());
+
+    if (!title || !fileName || !dataUrl.startsWith('data:')) {
+      return { ok: false, reason: 'validation' };
+    }
+    if (detectControlledFileKind(fileName, mimeType) !== 'pdf') {
+      return { ok: false, reason: 'type' };
+    }
+    const check = validateControlledUpload('pdf', fileName, mimeType, size);
+    if (!check.ok) return { ok: false, reason: check.reason };
+
+    const snapshot = cloneStore(store);
+    const item = normalizeSensorSops([
+      {
+        id: editId || nextAvailableId(items),
+        title,
+        fileName,
+        mimeType: mimeType || 'application/pdf',
+        dataUrl,
+        size,
+        uploadedAt,
+      },
+    ])[0] as SensorSopFileItem | undefined;
+    if (!item) return { ok: false, reason: 'validation' };
+
+    if (editId) {
+      const index = items.findIndex((row) => row.id === editId);
+      if (index === -1) return { ok: false, reason: 'stale' };
+      items.splice(index, 1, item);
+    } else {
+      items.push(item);
+    }
+    store[keyFor('sensor-sop-file', 'all')] = normalizeSensorSops(items);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item };
+  }
+
+  function deleteSensorSopFile(id: number): DeleteResult {
+    const items = getSensorSopFiles();
+    const index = items.findIndex((item) => item.id === id);
+    if (index === -1) return { ok: false, reason: 'stale' };
+
+    const snapshot = cloneStore(store);
+    items.splice(index, 1);
+    store[keyFor('sensor-sop-file', 'all')] = normalizeSensorSops(items);
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -635,6 +854,74 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
+  function getSensor3dFiles(): Sensor3dFileItem[] {
+    const key = keyFor('sensor-3d', 'all');
+    if (!Array.isArray(store[key])) {
+      store[key] = [];
+    }
+    store[key] = normalizeSensor3dFiles(store[key]);
+    return store[key] as Sensor3dFileItem[];
+  }
+
+  function saveSensor3dFile(
+    payload: Partial<Sensor3dFileItem>,
+    editId?: number,
+  ): SaveResult<Sensor3dFileItem> {
+    const items = getSensor3dFiles();
+    const title = storedText(payload.title).trim().slice(0, 80);
+    const fileName = storedText(payload.fileName).trim().slice(0, 200);
+    const mimeType = storedText(payload.mimeType).trim().slice(0, 120);
+    const dataUrl = storedText(payload.dataUrl);
+    const size = Number(payload.size);
+    const uploadedAt =
+      storedText(payload.uploadedAt).trim() || formatLocalDate(new Date());
+
+    if (!title || !fileName || !dataUrl.startsWith('data:')) {
+      return { ok: false, reason: 'validation' };
+    }
+    const check = validateSensor3dUpload(fileName, mimeType, size);
+    if (!check.ok) return { ok: false, reason: check.reason };
+
+    const snapshot = cloneStore(store);
+    const item = normalizeSensor3dFiles([
+      {
+        id: editId || nextAvailableId(items),
+        title,
+        fileName,
+        mimeType: mimeType || 'application/pdf',
+        dataUrl,
+        size,
+        uploadedAt,
+      },
+    ])[0];
+    if (!item) return { ok: false, reason: 'validation' };
+
+    if (editId) {
+      const index = items.findIndex((row) => row.id === editId);
+      if (index === -1) return { ok: false, reason: 'stale' };
+      items.splice(index, 1, item);
+    } else {
+      items.push(item);
+    }
+    store[keyFor('sensor-3d', 'all')] = normalizeSensor3dFiles(items);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item };
+  }
+
+  function deleteSensor3dFile(id: number): DeleteResult {
+    const items = getSensor3dFiles();
+    const index = items.findIndex((item) => item.id === id);
+    if (index === -1) return { ok: false, reason: 'stale' };
+    if (getSensors().some((item) => item.model3dId === id)) {
+      return { ok: false, reason: 'in-use' };
+    }
+
+    const snapshot = cloneStore(store);
+    items.splice(index, 1);
+    store[keyFor('sensor-3d', 'all')] = normalizeSensor3dFiles(items);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
   function getProcessSteps(): ProcessStepItem[] {
     const key = keyFor('process-steps', 'all');
     if (!Array.isArray(store[key])) {
@@ -699,6 +986,15 @@ export function createSelectionRepository({
     const snapshot = cloneStore(store);
     items.splice(index, 1);
     store[keyFor('process-steps', 'all')] = normalizeProcessSteps(items);
+    forEachPersistedMachineStructureRows((rows) => {
+      let changed = false;
+      for (const row of rows) {
+        if (row.processStepId !== id) continue;
+        row.processStepId = null;
+        changed = true;
+      }
+      return changed;
+    });
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -862,9 +1158,9 @@ export function createSelectionRepository({
       { allowNotes: true },
     );
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
-    const saved = (store[keyFor('machine-global-sections', 'all')] as MachineSectionItem[]).find(
-      (item) => item.name === name,
-    );
+    const saved = (
+      store[keyFor('machine-global-sections', 'all')] as MachineSectionItem[]
+    ).find((item) => item.name === name);
     if (!saved) return { ok: false, reason: 'validation' };
     return { ok: true, item: saved };
   }
@@ -915,12 +1211,17 @@ export function createSelectionRepository({
     }
 
     for (const group of getEntityGroups('machine')) {
-      for (const machineName of group.items) {
-        if (
-          getMachineSectionRows(id, machineName).length > 0 ||
-          getMachineSectionImages(id, machineName).length > 0
-        ) {
-          return { ok: false, reason: 'not-empty' };
+      for (const machineName of [
+        ...group.items,
+        ...(group.configurations ?? []).flatMap((item) => item.items),
+      ]) {
+        for (const process of getMachineProcesses()) {
+          if (
+            getMachineSectionRows(id, machineName, process.id).length > 0 ||
+            getMachineSectionImages(id, machineName, process.id).length > 0
+          ) {
+            return { ok: false, reason: 'not-empty' };
+          }
         }
       }
     }
@@ -934,21 +1235,29 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  function getExtraMachineSections(machineName: string): MachineSectionItem[] {
-    const key = keyFor('machine-extra-sections', machineName);
+  function getExtraMachineSections(
+    machineName: string,
+    processId = 1,
+  ): MachineSectionItem[] {
+    const key = keyFor(
+      'machine-extra-sections',
+      scopedMachineName(machineName, processId),
+    );
     if (!Array.isArray(store[key])) {
       store[key] = [];
     }
     store[key] = normalizeMachineSections(store[key], {
-      allowNotes: false,
-    }).map((item) => ({ ...item, kind: 'structure', scope: 'machine' }));
+      allowNotes: true,
+    }).map((item) => ({ ...item, locked: undefined, scope: 'machine' }));
     return store[key] as MachineSectionItem[];
   }
 
-  function nextExtraMachineSectionId(machineName: string): number {
+  function nextExtraMachineSectionId(
+    machineName: string,
+    processId = 1,
+  ): number {
     const used = new Set([
-      ...getExtraMachineSections(machineName).map((item) => item.id),
-      ...getGlobalMachineSections().map((item) => item.id),
+      ...getExtraMachineSections(machineName, processId).map((item) => item.id),
     ]);
     let id = 1001;
     while (used.has(id)) id += 1;
@@ -959,12 +1268,13 @@ export function createSelectionRepository({
     machineName: string,
     payload: Partial<MachineSectionItem>,
     editId?: number,
+    processId = 1,
   ): SaveResult<MachineSectionItem> {
-    const items = getExtraMachineSections(machineName);
+    const items = getExtraMachineSections(machineName, processId);
     const name = storedText(payload.name).trim().slice(0, 40);
     if (!name) return { ok: false, reason: 'validation' };
 
-    const resolvedNames = listResolvedMachineSections(machineName);
+    const resolvedNames = listResolvedMachineSections(machineName, processId);
     const duplicate = resolvedNames.some(
       (item) =>
         item.id !== editId &&
@@ -981,17 +1291,25 @@ export function createSelectionRepository({
       if (index === -1) return { ok: false, reason: 'stale' };
       const existing = items[index];
       if (!existing) return { ok: false, reason: 'stale' };
+      const kind = payload.kind === 'notes' ? 'notes' : 'structure';
+      if (
+        kind !== existing.kind &&
+        (getMachineSectionRows(editId, machineName, processId).length > 0 ||
+          getMachineSectionImages(editId, machineName, processId).length > 0)
+      ) {
+        return { ok: false, reason: 'not-empty' };
+      }
       const normalized = normalizeMachineSections(
         [
           {
             id: editId,
             name,
             sort: Number.isFinite(sort) ? sort : existing.sort,
-            kind: 'structure',
+            kind,
             scope: 'machine',
           },
         ],
-        { allowNotes: false },
+        { allowNotes: true },
       )[0];
       if (!normalized) return { ok: false, reason: 'validation' };
       items.splice(index, 1, { ...normalized, scope: 'machine' });
@@ -999,29 +1317,34 @@ export function createSelectionRepository({
       const normalized = normalizeMachineSections(
         [
           {
-            id: nextExtraMachineSectionId(machineName),
+            id: nextExtraMachineSectionId(machineName, processId),
             name,
             sort: Number.isFinite(sort) ? sort : items.length + 1,
-            kind: 'structure',
+            kind: payload.kind === 'notes' ? 'notes' : 'structure',
             scope: 'machine',
           },
         ],
-        { allowNotes: false },
+        { allowNotes: true },
       )[0];
       if (!normalized) return { ok: false, reason: 'validation' };
       items.push({ ...normalized, scope: 'machine' });
     }
 
-    store[keyFor('machine-extra-sections', machineName)] =
-      normalizeMachineSections(items, { allowNotes: false }).map((item) => ({
+    const key = keyFor(
+      'machine-extra-sections',
+      scopedMachineName(machineName, processId),
+    );
+    store[key] = normalizeMachineSections(items, { allowNotes: true }).map(
+      (item) => ({
         ...item,
-        kind: 'structure' as const,
+        locked: undefined,
         scope: 'machine' as const,
-      }));
+      }),
+    );
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
-    const saved = (
-      store[keyFor('machine-extra-sections', machineName)] as MachineSectionItem[]
-    ).find((item) => item.name === name);
+    const saved = (store[key] as MachineSectionItem[]).find(
+      (item) => item.name === name,
+    );
     if (!saved) return { ok: false, reason: 'validation' };
     return { ok: true, item: saved };
   }
@@ -1029,41 +1352,63 @@ export function createSelectionRepository({
   function deleteExtraMachineSection(
     machineName: string,
     id: number,
+    processId = 1,
   ): DeleteResult {
-    const items = getExtraMachineSections(machineName);
+    const items = getExtraMachineSections(machineName, processId);
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
     if (
-      getMachineSectionRows(id, machineName).length > 0 ||
-      getMachineSectionImages(id, machineName).length > 0
+      getMachineSectionRows(id, machineName, processId).length > 0 ||
+      getMachineSectionImages(id, machineName, processId).length > 0
     ) {
       return { ok: false, reason: 'not-empty' };
     }
 
     const snapshot = cloneStore(store);
     items.splice(index, 1);
-    store[keyFor('machine-extra-sections', machineName)] =
-      normalizeMachineSections(items, { allowNotes: false }).map((item) => ({
-        ...item,
-        kind: 'structure' as const,
-        scope: 'machine' as const,
-      }));
+    store[
+      keyFor(
+        'machine-extra-sections',
+        scopedMachineName(machineName, processId),
+      )
+    ] = normalizeMachineSections(items, { allowNotes: true }).map((item) => ({
+      ...item,
+      locked: undefined,
+      scope: 'machine' as const,
+    }));
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  function sectionAllowsImage(sectionId: number): boolean {
+  function sectionAllowsImage(
+    sectionId: number,
+    machineName: string,
+    processId = 1,
+  ): boolean {
     const numericId = Number(sectionId);
-    const section = getGlobalMachineSections().find(
+    const localSection = getExtraMachineSections(machineName, processId).find(
       (item) => item.id === numericId,
     );
-    if (section) return section.kind !== 'notes';
-    return true;
+    if (localSection) return localSection.kind === 'structure';
+    const legacySection = getGlobalMachineSections().find(
+      (item) => item.id === numericId,
+    );
+    return legacySection?.kind !== 'notes';
   }
 
-  function migrateLegacyMachineRows(sectionId: number, machineName: string) {
+  function migrateLegacyMachineRows(
+    sectionId: number,
+    machineName: string,
+    processId = 1,
+  ) {
     const numericId = Number(sectionId);
-    const newKey = machineSectionRowsKey(numericId, machineName);
+    const keyMachineName = scopedMachineName(machineName, processId);
+    const newKey = machineSectionRowsKey(numericId, keyMachineName);
     if (Object.hasOwn(store, newKey)) return;
+
+    if (normalizeProcessId(processId) !== 1) {
+      store[newKey] = [];
+      return;
+    }
 
     const legacyListId = Object.entries(MACHINE_SECTION_LEGACY_MAP).find(
       ([, id]) => id === numericId,
@@ -1083,7 +1428,7 @@ export function createSelectionRepository({
     }
 
     store[newKey] = normalizeMachineSectionRows(legacyItems, {
-      allowImage: sectionAllowsImage(numericId),
+      allowImage: sectionAllowsImage(numericId, machineName),
       sensorItems: getSensors(),
     });
   }
@@ -1091,11 +1436,15 @@ export function createSelectionRepository({
   function getMachineSectionRows(
     sectionId: number,
     machineName: string,
+    processId = 1,
   ): MachineSectionRow[] {
     const numericId = Number(sectionId);
-    migrateLegacyMachineRows(numericId, machineName);
-    const key = machineSectionRowsKey(numericId, machineName);
-    const allowImage = sectionAllowsImage(numericId);
+    migrateLegacyMachineRows(numericId, machineName, processId);
+    const key = machineSectionRowsKey(
+      numericId,
+      scopedMachineName(machineName, processId),
+    );
+    const allowImage = sectionAllowsImage(numericId, machineName, processId);
     store[key] = normalizeMachineSectionRows(
       Array.isArray(store[key]) ? store[key] : [],
       { allowImage, sensorItems: getSensors() },
@@ -1106,13 +1455,22 @@ export function createSelectionRepository({
   function getMachineSectionImages(
     sectionId: number,
     machineName: string,
+    processId = 1,
   ): MachineRowImage[] {
     const numericId = Number(sectionId);
-    const key = machineSectionImagesKey(numericId, machineName);
+    if (!sectionAllowsImage(numericId, machineName, processId)) return [];
+    const key = machineSectionImagesKey(
+      numericId,
+      scopedMachineName(machineName, processId),
+    );
     if (Object.hasOwn(store, key)) {
       store[key] = normalizeMachineSectionImages(store[key]);
     } else {
-      const legacyImages = getMachineSectionRows(numericId, machineName)
+      const legacyImages = getMachineSectionRows(
+        numericId,
+        machineName,
+        processId,
+      )
         .map((row) => row.image)
         .filter((image): image is MachineRowImage => Boolean(image));
       store[key] = normalizeMachineSectionImages(legacyImages);
@@ -1124,14 +1482,34 @@ export function createSelectionRepository({
     sectionId: number,
     machineName: string,
     images: MachineRowImage[],
+    processId = 1,
   ): SaveResult<{ items: MachineRowImage[] }> {
     const numericId = Number(sectionId);
+    if (!sectionAllowsImage(numericId, machineName, processId)) {
+      return { ok: false, reason: 'validation' };
+    }
     const normalized = normalizeMachineSectionImages(images);
     if (normalized.length !== (Array.isArray(images) ? images.length : 0)) {
       return { ok: false, reason: 'validation' };
     }
+    const currentCount = getMachineSectionImages(
+      numericId,
+      machineName,
+      processId,
+    ).length;
+    if (
+      normalized.length > currentCount &&
+      getMachineSectionRows(numericId, machineName, processId).length === 0
+    ) {
+      return { ok: false, reason: 'validation' };
+    }
     const snapshot = cloneStore(store);
-    store[machineSectionImagesKey(numericId, machineName)] = normalized;
+    store[
+      machineSectionImagesKey(
+        numericId,
+        scopedMachineName(machineName, processId),
+      )
+    ] = normalized;
     return persist(snapshot)
       ? { ok: true, item: { items: normalized } }
       : { ok: false, reason: 'storage' };
@@ -1142,10 +1520,11 @@ export function createSelectionRepository({
     machineName: string,
     payload: Partial<MachineSectionRow> & Record<string, unknown>,
     editId?: number,
+    processId = 1,
   ): SaveResult<MachineSectionRow> {
     const numericId = Number(sectionId);
-    const items = getMachineSectionRows(numericId, machineName);
-    const allowImage = sectionAllowsImage(numericId);
+    const items = getMachineSectionRows(numericId, machineName, processId);
+    const allowImage = sectionAllowsImage(numericId, machineName, processId);
     const role = storedText(payload.role).trim();
     let nextPayload = payload;
     if (allowImage) {
@@ -1161,10 +1540,30 @@ export function createSelectionRepository({
       if (!role || sensorIds.length === 0) {
         return { ok: false, reason: 'validation' };
       }
-      nextPayload = { ...payload, sensorIds };
+      const rawProcessStepId = payload.processStepId as unknown;
+      const processStepId =
+        rawProcessStepId === null ||
+        rawProcessStepId === undefined ||
+        rawProcessStepId === ''
+          ? null
+          : Number(rawProcessStepId);
+      if (
+        processStepId !== null &&
+        (!Number.isSafeInteger(processStepId) || processStepId <= 0)
+      ) {
+        return { ok: false, reason: 'validation' };
+      }
+      if (
+        processStepId !== null &&
+        !getProcessSteps().some((item) => item.id === processStepId)
+      ) {
+        return { ok: false, reason: 'stale' };
+      }
+      nextPayload = { ...payload, processStepId, sensorIds };
     } else {
       const name = storedText(payload.name).trim();
       if (!role || !name) return { ok: false, reason: 'validation' };
+      nextPayload = { ...payload, processStepId: null };
     }
 
     let image: MachineRowImage | null | undefined;
@@ -1188,6 +1587,10 @@ export function createSelectionRepository({
     const base: MachineSectionRow = {
       id: editId || nextAvailableId(items),
       role,
+      processStepId:
+        allowImage && typeof nextPayload.processStepId === 'number'
+          ? nextPayload.processStepId
+          : null,
       sensorIds: Array.isArray(nextPayload.sensorIds)
         ? nextPayload.sensorIds.map(Number)
         : [],
@@ -1237,11 +1640,15 @@ export function createSelectionRepository({
       items.push(normalized);
     }
 
-    store[machineSectionRowsKey(numericId, machineName)] =
-      normalizeMachineSectionRows(items, {
-        allowImage,
-        sensorItems: getSensors(),
-      });
+    store[
+      machineSectionRowsKey(
+        numericId,
+        scopedMachineName(machineName, processId),
+      )
+    ] = normalizeMachineSectionRows(items, {
+      allowImage,
+      sensorItems: getSensors(),
+    });
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: normalized };
   }
@@ -1250,18 +1657,23 @@ export function createSelectionRepository({
     sectionId: number,
     machineName: string,
     id: number,
+    processId = 1,
   ): DeleteResult {
     const numericId = Number(sectionId);
-    const items = getMachineSectionRows(numericId, machineName);
+    const items = getMachineSectionRows(numericId, machineName, processId);
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
     const snapshot = cloneStore(store);
     items.splice(index, 1);
-    store[machineSectionRowsKey(numericId, machineName)] =
-      normalizeMachineSectionRows(items, {
-        allowImage: sectionAllowsImage(numericId),
-        sensorItems: getSensors(),
-      });
+    store[
+      machineSectionRowsKey(
+        numericId,
+        scopedMachineName(machineName, processId),
+      )
+    ] = normalizeMachineSectionRows(items, {
+      allowImage: sectionAllowsImage(numericId, machineName, processId),
+      sensorItems: getSensors(),
+    });
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -1274,7 +1686,11 @@ export function createSelectionRepository({
       store[key] =
         listId === 'customer-sop' ? createDefaultControlledDocuments() : [];
     }
-    store[key] = normalizeControlledDocuments(store[key]);
+    const allowedKinds =
+      listId === 'process-intro'
+        ? PROCESS_INTRO_FILE_KINDS
+        : CONTROLLED_FILE_KINDS;
+    store[key] = normalizeControlledDocuments(store[key], allowedKinds);
     return store[key] as ControlledFileItem[];
   }
 
@@ -1291,9 +1707,14 @@ export function createSelectionRepository({
     entityName: string,
     attachment: ControlledFileAttachment,
   ): SaveResult<ControlledFileItem> {
+    const allowedKinds =
+      listId === 'process-intro'
+        ? PROCESS_INTRO_FILE_KINDS
+        : CONTROLLED_FILE_KINDS;
     const kind = detectControlledFileKind(
       attachment.fileName,
       attachment.mimeType,
+      allowedKinds,
     );
     if (!kind) return { ok: false, reason: 'type' };
 
@@ -1396,9 +1817,35 @@ export function createSelectionRepository({
       store[key] = createDictionaryDefaults(code);
     }
 
+    if (code === 'sensor-status') {
+      const statuses = store[key] as DictionaryItem[];
+      const customDisabled = statuses.find(
+        (item) => item.name !== '停用' && isSensorStatus(item.name, 'disabled'),
+      );
+      const plainDisabledIndex = statuses.findIndex(
+        (item) => item.name === '停用',
+      );
+      const sensorCatalog = store[keyFor('sensor-catalog', 'all')];
+      const plainDisabledInUse =
+        Array.isArray(sensorCatalog) &&
+        sensorCatalog.some(
+          (item) =>
+            item &&
+            typeof item === 'object' &&
+            (item as Record<string, unknown>).status === '停用',
+        );
+      if (customDisabled && plainDisabledIndex >= 0 && !plainDisabledInUse) {
+        const snapshot = cloneStore(store);
+        statuses.splice(plainDisabledIndex, 1);
+        persist(snapshot);
+      }
+    }
+
     if (
       code === 'sensor-status' &&
-      !(store[key] as DictionaryItem[]).some((item) => item.name === '停用')
+      !(store[key] as DictionaryItem[]).some((item) =>
+        isSensorStatus(item.name, 'disabled'),
+      )
     ) {
       const snapshot = cloneStore(store);
       store[key] = normalizeDictionaryItems([
@@ -1551,10 +1998,7 @@ export function createSelectionRepository({
     return getDictionaryItems('customer-feedback');
   }
 
-  function saveFeedbackType(
-    payload: Partial<DictionaryItem>,
-    editId?: number,
-  ) {
+  function saveFeedbackType(payload: Partial<DictionaryItem>, editId?: number) {
     return saveDictionaryItem('customer-feedback', payload, editId);
   }
 
@@ -1572,7 +2016,7 @@ export function createSelectionRepository({
     if (!Array.isArray(store[key])) {
       store[key] = createEntityGroupDefaults(kind);
     }
-    store[key] = normalizeEntityGroups(store[key]);
+    store[key] = normalizeEntityGroups(store[key], kind);
     if (store[key].length === 0) {
       store[key] = createEntityGroupDefaults(kind);
     }
@@ -1583,15 +2027,21 @@ export function createSelectionRepository({
     const definition = entityKindDefinition(kind);
     if (!definition) return [];
     if (kind === 'machine') {
-      const keys = [keyFor('machine-extra-sections', entityName)];
-      const sectionIds = new Set(
-        listResolvedMachineSections(entityName).map((item) => item.id),
-      );
-      for (const sectionId of sectionIds) {
-        keys.push(
-          machineSectionRowsKey(sectionId, entityName),
-          machineSectionImagesKey(sectionId, entityName),
+      const keys: string[] = [];
+      for (const process of getMachineProcesses()) {
+        const keyMachineName = scopedMachineName(entityName, process.id);
+        keys.push(keyFor('machine-extra-sections', keyMachineName));
+        const sectionIds = new Set(
+          listResolvedMachineSections(entityName, process.id).map(
+            (item) => item.id,
+          ),
         );
+        for (const sectionId of sectionIds) {
+          keys.push(
+            machineSectionRowsKey(sectionId, keyMachineName),
+            machineSectionImagesKey(sectionId, keyMachineName),
+          );
+        }
       }
       const rowSuffix = `:${entityName}`;
       for (const key of Object.keys(store)) {
@@ -1626,12 +2076,18 @@ export function createSelectionRepository({
 
   function entityHasData(kind: EntityKind, entityName: string): boolean {
     if (kind === 'machine') {
-      if (getExtraMachineSections(entityName).length > 0) return true;
-      return listResolvedMachineSections(entityName).some(
-        (section) =>
-          getMachineSectionRows(section.id, entityName).length > 0 ||
-          getMachineSectionImages(section.id, entityName).length > 0,
-      );
+      return getMachineProcesses().some((process) => {
+        if (getExtraMachineSections(entityName, process.id).length > 0) {
+          return true;
+        }
+        return listResolvedMachineSections(entityName, process.id).some(
+          (section) =>
+            getMachineSectionRows(section.id, entityName, process.id).length >
+              0 ||
+            getMachineSectionImages(section.id, entityName, process.id).length >
+              0,
+        );
+      });
     }
     return entityDataKeys(kind, entityName).some(
       (key) => Array.isArray(store[key]) && store[key].length > 0,
@@ -1645,11 +2101,19 @@ export function createSelectionRepository({
   ) {
     if (kind === 'machine') {
       const removals: string[] = [];
-      const extraFrom = keyFor('machine-extra-sections', fromName);
-      const extraTo = keyFor('machine-extra-sections', toName);
-      if (Object.hasOwn(store, extraFrom)) {
-        store[extraTo] = store[extraFrom];
-        removals.push(extraFrom);
+      for (const process of getMachineProcesses()) {
+        const extraFrom = keyFor(
+          'machine-extra-sections',
+          scopedMachineName(fromName, process.id),
+        );
+        const extraTo = keyFor(
+          'machine-extra-sections',
+          scopedMachineName(toName, process.id),
+        );
+        if (Object.hasOwn(store, extraFrom)) {
+          store[extraTo] = store[extraFrom];
+          removals.push(extraFrom);
+        }
       }
 
       const fromSuffix = `:${fromName}`;
@@ -1706,9 +2170,6 @@ export function createSelectionRepository({
   function initEmptyEntityData(kind: EntityKind, entityName: string) {
     if (kind === 'machine') {
       store[keyFor('machine-extra-sections', entityName)] = [];
-      for (const section of getGlobalMachineSections()) {
-        store[machineSectionRowsKey(section.id, entityName)] = [];
-      }
       return;
     }
     for (const key of entityDataKeys(kind, entityName)) {
@@ -1716,12 +2177,54 @@ export function createSelectionRepository({
     }
   }
 
-  function findEntityLocation(groups: EntityGroup[], entityName: string) {
+  function findEntityLocation(
+    groups: EntityGroup[],
+    entityName: string,
+    category?: string,
+    configurationName?: string | null,
+  ) {
     for (const group of groups) {
+      if (category && group.name !== category) continue;
+      if (configurationName) {
+        const configuration = group.configurations?.find(
+          (item) => item.name === configurationName,
+        );
+        const configurationIndex =
+          configuration?.items.indexOf(entityName) ?? -1;
+        if (configuration && configurationIndex !== -1) {
+          return {
+            group,
+            items: configuration.items,
+            index: configurationIndex,
+            configuration,
+          };
+        }
+        continue;
+      }
       const index = group.items.indexOf(entityName);
-      if (index !== -1) return { group, index };
+      if (index !== -1)
+        return { group, items: group.items, index, configuration: null };
+      for (const configuration of group.configurations ?? []) {
+        const configurationIndex = configuration.items.indexOf(entityName);
+        if (configurationIndex !== -1) {
+          return {
+            group,
+            items: configuration.items,
+            index: configurationIndex,
+            configuration,
+          };
+        }
+      }
     }
     return null;
+  }
+
+  function insertBySort(items: string[], item: string, sort?: number) {
+    const requested = Number(sort);
+    const index = Number.isInteger(requested)
+      ? Math.max(0, Math.min(items.length, requested - 1))
+      : items.length;
+    items.splice(index, 0, item);
   }
 
   function validReorderIndex(
@@ -1755,7 +2258,7 @@ export function createSelectionRepository({
     const [moved] = groups.splice(oldIndex, 1);
     if (!moved) return { ok: false, reason: 'stale' };
     groups.splice(newIndex, 0, moved);
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -1764,27 +2267,37 @@ export function createSelectionRepository({
     groupName: string,
     oldIndex: number,
     newIndex: number,
+    configurationName?: string | null,
   ): ReorderResult {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
     const groups = getEntityGroups(kind);
     const group = groups.find((item) => item.name === groupName);
     if (!group) return { ok: false, reason: 'stale' };
-    if (!validReorderIndex(oldIndex, newIndex, group.items.length)) {
+    const items = configurationName
+      ? group.configurations?.find((item) => item.name === configurationName)
+          ?.items
+      : group.items;
+    if (!items) return { ok: false, reason: 'stale' };
+    if (!validReorderIndex(oldIndex, newIndex, items.length)) {
       return { ok: false, reason: 'validation' };
     }
     if (oldIndex === newIndex) return { ok: true };
 
     const snapshot = cloneStore(store);
-    const [moved] = group.items.splice(oldIndex, 1);
+    const [moved] = items.splice(oldIndex, 1);
     if (moved === undefined) return { ok: false, reason: 'stale' };
-    group.items.splice(newIndex, 0, moved);
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    items.splice(newIndex, 0, moved);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
   function saveEntityGroup(
     kind: EntityKind,
-    payload: { name: string },
+    payload: {
+      name: string;
+      sort?: number;
+      machineType?: MachineCatalogKind;
+    },
     editName?: string,
   ): SaveResult<EntityGroup> {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
@@ -1803,12 +2316,46 @@ export function createSelectionRepository({
       if (index === -1) return { ok: false, reason: 'stale' };
       const existing = groups[index];
       if (!existing) return { ok: false, reason: 'stale' };
-      groups[index] = { name, items: [...existing.items] };
+      groups[index] = {
+        name,
+        items: [...existing.items],
+        ...(kind === 'machine'
+          ? {
+              machineType:
+                payload.machineType ?? existing.machineType ?? 'mechanism',
+            }
+          : {}),
+        ...(existing.configurations
+          ? {
+              configurations: existing.configurations.map((configuration) => ({
+                name: configuration.name,
+                items: [...configuration.items],
+              })),
+            }
+          : {}),
+      };
+      const [moved] = groups.splice(index, 1);
+      if (!moved) return { ok: false, reason: 'stale' };
+      const requested = Number(payload.sort);
+      const targetIndex = Number.isInteger(requested)
+        ? Math.max(0, Math.min(groups.length, requested - 1))
+        : index;
+      groups.splice(targetIndex, 0, moved);
     } else {
-      groups.push({ name, items: [] });
+      const requested = Number(payload.sort);
+      const targetIndex = Number.isInteger(requested)
+        ? Math.max(0, Math.min(groups.length, requested - 1))
+        : groups.length;
+      groups.splice(targetIndex, 0, {
+        name,
+        items: [],
+        ...(kind === 'machine'
+          ? { machineType: payload.machineType ?? 'mechanism' }
+          : {}),
+      });
     }
 
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     const item = (store[entityGroupsKey(kind)] as EntityGroup[]).find(
       (group) => group.name === name,
@@ -1822,19 +2369,96 @@ export function createSelectionRepository({
     const groups = getEntityGroups(kind);
     const index = groups.findIndex((group) => group.name === name);
     if (index === -1) return { ok: false, reason: 'stale' };
-    if ((groups[index]?.items.length ?? 0) > 0) {
+    if (
+      (groups[index]?.items.length ?? 0) > 0 ||
+      (groups[index]?.configurations?.length ?? 0) > 0
+    ) {
       return { ok: false, reason: 'not-empty' };
     }
 
     const snapshot = cloneStore(store);
     groups.splice(index, 1);
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
+  function saveMachineConfiguration(
+    category: string,
+    payload: { name: string; sort?: number },
+    editName?: string,
+  ): SaveResult<{ category: string; name: string }> {
+    const groups = getEntityGroups('machine');
+    const group = groups.find((item) => item.name === category);
+    const name = storedText(payload.name).trim().slice(0, 40);
+    if (!group || !name) return { ok: false, reason: 'validation' };
+    group.configurations ??= [];
+    if (
+      group.configurations.some(
+        (item) => item.name !== editName && sameLocaleName(item.name, name),
+      )
+    ) {
+      return { ok: false, reason: 'duplicate' };
+    }
+
+    const snapshot = cloneStore(store);
+    if (editName) {
+      const index = group.configurations.findIndex(
+        (item) => item.name === editName,
+      );
+      if (index === -1) return { ok: false, reason: 'stale' };
+      const existing = group.configurations[index];
+      if (!existing) return { ok: false, reason: 'stale' };
+      const [moved] = group.configurations.splice(index, 1);
+      if (!moved) return { ok: false, reason: 'stale' };
+      moved.name = name;
+      const requested = Number(payload.sort);
+      const targetIndex = Number.isInteger(requested)
+        ? Math.max(0, Math.min(group.configurations.length, requested - 1))
+        : index;
+      group.configurations.splice(targetIndex, 0, moved);
+    } else {
+      const requested = Number(payload.sort);
+      const targetIndex = Number.isInteger(requested)
+        ? Math.max(0, Math.min(group.configurations.length, requested - 1))
+        : group.configurations.length;
+      group.configurations.splice(targetIndex, 0, { name, items: [] });
+    }
+
+    store[entityGroupsKey('machine')] = normalizeEntityGroups(groups, 'machine');
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item: { category, name } };
+  }
+
+  function deleteMachineConfiguration(
+    category: string,
+    name: string,
+  ): DeleteResult {
+    const groups = getEntityGroups('machine');
+    const group = groups.find((item) => item.name === category);
+    const index =
+      group?.configurations?.findIndex((item) => item.name === name) ?? -1;
+    if (!group || !group.configurations || index === -1) {
+      return { ok: false, reason: 'stale' };
+    }
+    if ((group.configurations[index]?.items.length ?? 0) > 0) {
+      return { ok: false, reason: 'not-empty' };
+    }
+    const snapshot = cloneStore(store);
+    group.configurations.splice(index, 1);
+    store[entityGroupsKey('machine')] = normalizeEntityGroups(groups, 'machine');
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
   function saveEntityItem(
     kind: EntityKind,
-    payload: { category: string; name: string },
+    payload: {
+      category: string;
+      configuration?: string | null;
+      name: string;
+      previousCategory?: string;
+      previousConfiguration?: string | null;
+      sort?: number;
+    },
     editName?: string,
   ): SaveResult<EntityTreeItem> {
     const definition = entityKindDefinition(kind);
@@ -1847,29 +2471,41 @@ export function createSelectionRepository({
 
     const targetGroup = groups.find((group) => group.name === category);
     if (!targetGroup) return { ok: false, reason: 'validation' };
+    const configuration =
+      kind === 'machine'
+        ? storedText(payload.configuration).trim().slice(0, 40)
+        : '';
+    const targetItems = configuration
+      ? targetGroup.configurations?.find((item) => item.name === configuration)
+          ?.items
+      : targetGroup.items;
+    if (!targetItems) return { ok: false, reason: 'validation' };
 
-    const duplicate = groups.some((group) =>
-      group.items.some(
-        (item) => item !== editName && sameLocaleName(item, name),
-      ),
+    const duplicate = targetItems.some(
+      (item) => item !== editName && sameLocaleName(item, name),
     );
     if (duplicate) return { ok: false, reason: 'duplicate' };
 
     const snapshot = cloneStore(store);
     if (editName) {
-      const location = findEntityLocation(groups, editName);
+      const location = findEntityLocation(
+        groups,
+        editName,
+        payload.previousCategory,
+        payload.previousConfiguration,
+      );
       if (!location) return { ok: false, reason: 'stale' };
-      location.group.items.splice(location.index, 1);
+      location.items.splice(location.index, 1);
       if (editName !== name) {
         migrateEntityDataKeys(kind, editName, name);
       }
-      targetGroup.items.push(name);
+      insertBySort(targetItems, name, payload.sort);
     } else {
-      targetGroup.items.push(name);
+      insertBySort(targetItems, name, payload.sort);
       initEmptyEntityData(kind, name);
     }
 
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
     if (kind === 'machine' && category === GENERAL_STRUCTURE_CATEGORY) {
@@ -1880,19 +2516,27 @@ export function createSelectionRepository({
       if (!synced.ok) return synced;
     }
 
-    return { ok: true, item: { name, category } };
+    return {
+      ok: true,
+      item: { name, category, configuration: configuration || null },
+    };
   }
 
-  function deleteEntityItem(kind: EntityKind, name: string): DeleteResult {
+  function deleteEntityItem(
+    kind: EntityKind,
+    name: string,
+    category?: string,
+    configuration?: string | null,
+  ): DeleteResult {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
     const groups = getEntityGroups(kind);
-    const location = findEntityLocation(groups, name);
+    const location = findEntityLocation(groups, name, category, configuration);
     if (!location) return { ok: false, reason: 'stale' };
     if (entityHasData(kind, name)) return { ok: false, reason: 'not-empty' };
 
-    const category = location.group.name;
+    const locationCategory = location.group.name;
     const generalBinding =
-      kind === 'machine' && category === GENERAL_STRUCTURE_CATEGORY
+      kind === 'machine' && locationCategory === GENERAL_STRUCTURE_CATEGORY
         ? findGeneralStructureSection(name)
         : null;
     if (
@@ -1903,22 +2547,30 @@ export function createSelectionRepository({
       )
     ) {
       for (const group of groups) {
-        for (const machineName of group.items) {
+        for (const machineName of [
+          ...group.items,
+          ...(group.configurations ?? []).flatMap((item) => item.items),
+        ]) {
           if (machineName === name) continue;
-          if (
-            getMachineSectionRows(generalBinding.section.id, machineName)
-              .length > 0
-          ) {
-            return { ok: false, reason: 'not-empty' };
+          for (const process of getMachineProcesses()) {
+            if (
+              getMachineSectionRows(
+                generalBinding.section.id,
+                machineName,
+                process.id,
+              ).length > 0
+            ) {
+              return { ok: false, reason: 'not-empty' };
+            }
           }
         }
       }
     }
 
     const snapshot = cloneStore(store);
-    location.group.items.splice(location.index, 1);
+    location.items.splice(location.index, 1);
     clearEntityDataKeys(kind, name);
-    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups);
+    store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
     if (
@@ -1952,11 +2604,15 @@ export function createSelectionRepository({
     deleteExtraMachineSection,
     deleteFeedbackType,
     deleteGlobalMachineSection,
+    deleteMachineProcess,
     deleteMachineSectionRow,
     deleteProcessIntroFile,
     deleteProcessStep,
     deleteSensor,
+    deleteSensor3dFile,
+    deleteSensorSopFile,
     deleteSensorSop,
+    deleteMachineConfiguration,
     ensureGeneralStructureSection,
     entityHasData,
     findGeneralStructureSection,
@@ -1968,11 +2624,14 @@ export function createSelectionRepository({
     getFeedbackTypes,
     getGeneralStructureLabelMap,
     getGlobalMachineSections,
+    getMachineProcesses,
     getMachineSectionImages,
     getMachineSectionRows,
     getProcessIntroFiles,
     getProcessSteps,
     getSensors,
+    getSensor3dFiles,
+    getSensorSopFiles,
     getSensorSops,
     listResolvedMachineSections,
     replaceFromStorage,
@@ -1982,16 +2641,20 @@ export function createSelectionRepository({
     saveCrud,
     saveDictionaryItem,
     saveEntityGroup,
+    saveMachineConfiguration,
     saveEntityItem,
     saveExtraMachineSection,
     saveFeedbackType,
     saveGlobalMachineSection,
+    saveMachineProcess,
     saveMachineSectionRow,
     saveMachineSectionImages,
     saveProcessIntroFile,
     saveProcessStep,
     replaceSensorCurrent,
     saveSensor,
+    saveSensor3dFile,
+    saveSensorSopFile,
     saveSensorSop,
     snapshotStore,
     syncGeneralStructureItemRename,
@@ -2024,9 +2687,10 @@ export function buildDefaultStore({
   }
   repo.getProcessSteps();
   repo.getProcessIntroFiles();
-  repo.getGlobalMachineSections();
-  repo.getGeneralStructureLabelMap();
+  repo.getMachineProcesses();
   repo.getSensors();
+  repo.getSensor3dFiles();
+  repo.getSensorSopFiles();
   repo.getSensorSops();
   const next = repo.snapshotStore();
   const customerNames = repo

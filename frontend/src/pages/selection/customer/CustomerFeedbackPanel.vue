@@ -11,6 +11,7 @@ import {
   AButton,
   ADatePicker,
   AField,
+  AFilterResetButton,
   AFormGrid,
   AFormRow,
   AIconButton,
@@ -19,6 +20,7 @@ import {
   ASheet,
   ATable,
   ATextArea,
+  ATokenField,
   type BadgeTone,
   type SelectOption,
   type TableColumn,
@@ -34,8 +36,8 @@ const historyOpen = ref(false);
 const historyItem = ref<TimelineItem>();
 const editId = ref<number>();
 const query = ref('');
-const typeFilter = ref<string | null>(null);
-const statusFilter = ref<string | null>(null);
+const typeFilters = ref<Array<string | number>>([]);
+const statusFilters = ref<Array<string | number>>([]);
 const form = reactive({
   date: null as string | null,
   machine: '',
@@ -63,8 +65,9 @@ const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (!typeFilter.value || item.type === typeFilter.value) &&
-      (!statusFilter.value || item.status === statusFilter.value) &&
+      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
+      (statusFilters.value.length === 0 ||
+        statusFilters.value.includes(item.status)) &&
       (!value ||
         [item.type, item.machine, item.problem, item.measure, item.date, item.status]
           .join(' ')
@@ -72,6 +75,12 @@ const filtered = computed(() => {
           .includes(value)),
   );
 });
+const hasActiveFilters = computed(
+  () =>
+    Boolean(query.value.trim()) ||
+    typeFilters.value.length > 0 ||
+    statusFilters.value.length > 0,
+);
 const historyRows = computed(() =>
   [...(historyItem.value?.measureHistory ?? [])].sort((left, right) =>
     right.date.localeCompare(left.date, 'zh-CN'),
@@ -97,17 +106,22 @@ watch(
   () => props.entityName,
   () => {
     query.value = '';
-    typeFilter.value = null;
-    statusFilter.value = null;
+    typeFilters.value = [];
+    statusFilters.value = [];
     historyOpen.value = false;
     historyItem.value = undefined;
   },
 );
 
 function statusTone(status: string): BadgeTone {
-  if (status === '已解决') return 'green';
-  if (status === '处理中') return 'blue';
-  return 'orange';
+  const normalizedStatus = status
+    .trim()
+    .replace(/^\d+\s*[.、_\-:：]?\s*/, '');
+  if (normalizedStatus === '已解决') return 'green';
+  if (normalizedStatus === '处理中' || normalizedStatus === '测试中') {
+    return 'orange';
+  }
+  return 'neutral';
 }
 
 function resetForm() {
@@ -120,6 +134,12 @@ function resetForm() {
     status: statusOptions.value[0]?.value ?? '',
     type: typeOptions.value[0]?.value ?? '',
   });
+}
+
+function resetFilters() {
+  query.value = '';
+  typeFilters.value = [];
+  statusFilters.value = [];
 }
 
 function addItem() {
@@ -177,25 +197,26 @@ async function deleteItem(item: TimelineItem) {
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <ASelect
-        v-model="typeFilter"
+      <ATokenField
+        v-model="typeFilters"
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="问题分类"
-        clearable
+        :max-visible-tokens="1"
       />
-      <ASelect
-        v-model="statusFilter"
+      <ATokenField
+        v-model="statusFilters"
         class="selection-toolbar__filter"
         :options="statusOptions"
         placeholder="处理状态"
-        clearable
+        :max-visible-tokens="1"
       />
       <ASearchField
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、机型、问题点、对策、时间或状态"
       />
+      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
     </div>
     <ATable
@@ -203,7 +224,7 @@ async function deleteItem(item: TimelineItem) {
       :rows="filtered"
       row-key="id"
       :empty-text="
-        query.trim() || typeFilter || statusFilter
+        query.trim() || typeFilters.length || statusFilters.length
           ? '没有匹配的反馈记录'
           : '暂无反馈记录'
       "
@@ -241,21 +262,30 @@ async function deleteItem(item: TimelineItem) {
         </div>
         <div v-if="historyRows.length" class="feedback-history__table">
           <div class="feedback-history__header" aria-hidden="true">
-            <span>改善对策</span>
-            <span>反馈时间</span>
-            <span>状态</span>
+            <span class="feedback-history__cell--center">改善对策</span>
+            <span class="feedback-history__cell--center">反馈时间</span>
+            <span class="feedback-history__cell--center">状态</span>
           </div>
           <div
             v-for="(entry, index) in historyRows"
             :key="`${entry.date}-${entry.measure}-${index}`"
             class="feedback-history__row"
           >
-            <span class="feedback-history__measure">{{ entry.measure || '—' }}</span>
-            <span>{{ entry.date || '—' }}</span>
-            <ABadge
-              :label="entry.status"
-              :tone="entry.status === '现行' ? 'green' : 'neutral'"
-            />
+            <span
+              class="feedback-history__measure feedback-history__cell--center"
+              :class="{
+                'feedback-history__measure--obsolete': entry.status === '已作废',
+              }"
+            >
+              {{ entry.measure || '—' }}
+            </span>
+            <span class="feedback-history__cell--center">{{ entry.date || '—' }}</span>
+            <span class="feedback-history__status feedback-history__cell--center">
+              <ABadge
+                :label="entry.status"
+                :tone="entry.status === '现行' ? 'green' : 'neutral'"
+              />
+            </span>
           </div>
         </div>
         <div v-else class="feedback-history__empty">暂无改善对策历史</div>
@@ -306,8 +336,7 @@ async function deleteItem(item: TimelineItem) {
   border-radius: var(--radius-lg);
 }
 
-.feedback-history__context span,
-.feedback-history__header {
+.feedback-history__context span {
   color: var(--label-2);
 }
 
@@ -334,6 +363,7 @@ async function deleteItem(item: TimelineItem) {
 
 .feedback-history__header {
   font: var(--text-control-em);
+  color: var(--label);
   background: var(--fill-4);
 }
 
@@ -350,6 +380,23 @@ async function deleteItem(item: TimelineItem) {
 .feedback-history__measure {
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.feedback-history__cell--center {
+  justify-self: stretch;
+  text-align: center;
+}
+
+.feedback-history__status {
+  display: flex;
+  justify-content: center;
+}
+
+.feedback-history__measure--obsolete {
+  color: var(--label-2);
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: currentcolor;
 }
 
 .feedback-history__empty {

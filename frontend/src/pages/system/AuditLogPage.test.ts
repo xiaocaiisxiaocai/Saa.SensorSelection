@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
+import ASelect from '@/ui/ASelect.vue';
 import AuditLogPage from './AuditLogPage.vue';
 
 const log: AuditLogItem = {
@@ -46,6 +47,36 @@ describe('AuditLogPage', () => {
     await vi.waitFor(() => {
       expect(document.querySelector('[role="dialog"]')).toBeNull();
     });
+    wrapper.unmount();
+  });
+
+  it('clears all audit filters and reloads the first page', async () => {
+    const listAuditLogs = vi
+      .spyOn(api, 'listAuditLogs')
+      .mockResolvedValue({ items: [log], total: 1 });
+    const wrapper = mount(AuditLogPage);
+    await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalled());
+
+    await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
+    const selects = wrapper.findAllComponents(ASelect);
+    selects[0]?.vm.$emit('update:modelValue', 'auth.login');
+    selects[1]?.vm.$emit('update:modelValue', 'true');
+    await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
+
+    await vi.waitFor(() => {
+      expect(listAuditLogs).toHaveBeenLastCalledWith({
+        action: undefined,
+        from: undefined,
+        page: 1,
+        pageSize: 20,
+        result: undefined,
+        to: undefined,
+        username: undefined,
+      });
+    });
+    expect(wrapper.get<HTMLInputElement>('input[placeholder="操作用户"]').element.value).toBe('');
+    expect(selects[0]?.props('modelValue')).toBe('');
+    expect(selects[1]?.props('modelValue')).toBe('');
     wrapper.unmount();
   });
 });

@@ -9,6 +9,7 @@ import { useSelectionStore } from '@/stores/selection';
 import {
   AButton,
   AField,
+  AFilterResetButton,
   AFormGrid,
   AFormRow,
   AIconButton,
@@ -17,6 +18,7 @@ import {
   ASheet,
   ATable,
   ATextArea,
+  ATokenField,
   type SelectOption,
   type TableColumn,
 } from '@/ui';
@@ -29,8 +31,8 @@ const writable = computed(() => canWrite('selection:write'));
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
-const typeFilter = ref<string | null>(null);
-const sourceFilter = ref<string | null>(null);
+const typeFilters = ref<Array<string | number>>([]);
+const sourceFilters = ref<Array<string | number>>([]);
 const form = reactive({
   content: '',
   machine: '',
@@ -56,8 +58,9 @@ const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (!typeFilter.value || item.type === typeFilter.value) &&
-      (!sourceFilter.value || item.source === sourceFilter.value) &&
+      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
+      (sourceFilters.value.length === 0 ||
+        sourceFilters.value.includes(item.source)) &&
       (!value ||
         [item.type, item.machine, item.process, item.content, item.source, item.note]
           .join(' ')
@@ -65,6 +68,12 @@ const filtered = computed(() => {
           .includes(value)),
   );
 });
+const hasActiveFilters = computed(
+  () =>
+    Boolean(query.value.trim()) ||
+    typeFilters.value.length > 0 ||
+    sourceFilters.value.length > 0,
+);
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'type', label: '要求分类', width: 90 },
@@ -84,8 +93,8 @@ watch(
   () => props.entityName,
   () => {
     query.value = '';
-    typeFilter.value = null;
-    sourceFilter.value = null;
+    typeFilters.value = [];
+    sourceFilters.value = [];
   },
 );
 
@@ -99,6 +108,12 @@ function resetForm() {
     source: sourceOptions.value[0]?.value ?? '',
     type: typeOptions.value[0]?.value ?? '',
   });
+}
+
+function resetFilters() {
+  query.value = '';
+  typeFilters.value = [];
+  sourceFilters.value = [];
 }
 
 function addItem() {
@@ -150,25 +165,26 @@ async function deleteItem(item: CustomerReqItem) {
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <ASelect
-        v-model="typeFilter"
+      <ATokenField
+        v-model="typeFilters"
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="要求分类"
-        clearable
+        :max-visible-tokens="1"
       />
-      <ASelect
-        v-model="sourceFilter"
+      <ATokenField
+        v-model="sourceFilters"
         class="selection-toolbar__filter"
         :options="sourceOptions"
         placeholder="要求来源"
-        clearable
+        :max-visible-tokens="1"
       />
       <ASearchField
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、机型、制程、内容、来源或备注"
       />
+      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">新增要求</AButton>
     </div>
     <ATable
@@ -176,7 +192,7 @@ async function deleteItem(item: CustomerReqItem) {
       :rows="filtered"
       row-key="id"
       :empty-text="
-        query.trim() || typeFilter || sourceFilter
+        query.trim() || typeFilters.length || sourceFilters.length
           ? '没有匹配的要求记录'
           : '暂无要求记录'
       "
@@ -184,7 +200,12 @@ async function deleteItem(item: CustomerReqItem) {
     >
       <template #cell-actions="{ row }">
         <div class="table-actions">
-          <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
+          <AIconButton
+            :icon="Pencil"
+            label="编辑"
+            size="small"
+            @click="editItem(row)"
+          />
           <AIconButton
             :icon="Trash2"
             label="删除"
@@ -195,7 +216,11 @@ async function deleteItem(item: CustomerReqItem) {
         </div>
       </template>
     </ATable>
-    <ASheet v-model:open="dialogOpen" :title="editId ? '编辑要求' : '新增要求'" :width="560">
+    <ASheet
+      v-model:open="dialogOpen"
+      :title="editId ? '编辑要求' : '新增要求'"
+      :width="560"
+    >
       <AFormGrid>
         <AFormRow label="要求分类" required>
           <ASelect v-model="form.type" :options="typeOptions" />
@@ -204,7 +229,11 @@ async function deleteItem(item: CustomerReqItem) {
           <ASelect v-model="form.source" :options="sourceOptions" />
         </AFormRow>
         <AFormRow label="适用机型">
-          <AField v-model="form.machine" :maxlength="100" placeholder="如 ALL" />
+          <AField
+            v-model="form.machine"
+            :maxlength="100"
+            placeholder="如 ALL"
+          />
         </AFormRow>
         <AFormRow label="适用制程">
           <AField v-model="form.process" :maxlength="100" />

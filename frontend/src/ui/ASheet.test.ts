@@ -76,4 +76,19 @@ describe('ASheet', () => {
 
     wrapper.unmount();
   });
+
+  it('supports a viewport-sized layout for document previews', async () => {
+    const wrapper = mount(ASheet, {
+      attachTo: document.body,
+      props: { open: true, title: '预览 PDF', viewport: true },
+      slots: { default: '<div class="preview-content">PDF</div>' },
+    });
+
+    await nextTick();
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.classList.contains('a-sheet--viewport')).toBe(true);
+
+    wrapper.unmount();
+  });
 });

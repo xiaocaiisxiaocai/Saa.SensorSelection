@@ -4,6 +4,8 @@
 
 const BASE = process.env.API_BASE ?? 'http://localhost:5080/api'
 const E2E_PREFIX = 'e2e_'
+const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
 
 let passed = 0
 const failures = []
@@ -69,6 +71,10 @@ function section(title) {
   console.log(`\n${title}`)
 }
 
+function storeRoute(key) {
+  return `/store/by-key?key=${encodeURIComponent(key)}`
+}
+
 async function main() {
   console.log(`API CRUD regression against ${BASE}\n`)
 
@@ -83,7 +89,7 @@ async function main() {
 
   // ------------------------------------------------------------------ auth
   section('Authentication')
-  const adminLogin = await login('admin', 'admin123')
+  const adminLogin = await login(ADMIN_USERNAME, ADMIN_PASSWORD)
   await check('POST /auth/login succeeds for the seeded admin', async () => {
     assertEqual(adminLogin.status, 200, 'status')
     assert(typeof adminLogin.data.token === 'string' && adminLogin.data.token.length > 20, 'token missing')
@@ -116,7 +122,7 @@ async function main() {
   await check('GET /auth/me returns the caller profile', async () => {
     const res = await request('GET', '/auth/me', { token: adminToken })
     assertEqual(res.status, 200, 'status')
-    assertEqual(res.data.username, 'admin', 'username')
+    assertEqual(res.data.username, ADMIN_USERNAME, 'username')
     assert(Array.isArray(res.data.roles) && res.data.roles.length > 0, 'roles missing')
   })
 
@@ -134,7 +140,7 @@ async function main() {
   section('Selection store CRUD')
   const storeKey = `${E2E_PREFIX}customer-req:auto`
   cleanup.push(async () => {
-    await request('DELETE', `/store/${encodeURIComponent(storeKey)}`, { token: adminToken })
+    await request('DELETE', storeRoute(storeKey), { token: adminToken })
   })
 
   await check('GET /store returns the full snapshot as an object of arrays', async () => {
@@ -146,13 +152,13 @@ async function main() {
     }
   })
 
-  await check('PUT /store/{key} rejects an anonymous write with 401', async () => {
-    const res = await request('PUT', `/store/${encodeURIComponent(storeKey)}`, { body: [{ id: 1 }] })
+  await check('PUT /store/by-key rejects an anonymous write with 401', async () => {
+    const res = await request('PUT', storeRoute(storeKey), { body: [{ id: 1 }] })
     assertEqual(res.status, 401, 'status')
   })
 
-  await check('PUT /store/{key} creates a new key', async () => {
-    const res = await request('PUT', `/store/${encodeURIComponent(storeKey)}`, {
+  await check('PUT /store/by-key creates a new key', async () => {
+    const res = await request('PUT', storeRoute(storeKey), {
       token: adminToken,
       body: [{ id: 1, type: '外观', content: 'e2e created' }],
     })
@@ -160,16 +166,16 @@ async function main() {
     assertEqual(res.data.ok, true, 'ok flag')
   })
 
-  await check('GET /store/{key} reads the key back', async () => {
-    const res = await request('GET', `/store/${encodeURIComponent(storeKey)}`)
+  await check('GET /store/by-key reads the key back', async () => {
+    const res = await request('GET', storeRoute(storeKey))
     assertEqual(res.status, 200, 'status')
     assert(Array.isArray(res.data), 'expected an array')
     assertEqual(res.data.length, 1, 'row count')
     assertEqual(res.data[0].content, 'e2e created', 'content')
   })
 
-  await check('PUT /store/{key} updates an existing key', async () => {
-    const res = await request('PUT', `/store/${encodeURIComponent(storeKey)}`, {
+  await check('PUT /store/by-key updates an existing key', async () => {
+    const res = await request('PUT', storeRoute(storeKey), {
       token: adminToken,
       body: [
         { id: 1, type: '外观', content: 'e2e updated' },
@@ -177,13 +183,13 @@ async function main() {
       ],
     })
     assertEqual(res.status, 200, 'status')
-    const read = await request('GET', `/store/${encodeURIComponent(storeKey)}`)
+    const read = await request('GET', storeRoute(storeKey))
     assertEqual(read.data.length, 2, 'row count after update')
     assertEqual(read.data[0].content, 'e2e updated', 'updated content')
   })
 
-  await check('PUT /store/{key} rejects a non-array body with 400', async () => {
-    const res = await request('PUT', `/store/${encodeURIComponent(storeKey)}`, {
+  await check('PUT /store/by-key rejects a non-array body with 400', async () => {
+    const res = await request('PUT', storeRoute(storeKey), {
       token: adminToken,
       body: { nope: true },
     })
@@ -191,23 +197,54 @@ async function main() {
     assertEqual(res.data.reason, 'validation', 'reason')
   })
 
-  await check('GET /store/{key} returns 404 for an unknown key', async () => {
-    const res = await request('GET', `/store/${encodeURIComponent(`${E2E_PREFIX}missing:key`)}`)
+  await check('GET /store/by-key returns 404 for an unknown key', async () => {
+    const res = await request('GET', storeRoute(`${E2E_PREFIX}missing:key`))
     assertEqual(res.status, 404, 'status')
   })
 
-  await check('DELETE /store/{key} removes the key', async () => {
-    const res = await request('DELETE', `/store/${encodeURIComponent(storeKey)}`, { token: adminToken })
+  await check('DELETE /store/by-key removes the key', async () => {
+    const res = await request('DELETE', storeRoute(storeKey), { token: adminToken })
     assertEqual(res.status, 200, 'status')
-    const read = await request('GET', `/store/${encodeURIComponent(storeKey)}`)
+    const read = await request('GET', storeRoute(storeKey))
     assertEqual(read.status, 404, 'status after delete')
   })
 
-  await check('DELETE /store/{key} returns 404 for an unknown key', async () => {
-    const res = await request('DELETE', `/store/${encodeURIComponent(`${E2E_PREFIX}missing:key`)}`, {
+  await check('DELETE /store/by-key returns 404 for an unknown key', async () => {
+    const res = await request('DELETE', storeRoute(`${E2E_PREFIX}missing:key`), {
       token: adminToken,
     })
     assertEqual(res.status, 404, 'status')
+  })
+
+  await check('Legacy /store/{key} routes are not exposed', async () => {
+    const legacy = `/store/${encodeURIComponent(`${E2E_PREFIX}legacy:key`)}`
+    const read = await request('GET', legacy)
+    const write = await request('PUT', legacy, { token: adminToken, body: [{ id: 1 }] })
+    const remove = await request('DELETE', legacy, { token: adminToken })
+    assertEqual(read.status, 404, 'legacy GET status')
+    assertEqual(write.status, 404, 'legacy PUT status')
+    assertEqual(remove.status, 404, 'legacy DELETE status')
+  })
+
+  await check('Query-key CRUD preserves proxy-sensitive %2F text used by server data', async () => {
+    const key = `${E2E_PREFIX}machine-section-rows:2:06 入料输送（平板%2FBOX）`
+    const route = `/store/by-key?key=${encodeURIComponent(key)}`
+    cleanup.push(async () => {
+      await request('DELETE', route, { token: adminToken })
+    })
+
+    const saved = await request('PUT', route, {
+      token: adminToken,
+      body: [{ id: 1, content: 'proxy-safe' }],
+    })
+    assertEqual(saved.status, 200, 'save status')
+
+    const all = await request('GET', '/store')
+    assert(Array.isArray(all.data[key]), 'exact key was not preserved')
+    assert(!Object.hasOwn(all.data, 'by-key'), 'query key was mistaken for a route segment')
+
+    const deleted = await request('DELETE', route, { token: adminToken })
+    assertEqual(deleted.status, 200, 'delete status')
   })
 
   await check('PUT /store/entity-groups/{kind} validates duplicate item names', async () => {
@@ -228,19 +265,19 @@ async function main() {
   })
 
   await check('PUT /store/entity-groups/{kind} reorders groups without data loss', async () => {
-    const before = await request('GET', '/store/entity-groups%3Acustomer')
+    const before = await request('GET', storeRoute('entity-groups:customer'))
     assertEqual(before.status, 200, 'status of current groups')
     const groups = before.data
     assert(Array.isArray(groups) && groups.length > 0, 'no seeded customer groups')
     const reversed = [...groups].reverse()
     const res = await request('PUT', '/store/entity-groups/customer', { token: adminToken, body: reversed })
     assertEqual(res.status, 200, 'reorder status')
-    const after = await request('GET', '/store/entity-groups%3Acustomer')
+    const after = await request('GET', storeRoute('entity-groups:customer'))
     assertEqual(after.data.length, groups.length, 'group count preserved')
     // restore original order
     const restore = await request('PUT', '/store/entity-groups/customer', { token: adminToken, body: groups })
     assertEqual(restore.status, 200, 'restore status')
-    const restored = await request('GET', '/store/entity-groups%3Acustomer')
+    const restored = await request('GET', storeRoute('entity-groups:customer'))
     assertEqual(restored.data[0].name, groups[0].name, 'first group restored')
   })
 
@@ -275,12 +312,12 @@ async function main() {
     assert(!session.data.permissions.includes('rbac:view'), 'editor should not have rbac:view')
 
     const key = `${E2E_PREFIX}editor-write:auto`
-    const write = await request('PUT', `/store/${encodeURIComponent(key)}`, {
+    const write = await request('PUT', storeRoute(key), {
       token: editorToken,
       body: [{ id: 1, content: 'written by editor' }],
     })
     assertEqual(write.status, 200, 'editor write status')
-    await request('DELETE', `/store/${encodeURIComponent(key)}`, { token: adminToken })
+    await request('DELETE', storeRoute(key), { token: adminToken })
   })
 
   await check('An editor is denied access to RBAC endpoints with 403', async () => {
@@ -317,7 +354,7 @@ async function main() {
     const read = await request('GET', '/store', { token: viewerToken })
     assertEqual(read.status, 200, 'viewer read status')
 
-    const write = await request('PUT', `/store/${encodeURIComponent(`${E2E_PREFIX}viewer-write:auto`)}`, {
+    const write = await request('PUT', storeRoute(`${E2E_PREFIX}viewer-write:auto`), {
       token: viewerToken,
       body: [{ id: 1 }],
     })
@@ -420,10 +457,10 @@ async function main() {
     assertEqual(session.status, 200, 'login with the new password')
   })
 
-  await check('The last admin cannot be deleted', async () => {
+  await check('The current administrator cannot delete their own account', async () => {
     const users = await request('GET', '/rbac/users', { token: adminToken })
-    const admin = users.data.find((user) => user.username === 'admin')
-    assert(admin, 'admin user missing')
+    const admin = users.data.find((user) => user.username === ADMIN_USERNAME)
+    assert(admin, `${ADMIN_USERNAME} user missing`)
     const res = await request('DELETE', `/rbac/users/${admin.id}`, { token: adminToken })
     assert(res.status === 400, `expected 400, got ${res.status}`)
   })

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MachineSectionRow, SensorItem } from '@/domain';
+import type { MachineSectionRow, ProcessStepItem, SensorItem } from '@/domain';
 
 import { buildMachineTableRows } from './table-rows';
 
 const row: MachineSectionRow = {
   id: 7,
   role: '进板检测',
+  processStepId: 21,
   sensorIds: [11, 12, 13],
   sensorType: '',
   spec: '',
@@ -28,6 +29,7 @@ const sensors: SensorItem[] = [
     feature: '',
     scene: '',
     sopId: null,
+    model3dId: null,
     replacesId: null,
     replacedById: null,
     problemNote: '',
@@ -44,6 +46,7 @@ const sensors: SensorItem[] = [
     feature: '',
     scene: '',
     sopId: null,
+    model3dId: null,
     replacesId: null,
     replacedById: null,
     problemNote: '',
@@ -60,10 +63,22 @@ const sensors: SensorItem[] = [
     feature: '',
     scene: '',
     sopId: null,
+    model3dId: null,
     replacesId: null,
     replacedById: null,
     problemNote: '',
     replacedAt: '',
+  },
+];
+
+const processSteps: ProcessStepItem[] = [
+  {
+    id: 21,
+    layer: '内层',
+    name: 'DES 显影',
+    role: '',
+    feature: '',
+    note: '',
   },
 ];
 
@@ -96,5 +111,29 @@ describe('buildMachineTableRows', () => {
     expect(noteRows[0]?.sensor).toBeNull();
     expect(legacyRows[0]?.sensorType).toBe('漫反射');
     expect(legacyRows[0]?.spec).toBe('旧规格');
+  });
+
+  it('shows the optional process-step binding only for structure rows', () => {
+    const linkedRow = { ...row, processStepId: 21 };
+    const structureRows = buildMachineTableRows(
+      [linkedRow],
+      sensors,
+      true,
+      processSteps,
+    );
+    const noteRows = buildMachineTableRows(
+      [linkedRow],
+      sensors,
+      false,
+      processSteps,
+    );
+
+    expect(
+      (structureRows[0] as unknown as { processStepName: string })
+        .processStepName,
+    ).toBe('内层 · DES 显影');
+    expect(
+      (noteRows[0] as unknown as { processStepName: string }).processStepName,
+    ).toBe('—');
   });
 });

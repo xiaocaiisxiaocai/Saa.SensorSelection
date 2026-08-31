@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,10 +27,10 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         return Ok(await store.GetAllAsync());
     }
 
-    /// <summary>读取单个 key 的 JSON 数组（匿名可读）。</summary>
-    [HttpGet("{key}")]
+    /// <summary>通过查询参数读取单个 key，避免代理二次解码业务键。</summary>
+    [HttpGet("by-key")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetByKey(string key)
+    public async Task<IActionResult> GetByQueryKey([FromQuery] string key)
     {
         var result = await store.GetByKeyAsync(key);
         if (!result.Found)
@@ -88,10 +89,12 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         return Ok(new { ok = true });
     }
 
-    /// <summary>写入单个 key 的 JSON 数组（新增或覆盖）。</summary>
-    [HttpPut("{key}")]
+    /// <summary>通过查询参数写入单个 key（新增或覆盖）。</summary>
+    [HttpPut("by-key")]
     [Authorize(Policy = "selection:write")]
-    public async Task<IActionResult> Upsert(string key, [FromBody] JsonElement value)
+    public async Task<IActionResult> UpsertByQueryKey(
+        [FromQuery] string key,
+        [FromBody] JsonElement value)
     {
         var result = await store.UpsertAsync(key, value);
         var itemCount = value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : 0;
@@ -106,13 +109,17 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });
         }
 
-        return Ok(new { ok = true });
+        return Ok(new
+        {
+            ok = true,
+            value = result.Json is null ? null : JsonNode.Parse(result.Json),
+        });
     }
 
-    /// <summary>删除单个 key。</summary>
-    [HttpDelete("{key}")]
+    /// <summary>通过查询参数删除单个 key。</summary>
+    [HttpDelete("by-key")]
     [Authorize(Policy = "selection:write")]
-    public async Task<IActionResult> Delete(string key)
+    public async Task<IActionResult> DeleteByQueryKey([FromQuery] string key)
     {
         var result = await store.DeleteAsync(key);
         await audit.WriteAsync(

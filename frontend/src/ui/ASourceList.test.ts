@@ -54,6 +54,30 @@ describe('ASourceList', () => {
     wrapper.unmount();
   });
 
+  it('quickly expands and collapses all visible groups', async () => {
+    const wrapper = mountList();
+    const expandedStates = () =>
+      wrapper
+        .findAll('.a-source-list__toggle')
+        .map((node) => node.attributes('aria-expanded'));
+
+    expect(expandedStates()).toEqual(['true', 'false']);
+    expect(
+      wrapper
+        .get('.a-source-list__search')
+        .find('[aria-label="展开全部区域"]')
+        .exists(),
+    ).toBe(true);
+    expect(wrapper.text()).not.toContain('展开全部');
+
+    await wrapper.get('[aria-label="展开全部区域"]').trigger('click');
+    expect(expandedStates()).toEqual(['true', 'true']);
+
+    await wrapper.get('[aria-label="折叠全部区域"]').trigger('click');
+    expect(expandedStates()).toEqual(['false', 'false']);
+    wrapper.unmount();
+  });
+
   it('exposes a keyboard-adjustable width handle', async () => {
     const wrapper = mountList();
     const resizer = wrapper.get('[role="separator"]');

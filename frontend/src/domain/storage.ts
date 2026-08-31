@@ -59,6 +59,7 @@ export class BackendStorage implements StorageLike {
   private readonly seedDefaults?: Record<string, unknown[]>;
   private readonly seedMigration?: BackendStorageOptions['seedMigration'];
   private cache = new Map<string, unknown[]>();
+  private localSnapshotDisabled = false;
   private synced = new Map<string, unknown[]>();
 
   constructor(options: BackendStorageOptions) {
@@ -97,8 +98,14 @@ export class BackendStorage implements StorageLike {
   private enqueueWrite(key: string, value: unknown[], prev: unknown[] | undefined) {
     this.queue = this.queue.then(async () => {
       try {
-        await this.transport.writeKey(key, value);
-        this.synced.set(key, value);
+        const returned = await this.transport.writeKey(key, value);
+        const persisted = Array.isArray(returned) ? returned : value;
+        this.synced.set(key, persisted);
+        // 若排队期间没有更新的本地编辑，用后端剥离文件正文后的值替换缓存；
+        // 若已有后续编辑，保留较新的乐观值，等待后续队列项返回。
+        if (sameValue(this.cache.get(key), value)) {
+          this.cache.set(key, persisted);
+        }
         this.lastError = null;
         this.snapshotLocal();
       } catch (error) {
@@ -286,13 +293,16 @@ export class BackendStorage implements StorageLike {
   }
 
   snapshotLocal() {
-    if (this.status !== 'online') return;
+    if (this.status !== 'online' || this.localSnapshotDisabled) return;
     try {
       const full: Record<string, unknown[]> = {};
       for (const [key, value] of this.cache) full[key] = value;
       this.local.setItem(STORAGE_KEY, JSON.stringify(full));
     } catch {
-      // quota full: retry later
+      // A backend snapshot can be much larger than localStorage's quota. Retrying
+      // the same full serialization after every CRUD write blocks the UI again.
+      // A fresh bridge (page reload/reconnect) gets one new recovery attempt.
+      this.localSnapshotDisabled = true;
     }
   }
 

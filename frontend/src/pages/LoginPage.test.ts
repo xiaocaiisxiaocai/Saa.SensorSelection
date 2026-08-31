@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
+import { SEED_VERSION } from '@/domain';
 import { useThemeStore } from '@/stores/theme';
 import { toast } from '@/ui/toast';
 import LoginPage from './LoginPage.vue';
@@ -31,6 +32,12 @@ describe('LoginPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     toast.clear();
+    vi.spyOn(api, 'getStore').mockResolvedValue({
+      'meta:seed-version': [{ version: SEED_VERSION }],
+    });
+    vi.spyOn(api, 'putKey').mockResolvedValue([]);
+    vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
+    vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -43,6 +50,21 @@ describe('LoginPage', () => {
     expect(wrapper.find('.login__title').text()).toBe('感应器选型系统');
     expect(wrapper.find('.login__subtitle').text()).toBe('Symtek Automation China');
     expect(wrapper.find('.login-layout__footer').text()).toContain('Symtek Automation China');
+    wrapper.unmount();
+  });
+
+  it('hides clear buttons from the credential fields', async () => {
+    const wrapper = await mountLogin();
+    const inputs = wrapper.findAll('input');
+
+    await inputs[0].setValue('admin');
+    await inputs[0].trigger('focus');
+    expect(wrapper.find('[aria-label="清除"]').exists()).toBe(false);
+
+    await inputs[1].setValue('secret');
+    await inputs[1].trigger('focus');
+    expect(wrapper.find('[aria-label="清除"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="显示密码"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -92,7 +114,7 @@ describe('LoginPage', () => {
     );
     const getStore = vi.spyOn(api, 'getStore').mockResolvedValue({});
     const replaceAll = vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
-    vi.spyOn(api, 'putKey').mockResolvedValue(undefined);
+    vi.spyOn(api, 'putKey').mockResolvedValue([]);
     vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
     const wrapper = await mountLogin();
     await wrapper.get('.login__guest-link').trigger('click');
@@ -101,6 +123,44 @@ describe('LoginPage', () => {
       expect(getStore).toHaveBeenCalled();
       expect(replaceAll).toHaveBeenCalled();
     });
+    wrapper.unmount();
+  });
+
+  it('preloads data and only announces login success once it is ready', async () => {
+    let resolveStore!: (store: Record<string, unknown[]>) => void;
+    const getStore = vi.spyOn(api, 'getStore').mockImplementation(
+      () =>
+        new Promise<Record<string, unknown[]>>((resolve) => {
+          resolveStore = resolve;
+        }),
+    );
+    vi.spyOn(api, 'login').mockResolvedValue({
+      displayName: '管理员',
+      expiresAt: '2099-01-01T00:00:00Z',
+      orgUnit: null,
+      permissions: ['selection:read', 'selection:write'],
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      token: 'test-token',
+      username: 'admin',
+    });
+    vi.spyOn(api, 'putKey').mockResolvedValue([]);
+    vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
+    vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
+    const success = vi.spyOn(toast, 'success');
+    const wrapper = await mountLogin();
+
+    await vi.waitFor(() => expect(getStore).toHaveBeenCalledTimes(1));
+    const inputs = wrapper.findAll('input');
+    await inputs[0].setValue('admin');
+    await inputs[1].setValue('admin123');
+    await wrapper.get('form').trigger('submit');
+    expect(success).not.toHaveBeenCalledWith('登录成功');
+
+    resolveStore({ 'meta:seed-version': [{ version: SEED_VERSION }] });
+    await vi.waitFor(() => {
+      expect(success).toHaveBeenCalledWith('登录成功');
+    });
+    expect(getStore).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 });

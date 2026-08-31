@@ -111,6 +111,73 @@ async function run() {
     'PN-001',
   )
 
+  assert.deepEqual(
+    repository.saveSensorSopFile({
+      title: '暂不支持的 SOP 格式',
+      fileName: 'sensor-sop.docx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      dataUrl: 'data:application/octet-stream;base64,YQ==',
+      size: 12,
+      uploadedAt: '2026-08-27',
+    }),
+    { ok: false, reason: 'type' },
+  )
+
+  const savedSop = repository.saveSensorSopFile({
+    title: '感应器安装 SOP',
+    fileName: 'sensor-sop.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: 'data:application/pdf;base64,YQ==',
+    size: 12,
+    uploadedAt: '2026-08-27',
+  })
+  assert.equal(savedSop.ok, true)
+  assert.equal(repository.getSensorSopFiles()[0]?.fileName, 'sensor-sop.pdf')
+  assert.deepEqual(repository.getSensorSops(), [])
+  assert.deepEqual(repository.deleteSensorSopFile(savedSop.item.id), { ok: true })
+
+  assert.deepEqual(
+    repository.saveSensor3dFile({
+      title: '暂不支持的模型格式',
+      fileName: 'robot.step',
+      mimeType: 'application/step',
+      dataUrl: 'data:application/step;base64,YQ==',
+      size: 12,
+      uploadedAt: '2026-08-27',
+    }),
+    { ok: false, reason: 'type' },
+  )
+
+  const saved3d = repository.saveSensor3dFile({
+    title: '六轴机模型',
+    fileName: 'robot.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: 'data:application/pdf;base64,YQ==',
+    size: 12,
+    uploadedAt: '2026-08-27',
+  })
+  assert.equal(saved3d.ok, true)
+  assert.equal(repository.getSensor3dFiles()[0]?.fileName, 'robot.pdf')
+  const linked3d = repository.saveSensor(
+    { ...sensorsBefore[0], model3dId: saved3d.item.id },
+    sensorsBefore[0].id,
+  )
+  assert.equal(linked3d.ok, true)
+  assert.equal(linked3d.item.model3dId, saved3d.item.id)
+  assert.deepEqual(repository.deleteSensor3dFile(saved3d.item.id), {
+    ok: false,
+    reason: 'in-use',
+  })
+  assert.equal(
+    repository.saveSensor(
+      { ...linked3d.item, model3dId: null },
+      linked3d.item.id,
+    ).ok,
+    true,
+  )
+  assert.deepEqual(repository.deleteSensor3dFile(saved3d.item.id), { ok: true })
+
   const sensorStatusesEarly = repository.getDictionaryItems('sensor-status')
   assert.equal(
     sensorStatusesEarly.some((item) => item.name === '停用'),
@@ -337,8 +404,15 @@ async function run() {
   assert.deepEqual(duplicateType, { ok: false, reason: 'duplicate' })
 
   const statusTypes = repository.getDictionaryItems('customer-feedback-status')
-  assert.equal(statusTypes.length, 3)
-  assert.equal(statusTypes[0].name, '待处理')
+  assert.deepEqual(
+    statusTypes.map(({ name, sort }) => ({ name, sort })),
+    [
+      { name: '待处理', sort: 1 },
+      { name: '处理中', sort: 2 },
+      { name: '测试中', sort: 3 },
+      { name: '已解决', sort: 4 },
+    ],
+  )
 
   const savedFeedback = repository.saveCrud('customer-feedback', customer, {
     type: '现场临时异常',
@@ -656,7 +730,8 @@ async function run() {
   const sections = repository.getGlobalMachineSections()
   assert.equal(sections.some((item) => item.name === '机型注意事项' && item.kind === 'notes' && item.locked), true)
 
-  const machineName = '中间六轴机'
+  const machineName = '01 单段输送段（搭配）'
+  assert.deepEqual(repository.listResolvedMachineSections(machineName), [])
   const conveyorRows = repository.getMachineSectionRows(1, machineName)
   assert.deepEqual(
     conveyorRows,
@@ -749,9 +824,10 @@ async function run() {
   )
   assert.equal(delNotes.ok, false)
 
-  const machineB = '中间翻板机'
+  const machineB = '02 多段输送段（搭配）'
   const extraSection = repository.saveExtraMachineSection(machineName, {
     name: '本机专属Tab',
+    kind: 'structure',
     sort: 10,
   })
   assert.equal(extraSection.ok, true)
@@ -785,37 +861,50 @@ async function run() {
 
   const renamedMachine = repository.saveEntityItem(
     'machine',
-    { category: '中间段', name: '中间六轴机-改' },
+    {
+      category: '输送机构',
+      configuration: '标准输送段配置',
+      previousCategory: '输送机构',
+      previousConfiguration: '标准输送段配置',
+      name: '01 单段输送段（搭配）-改',
+    },
     machineName,
   )
   assert.equal(renamedMachine.ok, true)
   assert.equal(
     repository
-      .listResolvedMachineSections('中间六轴机-改')
+      .listResolvedMachineSections('01 单段输送段（搭配）-改')
       .some((item) => item.name === '本机专属Tab'),
     true,
   )
   assert.equal(
     repository
-      .getMachineSectionRows(extraSection.item.id, '中间六轴机-改')
+      .getMachineSectionRows(extraSection.item.id, '01 单段输送段（搭配）-改')
       .some((item) => item.sensorIds.includes(machineSensors[0].id)),
     true,
   )
-  assert.equal(repository.entityHasData('machine', '中间六轴机-改'), true)
+  assert.equal(repository.entityHasData('machine', '01 单段输送段（搭配）-改'), true)
   assert.equal(
     repository
       .getEntityGroups('machine')
-      .some((group) => group.items.includes('中间六轴机')),
+      .some((group) => domain.listEntityGroupItems(group).includes(machineName)),
     false,
   )
 
   const rowOnlyMachine = repository.saveEntityItem('machine', {
-    category: '中间段',
+    category: '输送机构',
+    configuration: '标准输送段配置',
     name: '仅行数据机',
   })
   assert.equal(rowOnlyMachine.ok, true)
   assert.equal(repository.entityHasData('machine', '仅行数据机'), false)
-  const onlyRow = repository.saveMachineSectionRow(1, '仅行数据机', {
+  const rowOnlySection = repository.saveExtraMachineSection('仅行数据机', {
+    name: '用户结构 Tab',
+    kind: 'structure',
+    sort: 1,
+  })
+  assert.equal(rowOnlySection.ok, true)
+  const onlyRow = repository.saveMachineSectionRow(rowOnlySection.item.id, '仅行数据机', {
     role: '进板检测',
     sensorIds: [machineSensors[0].id],
     purpose: '',
@@ -827,7 +916,7 @@ async function run() {
   const machineGroups = repository.getEntityGroups('machine')
   const machineSectionHits = []
   for (const group of machineGroups) {
-    for (const name of group.items) {
+    for (const name of domain.listEntityGroupItems(group)) {
       for (const section of repository.listResolvedMachineSections(name)) {
         for (const row of repository.getMachineSectionRows(section.id, name)) {
           machineSectionHits.push({
@@ -857,7 +946,14 @@ async function run() {
   })
   assert.equal(index.some((item) => item.title.includes('E3Z-D61')), true)
   assert.equal(index.some((item) => item.title === '庆鼎' && item.category === '华东'), true)
-  assert.equal(index.some((item) => item.title === 'AOI专用机' && item.category === '特殊机型'), true)
+  assert.equal(
+    index.some(
+      (item) =>
+        item.title === '02 多段输送段（搭配）' &&
+        item.category === '输送机构',
+    ),
+    true,
+  )
   assert.equal(index.some((item) => item.title === 'AOI检测' && item.category === '内层'), true)
   assert.equal(index.some((item) => item.title === '测试客户-改'), false)
   assert.equal(
@@ -865,13 +961,13 @@ async function run() {
       (item) =>
         item.title === machineSensors[0].sensorType &&
         item.type === 'machine' &&
-        item.query.item === '中间六轴机-改' &&
+        item.query.item === '01 单段输送段（搭配）-改' &&
         item.query.section === String(extraSection.item.id),
     ),
     true,
   )
   assert.equal(
-    index.some((item) => item.title === '中间六轴机-改' && item.type === 'machine'),
+    index.some((item) => item.title === '01 单段输送段（搭配）-改' && item.type === 'machine'),
     true,
   )
 
@@ -1185,7 +1281,7 @@ async function run() {
   assert.deepEqual(transport11.calls.writes, [])
   assert.equal(transport11.calls.writeAlls, 0)
 
-  // 内置基础数据物化：buildDefaultStore 覆盖字典/分组/制程/机型结构/Sensor 目录
+  // 内置基础数据物化：buildDefaultStore 覆盖字典/分组/制程/Sensor 目录；机型 Tab 由用户逐机型维护
   const defaultStore = domain.buildDefaultStore({
     crudDefaults: data.CRUD_DEFAULTS,
     sensorData: data.SENSOR_DATA,
@@ -1195,17 +1291,20 @@ async function run() {
     true,
   )
   assert.equal(defaultStore['entity-groups:customer'].length, 3) // 华东/华南/SAT
-  assert.equal(defaultStore['entity-groups:machine'].length, 4)
+  assert.equal(defaultStore['entity-groups:machine'].length, 10)
   assert.equal(defaultStore['dict:sensor-type'].length > 0, true)
   assert.equal(
     defaultStore['dict:sensor-status'].some((item) => item.name === '停用'),
     true,
   )
   assert.equal(defaultStore['process-steps:all'].length > 0, true)
-  assert.equal(defaultStore['machine-global-sections:all'].length, 4)
-  assert.equal(defaultStore['general-structure-labels:all'].length, 3)
+  assert.equal(defaultStore['machine-global-sections:all'], undefined)
+  assert.equal(defaultStore['general-structure-labels:all'], undefined)
+  assert.equal(defaultStore['dict:machine-section'], undefined)
   assert.equal(defaultStore['sensor-catalog:all'].length > 0, true)
   assert.deepEqual(defaultStore['sensor-sop:all'], [])
+  assert.deepEqual(defaultStore['sensor-sop-file:all'], [])
+  assert.deepEqual(defaultStore['sensor-3d:all'], [])
   assert.deepEqual(defaultStore['meta:seed-version'], [
     { version: data.SEED_VERSION },
   ])
@@ -1224,67 +1323,10 @@ async function run() {
   assert.equal(seeded.seeded, true)
   assert.equal(seeded.migrated, false)
   assert.equal(transport8.calls.writeAlls, 1)
-  assert.deepEqual(
-    transport8.remote.get('machine-global-sections:all'),
-    defaultStore['machine-global-sections:all'],
-  )
+  assert.equal(transport8.remote.get('machine-global-sections:all'), undefined)
   const seededRead = JSON.parse(bridge8.getItem(domain.STORAGE_KEY))
   assert.deepEqual(Object.keys(seededRead).sort(), Object.keys(defaultStore).sort())
   assert.deepEqual(seededRead['sensor-catalog:all'], defaultStore['sensor-catalog:all'])
-
-  // 旧机型结构名修复：必须经注入的 storage 持久化（online 下即桥接层 → 后端）
-  const legacyMemory = new Map()
-  legacyMemory.set(
-    domain.STORAGE_KEY,
-    JSON.stringify({
-      'machine-global-sections:all': [
-        {
-          id: 1,
-          name: '标准输送段',
-          sort: 1,
-          kind: 'structure',
-          scope: 'global',
-        },
-        {
-          id: 2,
-          name: '手臂机构',
-          sort: 2,
-          kind: 'structure',
-          scope: 'global',
-        },
-        {
-          id: 3,
-          name: '台车工位结构',
-          sort: 3,
-          kind: 'structure',
-          scope: 'global',
-        },
-        {
-          id: 4,
-          name: '机型注意事项',
-          sort: 4,
-          kind: 'notes',
-          locked: true,
-          scope: 'global',
-        },
-      ],
-    }),
-  )
-  const legacyStorage = {
-    getItem: (key) => legacyMemory.get(key) ?? null,
-    setItem: (key, value) => legacyMemory.set(key, value),
-  }
-  const legacyRepo = domain.createSelectionRepository({
-    crudDefaults: data.CRUD_DEFAULTS,
-    sensorData: data.SENSOR_DATA,
-    storage: legacyStorage,
-  })
-  legacyRepo.getGlobalMachineSections()
-  const repaired = JSON.parse(legacyMemory.get(domain.STORAGE_KEY))
-  assert.equal(
-    repaired['machine-global-sections:all'].find((item) => item.id === 1).name,
-    '输送机构',
-  )
 
   console.log('Selection domain contract checks passed.')
   } finally {

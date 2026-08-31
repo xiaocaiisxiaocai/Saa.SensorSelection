@@ -21,10 +21,10 @@ import {
   AFormGrid,
   AFormRow,
   AIconButton,
+  ASelect,
   ASheet,
   ASwitch,
   ATable,
-  ATokenField,
   ATreeSelect,
   type TableColumn,
 } from '@/ui';
@@ -47,7 +47,7 @@ const form = reactive({
   isActive: true,
   orgUnitId: null as number | null,
   password: '',
-  roleIds: [] as Array<string | number>,
+  roleId: null as number | null,
   username: '',
 });
 const newPassword = ref('');
@@ -101,7 +101,7 @@ function openCreate() {
     isActive: true,
     orgUnitId: null,
     password: '',
-    roleIds: [],
+    roleId: null,
     username: '',
   });
   dialogOpen.value = true;
@@ -114,10 +114,13 @@ function openEdit(user: RbacUser) {
     isActive: user.isActive,
     orgUnitId: user.orgUnit?.id ?? null,
     password: '',
-    roleIds: user.roles.map((role) => role.id),
+    roleId: user.roles.length === 1 ? user.roles[0]!.id : null,
     username: user.username,
   });
   dialogOpen.value = true;
+  if (user.roles.length > 1) {
+    toast.warning('该用户当前绑定多个角色，请重新选择一个角色');
+  }
 }
 
 async function saveUser() {
@@ -137,7 +140,7 @@ async function saveUser() {
         isActive: form.isActive,
         orgUnitId: form.orgUnitId,
         password: form.password,
-        roleIds: form.roleIds.map(Number),
+        roleIds: form.roleId === null ? [] : [Number(form.roleId)],
         username: form.username.trim(),
       });
       toast.success('用户已创建');
@@ -146,7 +149,7 @@ async function saveUser() {
         displayName: form.displayName.trim(),
         isActive: form.isActive,
         orgUnitId: form.orgUnitId,
-        roleIds: form.roleIds.map(Number),
+        roleIds: form.roleId === null ? [] : [Number(form.roleId)],
       });
       toast.success('用户已更新');
     }
@@ -274,10 +277,11 @@ function orgPath(user: RbacUser) {
           <AField v-model="form.displayName" :maxlength="64" placeholder="姓名或称呼" />
         </AFormRow>
         <AFormRow label="角色">
-          <ATokenField
-            v-model="form.roleIds"
+          <ASelect
+            v-model="form.roleId"
             :options="roleOptions"
-            placeholder="可多选角色"
+            placeholder="请选择一个角色"
+            clearable
           />
         </AFormRow>
         <AFormRow label="所属组织">

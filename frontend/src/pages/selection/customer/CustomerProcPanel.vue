@@ -9,6 +9,7 @@ import { useSelectionStore } from '@/stores/selection';
 import {
   AButton,
   AField,
+  AFilterResetButton,
   AFormGrid,
   AFormRow,
   AIconButton,
@@ -17,6 +18,7 @@ import {
   ASheet,
   ATable,
   ATextArea,
+  ATokenField,
   type SelectOption,
   type TableColumn,
 } from '@/ui';
@@ -29,7 +31,7 @@ const writable = computed(() => canWrite('selection:write'));
 const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
-const typeFilter = ref<string | null>(null);
+const typeFilters = ref<Array<string | number>>([]);
 const form = reactive({
   feature: '',
   note: '',
@@ -48,7 +50,7 @@ const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (!typeFilter.value || item.type === typeFilter.value) &&
+      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
       (!value ||
         [item.type, item.role, item.feature, item.sensorNote, item.note]
           .join(' ')
@@ -56,6 +58,9 @@ const filtered = computed(() => {
           .includes(value)),
   );
 });
+const hasActiveFilters = computed(
+  () => Boolean(query.value.trim()) || typeFilters.value.length > 0,
+);
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'type', label: '制程分类', width: 90 },
@@ -74,7 +79,7 @@ watch(
   () => props.entityName,
   () => {
     query.value = '';
-    typeFilter.value = null;
+    typeFilters.value = [];
   },
 );
 
@@ -87,6 +92,11 @@ function resetForm() {
     sensorNote: '',
     type: typeOptions.value[0]?.value ?? '',
   });
+}
+
+function resetFilters() {
+  query.value = '';
+  typeFilters.value = [];
 }
 
 function addItem() {
@@ -135,25 +145,26 @@ async function deleteItem(item: CustomerProcItem) {
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <ASelect
-        v-model="typeFilter"
+      <ATokenField
+        v-model="typeFilters"
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="制程分类"
-        clearable
+        :max-visible-tokens="1"
       />
       <ASearchField
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、作用、特性、sensor注意或备注"
       />
+      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
     </div>
     <ATable
       :columns="columns"
       :rows="filtered"
       row-key="id"
-      :empty-text="query.trim() || typeFilter ? '没有匹配的注意事项' : '暂无注意事项'"
+      :empty-text="query.trim() || typeFilters.length ? '没有匹配的注意事项' : '暂无注意事项'"
       striped
     >
       <template #cell-actions="{ row }">

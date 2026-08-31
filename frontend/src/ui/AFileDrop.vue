@@ -2,11 +2,7 @@
 import { Upload } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
-import {
-  describeFileRule,
-  validateFile,
-  type FileDropRule,
-} from './file-drop';
+import { describeFileRule, validateFile, type FileDropRule } from './file-drop';
 import { toast } from './toast';
 
 const props = withDefaults(
@@ -19,11 +15,13 @@ const props = withDefaults(
     disabled?: boolean;
     sizeMessage?: string;
     typeMessage?: string;
+    title?: string;
     hint?: string;
   }>(),
   {
     sizeMessage: '文件大小超出限制',
     typeMessage: '文件类型不受支持',
+    title: '将文件拖到此处，或点击选择',
   },
 );
 
@@ -42,20 +40,18 @@ const rule = computed<FileDropRule>(() => ({
   extensions: props.extensions,
 }));
 
-const hintText = computed(
-  () => props.hint ?? describeFileRule(rule.value),
-);
+const hintText = computed(() => props.hint ?? describeFileRule(rule.value));
 
 function takeFiles(list: FileList | File[] | null) {
-  if (inputEl.value) {
-    inputEl.value.value = '';
-  }
-
   if (!list || props.disabled) {
     return;
   }
 
   const files = [...list];
+  if (inputEl.value) {
+    inputEl.value.value = '';
+  }
+
   const accepted: File[] = [];
   for (const file of files) {
     const reason = validateFile(file, rule.value);
@@ -105,7 +101,10 @@ function openPicker() {
 <template>
   <div
     class="a-file-drop"
-    :class="{ 'a-file-drop--active': dragging, 'a-file-drop--disabled': disabled }"
+    :class="{
+      'a-file-drop--active': dragging,
+      'a-file-drop--disabled': disabled,
+    }"
     role="button"
     tabindex="0"
     :aria-disabled="disabled ? true : undefined"
@@ -124,11 +123,12 @@ function openPicker() {
       :accept="accept"
       :multiple="multiple"
       :disabled="disabled"
+      @click.stop
       @change="takeFiles(($event.target as HTMLInputElement).files)"
     >
     <Upload :size="24" :stroke-width="1.5" aria-hidden="true" />
-    <p class="a-file-drop__title">将文件拖到此处，或点击选择</p>
-    <p class="a-file-drop__hint">{{ hintText }}</p>
+    <p class="a-file-drop__title">{{ title }}</p>
+    <p v-if="hintText" class="a-file-drop__hint">{{ hintText }}</p>
   </div>
 </template>
 

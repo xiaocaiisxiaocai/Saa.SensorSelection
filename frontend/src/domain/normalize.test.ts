@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { STORAGE_KEY, keyFor, machineSectionImagesKey, machineSectionRowsKey } from './keys';
 import {
   CONTROLLED_FILE_RULES,
+  SENSOR_3D_FILE_RULES,
   createSensorCatalogDefaults,
   detectControlledFileKind,
   formatLocalDate,
@@ -12,10 +13,12 @@ import {
   normalizeDictionaryItems,
   normalizeEntityGroups,
   normalizeMachineSectionImages,
+  normalizeMachineRowImage,
   normalizeMachineSectionRows,
   normalizeMachineSections,
   normalizeProcessSteps,
   normalizeSensorItems,
+  normalizeSensor3dFiles,
   parsePersistedStore,
   validateControlledUpload,
   validateMachineRowImage,
@@ -171,6 +174,7 @@ describe('normalizeSensorItems', () => {
           sensorType: '未知',
           status: '坏状态',
           sopId: 0,
+          model3dId: 'nope',
           replacesId: 'nope',
         },
       ],
@@ -181,9 +185,73 @@ describe('normalizeSensorItems', () => {
       sensorType: '漫反射',
       status: '现用',
       sopId: null,
+      model3dId: null,
       replacesId: null,
       replacedById: null,
     });
+  });
+});
+
+describe('normalizeSensor3dFiles', () => {
+  it('keeps PDF-based 3D files and rejects model formats or oversized files', () => {
+    expect(
+      normalizeSensor3dFiles([
+        {
+          id: 1,
+          title: '六轴机模型',
+          fileName: 'robot.PDF',
+          mimeType: '',
+          dataUrl: 'data:application/pdf;base64,YQ==',
+          size: 12,
+          uploadedAt: '2026-08-27',
+        },
+        {
+          id: 2,
+          title: '暂不支持的模型格式',
+          fileName: 'robot.step',
+          mimeType: 'application/step',
+          dataUrl: 'data:application/step;base64,YQ==',
+          size: 12,
+        },
+        {
+          id: 3,
+          title: '过大模型',
+          fileName: 'large.pdf',
+          mimeType: 'application/pdf',
+          dataUrl: 'data:application/pdf;base64,YQ==',
+          size: SENSOR_3D_FILE_RULES.maxBytes + 1,
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        id: 1,
+        fileName: 'robot.PDF',
+        mimeType: 'application/pdf',
+        title: '六轴机模型',
+      }),
+    ]);
+  });
+
+  it('keeps backend file URLs without embedding base64 content in the store', () => {
+    expect(
+      normalizeSensor3dFiles([
+        {
+          id: 1,
+          title: '按需加载模型',
+          fileName: 'robot.pdf',
+          mimeType: 'application/pdf',
+          dataUrl: '/api/files/11111111-1111-1111-1111-111111111111/content',
+          fileId: '11111111-1111-1111-1111-111111111111',
+          size: 12,
+          uploadedAt: '2026-08-28',
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        dataUrl: '/api/files/11111111-1111-1111-1111-111111111111/content',
+        fileName: 'robot.pdf',
+      }),
+    ]);
   });
 });
 
@@ -252,9 +320,53 @@ describe('machine row images', () => {
     ]);
     expect(images.map((item) => item.fileName)).toEqual(['a.png', 'b.jpg']);
   });
+
+  it('keeps independently stored backend image URLs', () => {
+    expect(
+      normalizeMachineRowImage({
+        dataUrl: '/api/files/22222222-2222-2222-2222-222222222222/content',
+        fileName: 'machine.png',
+        mimeType: 'image/png',
+        size: 12,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        dataUrl: '/api/files/22222222-2222-2222-2222-222222222222/content',
+      }),
+    );
+  });
 });
 
 describe('normalizeMachineSectionRows', () => {
+  it('keeps valid structure process links, defaults old rows, and removes links from notes', () => {
+    const structureRows = normalizeMachineSectionRows(
+      [
+        {
+          id: 1,
+          role: '已绑定结构',
+          processStepId: 12,
+          sensorType: '漫反射',
+        },
+        { id: 2, role: '历史结构', sensorType: '对射' },
+      ],
+      { allowImage: true },
+    );
+    const noteRows = normalizeMachineSectionRows(
+      [
+        {
+          id: 3,
+          role: '安装注意',
+          name: '保持水平',
+          processStepId: 12,
+        },
+      ],
+      { allowImage: false },
+    );
+
+    expect(structureRows.map((row) => row.processStepId)).toEqual([12, null]);
+    expect(noteRows[0]?.processStepId).toBeNull();
+  });
+
   it('maps legacy type/spec text onto catalog ids when sensorIds are empty', () => {
     const [row] = normalizeMachineSectionRows(
       [
@@ -279,6 +391,7 @@ describe('normalizeMachineSectionRows', () => {
             feature: '',
             scene: '',
             sopId: null,
+            model3dId: null,
             replacesId: null,
             replacedById: null,
             problemNote: '',
@@ -320,6 +433,32 @@ describe('controlled files', () => {
     expect(detectControlledFileKind('a.txt', 'text/plain')).toBe(null);
   });
 
+  it('classifies PPT and PPTX only when process-intro kinds are enabled', () => {
+    expect(
+      detectControlledFileKind(
+        'briefing.PPTX',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ['pdf', 'word', 'ppt'],
+      ),
+    ).toBe('ppt');
+    expect(
+      detectControlledFileKind(
+        'legacy.PPT',
+        'application/vnd.ms-powerpoint',
+        ['pdf', 'word', 'ppt'],
+      ),
+    ).toBe('ppt');
+    expect(detectControlledFileKind('briefing.pptx', '')).toBe(null);
+    expect(
+      validateControlledUpload(
+        'ppt',
+        'briefing.pptx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        10,
+      ),
+    ).toEqual({ ok: true });
+  });
+
   it('validates size and type against kind rules', () => {
     expect(validateControlledUpload('excel' as 'pdf', 'a.pdf', 'application/pdf', 1)).toEqual({
       ok: false,
@@ -351,6 +490,26 @@ describe('controlled files', () => {
       expect.objectContaining({ id: 1, kind: 'pdf', fileName: 'a.pdf' }),
     ]);
   });
+
+  it('keeps independently stored backend document URLs', () => {
+    expect(
+      normalizeControlledDocuments([
+        {
+          id: 1,
+          kind: 'pdf',
+          fileName: '资料.pdf',
+          mimeType: 'application/pdf',
+          dataUrl: '/api/files/33333333-3333-3333-3333-333333333333/content',
+          size: 12,
+          uploadedAt: '2026-08-28',
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        dataUrl: '/api/files/33333333-3333-3333-3333-333333333333/content',
+      }),
+    ]);
+  });
 });
 
 describe('normalizeDictionaryItems', () => {
@@ -374,6 +533,40 @@ describe('normalizeEntityGroups', () => {
     expect(groups).toEqual([
       { name: '华东', items: ['庆鼎'] },
       { name: '华南', items: ['崇达'] },
+    ]);
+  });
+
+  it('keeps ordered machine configurations and direct category machines', () => {
+    const groups = normalizeEntityGroups([
+      {
+        name: '输送机构',
+        items: ['直属机型'],
+        configurations: [
+          {
+            name: '标准输送段配置',
+            items: ['01 单段输送段（搭配）', '02 多段输送段（搭配）'],
+          },
+          {
+            name: '标准输送段配置',
+            items: ['重复配置中的机型'],
+          },
+        ],
+      },
+      { name: '专案机型', items: ['CSL(U)R-802（插框机）'] },
+    ]);
+
+    expect(groups).toEqual([
+      {
+        name: '输送机构',
+        items: ['直属机型'],
+        configurations: [
+          {
+            name: '标准输送段配置',
+            items: ['01 单段输送段（搭配）', '02 多段输送段（搭配）'],
+          },
+        ],
+      },
+      { name: '专案机型', items: ['CSL(U)R-802（插框机）'] },
     ]);
   });
 });

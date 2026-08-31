@@ -60,7 +60,7 @@ async function onFiles(picked: File[]) {
       title: file.name.replace(/\.pdf$/i, ''),
       uploadedAt: new Date().toISOString(),
     });
-    toastResult(result, 'SOP 已上传', {
+    toastResult(result, '型录已上传', {
       size: '文件大小超出 8 MB 限制',
       type: '仅支持 PDF 文档',
       storage: '数据保存失败，文件未保存',
@@ -69,11 +69,11 @@ async function onFiles(picked: File[]) {
 }
 
 async function remove(item: SensorSopItem) {
-  const ok = await confirmDelete('删除 SOP', `确认删除“${item.title}”吗？`);
+  const ok = await confirmDelete('删除型录', `确认删除“${item.title}”吗？`);
   if (!ok) return;
   const result = store.deleteSensorSop(item.id);
-  toastResult(result, 'SOP 已删除', {
-    'in-use': '仍有型号关联该 SOP，请先取消关联后再删除',
+  toastResult(result, '型录已删除', {
+    'in-use': '仍有型号关联该型录，请先取消关联后再删除',
   });
   if (preview.value?.id === item.id) preview.value = null;
 }
@@ -130,14 +130,18 @@ async function remove(item: SensorSopItem) {
         </div>
       </li>
     </ul>
-    <p v-else class="docs-empty">暂无 SOP 文件</p>
+    <p v-else class="docs-empty">暂无型录文件</p>
     <ASheet
       :open="Boolean(preview)"
       :title="preview?.title || '预览 PDF'"
-      :width="720"
+      viewport
       @update:open="(open) => { if (!open) preview = null }"
     >
-      <APdfViewer v-if="preview" :src="preview.dataUrl" />
+      <APdfViewer
+        v-if="preview"
+        class="a-pdf-viewer--large"
+        :src="preview.dataUrl"
+      />
     </ASheet>
   </div>
 </template>

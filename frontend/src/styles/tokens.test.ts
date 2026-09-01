@@ -8,6 +8,10 @@ const tokens = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), 'tokens.css'),
   'utf8',
 );
+const controls = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'control.css'),
+  'utf8',
+);
 
 const requiredTokens = [
   '--sys-blue',
@@ -88,5 +92,14 @@ describe('tokens.css', () => {
     for (const name of ['--sys-blue', '--sys-green', '--sys-red', '--sys-orange']) {
       expect(contrastOnWhite(getHex(name)), name).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('uses the compact caption scale consistently for small controls', () => {
+    expect(controls).toMatch(
+      /\.a-control--small\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(controls).toMatch(
+      /\.a-control--small \.a-control__input\s*\{[^}]*font:\s*inherit;/s,
+    );
   });
 });

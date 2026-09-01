@@ -41,6 +41,7 @@
 
 .a-control--small {
   min-height: var(--control-height-sm);
+  font: var(--text-caption);
 }
 
 .a-control--textarea {
@@ -58,6 +59,10 @@
   color: var(--label);
   background: transparent;
   border: 0;
+}
+
+.a-control--small .a-control__input {
+  font: inherit;
 }
 
 .a-control__input::placeholder {

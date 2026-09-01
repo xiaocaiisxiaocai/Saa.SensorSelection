@@ -652,11 +652,13 @@ async function closeTab(value: string) {
             class="machine-process-context__select"
             :options="processOptions"
             placeholder="选择制程"
+            size="small"
           />
           <AButton
             v-if="writable"
             class="machine-process-context__manage"
             variant="borderless"
+            size="small"
             @click="openProcessManager"
           >
             管理制程
@@ -831,7 +833,7 @@ async function closeTab(value: string) {
 .machine-source-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: max-content;
   max-width: 100%;
   min-width: 0;
@@ -871,6 +873,8 @@ async function closeTab(value: string) {
 .machine-catalog-tabs :deep(.a-tab-bar__tab) {
   flex: 1;
   justify-content: center;
+  height: var(--control-height-md);
+  font: var(--text-caption);
 }
 
 .machine-process-list {

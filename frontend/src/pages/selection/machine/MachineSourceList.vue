@@ -1004,7 +1004,7 @@ onMounted(restoreWidth);
 .machine-source__search {
   flex: 1;
   min-width: 0;
-  height: 34px;
+  height: var(--control-height-md);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1012,6 +1012,7 @@ onMounted(restoreWidth);
   border-radius: 8px;
   background: var(--fill-3);
   color: var(--label-2);
+  font: var(--text-caption);
 }
 
 .machine-source__search input {
@@ -1031,7 +1032,7 @@ onMounted(restoreWidth);
 }
 
 .machine-source__action {
-  height: 30px;
+  height: var(--control-height-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1040,6 +1041,7 @@ onMounted(restoreWidth);
   border-radius: 6px;
   background: var(--bg-content);
   color: var(--label);
+  font: var(--text-caption);
   cursor: pointer;
 }
 

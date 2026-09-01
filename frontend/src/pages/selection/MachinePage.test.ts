@@ -148,6 +148,7 @@ describe('MachinePage', () => {
       .findAllComponents(ASelect)
       .find((component) => component.props('placeholder') === '选择制程');
     expect(processSelect).toBeDefined();
+    expect(processSelect?.props('size')).toBe('small');
     expect(processSelect?.props('options')).toEqual([
       { label: '制程1', value: 1 },
       { label: '制程2', value: 2 },
@@ -160,6 +161,9 @@ describe('MachinePage', () => {
       false,
     );
     expect(wrapper.text()).toContain('管理制程');
+    expect(
+      wrapper.get('.machine-process-context__manage').classes(),
+    ).toContain('a-button--small');
     expect(wrapper.text()).toContain('标准输送段配置');
 
     await wrapper.get('.machine-process-context__manage').trigger('click');
@@ -569,9 +573,21 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('uses the compact caption type scale for classification trees', () => {
+  it('uses the compact caption scale for source controls and trees', () => {
+    expect(machinePageSource).toMatch(
+      /\.machine-source-stack\s*\{[^}]*gap:\s*var\(--space-2\);/s,
+    );
+    expect(machinePageSource).toMatch(
+      /\.machine-catalog-tabs :deep\(\.a-tab-bar__tab\)\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-caption\);/s,
+    );
     expect(machineSourceListSource).toMatch(
       /\.machine-tree-row\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(machineSourceListSource).toMatch(
+      /\.machine-source__search\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(machineSourceListSource).toMatch(
+      /\.machine-source__action\s*\{[^}]*height:\s*var\(--control-height-sm\);[^}]*font:\s*var\(--text-caption\);/s,
     );
     expect(sharedSourceListSource).toMatch(
       /\.a-source-list__toggle,\s*\.a-source-list__item\s*\{[^}]*font:\s*var\(--text-caption\);/s,

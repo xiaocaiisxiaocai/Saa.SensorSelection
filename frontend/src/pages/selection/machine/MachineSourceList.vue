@@ -1059,6 +1059,7 @@ onMounted(restoreWidth);
   gap: 6px;
   border-radius: 6px;
   color: var(--label);
+  font: var(--text-caption);
 }
 
 .machine-tree-row--group {

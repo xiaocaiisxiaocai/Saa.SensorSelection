@@ -189,30 +189,30 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
     : undefined;
   const cols: TableColumn<MachineTableRow>[] = isStructure.value
     ? [
-        { key: 'role', label: '功能作用', minWidth: 100, rowSpan },
-        { key: 'machineModelName', label: '机型', minWidth: 120, rowSpan },
+        { key: 'role', label: '功能作用', minWidth: 90, rowSpan },
+        { key: 'machineModelName', label: '机型', minWidth: 100, rowSpan },
         {
           key: 'processStepName',
           label: '工艺制程',
-          minWidth: 140,
+          minWidth: 110,
           rowSpan,
         },
         {
           key: 'boardCharacteristicName',
           label: '板件特性',
-          minWidth: 150,
+          minWidth: 120,
           rowSpan,
         },
-        { key: 'sensorType', label: '传感器类型', minWidth: 110 },
-        { key: 'spec', label: '规格', minWidth: 260, ellipsis: true },
+        { key: 'sensorType', label: '传感器类型', minWidth: 100 },
+        { key: 'spec', label: '规格', minWidth: 220, ellipsis: true },
         {
           key: 'purpose',
           label: '作用',
-          minWidth: 150,
+          minWidth: 120,
           ellipsis: true,
           rowSpan,
         },
-        { key: 'note', label: '备注', minWidth: 130, ellipsis: true, rowSpan },
+        { key: 'note', label: '备注', minWidth: 96, ellipsis: true, rowSpan },
       ]
     : [
         { key: 'role', label: '注意分类', width: 120 },
@@ -224,7 +224,7 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
     cols.push({
       key: 'actions',
       label: '操作',
-      width: 96,
+      width: 72,
       fixed: 'end',
       rowSpan,
     });

@@ -23,7 +23,28 @@ const selectionPageCss = readFileSync(
   ),
   'utf8',
 );
-const machinePageSource = readFileSync(fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'), 'utf8');
+const machinePageSource = readFileSync(
+  fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'),
+  'utf8',
+);
+const machineSourceListSource = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    'machine',
+    'MachineSourceList.vue',
+  ),
+  'utf8',
+);
+const sharedSourceListSource = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'ui',
+    'ASourceList.vue',
+  ),
+  'utf8',
+);
 
 async function mountPage(
   authenticated = false,
@@ -532,17 +553,32 @@ describe('MachinePage', () => {
   });
 
   it('keeps structure labels compact and gives specifications more room', async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountPage(true, true);
     const headers = wrapper.findAll('.a-table thead th');
 
-    expect(headers[0]?.attributes('style')).toContain('width: 100px');
-    expect(headers[1]?.attributes('style')).toContain('width: 120px');
-    expect(headers[2]?.attributes('style')).toContain('width: 140px');
-    expect(headers[3]?.attributes('style')).toContain('width: 150px');
-    expect(headers[4]?.attributes('style')).toContain('width: 110px');
-    expect(headers[5]?.attributes('style')).toContain('width: 260px');
+    expect(headers[0]?.attributes('style')).toContain('width: 90px');
+    expect(headers[1]?.attributes('style')).toContain('width: 100px');
+    expect(headers[2]?.attributes('style')).toContain('width: 110px');
+    expect(headers[3]?.attributes('style')).toContain('width: 120px');
+    expect(headers[4]?.attributes('style')).toContain('width: 100px');
+    expect(headers[5]?.attributes('style')).toContain('width: 220px');
+    expect(headers[6]?.attributes('style')).toContain('width: 120px');
+    expect(headers[7]?.attributes('style')).toContain('width: 96px');
+    expect(headers[8]?.attributes('style')).toContain('width: 72px');
 
     wrapper.unmount();
+  });
+
+  it('uses the compact caption type scale for classification trees', () => {
+    expect(machineSourceListSource).toMatch(
+      /\.machine-tree-row\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(sharedSourceListSource).toMatch(
+      /\.a-source-list__toggle,\s*\.a-source-list__item\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(sharedSourceListSource).toMatch(
+      /\.a-source-list__count\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
   });
 
   it('left-aligns custom badge and action content inside table cells', async () => {

@@ -614,7 +614,7 @@ onMounted(restoreWidth);
   align-items: center;
   min-width: 0;
   height: var(--row-height);
-  font: var(--text-control);
+  font: var(--text-caption);
   text-align: start;
 }
 
@@ -664,7 +664,7 @@ onMounted(restoreWidth);
 .a-source-list__count {
   flex-shrink: 0;
   padding-right: var(--space-2);
-  font: var(--text-control);
+  font: var(--text-caption);
   color: var(--label-3);
 }
 

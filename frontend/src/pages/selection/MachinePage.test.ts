@@ -164,9 +164,10 @@ describe('MachinePage', () => {
     expect(
       wrapper.get('.machine-source-stack > .machine-process-context'),
     ).toBeDefined();
-    expect(wrapper.get('.machine-process-context__label').text()).toBe(
-      '当前浏览制程',
+    expect(wrapper.find('.machine-process-context__label').exists()).toBe(
+      false,
     );
+    expect(processSelect?.props('ariaLabel')).toBe('当前浏览制程');
     expect(wrapper.text()).toContain('管理制程');
     expect(wrapper.get('.machine-process-context__manage').classes()).toContain(
       'a-button--small',
@@ -192,7 +193,10 @@ describe('MachinePage', () => {
   it('keeps the current browsing process while global structure search defaults to every process', async () => {
     const wrapper = await mountPage(true, true);
 
-    expect(wrapper.text()).toContain('当前浏览制程');
+    const browsingProcess = wrapper
+      .findAllComponents(ASelect)
+      .find((component) => component.props('ariaLabel') === '当前浏览制程');
+    expect(browsingProcess).toBeDefined();
     expect(wrapper.text()).toContain('目录浏览');
     expect(wrapper.text()).toContain('条件查找');
 

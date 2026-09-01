@@ -809,7 +809,6 @@ async function closeTab(value: string) {
     >
       <div class="machine-source-stack">
         <div class="machine-process-context" aria-label="当前浏览制程">
-          <span class="machine-process-context__label">当前浏览制程</span>
           <ASelect
             v-model="processSelection"
             class="machine-process-context__select"
@@ -1068,12 +1067,6 @@ async function closeTab(value: string) {
   min-width: 120px;
 }
 
-.machine-process-context__label {
-  flex: none;
-  color: var(--label-2);
-  font: var(--text-caption);
-}
-
 .machine-process-context__manage {
   flex: none;
 }
@@ -1202,10 +1195,6 @@ async function closeTab(value: string) {
 
   .machine-process-context__manage {
     padding-inline: var(--space-2);
-  }
-
-  .machine-process-context__label {
-    display: none;
   }
 
   .selection-split--global-search {

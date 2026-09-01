@@ -70,6 +70,8 @@
   --text-control: 400 15px/22px var(--font-ui);
   --text-control-em: 600 15px/22px var(--font-ui);
   --text-field: 400 13px/18px var(--font-ui);
+  --text-toolbar: 400 12px/18px var(--font-ui);
+  --text-toolbar-em: 600 12px/18px var(--font-ui);
   --text-caption: 400 13px/18px var(--font-ui);
   --tracking-display: -0.5px;
   --tracking-title-1: -0.4px;

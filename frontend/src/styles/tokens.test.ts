@@ -40,6 +40,30 @@ const appShell = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'shell', 'AppShell.vue'),
   'utf8',
 );
+const selectionPage = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'pages',
+    'shared',
+    'selection-page.css',
+  ),
+  'utf8',
+);
+const tabBar = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATabBar.vue'),
+  'utf8',
+);
+const machinePage = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'pages',
+    'selection',
+    'MachinePage.vue',
+  ),
+  'utf8',
+);
 
 const requiredTokens = [
   '--sys-blue',
@@ -69,6 +93,8 @@ const requiredTokens = [
   '--text-display',
   '--text-control',
   '--text-field',
+  '--text-toolbar',
+  '--text-toolbar-em',
   '--text-caption',
   '--sidebar-width',
   '--toolbar-height',
@@ -163,6 +189,30 @@ describe('tokens.css', () => {
     expect(appShell).toMatch(
       /\.search input\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
+  });
+
+  it('gives dense filter toolbars a compact hierarchy without shrinking table copy', () => {
+    expect(tokens).toMatch(/--text-toolbar:\s*400 12px\/18px/);
+    expect(tokens).toMatch(/--text-toolbar-em:\s*600 12px\/18px/);
+    expect(selectionPage).toMatch(
+      /\.selection-toolbar \.a-control,[\s\S]*?\.selection-toolbar \.a-token-field__chip\s*\{[^}]*font:\s*var\(--text-toolbar\);/,
+    );
+    expect(selectionPage).toMatch(
+      /\.selection-toolbar\s+\.a-button\s*\{[^}]*font:\s*var\(--text-toolbar-em\);/s,
+    );
+    expect(selectionPage).toMatch(
+      /\.machine-images h3\s*\{[^}]*font:\s*var\(--text-control-em\);/s,
+    );
+    expect(tabBar).toMatch(
+      /\.a-tab-bar__tab\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+    expect(tabBar).toMatch(
+      /\.a-tab-bar__tab--selected\s*\{[^}]*font-weight:\s*600;/s,
+    );
+    expect(machinePage).toMatch(
+      /\.machine-catalog-tabs\s+:deep\(\.a-tab-bar__tab--selected\)\s*\{[^}]*font-weight:\s*600;/s,
+    );
+    expect(tokens).toMatch(/--text-control:\s*400 15px\/22px/);
   });
 
   it('uses a dedicated readable color for field placeholders in both themes', () => {

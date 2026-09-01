@@ -877,6 +877,10 @@ async function closeTab(value: string) {
   font: var(--text-caption);
 }
 
+.machine-catalog-tabs :deep(.a-tab-bar__tab--selected) {
+  font-weight: 600;
+}
+
 .machine-process-list {
   display: grid;
   gap: 8px;

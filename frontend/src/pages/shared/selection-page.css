@@ -95,6 +95,16 @@
   min-width: 0;
 }
 
+.selection-toolbar .a-control,
+.selection-toolbar .a-control__input,
+.selection-toolbar .a-token-field__chip {
+  font: var(--text-toolbar);
+}
+
+.selection-toolbar .a-button {
+  font: var(--text-toolbar-em);
+}
+
 .selection-toolbar__count {
   flex: 0 0 auto;
   margin-right: auto;
@@ -259,8 +269,7 @@
 
 .machine-images h3 {
   margin: 0;
-  font: var(--text-headline);
-  letter-spacing: var(--tracking-headline);
+  font: var(--text-control-em);
 }
 
 .machine-images p {

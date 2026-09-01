@@ -235,13 +235,14 @@ onBeforeUnmount(() => {
   align-items: center;
   height: var(--control-height-lg);
   padding: 0 var(--space-4);
-  font: var(--text-control);
+  font: var(--text-caption);
   color: var(--label-2);
   background: transparent;
   border: 0;
 }
 
 .a-tab-bar__tab--selected {
+  font-weight: 600;
   color: var(--sys-blue);
 }
 

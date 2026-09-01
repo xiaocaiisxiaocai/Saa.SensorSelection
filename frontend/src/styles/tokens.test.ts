@@ -127,6 +127,11 @@ describe('tokens.css', () => {
     expect(tokens).toContain("'Noto Sans SC'");
   });
 
+  it('keeps the expanded navigation compact without changing its collapsed target', () => {
+    expect(tokens).toMatch(/--sidebar-width:\s*168px/);
+    expect(tokens).toMatch(/--sidebar-collapsed-width:\s*64px/);
+  });
+
   it('keeps light-theme semantic colors readable on white surfaces', () => {
     const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
     const getHex = (name: string) =>

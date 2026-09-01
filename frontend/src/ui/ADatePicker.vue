@@ -176,10 +176,7 @@ watch(open, (isOpen) => {
 </script>
 
 <template>
-  <div
-    class="a-date-picker"
-    :class="{ 'a-date-picker--clearable': showClear }"
-  >
+  <div class="a-date-picker" :class="{ 'a-date-picker--clearable': showClear }">
     <APopover v-model:open="open" align="start">
       <template #trigger>
         <button
@@ -307,7 +304,7 @@ watch(open, (isOpen) => {
 }
 
 .a-date-picker__value[data-placeholder] {
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .a-date-picker__clear {

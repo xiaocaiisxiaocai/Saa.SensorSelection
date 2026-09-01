@@ -1,9 +1,5 @@
 export type ButtonVariant =
-  | 'filled'
-  | 'tinted'
-  | 'plain'
-  | 'borderless'
-  | 'destructive';
+  'filled' | 'tinted' | 'plain' | 'borderless' | 'destructive';
 
 export type ButtonSize = 'small' | 'medium' | 'large' | 'xlarge';
 
@@ -12,13 +8,7 @@ export type IconButtonVariant = 'plain' | 'borderless' | 'destructive';
 export type IconButtonSize = 'small' | 'medium' | 'large';
 
 export type BadgeTone =
-  | 'neutral'
-  | 'blue'
-  | 'green'
-  | 'orange'
-  | 'red'
-  | 'yellow'
-  | 'indigo';
+  'neutral' | 'blue' | 'green' | 'orange' | 'red' | 'yellow' | 'indigo';
 
 export type SpinnerSize = 12 | 16 | 24 | 32;
 
@@ -69,7 +59,7 @@ export interface TableColumn<T = unknown> {
   align?: TableAlign;
   ellipsis?: boolean;
   mono?: boolean;
-  fixed?: 'end';
+  fixed?: 'start' | 'end';
   rowSpan?: (row: T, rowIndex: number) => number;
 }
 

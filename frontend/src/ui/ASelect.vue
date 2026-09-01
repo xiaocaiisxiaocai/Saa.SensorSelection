@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { Check, ChevronDown, X } from 'lucide-vue-next';
 import { computed, nextTick, ref, useId, watch } from 'vue';
-import {
-  ListboxItem,
-  ListboxItemIndicator,
-  ListboxRoot,
-} from 'reka-ui';
+import { ListboxItem, ListboxItemIndicator, ListboxRoot } from 'reka-ui';
 
 import AIconButton from './AIconButton.vue';
 import APopover from './APopover.vue';
@@ -192,7 +188,7 @@ watch(open, async (isOpen) => {
 }
 
 .a-select__value[data-placeholder] {
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .a-select__chevron {
@@ -234,6 +230,10 @@ watch(open, async (isOpen) => {
   background: var(--fill-2);
   border: 0;
   border-radius: var(--radius-sm);
+}
+
+.a-select__filter::placeholder {
+  color: var(--label-placeholder);
 }
 
 .a-select__filter:focus,

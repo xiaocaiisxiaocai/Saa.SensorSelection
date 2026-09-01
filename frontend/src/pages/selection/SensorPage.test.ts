@@ -60,6 +60,20 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
+  it('keeps the model identity column visible while the table scrolls horizontally', async () => {
+    const wrapper = await mountPage();
+    const table = wrapper.getComponent({ name: 'ATable' });
+    const columns = table.props('columns') as Array<{
+      key: string;
+      fixed?: 'start' | 'end';
+    }>;
+
+    expect(columns.find((column) => column.key === 'model')?.fixed).toBe(
+      'start',
+    );
+    wrapper.unmount();
+  });
+
   it('renders the SOP PDF workspace from its tab', async () => {
     const wrapper = await mountPage({ tab: 'sop-library' }, writer);
     expect(wrapper.text()).toContain('暂无 SOP 文件');
@@ -176,7 +190,8 @@ describe('SensorPage', () => {
     });
     expect(documentResult).toMatchObject({ ok: true });
     expect(model3dResult).toMatchObject({ ok: true });
-    if (!documentResult.ok || !model3dResult.ok) throw new Error('测试文件保存失败');
+    if (!documentResult.ok || !model3dResult.ok)
+      throw new Error('测试文件保存失败');
 
     expect(
       store.saveSensor({
@@ -205,9 +220,9 @@ describe('SensorPage', () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       '产品资料',
     );
-    expect(
-      wrapper.get('[role="tab"][aria-selected="true"]').text(),
-    ).toBe('现用');
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+      '现用',
+    );
 
     document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
     await nextTick();
@@ -222,9 +237,9 @@ describe('SensorPage', () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       '三维图纸',
     );
-    expect(
-      wrapper.get('[role="tab"][aria-selected="true"]').text(),
-    ).toBe('现用');
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+      '现用',
+    );
 
     wrapper.unmount();
   });
@@ -239,7 +254,9 @@ describe('SensorPage', () => {
     await addButton!.trigger('click');
     await nextTick();
 
-    const associationRow = [...document.body.querySelectorAll('.a-form-grid')].find(
+    const associationRow = [
+      ...document.body.querySelectorAll('.a-form-grid'),
+    ].find(
       (grid) =>
         grid.textContent?.includes('关联型录') &&
         grid.textContent.includes('关联 3D'),
@@ -268,7 +285,11 @@ describe('SensorPage', () => {
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await nextTick();
     expect(typeFilter.props('modelValue')).toEqual([]);
-    expect(wrapper.findAll('tbody tr').some((row) => row.text().includes('E2E-X5MF1'))).toBe(true);
+    expect(
+      wrapper
+        .findAll('tbody tr')
+        .some((row) => row.text().includes('E2E-X5MF1')),
+    ).toBe(true);
 
     wrapper.unmount();
   });
@@ -373,11 +394,15 @@ describe('SensorPage', () => {
 
   it('uses green, yellow, and red badges for current, alternate, and disabled sensors', async () => {
     const currentWrapper = await mountPage();
-    expect(currentWrapper.get('.a-badge').classes()).toContain('a-badge--green');
+    expect(currentWrapper.get('.a-badge').classes()).toContain(
+      'a-badge--green',
+    );
     currentWrapper.unmount();
 
     const alternateWrapper = await mountPage({ tab: '备选' });
-    expect(alternateWrapper.get('.a-badge').classes()).toContain('a-badge--yellow');
+    expect(alternateWrapper.get('.a-badge').classes()).toContain(
+      'a-badge--yellow',
+    );
     alternateWrapper.unmount();
 
     const disabledWrapper = await mountPage({ tab: '停用' });
@@ -449,7 +474,9 @@ describe('SensorPage', () => {
     const alternateRow = rows.find((row) => row.text().includes('02 备选'));
 
     expect(currentRow?.get('.a-badge').classes()).toContain('a-badge--green');
-    expect(alternateRow?.get('.a-badge').classes()).toContain('a-badge--yellow');
+    expect(alternateRow?.get('.a-badge').classes()).toContain(
+      'a-badge--yellow',
+    );
     expect(alternateRow?.find('[aria-label="替换现用"]').exists()).toBe(true);
 
     wrapper.unmount();

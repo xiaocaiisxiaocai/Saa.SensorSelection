@@ -32,6 +32,10 @@ const treeSelect = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATreeSelect.vue'),
   'utf8',
 );
+const datePicker = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ADatePicker.vue'),
+  'utf8',
+);
 const appShell = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'shell', 'AppShell.vue'),
   'utf8',
@@ -51,6 +55,7 @@ const requiredTokens = [
   '--label',
   '--label-2',
   '--label-3',
+  '--label-placeholder',
   '--label-4',
   '--separator',
   '--separator-opaque',
@@ -106,15 +111,20 @@ describe('tokens.css', () => {
         .match(/.{2}/g)!
         .map((part) => Number.parseInt(part, 16) / 255)
         .map((value) =>
-          value <= 0.04045
-            ? value / 12.92
-            : ((value + 0.055) / 1.055) ** 2.4,
+          value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
         );
-      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+      return (
+        0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!
+      );
     };
     const contrastOnWhite = (hex: string) => 1.05 / (luminance(hex) + 0.05);
 
-    for (const name of ['--sys-blue', '--sys-green', '--sys-red', '--sys-orange']) {
+    for (const name of [
+      '--sys-blue',
+      '--sys-green',
+      '--sys-red',
+      '--sys-orange',
+    ]) {
       expect(contrastOnWhite(getHex(name)), name).toBeGreaterThanOrEqual(4.5);
     }
   });
@@ -153,5 +163,65 @@ describe('tokens.css', () => {
     expect(appShell).toMatch(
       /\.search input\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
+  });
+
+  it('uses a dedicated readable color for field placeholders in both themes', () => {
+    expect(tokens).toMatch(
+      /:root\s*\{[\s\S]*--label-placeholder:\s*#[0-9a-f]{6};/i,
+    );
+    expect(tokens).toMatch(
+      /:root\[data-theme='dark'\]\s*\{[\s\S]*--label-placeholder:\s*#[0-9a-f]{6};/i,
+    );
+    expect(controls).toMatch(
+      /\.a-control__input::placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(select).toMatch(
+      /\.a-select__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(tokenField).toMatch(
+      /\.a-token-field__placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(treeSelect).toMatch(
+      /\.a-tree-select__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(datePicker).toMatch(
+      /\.a-date-picker__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(appShell).toMatch(
+      /\.search input::placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+
+    const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const dark =
+      tokens.match(/:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const getHex = (block: string, name: string) =>
+      block.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1] ?? '';
+    const luminance = (hex: string) => {
+      const channels = hex
+        .slice(1)
+        .match(/.{2}/g)!
+        .map((part) => Number.parseInt(part, 16) / 255)
+        .map((value) =>
+          value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+        );
+      return (
+        0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!
+      );
+    };
+    const contrast = (foreground: string, background: string) => {
+      const foregroundLuminance = luminance(foreground);
+      const backgroundLuminance = luminance(background);
+      return (
+        (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+        (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+      );
+    };
+
+    expect(
+      contrast(getHex(light, '--label-placeholder'), '#ebebed'),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrast(getHex(dark, '--label-placeholder'), '#2c2c2e'),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });

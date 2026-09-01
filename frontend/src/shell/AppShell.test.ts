@@ -1,10 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
-import {
-  createMemoryHistory,
-  createRouter,
-} from 'vue-router';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
@@ -78,6 +75,16 @@ describe('AppShell', () => {
     wrapper.unmount();
   });
 
+  it('focuses the global search input from the full pill surface', async () => {
+    const { wrapper } = await mountShell();
+    const input = wrapper.get('input[aria-label="全局搜索"]');
+
+    await wrapper.get('form.search').trigger('mousedown');
+    expect(document.activeElement).toBe(input.element);
+
+    wrapper.unmount();
+  });
+
   it('updates the desktop sidebar toggle label and expanded state', async () => {
     const { wrapper } = await mountShell();
     const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
@@ -98,10 +105,14 @@ describe('AppShell', () => {
       matches: query.includes('960px'),
       media: query,
       onchange: null,
-      addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) =>
-        listeners.add(listener),
-      removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) =>
-        listeners.delete(listener),
+      addEventListener: (
+        _type: string,
+        listener: (event: MediaQueryListEvent) => void,
+      ) => listeners.add(listener),
+      removeEventListener: (
+        _type: string,
+        listener: (event: MediaQueryListEvent) => void,
+      ) => listeners.delete(listener),
       dispatchEvent: () => true,
       addListener: vi.fn(),
       removeListener: vi.fn(),

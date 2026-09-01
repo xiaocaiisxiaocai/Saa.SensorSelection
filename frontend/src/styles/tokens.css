@@ -34,6 +34,7 @@
   --label-2: rgb(60 60 67 / 60%);
   --label-3: rgb(60 60 67 / 30%);
   --label-4: rgb(60 60 67 / 18%);
+  --label-placeholder: #5f5f63;
 
   --separator: rgb(60 60 67 / 29%);
   --separator-opaque: #c6c6c8;
@@ -174,6 +175,7 @@
   --label-2: rgb(235 235 245 / 60%);
   --label-3: rgb(235 235 245 / 30%);
   --label-4: rgb(235 235 245 / 16%);
+  --label-placeholder: #b4b4bb;
 
   --separator: rgb(84 84 88 / 65%);
   --separator-opaque: #38383a;

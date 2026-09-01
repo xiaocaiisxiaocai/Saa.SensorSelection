@@ -23,16 +23,23 @@ const props = withDefaults(
 const model = defineModel<string>({ default: '' });
 const { id, describedBy, invalid, required } = useFormControl(props);
 const focused = ref(false);
+const input = ref<HTMLInputElement | null>(null);
 
 const showShortcut = computed(
   () => Boolean(props.shortcut) && !focused.value && model.value.length === 0,
 );
-const showClear = computed(
-  () => !props.disabled && model.value.length > 0,
-);
+const showClear = computed(() => !props.disabled && model.value.length > 0);
 
 function clear() {
   model.value = '';
+}
+
+function focusFromSurface(event: MouseEvent) {
+  if (props.disabled) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input, button, a, [role="button"]')) return;
+  event.preventDefault();
+  input.value?.focus();
 }
 </script>
 
@@ -44,10 +51,12 @@ function clear() {
       'a-control--invalid': invalid,
       'a-control--small': size === 'small',
     }"
+    @mousedown="focusFromSurface"
   >
     <Search class="a-search__icon" :size="18" :stroke-width="1.5" />
     <input
       :id="id"
+      ref="input"
       class="a-control__input"
       type="search"
       :value="model"
@@ -89,5 +98,9 @@ function clear() {
 .a-control__input[type='search']::-webkit-search-results-button,
 .a-control__input[type='search']::-webkit-search-results-decoration {
   display: none;
+}
+
+.a-control__input {
+  align-self: stretch;
 }
 </style>

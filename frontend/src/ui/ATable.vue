@@ -167,7 +167,9 @@ const hoverTip = ref('');
 
 function hasOverflowingContent(el: HTMLElement): boolean {
   const elements = [el, ...el.querySelectorAll<HTMLElement>('*')];
-  return elements.some((content) => content.scrollWidth > content.clientWidth + 1);
+  return elements.some(
+    (content) => content.scrollWidth > content.clientWidth + 1,
+  );
 }
 
 function onEllipsisEnter(event: Event) {
@@ -288,7 +290,11 @@ watch(
       'a-table--overflow-end': canScrollEnd,
     }"
     :aria-busy="loading ? true : undefined"
-    :aria-label="canScrollStart || canScrollEnd ? '数据表格，可使用左右方向键横向滚动' : undefined"
+    :aria-label="
+      canScrollStart || canScrollEnd
+        ? '数据表格，可使用左右方向键横向滚动'
+        : undefined
+    "
     :tabindex="canScrollStart || canScrollEnd ? 0 : undefined"
     @scroll="onScroll"
     @keydown="onScrollerKeydown"
@@ -302,13 +308,18 @@ watch(
             scope="col"
             :class="[
               `a-table__cell--${column.align ?? 'start'}`,
-              { 'a-table__cell--fixed': column.fixed === 'end' },
+              {
+                'a-table__cell--fixed': Boolean(column.fixed),
+                [`a-table__cell--fixed-${column.fixed}`]: Boolean(column.fixed),
+              },
             ]"
             :style="cellStyle(column)"
           >
             <ATooltip :content="column.label">
               <template #trigger>
-                <span class="a-table__ellipsis a-table__header-content">{{ column.label }}</span>
+                <span class="a-table__ellipsis a-table__header-content">{{
+                  column.label
+                }}</span>
               </template>
             </ATooltip>
           </th>
@@ -337,7 +348,10 @@ watch(
               :class="[
                 `a-table__cell--${column.align ?? 'start'}`,
                 {
-                  'a-table__cell--fixed': column.fixed === 'end',
+                  'a-table__cell--fixed': Boolean(column.fixed),
+                  [`a-table__cell--fixed-${column.fixed}`]: Boolean(
+                    column.fixed,
+                  ),
                   'a-table__cell--mono': column.mono,
                 },
               ]"
@@ -358,7 +372,9 @@ watch(
               <ATooltip
                 v-else
                 :content="column.ellipsis ? tooltipText(row, column) : hoverTip"
-                :disabled="column.ellipsis ? !tooltipText(row, column) : !hoverTip"
+                :disabled="
+                  column.ellipsis ? !tooltipText(row, column) : !hoverTip
+                "
               >
                 <template #trigger>
                   <div
@@ -512,7 +528,6 @@ tbody tr:hover {
 
 .a-table__cell--fixed {
   position: sticky;
-  right: 0;
   z-index: 1;
   overflow: hidden;
   white-space: nowrap;
@@ -522,7 +537,15 @@ tbody tr:hover {
     inset 0 -0.5px 0 var(--separator);
 }
 
-.a-table__cell--fixed::before {
+.a-table__cell--fixed-start {
+  left: 0;
+}
+
+.a-table__cell--fixed-end {
+  right: 0;
+}
+
+.a-table__cell--fixed-end::before {
   position: absolute;
   top: 0;
   bottom: 0.5px;
@@ -531,6 +554,17 @@ tbody tr:hover {
   pointer-events: none;
   content: '';
   background: linear-gradient(to right, transparent, var(--bg-content));
+}
+
+.a-table__cell--fixed-start::before {
+  position: absolute;
+  top: 0;
+  right: calc(var(--space-3) * -1);
+  bottom: 0.5px;
+  width: var(--space-3);
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(to left, transparent, var(--bg-content));
 }
 
 th.a-table__cell--fixed {

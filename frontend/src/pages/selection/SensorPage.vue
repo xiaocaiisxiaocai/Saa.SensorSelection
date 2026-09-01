@@ -51,7 +51,9 @@ const writable = computed(() => canWrite('selection:write'));
 
 const mainTab = ref(initialTab());
 const query = ref(String(route.query.model || ''));
-const sensorTypeFilters = ref<Array<string | number>>(initialSensorTypeFilters());
+const sensorTypeFilters = ref<Array<string | number>>(
+  initialSensorTypeFilters(),
+);
 const dialogOpen = ref(false);
 const replaceOpen = ref(false);
 const editId = ref<number>();
@@ -86,7 +88,9 @@ const statusNames = computed(() => {
   });
 });
 const typeOptions = computed<SelectOption[]>(() =>
-  store.dictionaryNames('sensor-type').map((name) => ({ label: name, value: name })),
+  store
+    .dictionaryNames('sensor-type')
+    .map((name) => ({ label: name, value: name })),
 );
 const statusOptions = computed<SelectOption[]>(() =>
   statusNames.value.map((name) => ({ label: name, value: name })),
@@ -118,9 +122,9 @@ const showDisabledDetails = computed(() =>
 );
 const statusFilter = computed({
   get: () =>
-    (['sop-library', 'sop', '3d'].includes(mainTab.value)
+    ['sop-library', 'sop', '3d'].includes(mainTab.value)
       ? '全部'
-      : mainTab.value),
+      : mainTab.value,
   set: (value: string | number | null) => {
     mainTab.value = String(value || '全部');
   },
@@ -175,7 +179,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'partNumber', label: '料号', width: 120, mono: true },
     { key: 'sensorType', label: '感应器类型', width: 120 },
     { key: 'brand', label: '品牌', width: 88 },
-    { key: 'model', label: '型号', width: 140, mono: true },
+    { key: 'model', label: '型号', width: 140, mono: true, fixed: 'start' },
     ...(showDisabledDetails.value
       ? [
           { key: 'replacedAt', label: '停用时间', width: 112 },
@@ -299,9 +303,14 @@ function initialTab() {
 
 function parseSensorTypeFilters(value: string) {
   const allowed = new Set(store.dictionaryNames('sensor-type'));
-  return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].filter(
-    (item) => allowed.has(item),
-  );
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ].filter((item) => allowed.has(item));
 }
 
 function initialSensorTypeFilters() {
@@ -330,7 +339,7 @@ function model3dTitle(model3dId: null | number | undefined) {
 
 function relatedSensor(item: SensorItem) {
   const id = item.replacesId || item.replacedById;
-  return id ? sensorById.value.get(id) ?? null : null;
+  return id ? (sensorById.value.get(id) ?? null) : null;
 }
 
 function relationText(item: SensorItem) {
@@ -422,7 +431,9 @@ function exportExcel() {
     toast.error('当前条件下没有可导出的型号');
     return;
   }
-  const exportColumns = columns.value.filter((column) => column.key !== 'actions');
+  const exportColumns = columns.value.filter(
+    (column) => column.key !== 'actions',
+  );
   downloadSensorExcel({
     pageName: mainTab.value,
     headers: exportColumns.map((column) => column.label),
@@ -512,7 +523,8 @@ async function copyPartNumber(value: unknown) {
       try {
         await navigator.clipboard.writeText(partNumber);
       } catch {
-        if (!copyWithSelection(partNumber)) throw new Error('clipboard unavailable');
+        if (!copyWithSelection(partNumber))
+          throw new Error('clipboard unavailable');
       }
     } else if (!copyWithSelection(partNumber)) {
       throw new Error('clipboard unavailable');
@@ -624,7 +636,9 @@ function saveReplace() {
           <Download :size="14" :stroke-width="1.75" aria-hidden="true" />
           导出 Excel
         </AButton>
-        <AButton v-if="writable" variant="filled" @click="addItem">新增型号</AButton>
+        <AButton v-if="writable" variant="filled" @click="addItem">
+          新增型号
+        </AButton>
       </div>
       <ATable
         :columns="columns"
@@ -661,7 +675,9 @@ function saveReplace() {
             @click="openLinkedSop(row.sopId)"
           >
             <Eye :size="14" :stroke-width="1.75" aria-hidden="true" />
-            <span class="sensor-file-link__text">{{ sopTitle(row.sopId) }}</span>
+            <span class="sensor-file-link__text">{{
+              sopTitle(row.sopId)
+            }}</span>
           </button>
           <span v-else>未关联</span>
         </template>
@@ -696,7 +712,12 @@ function saveReplace() {
         </template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
-            <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
+            <AIconButton
+              :icon="Pencil"
+              label="编辑"
+              size="small"
+              @click="editItem(row)"
+            />
             <AIconButton
               v-if="isSensorStatus(row.status, 'alternate')"
               :icon="Replace"
@@ -714,13 +735,25 @@ function saveReplace() {
           </div>
         </template>
       </ATable>
-      <APagination v-model:page="page" v-model:page-size="pageSize" :total="items.length" />
+      <APagination
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total="items.length"
+      />
     </div>
     <ASheet
       :open="Boolean(linkedPreview)"
-      :title="linkedPreview ? `${linkedPreview.kind} · ${linkedPreview.file.title}` : '预览 PDF'"
+      :title="
+        linkedPreview
+          ? `${linkedPreview.kind} · ${linkedPreview.file.title}`
+          : '预览 PDF'
+      "
       viewport
-      @update:open="(open) => { if (!open) linkedPreview = null }"
+      @update:open="
+        (open) => {
+          if (!open) linkedPreview = null;
+        }
+      "
     >
       <APdfViewer
         v-if="linkedPreview"
@@ -738,7 +771,11 @@ function saveReplace() {
           <ASelect v-model="form.status" :options="statusOptions" />
         </AFormRow>
         <AFormRow label="料号">
-          <AField v-model="form.partNumber" :maxlength="80" placeholder="可选" />
+          <AField
+            v-model="form.partNumber"
+            :maxlength="80"
+            placeholder="可选"
+          />
         </AFormRow>
         <AFormRow label="感应器类型" required>
           <ASelect v-model="form.sensorType" :options="typeOptions" />

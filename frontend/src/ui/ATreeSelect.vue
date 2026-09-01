@@ -128,7 +128,9 @@ watch(open, async (isOpen) => {
           placeholder="筛选"
           aria-label="筛选组织"
         />
-        <div v-if="rows.length === 0" class="a-tree-select__empty">无匹配项</div>
+        <div v-if="rows.length === 0" class="a-tree-select__empty">
+          无匹配项
+        </div>
         <div v-else class="a-tree-select__list" role="listbox">
           <div
             v-for="row in rows"
@@ -211,7 +213,7 @@ watch(open, async (isOpen) => {
 }
 
 .a-tree-select__value[data-placeholder] {
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .a-tree-select__clear {

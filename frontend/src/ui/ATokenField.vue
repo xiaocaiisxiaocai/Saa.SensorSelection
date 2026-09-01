@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { Check, ChevronDown, X } from 'lucide-vue-next';
 import { computed, ref, useId } from 'vue';
-import {
-  ListboxItem,
-  ListboxItemIndicator,
-  ListboxRoot,
-} from 'reka-ui';
+import { ListboxItem, ListboxItemIndicator, ListboxRoot } from 'reka-ui';
 
 import APopover from './APopover.vue';
 import ATooltip from './ATooltip.vue';
@@ -112,10 +108,7 @@ function remove(value: string | number, event: Event) {
               <span class="a-token-field__more">+{{ hidden.length }}</span>
             </template>
           </ATooltip>
-          <span
-            v-if="selected.length === 0"
-            class="a-token-field__placeholder"
-          >
+          <span v-if="selected.length === 0" class="a-token-field__placeholder">
             {{ placeholder }}
           </span>
           <ChevronDown
@@ -255,7 +248,7 @@ function remove(value: string | number, event: Event) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .a-token-field__chevron {
@@ -282,6 +275,10 @@ function remove(value: string | number, event: Event) {
   background: var(--fill-2);
   border: 0;
   border-radius: var(--radius-sm);
+}
+
+.a-select__filter::placeholder {
+  color: var(--label-placeholder);
 }
 
 .a-select__filter:focus,

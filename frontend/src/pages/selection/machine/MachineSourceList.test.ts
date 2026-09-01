@@ -158,12 +158,28 @@ describe('MachineSourceList', () => {
     ).toBe(true);
     expect(
       wrapper
-        .findAll('.machine-tree-row--item .machine-tree-row__tools button')
+        .findAll('.machine-tree-row__tools button')
         .every((button) => button.attributes('tabindex') === '-1'),
     ).toBe(true);
     expect(
       wrapper.findAll('[data-node-kind="item"][tabindex="0"]'),
     ).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('keeps hidden group actions keyboard-accessible through row shortcuts', async () => {
+    const wrapper = mountList();
+    const groupToggle = wrapper.get('[aria-label="折叠分类 分类甲"]');
+    const configurationToggle = wrapper.get('[aria-label="折叠配置 配置甲"]');
+
+    expect(groupToggle.attributes('aria-keyshortcuts')).toContain('F2');
+    await groupToggle.trigger('keydown', { key: 'F2' });
+    expect(wrapper.emitted('editGroup')?.at(-1)).toEqual(['分类甲']);
+
+    await configurationToggle.trigger('keydown', { key: 'Delete' });
+    expect(wrapper.emitted('deleteConfiguration')?.at(-1)).toEqual([
+      { category: '分类甲', configuration: '配置甲' },
+    ]);
     wrapper.unmount();
   });
 

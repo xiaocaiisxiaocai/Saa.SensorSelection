@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import {
-  Monitor,
-  Moon,
-  PanelLeft,
-  Search,
-  Sun,
-} from 'lucide-vue-next';
+import { Monitor, Moon, PanelLeft, Search, Sun } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
@@ -123,6 +117,13 @@ function onSearchHotkey(event: KeyboardEvent) {
   searchInput.value?.select();
 }
 
+function focusSearchFromSurface(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input, button, a, [role="button"]')) return;
+  event.preventDefault();
+  searchInput.value?.focus();
+}
+
 onMounted(() => {
   selection.ensureBackendInit();
   window.addEventListener('keydown', onSearchHotkey);
@@ -172,7 +173,10 @@ watch(
       'app-shell--drawer-open': compactViewport && mobileSidebarOpen,
     }"
   >
-    <header class="toolbar material-toolbar" :class="{ 'toolbar--scrolled': contentScrolled }">
+    <header
+      class="toolbar material-toolbar"
+      :class="{ 'toolbar--scrolled': contentScrolled }"
+    >
       <div class="toolbar__start">
         <button
           class="icon-button"
@@ -191,7 +195,12 @@ watch(
         </RouterLink>
       </div>
 
-      <form class="search" role="search" @submit.prevent="submitSearch">
+      <form
+        class="search"
+        role="search"
+        @mousedown="focusSearchFromSurface"
+        @submit.prevent="submitSearch"
+      >
         <Search :size="18" :stroke-width="1.5" aria-hidden="true" />
         <input
           ref="searchInput"
@@ -226,10 +235,7 @@ watch(
       </div>
     </header>
 
-    <div
-      v-if="selection.backendStatus === 'unauthorized'"
-      class="shell-banner"
-    >
+    <div v-if="selection.backendStatus === 'unauthorized'" class="shell-banner">
       <ABanner
         tone="error"
         message="登录已失效，请重新登录"
@@ -247,7 +253,9 @@ watch(
         :inert="compactViewport && !mobileSidebarOpen ? true : undefined"
       >
         <section v-for="group in groups" :key="group.id" class="nav-group">
-          <h2 v-if="sidebarExpanded" class="nav-group__label">{{ group.label }}</h2>
+          <h2 v-if="sidebarExpanded" class="nav-group__label">
+            {{ group.label }}
+          </h2>
           <ATooltip
             v-for="item in group.items"
             :key="item.to"
@@ -262,8 +270,15 @@ watch(
                 :to="item.to"
                 :title="sidebarExpanded ? undefined : item.label"
               >
-                <component :is="item.icon" class="nav-item__icon" :size="18" :stroke-width="1.5" />
-                <span v-if="sidebarExpanded" class="nav-item__label">{{ item.label }}</span>
+                <component
+                  :is="item.icon"
+                  class="nav-item__icon"
+                  :size="18"
+                  :stroke-width="1.5"
+                />
+                <span v-if="sidebarExpanded" class="nav-item__label">{{
+                  item.label
+                }}</span>
               </RouterLink>
             </template>
           </ATooltip>
@@ -373,6 +388,7 @@ watch(
 }
 
 .search input {
+  align-self: stretch;
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -392,7 +408,7 @@ watch(
 }
 
 .search input::placeholder {
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .search input:focus,

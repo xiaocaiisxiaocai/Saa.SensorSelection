@@ -206,7 +206,11 @@ const visibleItemKeys = computed(() =>
   ]),
 );
 
-function rowTabIndex(category: string, configuration: string | null, item: string) {
+function rowTabIndex(
+  category: string,
+  configuration: string | null,
+  item: string,
+) {
   const key = itemKey(category, configuration, item);
   const activeKey =
     focusedItemKey.value ||
@@ -222,10 +226,46 @@ function rowTabIndex(category: string, configuration: string | null, item: strin
 function focusItem(key: string) {
   focusedItemKey.value = key;
   void nextTick(() => {
-    const row = [...(tree.value?.querySelectorAll<HTMLElement>('[data-tree-key]') ?? [])]
-      .find((candidate) => candidate.dataset.treeKey === key);
+    const row = [
+      ...(tree.value?.querySelectorAll<HTMLElement>('[data-tree-key]') ?? []),
+    ].find((candidate) => candidate.dataset.treeKey === key);
     row?.focus();
   });
+}
+
+function onGroupKeydown(event: KeyboardEvent, category: string) {
+  if (!props.editable) return;
+  if (event.key === 'F2') {
+    event.preventDefault();
+    event.stopPropagation();
+    emit('editGroup', category);
+    return;
+  }
+  if (event.key === 'Delete') {
+    event.preventDefault();
+    event.stopPropagation();
+    emit('deleteGroup', category);
+  }
+}
+
+function onConfigurationKeydown(
+  event: KeyboardEvent,
+  category: string,
+  configuration: string,
+) {
+  if (!props.editable) return;
+  const payload = { category, configuration };
+  if (event.key === 'F2') {
+    event.preventDefault();
+    event.stopPropagation();
+    emit('editConfiguration', payload);
+    return;
+  }
+  if (event.key === 'Delete') {
+    event.preventDefault();
+    event.stopPropagation();
+    emit('deleteConfiguration', payload);
+  }
 }
 
 function onItemKeydown(
@@ -272,9 +312,13 @@ function onItemKeydown(
         )?.items
       : group?.items;
     const oldIndex = siblings?.indexOf(item) ?? -1;
-    const newIndex =
-      event.key === 'ArrowDown' ? oldIndex + 1 : oldIndex - 1;
-    if (siblings && oldIndex >= 0 && newIndex >= 0 && newIndex < siblings.length) {
+    const newIndex = event.key === 'ArrowDown' ? oldIndex + 1 : oldIndex - 1;
+    if (
+      siblings &&
+      oldIndex >= 0 &&
+      newIndex >= 0 &&
+      newIndex < siblings.length
+    ) {
       event.preventDefault();
       emit('reorderItems', { category, configuration, oldIndex, newIndex });
     }
@@ -623,7 +667,9 @@ onMounted(restoreWidth);
             class="machine-tree-row__toggle"
             :aria-expanded="openGroups.has(group.name)"
             :aria-label="`${openGroups.has(group.name) ? '折叠' : '展开'}分类 ${group.name}`"
+            :aria-keyshortcuts="editable ? 'F2 Delete' : undefined"
             @click="toggleGroup(group.name)"
+            @keydown="onGroupKeydown($event, group.name)"
           >
             <ChevronDown v-if="openGroups.has(group.name)" :size="15" />
             <ChevronRight v-else :size="15" />
@@ -636,6 +682,7 @@ onMounted(restoreWidth);
             <button
               class="machine-tree-row__tool"
               type="button"
+              tabindex="-1"
               :aria-label="`编辑分类 ${group.name}`"
               @click="emit('editGroup', group.name)"
             >
@@ -644,6 +691,7 @@ onMounted(restoreWidth);
             <button
               class="machine-tree-row__tool"
               type="button"
+              tabindex="-1"
               :aria-label="`删除分类 ${group.name}`"
               @click="emit('deleteGroup', group.name)"
             >
@@ -702,7 +750,11 @@ onMounted(restoreWidth);
                     ? '折叠'
                     : '展开'
                 }配置 ${configuration.name}`"
+                :aria-keyshortcuts="editable ? 'F2 Delete' : undefined"
                 @click="toggleConfiguration(group.name, configuration.name)"
+                @keydown="
+                  onConfigurationKeydown($event, group.name, configuration.name)
+                "
               >
                 <ChevronDown
                   v-if="
@@ -722,6 +774,7 @@ onMounted(restoreWidth);
                 <button
                   class="machine-tree-row__tool"
                   type="button"
+                  tabindex="-1"
                   :aria-label="`编辑配置 ${configuration.name}`"
                   @click="
                     emit('editConfiguration', {
@@ -735,6 +788,7 @@ onMounted(restoreWidth);
                 <button
                   class="machine-tree-row__tool"
                   type="button"
+                  tabindex="-1"
                   :aria-label="`删除配置 ${configuration.name}`"
                   @click="
                     emit('deleteConfiguration', {
@@ -772,19 +826,29 @@ onMounted(restoreWidth);
                 :data-tree-key="itemKey(group.name, configuration.name, item)"
                 :tabindex="rowTabIndex(group.name, configuration.name, item)"
                 role="button"
-                :aria-current="isSelected(group.name, configuration.name, item) ? 'true' : undefined"
+                :aria-current="
+                  isSelected(group.name, configuration.name, item)
+                    ? 'true'
+                    : undefined
+                "
                 aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
                 @dragover="allowDrop"
                 @drop="onItemDrop($event, group.name, configuration.name, item)"
                 @click="
-                  focusedItemKey = itemKey(group.name, configuration.name, item);
+                  focusedItemKey = itemKey(
+                    group.name,
+                    configuration.name,
+                    item,
+                  );
                   emit('select', {
                     category: group.name,
                     configuration: configuration.name,
                     item,
-                  })
+                  });
                 "
-                @keydown="onItemKeydown($event, group.name, configuration.name, item)"
+                @keydown="
+                  onItemKeydown($event, group.name, configuration.name, item)
+                "
               >
                 <button
                   v-if="canSort"
@@ -877,7 +941,9 @@ onMounted(restoreWidth);
             :data-tree-key="itemKey(group.name, null, item)"
             :tabindex="rowTabIndex(group.name, null, item)"
             role="button"
-            :aria-current="isSelected(group.name, null, item) ? 'true' : undefined"
+            :aria-current="
+              isSelected(group.name, null, item) ? 'true' : undefined
+            "
             aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
             @dragover="allowDrop"
             @drop="onItemDrop($event, group.name, null, item)"
@@ -887,7 +953,7 @@ onMounted(restoreWidth);
                 category: group.name,
                 configuration: null,
                 item,
-              })
+              });
             "
             @keydown="onItemKeydown($event, group.name, null, item)"
           >

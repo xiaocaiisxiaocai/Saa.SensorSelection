@@ -72,6 +72,22 @@ describe('ATable', () => {
     expect(wrapper.get('td').classes()).toContain('a-table__cell--start');
   });
 
+  it('keeps a fixed-start identity column visible during horizontal scrolling', () => {
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'model', label: '型号', fixed: 'start' },
+          { key: 'note', label: '说明', minWidth: 400 },
+        ],
+        rows,
+        rowKey: 'id',
+      },
+    });
+
+    expect(wrapper.get('th').classes()).toContain('a-table__cell--fixed-start');
+    expect(wrapper.get('td').classes()).toContain('a-table__cell--fixed-start');
+  });
+
   it('renders a custom cell slot', () => {
     const wrapper = mount(ATable, {
       props: { columns, rows, rowKey: 'id' },
@@ -85,7 +101,8 @@ describe('ATable', () => {
   });
 
   it('shows the full custom cell text when a nested element is truncated', async () => {
-    const fullSpec = 'OMRON E3Z-D61 · 检测距离 0~300mm；12~24V DC；PNP/NPN；IP67';
+    const fullSpec =
+      'OMRON E3Z-D61 · 检测距离 0~300mm；12~24V DC；PNP/NPN；IP67';
     const wrapper = mount(ATable, {
       props: {
         columns: [{ key: 'spec', label: '规格', ellipsis: true }],
@@ -102,10 +119,22 @@ describe('ATable', () => {
     expect(cell).toBeTruthy();
     if (!cell) return;
     const nestedContent = cell.get('.spec-lines').element;
-    Object.defineProperty(cell.element, 'clientWidth', { value: 244, configurable: true });
-    Object.defineProperty(cell.element, 'scrollWidth', { value: 244, configurable: true });
-    Object.defineProperty(nestedContent, 'clientWidth', { value: 244, configurable: true });
-    Object.defineProperty(nestedContent, 'scrollWidth', { value: 430, configurable: true });
+    Object.defineProperty(cell.element, 'clientWidth', {
+      value: 244,
+      configurable: true,
+    });
+    Object.defineProperty(cell.element, 'scrollWidth', {
+      value: 244,
+      configurable: true,
+    });
+    Object.defineProperty(nestedContent, 'clientWidth', {
+      value: 244,
+      configurable: true,
+    });
+    Object.defineProperty(nestedContent, 'scrollWidth', {
+      value: 430,
+      configurable: true,
+    });
 
     await cell.trigger('mouseenter');
     await nextTick();
@@ -123,7 +152,11 @@ describe('ATable', () => {
     const wrapper = mount(ATable, {
       props: {
         columns: [
-          { key: 'group', label: '功能作用', rowSpan: (_row, index) => (index === 0 ? 2 : 0) },
+          {
+            key: 'group',
+            label: '功能作用',
+            rowSpan: (_row, index) => (index === 0 ? 2 : 0),
+          },
           { key: 'detail', label: '传感器类型' },
         ],
         rows: groupedRows,
@@ -132,7 +165,9 @@ describe('ATable', () => {
     });
 
     expect(wrapper.findAll('tbody tr')).toHaveLength(2);
-    expect(wrapper.findAll('tbody tr')[0]?.find('td')?.attributes('rowspan')).toBe('2');
+    expect(
+      wrapper.findAll('tbody tr')[0]?.find('td')?.attributes('rowspan'),
+    ).toBe('2');
     expect(wrapper.findAll('tbody tr')[1]?.findAll('td')).toHaveLength(1);
     expect(wrapper.text()).toContain('漫反射');
     expect(wrapper.text()).toContain('对射');
@@ -210,7 +245,10 @@ describe('ATable', () => {
     });
 
     // JSDOM 中 clientHeight 默认为 0，需要模拟容器高度（4 行 × 40px = 160px）
-    Object.defineProperty(wrapper.element, 'clientHeight', { value: 160, configurable: true });
+    Object.defineProperty(wrapper.element, 'clientHeight', {
+      value: 160,
+      configurable: true,
+    });
     // 触发 ResizeObserver 回调（JSDOM 不实现 ResizeObserver，直接注入值）
     // 通过模拟 scrollTop=0，验证默认只渲染 start..end 范围
     await nextTick();

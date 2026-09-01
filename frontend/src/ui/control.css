@@ -67,7 +67,7 @@
 }
 
 .a-control__input::placeholder {
-  color: var(--label-3);
+  color: var(--label-placeholder);
 }
 
 .a-control__input:disabled {

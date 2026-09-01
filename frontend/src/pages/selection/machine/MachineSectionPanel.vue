@@ -1,6 +1,18 @@
 <script setup lang="ts">
-import { Pencil, Trash2 } from 'lucide-vue-next';
-import { computed, reactive, ref, watch } from 'vue';
+import {
+  PanelRightClose,
+  PanelRightOpen,
+  Pencil,
+  Trash2,
+} from 'lucide-vue-next';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import {
   MACHINE_ROW_IMAGE_RULES,
@@ -43,6 +55,8 @@ const props = defineProps<{
   section: MachineSectionItem;
 }>();
 
+const COMPACT_IMAGES_MEDIA_QUERY = '(min-width: 960px) and (max-width: 1439px)';
+
 const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
@@ -53,6 +67,8 @@ const sensorTypeFilters = ref<Array<string | number>>([]);
 const machineModelFilter = ref<string | number | null>(null);
 const processStepFilter = ref<string | number | null>(null);
 const boardCharacteristicFilter = ref<string | number | null>(null);
+const imagesCollapsed = ref(false);
+const imagesPanelTouched = ref(false);
 const preview = ref<MachineRowImage | null>(null);
 const imageOpen = computed({
   get: () => Boolean(preview.value),
@@ -62,6 +78,7 @@ const imageOpen = computed({
 });
 const page = ref(1);
 const pageSize = ref(20);
+let compactImagesMedia: MediaQueryList | null = null;
 const form = reactive({
   boardCharacteristicId: null as number | null,
   desc: '',
@@ -75,6 +92,30 @@ const form = reactive({
 });
 
 const isStructure = computed(() => props.section.kind === 'structure');
+
+function syncImagesPanel(matches: boolean) {
+  if (!imagesPanelTouched.value) imagesCollapsed.value = matches;
+}
+
+function onCompactImagesChange(event: MediaQueryListEvent) {
+  syncImagesPanel(event.matches);
+}
+
+function toggleImagesPanel() {
+  imagesPanelTouched.value = true;
+  imagesCollapsed.value = !imagesCollapsed.value;
+}
+
+onMounted(() => {
+  compactImagesMedia = window.matchMedia?.(COMPACT_IMAGES_MEDIA_QUERY) ?? null;
+  if (!compactImagesMedia) return;
+  syncImagesPanel(compactImagesMedia.matches);
+  compactImagesMedia.addEventListener('change', onCompactImagesChange);
+});
+
+onBeforeUnmount(() => {
+  compactImagesMedia?.removeEventListener('change', onCompactImagesChange);
+});
 const typeOptions = computed<SelectOption[]>(() =>
   store
     .dictionaryNames('sensor-type')
@@ -469,7 +510,10 @@ async function removeImage(index: number) {
 <template>
   <div
     class="machine-body"
-    :class="{ 'machine-body--with-images': isStructure }"
+    :class="{
+      'machine-body--with-images': isStructure,
+      'machine-body--images-collapsed': isStructure && imagesCollapsed,
+    }"
   >
     <div class="selection-panel">
       <div class="selection-toolbar machine-structure-toolbar">
@@ -575,10 +619,24 @@ async function removeImage(index: number) {
         :total="filtered.length"
       />
     </div>
-    <aside v-if="isStructure" class="machine-images">
-      <h3>结构示意图</h3>
+    <aside
+      v-if="isStructure"
+      class="machine-images"
+      :class="{ 'machine-images--collapsed': imagesCollapsed }"
+    >
+      <div class="machine-images__header">
+        <h3 v-if="!imagesCollapsed">结构示意图</h3>
+        <AIconButton
+          :icon="imagesCollapsed ? PanelRightOpen : PanelRightClose"
+          :label="imagesCollapsed ? '展开结构示意图' : '折叠结构示意图'"
+          size="small"
+          @click="toggleImagesPanel"
+        />
+      </div>
       <AFileDrop
-        v-if="writable && hasTabContent && images.length < 2"
+        v-if="
+          !imagesCollapsed && writable && hasTabContent && images.length < 2
+        "
         :accept="MACHINE_ROW_IMAGE_RULES.accept"
         :max-bytes="MACHINE_ROW_IMAGE_RULES.maxBytes"
         :extensions="[...MACHINE_ROW_IMAGE_RULES.extensions]"
@@ -589,11 +647,15 @@ async function removeImage(index: number) {
         type-message="仅支持 JPG、PNG 或 WebP 图片"
         @files="addImages"
       />
-      <p v-else-if="writable && !hasTabContent" class="machine-images__empty">
+      <p
+        v-else-if="!imagesCollapsed && writable && !hasTabContent"
+        class="machine-images__empty"
+      >
         请先新增内容后再添加图片
       </p>
       <button
         v-for="(image, index) in images"
+        v-show="!imagesCollapsed"
         :key="`${image.fileName}-${index}`"
         class="image-card"
         type="button"
@@ -630,10 +692,7 @@ async function removeImage(index: number) {
           clearable
         />
       </AFormRow>
-      <AFormRow
-        label="工艺制程"
-        hint="可选；来自“制程管理 → 工艺制程”。"
-      >
+      <AFormRow label="工艺制程" hint="可选；来自“制程管理 → 工艺制程”。">
         <ASelect
           v-model="form.processStepId"
           :options="processStepOptions"
@@ -642,10 +701,7 @@ async function removeImage(index: number) {
           clearable
         />
       </AFormRow>
-      <AFormRow
-        label="板件特性"
-        hint="可选；来自“数据字典 → 板件特性”。"
-      >
+      <AFormRow label="板件特性" hint="可选；来自“数据字典 → 板件特性”。">
         <ASelect
           v-model="form.boardCharacteristicId"
           :options="boardCharacteristicOptions"
@@ -706,18 +762,15 @@ async function removeImage(index: number) {
   gap: var(--space-2);
 }
 
-.machine-structure-toolbar
-  .a-select.machine-structure-toolbar__select,
-.machine-structure-toolbar
-  .a-token-field.machine-structure-toolbar__select {
+.machine-structure-toolbar .a-select.machine-structure-toolbar__select,
+.machine-structure-toolbar .a-token-field.machine-structure-toolbar__select {
   flex: 1 1 8.25rem;
   width: auto;
   min-width: 7.5rem;
   max-width: 9.25rem;
 }
 
-.machine-structure-toolbar
-  .a-control.machine-structure-toolbar__search {
+.machine-structure-toolbar .a-control.machine-structure-toolbar__search {
   flex: 4 1 16rem;
   width: auto;
   min-width: 12rem;

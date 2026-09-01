@@ -85,6 +85,7 @@ describe('MachinePage', () => {
   afterEach(() => {
     toast.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
   it('separates mechanism and project machines under every process', async () => {
     const wrapper = await mountPage(true, true);
@@ -118,9 +119,9 @@ describe('MachinePage', () => {
     );
     await flushPromises();
 
-    expect(wrapper.get('.machine-catalog-tabs [aria-selected="true"]').text()).toBe(
-      '专案机型',
-    );
+    expect(
+      wrapper.get('.machine-catalog-tabs [aria-selected="true"]').text(),
+    ).toBe('专案机型');
     expect(wrapper.text()).toContain('CSL(U)R-802（插框机）');
     expect(wrapper.vm.$route.query.catalog).toBe('project');
     wrapper.unmount();
@@ -161,9 +162,9 @@ describe('MachinePage', () => {
       false,
     );
     expect(wrapper.text()).toContain('管理制程');
-    expect(
-      wrapper.get('.machine-process-context__manage').classes(),
-    ).toContain('a-button--small');
+    expect(wrapper.get('.machine-process-context__manage').classes()).toContain(
+      'a-button--small',
+    );
     expect(wrapper.text()).toContain('标准输送段配置');
 
     await wrapper.get('.machine-process-context__manage').trigger('click');
@@ -258,7 +259,9 @@ describe('MachinePage', () => {
 
   it('explains why a selected machine with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
-    const checkbox = wrapper.get('input[aria-label="选择 01 单段输送段（搭配）"]');
+    const checkbox = wrapper.get(
+      'input[aria-label="选择 01 单段输送段（搭配）"]',
+    );
     await checkbox.setValue(true);
     await flushPromises();
 
@@ -400,7 +403,9 @@ describe('MachinePage', () => {
 
     const machineSelect = wrapper
       .findAllComponents(ASelect)
-      .find((component) => component.props('placeholder') === '选择机型（可选）');
+      .find(
+        (component) => component.props('placeholder') === '选择机型（可选）',
+      );
     const boardSelect = wrapper
       .findAllComponents(ASelect)
       .find(
@@ -745,6 +750,31 @@ describe('MachinePage', () => {
     );
   });
 
+  it('auto-collapses the schematic rail on compact desktop widths and lets users reopen it', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('1439px'),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: () => true,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+    const wrapper = await mountPage(true, true);
+    const panel = wrapper.getComponent(MachineSectionPanel);
+
+    expect(panel.get('.machine-body').classes()).toContain(
+      'machine-body--images-collapsed',
+    );
+    await panel.get('[aria-label="展开结构示意图"]').trigger('click');
+    expect(panel.get('.machine-body').classes()).not.toContain(
+      'machine-body--images-collapsed',
+    );
+    expect(panel.get('[aria-label="折叠结构示意图"]')).toBeTruthy();
+    wrapper.unmount();
+  });
+
   it('stacks the source tree above content with a bounded height on narrow screens', () => {
     expect(selectionPageCss).toMatch(
       /@media \(width < 60rem\)[\s\S]*\.selection-split\s*\{[^}]*grid-template-rows:\s*minmax\(12rem,\s*42vh\)\s+minmax\(0,\s*1fr\);/s,
@@ -767,6 +797,9 @@ describe('MachinePage', () => {
     const machineName = panel.props('machineName') as string;
     const section = panel.props('section') as { id: number; kind: string };
     const sensor = selectionStore.sensors[0];
+
+    const expandImages = panel.find('[aria-label="展开结构示意图"]');
+    if (expandImages.exists()) await expandImages.trigger('click');
 
     expect(panel.find('.a-file-drop').exists()).toBe(false);
     expect(panel.text()).toContain('请先新增内容后再添加图片');

@@ -73,9 +73,10 @@
 
 .a-menu-item__text .a-menu-item__label,
 .a-menu-item__text .a-menu-item__hint {
-  overflow: visible;
-  text-overflow: unset;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .a-menu-separator {

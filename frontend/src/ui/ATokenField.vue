@@ -67,7 +67,7 @@ function remove(value: string | number, event: Event) {
 
 <template>
   <div class="a-token-field">
-    <APopover v-model:open="open" align="start" match-trigger-width>
+    <APopover v-model:open="open" align="start" min-trigger-width>
       <template #trigger>
         <div
           :id="id"
@@ -151,8 +151,14 @@ function remove(value: string | number, event: Event) {
               </ListboxItemIndicator>
             </span>
             <span class="a-menu-item__text">
-              <span class="a-menu-item__label">{{ option.label }}</span>
-              <span v-if="option.hint" class="a-menu-item__hint">
+              <span class="a-menu-item__label" :title="option.label">
+                {{ option.label }}
+              </span>
+              <span
+                v-if="option.hint"
+                class="a-menu-item__hint"
+                :title="option.hint"
+              >
                 {{ option.hint }}
               </span>
             </span>

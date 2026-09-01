@@ -16,6 +16,7 @@ withDefaults(
     arrow?: boolean;
     modal?: boolean;
     matchTriggerWidth?: boolean;
+    minTriggerWidth?: boolean;
   }>(),
   {
     side: 'bottom',
@@ -34,7 +35,10 @@ const open = defineModel<boolean>('open');
     <PopoverPortal>
       <PopoverContent
         class="a-popover"
-        :class="{ 'a-popover--match-trigger': matchTriggerWidth }"
+        :class="{
+          'a-popover--match-trigger': matchTriggerWidth,
+          'a-popover--min-trigger': minTriggerWidth,
+        }"
         :side="side"
         :align="align"
         :side-offset="8"
@@ -76,6 +80,14 @@ const open = defineModel<boolean>('open');
   min-width: var(--reka-popover-trigger-width);
   max-width: min(
     var(--reka-popover-trigger-width),
+    calc(100vw - var(--space-8))
+  );
+}
+
+.a-popover--min-trigger {
+  width: max-content;
+  min-width: min(
+    max(var(--reka-popover-trigger-width), 10rem),
     calc(100vw - var(--space-8))
   );
 }

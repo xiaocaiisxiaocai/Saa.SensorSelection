@@ -98,4 +98,21 @@ describe('APopover', () => {
 
     wrapper.unmount();
   });
+
+  it('uses the trigger as a minimum while allowing content to grow', async () => {
+    const wrapper = mount(APopover, {
+      attachTo: document.body,
+      props: { minTriggerWidth: true, open: true },
+      slots: {
+        trigger: '<button type="button">打开</button>',
+        default: '<p>可按内容增宽</p>',
+      },
+    });
+
+    await nextTick();
+    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
+    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
+
+    wrapper.unmount();
+  });
 });

@@ -69,7 +69,7 @@ watch(open, async (isOpen) => {
 
 <template>
   <div class="a-select" :class="{ 'a-select--clearable': showClear }">
-    <APopover v-model:open="open" align="start" match-trigger-width>
+    <APopover v-model:open="open" align="start" min-trigger-width>
       <template #trigger>
         <button
           :id="id"
@@ -92,6 +92,7 @@ watch(open, async (isOpen) => {
           <span
             class="a-select__value"
             :data-placeholder="selected ? undefined : ''"
+            :title="selected?.label"
           >
             {{ selected?.label ?? placeholder }}
           </span>
@@ -135,8 +136,14 @@ watch(open, async (isOpen) => {
               </ListboxItemIndicator>
             </span>
             <span class="a-menu-item__text">
-              <span class="a-menu-item__label">{{ option.label }}</span>
-              <span v-if="option.hint" class="a-menu-item__hint">
+              <span class="a-menu-item__label" :title="option.label">
+                {{ option.label }}
+              </span>
+              <span
+                v-if="option.hint"
+                class="a-menu-item__hint"
+                :title="option.hint"
+              >
                 {{ option.hint }}
               </span>
             </span>

@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +15,14 @@ const options: SelectOption[] = [
   { label: '停用', value: 'retired', disabled: true },
   { label: 'OMRON E3Z-D61', value: 'e3z', hint: '漫反射' },
 ];
+const selectSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ASelect.vue'),
+  'utf8',
+);
+const menuSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'menu.css'),
+  'utf8',
+);
 
 describe('ASelect', () => {
   afterEach(() => {
@@ -129,6 +141,33 @@ describe('ASelect', () => {
     );
     expect(labels.some((text) => text?.includes('OMRON'))).toBe(true);
     expect(labels.some((text) => text?.includes('现用'))).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('keeps compact option labels on one line while the panel can grow', async () => {
+    const boardOptions: SelectOption[] = [
+      { label: '电镀 · PTH电镀', value: 'pth' },
+      { label: '电镀 · VCP电镀', value: 'vcp' },
+    ];
+    const wrapper = mount(ASelect, {
+      attachTo: document.body,
+      props: { options: boardOptions, filterable: true, placeholder: '板件特性' },
+    });
+
+    await wrapper.get('[role="combobox"]').trigger('click');
+    await nextTick();
+
+    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
+    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
+    expect(
+      document.querySelector('[role="option"] .a-menu-item__label')?.getAttribute('title'),
+    ).toBe('电镀 · PTH电镀');
+    expect(selectSource).toContain('min-trigger-width');
+    expect(menuSource).toMatch(
+      /\.a-menu-item__text \.a-menu-item__label,[\s\S]*?white-space:\s*nowrap;/,
+    );
+    expect(menuSource).toMatch(/word-break:\s*keep-all;/);
 
     wrapper.unmount();
   });

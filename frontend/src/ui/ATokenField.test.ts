@@ -18,6 +18,10 @@ const tokenFieldSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), 'ATokenField.vue'),
   'utf8',
 );
+const menuSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'menu.css'),
+  'utf8',
+);
 
 describe('ATokenField', () => {
   afterEach(() => {
@@ -125,6 +129,29 @@ describe('ATokenField', () => {
     await nextTick();
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['e3z', 'pzg']]);
+
+    wrapper.unmount();
+  });
+
+  it('keeps dropdown options single-line while the panel can grow', async () => {
+    const wrapper = mount(ATokenField, {
+      attachTo: document.body,
+      props: {
+        options,
+        modelValue: [],
+        filterable: true,
+      },
+    });
+
+    await wrapper.get('[role="combobox"]').trigger('click');
+    await nextTick();
+
+    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
+    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
+    expect(tokenFieldSource).toContain('min-trigger-width');
+    expect(menuSource).toMatch(
+      /\.a-menu-item__text \.a-menu-item__label,[\s\S]*?white-space:\s*nowrap;/,
+    );
 
     wrapper.unmount();
   });

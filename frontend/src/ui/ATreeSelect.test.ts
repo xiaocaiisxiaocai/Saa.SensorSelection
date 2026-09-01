@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -19,6 +23,10 @@ const nodes: TreeNode[] = [
     ],
   },
 ];
+const treeSelectSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ATreeSelect.vue'),
+  'utf8',
+);
 
 describe('ATreeSelect', () => {
   afterEach(() => {
@@ -66,6 +74,24 @@ describe('ATreeSelect', () => {
 
     expect(document.body.textContent).toContain('上海办');
     expect(document.body.textContent).toContain('总部');
+    wrapper.unmount();
+  });
+
+  it('keeps tree labels on one line while the panel can grow', async () => {
+    const wrapper = mount(ATreeSelect, {
+      attachTo: document.body,
+      props: { nodes, placeholder: '所属组织' },
+    });
+
+    await wrapper.get('[role="combobox"]').trigger('click');
+    await nextTick();
+
+    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
+    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
+    expect(treeSelectSource).toMatch(
+      /\.a-tree-select__option-label\s*\{[^}]*white-space:\s*nowrap;/s,
+    );
+
     wrapper.unmount();
   });
 });

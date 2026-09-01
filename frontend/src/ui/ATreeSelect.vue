@@ -93,7 +93,7 @@ watch(open, async (isOpen) => {
 
 <template>
   <div class="a-tree-select" :class="{ 'a-tree-select--clearable': showClear }">
-    <APopover v-model:open="open" align="start" match-trigger-width>
+    <APopover v-model:open="open" align="start" min-trigger-width>
       <template #trigger>
         <button
           :id="id"
@@ -113,6 +113,7 @@ watch(open, async (isOpen) => {
           <span
             class="a-tree-select__value"
             :data-placeholder="selectedLabel ? undefined : ''"
+            :title="selectedLabel ?? undefined"
           >
             {{ selectedLabel ?? placeholder }}
           </span>
@@ -162,7 +163,9 @@ watch(open, async (isOpen) => {
               :disabled="row.disabled"
               @click="pick(row.id, row.disabled)"
             >
-              <span>{{ row.label }}</span>
+              <span class="a-tree-select__option-label" :title="row.label">
+                {{ row.label }}
+              </span>
               <Check
                 v-if="model === row.id"
                 class="a-tree-select__check"
@@ -270,6 +273,14 @@ watch(open, async (isOpen) => {
   background: transparent;
   border: 0;
   border-radius: var(--radius-sm);
+}
+
+.a-tree-select__option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .a-tree-select__option:hover,

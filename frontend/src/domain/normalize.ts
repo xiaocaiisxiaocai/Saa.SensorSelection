@@ -704,15 +704,29 @@ export function normalizeMachineSectionRows(
     .filter(isRecord)
     .map((item) => {
       const id = allocateId(item.id, usedIds, nextIdRef);
+      const machineModelId = Number(item.machineModelId);
       const processStepId = Number(item.processStepId);
+      const boardCharacteristicId = Number(item.boardCharacteristicId);
       const row: MachineSectionRow = {
         id,
         role: storedText(item.role),
+        machineModelId:
+          allowImage &&
+          Number.isSafeInteger(machineModelId) &&
+          machineModelId > 0
+            ? machineModelId
+            : null,
         processStepId:
           allowImage &&
           Number.isSafeInteger(processStepId) &&
           processStepId > 0
             ? processStepId
+            : null,
+        boardCharacteristicId:
+          allowImage &&
+          Number.isSafeInteger(boardCharacteristicId) &&
+          boardCharacteristicId > 0
+            ? boardCharacteristicId
             : null,
         sensorIds: normalizeSensorIds(item, sensorItems),
         sensorType: storedText(item.sensorType),

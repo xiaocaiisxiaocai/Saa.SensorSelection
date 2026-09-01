@@ -470,7 +470,9 @@ describe('sensors', () => {
     rows.push({
       id: 1,
       role: '历史结构行',
+      machineModelId: null,
       processStepId: null,
+      boardCharacteristicId: null,
       sensorIds: [current.id],
       sensorType: current.sensorType,
       spec: current.spec,
@@ -661,6 +663,69 @@ describe('entity tree and dictionary', () => {
 });
 
 describe('machine sections', () => {
+  it('persists dictionary-backed machine and board bindings and clears deleted references', () => {
+    const { storage } = createMemory();
+    const repo = createRepo(storage);
+    const machineName = '01 单段输送段（搭配）';
+    const sensor = repo.getSensors()[0];
+    const machineModel = repo.getDictionaryItems('machine-model')[0];
+    const boardCharacteristic = repo.getDictionaryItems(
+      'board-characteristic',
+    )[0];
+    const structure = repo.saveExtraMachineSection(machineName, {
+      kind: 'structure',
+      name: '字典绑定测试',
+      sort: 1,
+    });
+    if (!sensor || !machineModel || !boardCharacteristic || !structure.ok) {
+      throw new Error('dictionary binding fixture failed');
+    }
+
+    const linked = repo.saveMachineSectionRow(
+      structure.item.id,
+      machineName,
+      {
+        role: '进板检测',
+        sensorIds: [sensor.id],
+        machineModelId: machineModel.id,
+        boardCharacteristicId: boardCharacteristic.id,
+      },
+    );
+    expect(linked).toEqual(
+      expect.objectContaining({
+        ok: true,
+        item: expect.objectContaining({
+          machineModelId: machineModel.id,
+          boardCharacteristicId: boardCharacteristic.id,
+        }),
+      }),
+    );
+    expect(
+      repo.saveMachineSectionRow(structure.item.id, machineName, {
+        role: '失效字典引用',
+        sensorIds: [sensor.id],
+        machineModelId: 999_999,
+      }),
+    ).toEqual({ ok: false, reason: 'stale' });
+
+    const reloaded = createRepo(storage);
+    expect(
+      reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
+    ).toEqual(
+      expect.objectContaining({
+        machineModelId: machineModel.id,
+        boardCharacteristicId: boardCharacteristic.id,
+      }),
+    );
+
+    expect(
+      reloaded.deleteDictionaryItem('board-characteristic', boardCharacteristic.id),
+    ).toEqual({ ok: true });
+    expect(
+      reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
+    ).toEqual(expect.objectContaining({ boardCharacteristicId: null }));
+  });
+
   it('optionally persists process-step links for structure rows and clears them when the step is deleted', () => {
     const { storage } = createMemory();
     const repo = createRepo(storage);
@@ -725,6 +790,36 @@ describe('machine sections', () => {
     expect(
       reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
     ).toEqual(expect.objectContaining({ processStepId: null }));
+  });
+
+  it('shows legacy machine rows through restored machine-owned tabs', () => {
+    const persisted = JSON.stringify({
+      'meta:seed-version': [{ version: 10 }],
+      'machine-section-rows:1:既有机型': [
+        {
+          id: 9,
+          role: '真实结构资料',
+          sensorType: '漫反射',
+          sensorIds: [],
+        },
+      ],
+    });
+    const repo = createRepo({
+      getItem: (key) => (key === STORAGE_KEY ? persisted : null),
+      setItem: () => undefined,
+    });
+
+    expect(repo.listResolvedMachineSections('既有机型')).toEqual([
+      expect.objectContaining({
+        id: 1,
+        name: '输送机构',
+        kind: 'structure',
+        scope: 'machine',
+      }),
+    ]);
+    expect(repo.getMachineSectionRows(1, '既有机型')).toEqual([
+      expect.objectContaining({ id: 9, role: '真实结构资料' }),
+    ]);
   });
 
   it('keeps legacy machine content in the default process and isolates custom processes', () => {

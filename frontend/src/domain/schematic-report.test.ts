@@ -28,7 +28,9 @@ describe('buildMachineSchematicReportHtml', () => {
               {
                 id: 1,
                 role: '进板检测',
+                machineModelId: null,
                 processStepId: 1,
+                boardCharacteristicId: null,
                 processStepName: '内层 · DES 显影',
                 sensorIds: [1, 2, 3],
                 sensorType: '',
@@ -83,7 +85,9 @@ describe('buildMachineSchematicReportHtml', () => {
               {
                 id: 2,
                 role: '出板检测',
+                machineModelId: null,
                 processStepId: null,
+                boardCharacteristicId: null,
                 sensorIds: [],
                 sensorType: '光纤式',
                 spec: '检测距离 4mm',

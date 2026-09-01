@@ -1,4 +1,5 @@
 import type {
+  DictionaryItem,
   MachineSectionRow,
   ProcessStepItem,
   SensorItem,
@@ -8,7 +9,9 @@ export interface MachineTableRow extends MachineSectionRow {
   displayId: string;
   groupSize: number;
   groupStart: boolean;
+  machineModelName: string;
   processStepName: string;
+  boardCharacteristicName: string;
   sensor: SensorItem | null;
   source: MachineSectionRow;
 }
@@ -22,6 +25,8 @@ export function buildMachineTableRows(
   sensors: SensorItem[],
   isStructure: boolean,
   processSteps: ProcessStepItem[] = [],
+  machineModels: DictionaryItem[] = [],
+  boardCharacteristics: DictionaryItem[] = [],
 ): MachineTableRow[] {
   return items.flatMap((item) => {
     const records = isStructure
@@ -38,13 +43,22 @@ export function buildMachineTableRows(
     const processStepName = processStep
       ? `${processStep.layer} · ${processStep.name}`
       : '—';
+    const machineModelName =
+      machineModels.find((candidate) => candidate.id === item.machineModelId)
+        ?.name ?? '—';
+    const boardCharacteristicName =
+      boardCharacteristics.find(
+        (candidate) => candidate.id === item.boardCharacteristicId,
+      )?.name ?? '—';
 
     return displaySensors.map((sensor, index) => ({
       ...item,
       displayId: `${item.id}-${index}-${sensor?.id ?? 'legacy'}`,
       groupSize: displaySensors.length,
       groupStart: index === 0,
+      machineModelName,
       processStepName,
+      boardCharacteristicName,
       sensor,
       source: item,
       sensorType: sensor?.sensorType ?? item.sensorType,

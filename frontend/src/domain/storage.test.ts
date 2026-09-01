@@ -371,7 +371,47 @@ describe('BackendStorage', () => {
       { id: 1, problem: '历史问题', status: '04 已解决' },
     ]);
     expect(transport.remote.get('meta:seed-version')).toEqual([
-      { version: 10 },
+      { version: SEED_VERSION },
+    ]);
+  });
+
+  it('persists restored machine-owned tabs before version 11', async () => {
+    const defaultStore = buildDefaultStore({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
+    });
+    const transport = createFakeTransport({
+      'meta:seed-version': [{ version: 10 }],
+      'machine-section-rows:1:既有机型': [
+        { id: 1, role: '真实结构资料', sensorType: '漫反射' },
+      ],
+    });
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+      seedDefaults: defaultStore,
+      seedMigration: migrateSelectionSeedStore,
+    });
+
+    await bridge.init();
+
+    expect(transport.remote.get('machine-extra-sections:既有机型')).toEqual([
+      {
+        id: 1,
+        name: '输送机构',
+        sort: 1,
+        kind: 'structure',
+        scope: 'machine',
+      },
+    ]);
+    expect(transport.remote.get('dict:machine-model')).toEqual(
+      defaultStore['dict:machine-model'],
+    );
+    expect(transport.remote.get('dict:board-characteristic')).toEqual(
+      defaultStore['dict:board-characteristic'],
+    );
+    expect(transport.remote.get('meta:seed-version')).toEqual([
+      { version: SEED_VERSION },
     ]);
   });
 
@@ -384,6 +424,8 @@ describe('BackendStorage', () => {
     expect(defaultStore['machine-global-sections:all']).toBeUndefined();
     expect(defaultStore['general-structure-labels:all']).toBeUndefined();
     expect(defaultStore['dict:machine-section']).toBeUndefined();
+    expect(defaultStore['dict:machine-model']).toHaveLength(14);
+    expect(defaultStore['dict:board-characteristic']).toHaveLength(9);
     expect(defaultStore['customer-req:庆鼎']).toHaveLength(2);
     expect(defaultStore['customer-req:景旺']).toHaveLength(2);
     expect(defaultStore['customer-req:健鼎']).toBeUndefined();

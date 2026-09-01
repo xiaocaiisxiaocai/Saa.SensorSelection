@@ -362,4 +362,44 @@ describe('migrateSelectionSeedStore', () => {
       { id: 14, name: '04 已解决', sort: 4 },
     ]);
   });
+
+  it('restores non-empty legacy machine content as machine-owned tabs', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 10 }],
+      'machine-section-rows:1:既有机型': [
+        { id: 9, role: '真实资料', sensorType: '漫反射' },
+      ],
+      'machine-section-images:1:既有机型': [
+        {
+          dataUrl: 'data:image/png;base64,YQ==',
+          fileName: 'legacy.png',
+          mimeType: 'image/png',
+          size: 1,
+        },
+      ],
+      'machine-section-rows:2:空机型': [],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 10, 11);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['machine-extra-sections:既有机型']).toEqual([
+      {
+        id: 1,
+        name: '输送机构',
+        sort: 1,
+        kind: 'structure',
+        scope: 'machine',
+      },
+    ]);
+    expect(migrated.store['machine-section-rows:1:既有机型']).toEqual([
+      { id: 9, role: '真实资料', sensorType: '漫反射' },
+    ]);
+    expect(migrated.store['machine-section-images:1:既有机型']).toHaveLength(1);
+    expect(migrated.store['machine-extra-sections:空机型']).toBeUndefined();
+
+    const rerun = migrateSelectionSeedStore(migrated.store, 11, 11);
+    expect(rerun.changed).toBe(false);
+    expect(rerun.store).toEqual(migrated.store);
+  });
 });

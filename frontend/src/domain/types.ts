@@ -187,7 +187,9 @@ export interface MachineRowImage {
 export interface MachineSectionRow {
   id: number;
   role: string;
+  machineModelId: number | null;
   processStepId: number | null;
+  boardCharacteristicId: number | null;
   sensorIds: number[];
   sensorType: string;
   spec: string;
@@ -206,6 +208,7 @@ export interface DictionaryDefinition {
   defaults: string[];
   field?: 'layer' | 'sensorType' | 'source' | 'status' | 'type';
   catalog?: 'process-step' | 'sensor';
+  machineRowField?: 'machineModelId' | 'boardCharacteristicId';
 }
 
 export interface EntityKindDefinition {

@@ -7,7 +7,9 @@ import { buildMachineTableRows } from './table-rows';
 const row: MachineSectionRow = {
   id: 7,
   role: '进板检测',
+  machineModelId: null,
   processStepId: 21,
+  boardCharacteristicId: null,
   sensorIds: [11, 12, 13],
   sensorType: '',
   spec: '',
@@ -82,6 +84,11 @@ const processSteps: ProcessStepItem[] = [
   },
 ];
 
+const machineModels = [{ id: 3, name: '中间输送机', sort: 1 }];
+const boardCharacteristics = [
+  { id: 4, name: '平板无孔，金属材质', sort: 1 },
+];
+
 describe('buildMachineTableRows', () => {
   it('expands each selected sensor into a physical row and keeps the group metadata', () => {
     const result = buildMachineTableRows([row], sensors, true);
@@ -114,12 +121,19 @@ describe('buildMachineTableRows', () => {
   });
 
   it('shows the optional process-step binding only for structure rows', () => {
-    const linkedRow = { ...row, processStepId: 21 };
+    const linkedRow = {
+      ...row,
+      machineModelId: 3,
+      processStepId: 21,
+      boardCharacteristicId: 4,
+    };
     const structureRows = buildMachineTableRows(
       [linkedRow],
       sensors,
       true,
       processSteps,
+      machineModels,
+      boardCharacteristics,
     );
     const noteRows = buildMachineTableRows(
       [linkedRow],
@@ -132,6 +146,10 @@ describe('buildMachineTableRows', () => {
       (structureRows[0] as unknown as { processStepName: string })
         .processStepName,
     ).toBe('内层 · DES 显影');
+    expect(structureRows[0]?.machineModelName).toBe('中间输送机');
+    expect(structureRows[0]?.boardCharacteristicName).toBe(
+      '平板无孔，金属材质',
+    );
     expect(
       (noteRows[0] as unknown as { processStepName: string }).processStepName,
     ).toBe('—');

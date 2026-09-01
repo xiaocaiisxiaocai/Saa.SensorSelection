@@ -46,7 +46,7 @@ const items = computed(() =>
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'sort', label: '排序', width: 72 },
-    { key: 'name', label: '分类名称', minWidth: 200 },
+    { key: 'name', label: '字典项名称', minWidth: 200 },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
@@ -54,7 +54,9 @@ const columns = computed<TableColumn[]>(() => {
   return cols;
 });
 const rows = computed(() => items.value);
-const sheetTitle = computed(() => (editId.value ? '编辑分类' : '新增分类'));
+const sheetTitle = computed(() =>
+  editId.value ? '编辑字典项' : '新增字典项',
+);
 
 watch(activeCode, () => {
   dialogOpen.value = false;
@@ -91,9 +93,9 @@ function saveItem() {
     editId.value,
   );
   if (
-    toastResult(result, editId.value ? '分类已更新' : '分类已新增', {
-      duplicate: '该分类名称已存在',
-      validation: '请填写有效的分类名称',
+    toastResult(result, editId.value ? '字典项已更新' : '字典项已新增', {
+      duplicate: '该字典项名称已存在',
+      validation: '请填写有效的字典项名称',
     })
   ) {
     dialogOpen.value = false;
@@ -104,14 +106,14 @@ function saveItem() {
 async function deleteItem(item: DictionaryItem) {
   if (!activeCode.value) return;
   const ok = await confirmDelete(
-    '删除分类',
-    `确认删除“${item.name}”吗？已使用该分类的数据会改归到其他分类。`,
+    '删除字典项',
+    `确认删除“${item.name}”吗？已使用该字典项的数据会按业务规则清理或改归。`,
   );
   if (!ok) return;
   const result = store.deleteDictionaryItem(activeCode.value, item.id);
   if (
-    toastResult(result, '分类已删除', {
-      validation: '至少保留一个分类',
+    toastResult(result, '字典项已删除', {
+      validation: '至少保留一个字典项',
     })
   ) {
     if (editId.value === item.id) {
@@ -134,20 +136,20 @@ async function deleteItem(item: DictionaryItem) {
         :columns="columns"
         :rows="rows"
         row-key="id"
-        empty-text="暂无分类"
+        empty-text="暂无字典项"
         striped
       >
         <template #cell-actions="{ row }">
           <div class="table-actions">
             <AIconButton
               :icon="Pencil"
-              label="编辑分类"
+              label="编辑字典项"
               size="small"
               @click="editItem(row)"
             />
             <AIconButton
               :icon="Trash2"
-              label="删除分类"
+              label="删除字典项"
               size="small"
               variant="destructive"
               @click="deleteItem(row)"
@@ -159,7 +161,7 @@ async function deleteItem(item: DictionaryItem) {
 
     <ASheet v-model:open="dialogOpen" :title="sheetTitle" :width="480">
       <AFormGrid :columns="1">
-        <AFormRow label="分类名称" required>
+        <AFormRow label="字典项名称" required>
           <AField v-model="form.name" :maxlength="40" />
         </AFormRow>
         <AFormRow label="排序">

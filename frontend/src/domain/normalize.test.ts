@@ -340,13 +340,15 @@ describe('machine row images', () => {
 });
 
 describe('normalizeMachineSectionRows', () => {
-  it('keeps valid structure process links, defaults old rows, and removes links from notes', () => {
+  it('keeps valid structure bindings, defaults old rows, and removes bindings from notes', () => {
     const structureRows = normalizeMachineSectionRows(
       [
         {
           id: 1,
           role: '已绑定结构',
           processStepId: 12,
+          machineModelId: 3,
+          boardCharacteristicId: 4,
           sensorType: '漫反射',
         },
         { id: 2, role: '历史结构', sensorType: '对射' },
@@ -360,13 +362,22 @@ describe('normalizeMachineSectionRows', () => {
           role: '安装注意',
           name: '保持水平',
           processStepId: 12,
+          machineModelId: 3,
+          boardCharacteristicId: 4,
         },
       ],
       { allowImage: false },
     );
 
     expect(structureRows.map((row) => row.processStepId)).toEqual([12, null]);
+    expect(structureRows.map((row) => row.machineModelId)).toEqual([3, null]);
+    expect(structureRows.map((row) => row.boardCharacteristicId)).toEqual([
+      4,
+      null,
+    ]);
     expect(noteRows[0]?.processStepId).toBeNull();
+    expect(noteRows[0]?.machineModelId).toBeNull();
+    expect(noteRows[0]?.boardCharacteristicId).toBeNull();
   });
 
   it('maps legacy type/spec text onto catalog ids when sensorIds are empty', () => {

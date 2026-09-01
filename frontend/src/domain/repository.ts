@@ -1559,11 +1559,46 @@ export function createSelectionRepository({
       ) {
         return { ok: false, reason: 'stale' };
       }
-      nextPayload = { ...payload, processStepId, sensorIds };
+      const dictionaryBinding = (
+        field: 'machineModelId' | 'boardCharacteristicId',
+        code: 'machine-model' | 'board-characteristic',
+      ) => {
+        const rawValue = payload[field] as unknown;
+        if (rawValue === null || rawValue === undefined || rawValue === '') {
+          return { ok: true as const, value: null };
+        }
+        const value = Number(rawValue);
+        if (!Number.isSafeInteger(value) || value <= 0) {
+          return { ok: false as const, reason: 'validation' as const };
+        }
+        if (!getDictionaryItems(code).some((item) => item.id === value)) {
+          return { ok: false as const, reason: 'stale' as const };
+        }
+        return { ok: true as const, value };
+      };
+      const machineModel = dictionaryBinding('machineModelId', 'machine-model');
+      if (!machineModel.ok) return machineModel;
+      const boardCharacteristic = dictionaryBinding(
+        'boardCharacteristicId',
+        'board-characteristic',
+      );
+      if (!boardCharacteristic.ok) return boardCharacteristic;
+      nextPayload = {
+        ...payload,
+        machineModelId: machineModel.value,
+        processStepId,
+        boardCharacteristicId: boardCharacteristic.value,
+        sensorIds,
+      };
     } else {
       const name = storedText(payload.name).trim();
       if (!role || !name) return { ok: false, reason: 'validation' };
-      nextPayload = { ...payload, processStepId: null };
+      nextPayload = {
+        ...payload,
+        machineModelId: null,
+        processStepId: null,
+        boardCharacteristicId: null,
+      };
     }
 
     let image: MachineRowImage | null | undefined;
@@ -1587,9 +1622,17 @@ export function createSelectionRepository({
     const base: MachineSectionRow = {
       id: editId || nextAvailableId(items),
       role,
+      machineModelId:
+        allowImage && typeof nextPayload.machineModelId === 'number'
+          ? nextPayload.machineModelId
+          : null,
       processStepId:
         allowImage && typeof nextPayload.processStepId === 'number'
           ? nextPayload.processStepId
+          : null,
+      boardCharacteristicId:
+        allowImage && typeof nextPayload.boardCharacteristicId === 'number'
+          ? nextPayload.boardCharacteristicId
           : null,
       sensorIds: Array.isArray(nextPayload.sensorIds)
         ? nextPayload.sensorIds.map(Number)
@@ -1990,6 +2033,20 @@ export function createSelectionRepository({
     const fallback =
       items[0]?.name || createDictionaryDefaults(code)[0]?.name || '';
     if (removed) renameDictionaryValue(definition, removed.name, fallback);
+    if (definition.machineRowField) {
+      for (const [key, value] of Object.entries(store)) {
+        if (!key.startsWith('machine-section-rows:') || !Array.isArray(value)) {
+          continue;
+        }
+        store[key] = value.map((row) =>
+          row &&
+          typeof row === 'object' &&
+          (row as Record<string, unknown>)[definition.machineRowField!] === id
+            ? { ...row, [definition.machineRowField!]: null }
+            : row,
+        );
+      }
+    }
     store[dictionaryStorageKey(code)] = normalizeDictionaryItems(items);
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }

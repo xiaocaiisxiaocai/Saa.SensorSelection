@@ -64,6 +64,7 @@ export type {
   MachineReportSection,
 } from './schematic-report';
 export {
+  BOARD_CHARACTERISTIC_OPTIONS,
   CRUD_DEFAULTS,
   DICTIONARY_DEFINITIONS,
   ENTITY_KIND_DEFINITIONS,

@@ -61,7 +61,9 @@ const imageOpen = computed({
 const page = ref(1);
 const pageSize = ref(20);
 const form = reactive({
+  boardCharacteristicId: null as number | null,
   desc: '',
+  machineModelId: null as number | null,
   name: '',
   note: '',
   processStepId: null as number | null,
@@ -79,6 +81,21 @@ const typeOptions = computed<SelectOption[]>(() =>
 const processStepOptions = computed<SelectOption[]>(() =>
   store.processSteps.map((item) => ({
     label: `${item.layer} · ${item.name}`,
+    value: item.id,
+  })),
+);
+const machineModelItems = computed(() =>
+  store.dictionaryItems('machine-model'),
+);
+const machineModelOptions = computed<SelectOption[]>(() =>
+  machineModelItems.value.map((item) => ({ label: item.name, value: item.id })),
+);
+const boardCharacteristicItems = computed(() =>
+  store.dictionaryItems('board-characteristic'),
+);
+const boardCharacteristicOptions = computed<SelectOption[]>(() =>
+  boardCharacteristicItems.value.map((item) => ({
+    label: item.name,
     value: item.id,
   })),
 );
@@ -138,7 +155,12 @@ const filtered = computed(() => {
     const haystack = isStructure.value
       ? [
           item.role,
+          dictionaryLabel(machineModelItems.value, item.machineModelId),
           processStepLabel(item.processStepId),
+          dictionaryLabel(
+            boardCharacteristicItems.value,
+            item.boardCharacteristicId,
+          ),
           sensorTypesLabel(item),
           sensorSpecsLabel(item),
           item.purpose,
@@ -157,6 +179,8 @@ const tableData = computed(() => {
     store.sensors,
     isStructure.value,
     store.processSteps,
+    machineModelItems.value,
+    boardCharacteristicItems.value,
   );
 });
 const columns = computed<TableColumn<MachineTableRow>[]>(() => {
@@ -166,10 +190,17 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
   const cols: TableColumn<MachineTableRow>[] = isStructure.value
     ? [
         { key: 'role', label: '功能作用', minWidth: 100, rowSpan },
+        { key: 'machineModelName', label: '机型', minWidth: 120, rowSpan },
         {
           key: 'processStepName',
           label: '工艺制程',
           minWidth: 140,
+          rowSpan,
+        },
+        {
+          key: 'boardCharacteristicName',
+          label: '板件特性',
+          minWidth: 150,
           rowSpan,
         },
         { key: 'sensorType', label: '传感器类型', minWidth: 110 },
@@ -235,6 +266,14 @@ function processStepLabel(id: number | null) {
   return item ? `${item.layer} · ${item.name}` : '';
 }
 
+function dictionaryLabel(
+  items: Array<{ id: number; name: string }>,
+  id: number | null,
+) {
+  if (id === null) return '';
+  return items.find((item) => item.id === id)?.name ?? '';
+}
+
 function sensorTypesLabel(item: MachineSectionRow) {
   const types = [
     ...new Set(sensorRecords(item).map((sensor) => sensor.sensorType)),
@@ -269,7 +308,9 @@ function sensorOptionLabel(item: SensorItem) {
 function resetForm() {
   editId.value = undefined;
   Object.assign(form, {
+    boardCharacteristicId: null,
     desc: '',
+    machineModelId: null,
     name: '',
     note: '',
     processStepId: null,
@@ -287,7 +328,9 @@ function addItem() {
 function editItem(item: MachineSectionRow) {
   editId.value = item.id;
   Object.assign(form, {
+    boardCharacteristicId: item.boardCharacteristicId,
     desc: item.desc,
+    machineModelId: item.machineModelId,
     name: item.name,
     note: item.note,
     processStepId: item.processStepId,
@@ -304,9 +347,13 @@ function saveItem() {
     props.machineName,
     {
       desc: form.desc.trim(),
+      machineModelId: isStructure.value ? form.machineModelId : null,
       name: form.name.trim(),
       note: form.note.trim(),
       processStepId: isStructure.value ? form.processStepId : null,
+      boardCharacteristicId: isStructure.value
+        ? form.boardCharacteristicId
+        : null,
       purpose: form.purpose.trim(),
       role: form.role.trim(),
       sensorIds: form.sensorIds.map(Number),
@@ -416,7 +463,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter"
           :placeholder="
             isStructure
-              ? '搜索功能作用、工艺制程、传感器类型、规格、作用或备注'
+              ? '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注'
               : '搜索注意分类、事项名称、说明或备注'
           "
         />
@@ -522,6 +569,15 @@ async function removeImage(index: number) {
       <AFormRow label="功能作用" required>
         <AField v-model="form.role" :maxlength="80" />
       </AFormRow>
+      <AFormRow label="机型" hint="可选；来自“数据字典 → 机型”。">
+        <ASelect
+          v-model="form.machineModelId"
+          :options="machineModelOptions"
+          placeholder="选择机型（可选）"
+          filterable
+          clearable
+        />
+      </AFormRow>
       <AFormRow
         label="工艺制程"
         hint="可选；来自“制程管理 → 工艺制程”。"
@@ -530,6 +586,18 @@ async function removeImage(index: number) {
           v-model="form.processStepId"
           :options="processStepOptions"
           placeholder="选择工艺制程（可选）"
+          filterable
+          clearable
+        />
+      </AFormRow>
+      <AFormRow
+        label="板件特性"
+        hint="可选；来自“数据字典 → 板件特性”。"
+      >
+        <ASelect
+          v-model="form.boardCharacteristicId"
+          :options="boardCharacteristicOptions"
+          placeholder="选择板件特性（可选）"
           filterable
           clearable
         />

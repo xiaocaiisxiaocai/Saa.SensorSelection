@@ -11,6 +11,7 @@ import {
   INITIAL_CRUD_DATA,
   LEGACY_DEMO_CRUD_DEFAULTS,
   MACHINE_SECTION_LEGACY_MAP,
+  MACHINE_SECTION_SEED,
   MACHINE_GROUPS,
   SENSOR_DATA,
 } from './seed';
@@ -25,6 +26,7 @@ const MACHINE_HIERARCHY_VERSION = 7;
 const USER_DEFINED_MACHINE_TABS_VERSION = 8;
 const MACHINE_CATALOG_SPLIT_VERSION = 9;
 const NUMBERED_FEEDBACK_STATUS_VERSION = 10;
+const LEGACY_MACHINE_CONTENT_TAB_VERSION = 11;
 const LEGACY_FEEDBACK_STATUS_OPTIONS = [
   '待处理',
   '处理中',
@@ -136,14 +138,21 @@ function legacyRows(listId: string, entityName: string): unknown[] {
           .join('、'),
       };
     });
-    const withoutProcessBinding = [...rows, ...normalized, ...derived].map(
+    const withoutOptionalBindings = [...rows, ...normalized, ...derived].map(
       (row) => {
         if (!row || typeof row !== 'object') return row;
-        const { processStepId, ...legacyRow } = row as Record<string, unknown>;
-        return processStepId === null ? legacyRow : row;
+        const legacyRow = { ...(row as Record<string, unknown>) };
+        for (const field of [
+          'machineModelId',
+          'processStepId',
+          'boardCharacteristicId',
+        ]) {
+          if (legacyRow[field] === null) delete legacyRow[field];
+        }
+        return legacyRow;
       },
     );
-    return [...rows, ...normalized, ...derived, ...withoutProcessBinding];
+    return [...rows, ...normalized, ...derived, ...withoutOptionalBindings];
   }
 
   return normalizeCrudItems(listId, rows);
@@ -244,6 +253,98 @@ function migrateNumberedFeedbackStatuses(store: PersistedStore): boolean {
     if (!rowsChanged) continue;
     store[key] = nextRows;
     changed = true;
+  }
+
+  return changed;
+}
+
+function migrateLegacyMachineContentTabs(store: PersistedStore): boolean {
+  const definitions = new Map(
+    MACHINE_SECTION_SEED.map((section) => [section.id, section]),
+  );
+  const candidates = new Map<string, Set<number>>();
+
+  for (const [key, rows] of Object.entries(store)) {
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    const match = /^machine-section-(?:rows|images):(\d+):(.+)$/.exec(key);
+    if (!match) continue;
+    const sectionId = Number(match[1]);
+    const scopedMachineName = match[2] || '';
+    if (!definitions.has(sectionId) || !scopedMachineName) continue;
+    const ids = candidates.get(scopedMachineName) ?? new Set<number>();
+    ids.add(sectionId);
+    candidates.set(scopedMachineName, ids);
+  }
+
+  let changed = false;
+  for (const [scopedMachineName, sectionIds] of candidates) {
+    const extraKey = `machine-extra-sections:${scopedMachineName}`;
+    const existing = Array.isArray(store[extraKey])
+      ? [...store[extraKey]]
+      : [];
+    let machineChanged = false;
+
+    for (const sectionId of sectionIds) {
+      const definition = definitions.get(sectionId);
+      if (!definition) continue;
+      const sameId = existing.find(
+        (item) =>
+          item &&
+          typeof item === 'object' &&
+          Number((item as Record<string, unknown>).id) === sectionId,
+      );
+      if (sameId) continue;
+
+      const sameName = existing.find((item) => {
+        if (!item || typeof item !== 'object') return false;
+        const record = item as Record<string, unknown>;
+        return (
+          String(record.name || '').localeCompare(definition.name, 'zh-CN', {
+            sensitivity: 'accent',
+          }) === 0 &&
+          (record.kind === 'notes' ? 'notes' : 'structure') === definition.kind
+        );
+      }) as Record<string, unknown> | undefined;
+
+      if (sameName) {
+        const targetId = Number(sameName.id);
+        if (Number.isSafeInteger(targetId) && targetId > 0) {
+          for (const listId of [
+            'machine-section-rows',
+            'machine-section-images',
+          ]) {
+            const sourceKey = `${listId}:${sectionId}:${scopedMachineName}`;
+            const targetKey = `${listId}:${targetId}:${scopedMachineName}`;
+            const sourceRows = Array.isArray(store[sourceKey])
+              ? store[sourceKey]
+              : [];
+            if (sourceRows.length === 0) continue;
+            const targetRows = Array.isArray(store[targetKey])
+              ? store[targetKey]
+              : [];
+            store[targetKey] = [...targetRows, ...sourceRows];
+            if (targetKey !== sourceKey) delete store[sourceKey];
+            changed = true;
+            machineChanged = true;
+          }
+        }
+        continue;
+      }
+
+      existing.push({
+        id: definition.id,
+        name: definition.name,
+        sort: definition.sort,
+        kind: definition.kind,
+        scope: 'machine',
+      });
+      changed = true;
+      machineChanged = true;
+    }
+
+    if (machineChanged) {
+      store[extraKey] = existing;
+    }
   }
 
   return changed;
@@ -375,6 +476,14 @@ export function migrateSelectionSeedStore(
     currentVersion < NUMBERED_FEEDBACK_STATUS_VERSION &&
     targetVersion >= NUMBERED_FEEDBACK_STATUS_VERSION &&
     migrateNumberedFeedbackStatuses(store)
+  ) {
+    changed = true;
+  }
+
+  if (
+    currentVersion < LEGACY_MACHINE_CONTENT_TAB_VERSION &&
+    targetVersion >= LEGACY_MACHINE_CONTENT_TAB_VERSION &&
+    migrateLegacyMachineContentTabs(store)
   ) {
     changed = true;
   }

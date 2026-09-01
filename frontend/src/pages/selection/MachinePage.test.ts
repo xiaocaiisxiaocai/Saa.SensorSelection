@@ -328,7 +328,96 @@ describe('MachinePage', () => {
             component.props('placeholder') === '选择工艺制程（可选）',
         ),
     ).toBe(false);
+    expect(
+      notesPanel
+        .findAllComponents(ASelect)
+        .some(
+          (component) =>
+            component.props('placeholder') === '选择机型（可选）' ||
+            component.props('placeholder') === '选择板件特性（可选）',
+        ),
+    ).toBe(false);
     notesPanel.unmount();
+  });
+
+  it('offers searchable optional machine and board dictionary bindings for structure records only', async () => {
+    window.localStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().applyProfile({
+      displayName: '维护员',
+      orgUnit: null,
+      permissions: ['selection:write'],
+      roles: [{ code: 'editor', id: 3, name: '业务维护员' }],
+      username: 'editor',
+    });
+    const selectionStore = useSelectionStore();
+    const structure = selectionStore.saveExtraMachineSection('测试机型', {
+      kind: 'structure',
+      name: '测试结构',
+      sort: 1,
+    });
+    if (!structure.ok) throw new Error('structure fixture failed');
+
+    const wrapper = mount(MachineSectionPanel, {
+      props: {
+        machineName: '测试机型',
+        processId: 1,
+        section: structure.item,
+      },
+      global: { plugins: [pinia] },
+    });
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '新增')
+      ?.trigger('click');
+    await flushPromises();
+
+    const machineSelect = wrapper
+      .findAllComponents(ASelect)
+      .find((component) => component.props('placeholder') === '选择机型（可选）');
+    const boardSelect = wrapper
+      .findAllComponents(ASelect)
+      .find(
+        (component) =>
+          component.props('placeholder') === '选择板件特性（可选）',
+      );
+    expect(machineSelect?.props('filterable')).toBe(true);
+    expect(machineSelect?.props('clearable')).toBe(true);
+    expect(machineSelect?.props('options')).toEqual(
+      selectionStore.dictionaryItems('machine-model').map((item) => ({
+        label: item.name,
+        value: item.id,
+      })),
+    );
+    expect(boardSelect?.props('filterable')).toBe(true);
+    expect(boardSelect?.props('clearable')).toBe(true);
+    expect(boardSelect?.props('options')).toEqual(
+      selectionStore.dictionaryItems('board-characteristic').map((item) => ({
+        label: item.name,
+        value: item.id,
+      })),
+    );
+    const sensor = selectionStore.sensors[0];
+    const machineModel = selectionStore.dictionaryItems('machine-model')[0];
+    const boardCharacteristic = selectionStore.dictionaryItems(
+      'board-characteristic',
+    )[0];
+    if (!sensor || !machineModel || !boardCharacteristic) {
+      throw new Error('dictionary binding options missing');
+    }
+    expect(
+      selectionStore.saveMachineSectionRow(structure.item.id, '测试机型', {
+        role: '字典绑定显示',
+        sensorIds: [sensor.id],
+        machineModelId: machineModel.id,
+        boardCharacteristicId: boardCharacteristic.id,
+      }).ok,
+    ).toBe(true);
+    await flushPromises();
+    expect(wrapper.text()).toContain(machineModel.name);
+    expect(wrapper.text()).toContain(boardCharacteristic.name);
+    wrapper.unmount();
   });
 
   it('searches structure records by their linked process step', async () => {
@@ -369,7 +458,7 @@ describe('MachinePage', () => {
 
     const search = panel.getComponent(ASearchField);
     expect(search.props('placeholder')).toBe(
-      '搜索功能作用、工艺制程、传感器类型、规格、作用或备注',
+      '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注',
     );
 
     search.vm.$emit('update:modelValue', secondProcessStep.name);
@@ -447,9 +536,11 @@ describe('MachinePage', () => {
     const headers = wrapper.findAll('.a-table thead th');
 
     expect(headers[0]?.attributes('style')).toContain('width: 100px');
-    expect(headers[1]?.attributes('style')).toContain('width: 140px');
-    expect(headers[2]?.attributes('style')).toContain('width: 110px');
-    expect(headers[3]?.attributes('style')).toContain('width: 260px');
+    expect(headers[1]?.attributes('style')).toContain('width: 120px');
+    expect(headers[2]?.attributes('style')).toContain('width: 140px');
+    expect(headers[3]?.attributes('style')).toContain('width: 150px');
+    expect(headers[4]?.attributes('style')).toContain('width: 110px');
+    expect(headers[5]?.attributes('style')).toContain('width: 260px');
 
     wrapper.unmount();
   });

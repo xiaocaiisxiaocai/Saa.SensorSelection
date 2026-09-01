@@ -473,7 +473,13 @@ function cloneMachineRows(
     >
   >,
 ): MachineSectionRow[] {
-  return rows.map((row) => ({ ...row, processStepId: null, sensorIds: [] }));
+  return rows.map((row) => ({
+    ...row,
+    machineModelId: null,
+    processStepId: null,
+    boardCharacteristicId: null,
+    sensorIds: [],
+  }));
 }
 
 export const LEGACY_DEMO_CRUD_DEFAULTS: CrudDefaults = {
@@ -783,6 +789,18 @@ export const CRUD_DEFAULTS: CrudDefaults = {
 
 export const PROCESS_LAYER_OPTIONS = ['内层', '外层'];
 
+export const BOARD_CHARACTERISTIC_OPTIONS = [
+  '板架有孔，无法安装镜片',
+  '板架有孔，可安装镜片',
+  '板架无孔',
+  '平板有孔，无法安装镜片',
+  '平板有孔，可安装镜片',
+  '平板无孔，金属材质',
+  '平板无孔，电木材质',
+  '透明板',
+  '小板件',
+];
+
 export function createProcessStepDefaults(): ProcessStepItem[] {
   let id = 1;
   const steps: ProcessStepItem[] = [];
@@ -803,7 +821,7 @@ export function createProcessStepDefaults(): ProcessStepItem[] {
   return steps;
 }
 
-export const SEED_VERSION = 10;
+export const SEED_VERSION = 12;
 
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
@@ -934,6 +952,22 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
     listIds: [],
     catalog: 'process-step',
     defaults: PROCESS_LAYER_OPTIONS,
+  },
+  {
+    code: 'machine-model',
+    title: '机型',
+    description: '机型结构记录可绑定的机型，全局共用',
+    listIds: [],
+    machineRowField: 'machineModelId',
+    defaults: Object.keys(MACHINE_DETAILS),
+  },
+  {
+    code: 'board-characteristic',
+    title: '板件特性',
+    description: '机型结构记录可绑定的板件特性，全局共用',
+    listIds: [],
+    machineRowField: 'boardCharacteristicId',
+    defaults: BOARD_CHARACTERISTIC_OPTIONS,
   },
   {
     code: 'sensor-status',

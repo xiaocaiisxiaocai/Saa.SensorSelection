@@ -1,9 +1,9 @@
 export const SOURCE_LIST_MIN_WIDTH = 160;
 export const SOURCE_LIST_MAX_WIDTH = 320;
 export const SOURCE_LIST_DEFAULT_WIDTH = 220;
-export const MACHINE_SOURCE_LIST_MIN_WIDTH = 260;
-export const MACHINE_SOURCE_LIST_MAX_WIDTH = 400;
-export const MACHINE_SOURCE_LIST_DEFAULT_WIDTH = 260;
+export const MACHINE_SOURCE_LIST_MIN_WIDTH = 220;
+export const MACHINE_SOURCE_LIST_MAX_WIDTH = 320;
+export const MACHINE_SOURCE_LIST_DEFAULT_WIDTH = 240;
 
 export interface SourceGroup {
   name: string;

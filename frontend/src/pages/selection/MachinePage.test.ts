@@ -35,6 +35,10 @@ const machineSourceListSource = readFileSync(
   ),
   'utf8',
 );
+const entitySource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'EntitySource.vue'),
+  'utf8',
+);
 const sharedSourceListSource = readFileSync(
   join(
     dirname(fileURLToPath(import.meta.url)),
@@ -700,6 +704,24 @@ describe('MachinePage', () => {
     );
     expect(sharedSourceListSource).toMatch(
       /\.a-source-list__count\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+    );
+  });
+
+  it('does not reserve invisible action space that makes tree labels wrap early', () => {
+    expect(machineSourceListSource).toMatch(
+      /\.machine-tree-row\s*\{[^}]*position:\s*relative;/s,
+    );
+    expect(machineSourceListSource).toMatch(
+      /\.machine-tree-row__tools\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-1\);/s,
+    );
+    expect(machineSourceListSource).not.toMatch(
+      /\.machine-tree-row__tools\s*\{[^}]*margin-left:\s*auto;/s,
+    );
+    expect(machineSourceListSource).toMatch(
+      /\.machine-source__tree\s*\{[^}]*overflow:\s*hidden auto;/s,
+    );
+    expect(entitySource).toMatch(
+      /<MachineSourceList[\s\S]*?:storage-key="`selection:source-list-width:\$\{kind\}:v5`"/,
     );
   });
 

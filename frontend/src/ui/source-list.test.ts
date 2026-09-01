@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   clampSourceListWidth,
   filterSourceGroups,
+  MACHINE_SOURCE_LIST_DEFAULT_WIDTH,
+  MACHINE_SOURCE_LIST_MAX_WIDTH,
+  MACHINE_SOURCE_LIST_MIN_WIDTH,
   moveIndex,
   sourceListWidthFromKey,
   SOURCE_LIST_MAX_WIDTH,
@@ -15,6 +18,12 @@ const groups = [
 ];
 
 describe('source-list helpers', () => {
+  it('uses a compact width range for the machine hierarchy', () => {
+    expect(MACHINE_SOURCE_LIST_MIN_WIDTH).toBe(220);
+    expect(MACHINE_SOURCE_LIST_DEFAULT_WIDTH).toBe(240);
+    expect(MACHINE_SOURCE_LIST_MAX_WIDTH).toBe(320);
+  });
+
   it('clamps sidebar width to 160–320', () => {
     expect(clampSourceListWidth(100)).toBe(SOURCE_LIST_MIN_WIDTH);
     expect(clampSourceListWidth(800)).toBe(SOURCE_LIST_MAX_WIDTH);

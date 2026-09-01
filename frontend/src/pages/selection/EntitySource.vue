@@ -507,7 +507,7 @@ function onReorderMachineItems(payload: {
       :min-width="listMinWidth"
       :max-width="listMaxWidth"
       :default-width="listDefaultWidth"
-      :storage-key="`selection:source-list-width:${kind}:v4`"
+      :storage-key="`selection:source-list-width:${kind}:v5`"
       @select="emit('select', $event)"
       @toggle-check="emit('toggleCheck', $event)"
       @create-group="openCreateGroup"

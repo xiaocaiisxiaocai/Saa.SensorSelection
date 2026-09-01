@@ -1117,10 +1117,11 @@ onMounted(restoreWidth);
   display: grid;
   align-content: start;
   gap: 3px;
-  overflow: auto;
+  overflow: hidden auto;
 }
 
 .machine-tree-row {
+  position: relative;
   min-height: 32px;
   display: flex;
   align-items: center;
@@ -1200,14 +1201,22 @@ onMounted(restoreWidth);
 }
 
 .machine-tree-row__tools {
+  position: absolute;
+  top: 50%;
+  right: var(--space-1);
   display: inline-flex;
   gap: 1px;
-  margin-left: auto;
+  pointer-events: none;
+  background: var(--bg-content);
+  border-radius: var(--radius-sm);
+  box-shadow: calc(var(--space-2) * -2) 0 var(--space-2) var(--bg-content);
   opacity: 0;
+  transform: translateY(-50%);
 }
 
 .machine-tree-row:hover .machine-tree-row__tools,
 .machine-tree-row:focus-within .machine-tree-row__tools {
+  pointer-events: auto;
   opacity: 1;
 }
 

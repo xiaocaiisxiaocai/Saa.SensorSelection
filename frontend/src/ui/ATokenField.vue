@@ -277,7 +277,7 @@ function remove(value: string | number, event: Event) {
   width: 100%;
   height: var(--control-height-md);
   padding: 0 var(--space-3);
-  font: var(--text-control);
+  font: var(--text-field);
   color: var(--label);
   background: var(--fill-2);
   border: 0;

@@ -12,6 +12,30 @@ const controls = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'control.css'),
   'utf8',
 );
+const reset = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'reset.css'),
+  'utf8',
+);
+const menu = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'menu.css'),
+  'utf8',
+);
+const select = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ASelect.vue'),
+  'utf8',
+);
+const tokenField = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATokenField.vue'),
+  'utf8',
+);
+const treeSelect = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATreeSelect.vue'),
+  'utf8',
+);
+const appShell = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'shell', 'AppShell.vue'),
+  'utf8',
+);
 
 const requiredTokens = [
   '--sys-blue',
@@ -39,6 +63,7 @@ const requiredTokens = [
   '--font-ui',
   '--text-display',
   '--text-control',
+  '--text-field',
   '--text-caption',
   '--sidebar-width',
   '--toolbar-height',
@@ -100,6 +125,33 @@ describe('tokens.css', () => {
     );
     expect(controls).toMatch(
       /\.a-control--small \.a-control__input\s*\{[^}]*font:\s*inherit;/s,
+    );
+  });
+
+  it('keeps body copy unchanged while compacting fields and dropdown options', () => {
+    expect(tokens).toMatch(/--text-control:\s*400 15px\/22px/);
+    expect(tokens).toMatch(/--text-field:\s*400 13px\/18px/);
+    expect(reset).toMatch(/html\s*\{[^}]*font:\s*var\(--text-control\);/s);
+    expect(controls).toMatch(
+      /\.a-control\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(controls).toMatch(
+      /\.a-control__input\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(menu).toMatch(
+      /\.a-menu-item\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(select).toMatch(
+      /\.a-select__filter\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(tokenField).toMatch(
+      /\.a-select__filter\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(treeSelect).toMatch(
+      /\.a-tree-select__option\s*\{[^}]*font:\s*var\(--text-field\);/s,
+    );
+    expect(appShell).toMatch(
+      /\.search input\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
   });
 });

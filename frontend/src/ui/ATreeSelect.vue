@@ -262,7 +262,7 @@ watch(open, async (isOpen) => {
   min-width: 0;
   height: var(--row-height);
   padding: 0 var(--space-2);
-  font: var(--text-control);
+  font: var(--text-field);
   color: var(--label);
   text-align: start;
   background: transparent;

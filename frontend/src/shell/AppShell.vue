@@ -376,7 +376,7 @@ watch(
   flex: 1;
   min-width: 0;
   padding: 0;
-  font: var(--text-control);
+  font: var(--text-field);
   color: var(--label);
   appearance: none;
   background: transparent;

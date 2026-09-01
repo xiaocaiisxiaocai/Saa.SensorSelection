@@ -259,9 +259,9 @@ onMounted(async () => {
 
 .login__card {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-5);
   width: min(100%, 400px);
-  padding: var(--space-8) var(--space-7);
+  padding: var(--space-7) var(--space-6);
   background: var(--bg-elevated);
   border: 1px solid var(--separator);
   border-radius: var(--radius-2xl);
@@ -297,7 +297,7 @@ onMounted(async () => {
 
 .login__form {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .login__guest {

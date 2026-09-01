@@ -462,7 +462,7 @@ table {
 th,
 td {
   height: var(--row-height);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   overflow: hidden;
   font: var(--text-control);
   color: var(--label);

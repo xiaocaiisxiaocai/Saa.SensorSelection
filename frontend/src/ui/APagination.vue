@@ -101,7 +101,7 @@ function onPageSizeChange(value: string | number | null) {
 .a-pagination {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
   font: var(--text-caption);

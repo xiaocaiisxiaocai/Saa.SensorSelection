@@ -318,7 +318,7 @@ watch(
   display: grid;
   flex-shrink: 0;
   grid-template-columns: 1fr minmax(0, 28rem) 1fr;
-  gap: var(--space-4);
+  gap: var(--space-3);
   align-items: center;
   height: var(--toolbar-height);
   padding: 0 var(--space-4);
@@ -327,7 +327,7 @@ watch(
 .toolbar__start,
 .toolbar__end {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -355,7 +355,7 @@ watch(
 
 .brand {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
   min-width: 0;
   color: var(--label);
@@ -372,12 +372,12 @@ watch(
 
 .search {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
   width: 100%;
   min-width: 0;
   height: var(--control-height-lg);
-  padding: 0 var(--space-5);
+  padding: 0 var(--space-4);
   color: var(--label-3);
   background: var(--fill-2);
   border: 0;
@@ -483,7 +483,7 @@ watch(
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  gap: var(--space-5);
+  gap: var(--space-4);
   width: var(--sidebar-width);
   padding: var(--space-3);
   overflow: auto;
@@ -514,7 +514,7 @@ watch(
 }
 
 .nav-group__label {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   margin: 0;
   font: var(--text-caption);
   color: var(--label-2);
@@ -524,10 +524,10 @@ watch(
 
 .nav-item {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
   min-height: var(--control-height-lg);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   color: var(--label);
   border-radius: var(--radius-md);
   transition: background-color var(--dur-1) var(--ease-out);
@@ -572,7 +572,7 @@ watch(
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-7);
+  padding: var(--space-5);
   overflow: hidden;
   background: var(--bg-content);
 }
@@ -633,7 +633,7 @@ watch(
   }
 
   .content {
-    padding: var(--space-5);
+    padding: var(--space-4);
   }
 }
 

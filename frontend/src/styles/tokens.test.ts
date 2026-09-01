@@ -64,6 +64,26 @@ const machinePage = readFileSync(
   ),
   'utf8',
 );
+const button = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'AButton.vue'),
+  'utf8',
+);
+const formGrid = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'AFormGrid.vue'),
+  'utf8',
+);
+const sheet = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ASheet.vue'),
+  'utf8',
+);
+const sourceList = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ASourceList.vue'),
+  'utf8',
+);
+const table = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATable.vue'),
+  'utf8',
+);
 
 const requiredTokens = [
   '--sys-blue',
@@ -127,9 +147,51 @@ describe('tokens.css', () => {
     expect(tokens).toContain("'Noto Sans SC'");
   });
 
-  it('keeps the expanded navigation compact without changing its collapsed target', () => {
-    expect(tokens).toMatch(/--sidebar-width:\s*168px/);
-    expect(tokens).toMatch(/--sidebar-collapsed-width:\s*64px/);
+  it('keeps both expanded and collapsed navigation compact', () => {
+    expect(tokens).toMatch(/--sidebar-width:\s*152px/);
+    expect(tokens).toMatch(/--sidebar-collapsed-width:\s*56px/);
+  });
+
+  it('defines one compact desktop density scale while preserving coarse-pointer targets', () => {
+    expect(tokens).toMatch(/--toolbar-height:\s*52px/);
+    expect(tokens).toMatch(/--row-height:\s*36px/);
+    expect(tokens).toMatch(/--row-height-loose:\s*44px/);
+    expect(tokens).toMatch(/--control-height-sm:\s*26px/);
+    expect(tokens).toMatch(/--control-height-md:\s*30px/);
+    expect(tokens).toMatch(/--control-height-lg:\s*34px/);
+    expect(tokens).toMatch(/--control-height-xl:\s*42px/);
+    expect(tokens).toMatch(/--control-pad-md:\s*10px/);
+    expect(tokens).toMatch(/--control-pad-lg:\s*12px/);
+    expect(tokens).toMatch(
+      /@media \(pointer:\s*coarse\)\s*\{[\s\S]*--control-height-lg:\s*44px/,
+    );
+    expect(button).toMatch(
+      /\.a-button--large\s*\{[^}]*height:\s*var\(--control-height-lg\);/s,
+    );
+  });
+
+  it('applies compact spacing through shared shells, forms, tables, sheets and source lists', () => {
+    expect(appShell).toMatch(
+      /\.content\s*\{[^}]*padding:\s*var\(--space-5\);/s,
+    );
+    expect(selectionPage).toMatch(
+      /\.selection-page\s*\{[^}]*gap:\s*var\(--space-4\);/s,
+    );
+    expect(selectionPage).toMatch(
+      /\.selection-panel\s*\{[^}]*gap:\s*var\(--space-3\);/s,
+    );
+    expect(formGrid).toMatch(
+      /\.a-form-grid\s*\{[^}]*gap:\s*var\(--space-4\);/s,
+    );
+    expect(table).toMatch(
+      /th,\s*td\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-3\);/s,
+    );
+    expect(sheet).toMatch(
+      /\.a-sheet__body\s*\{[^}]*padding:\s*var\(--space-5\);/s,
+    );
+    expect(sourceList).toMatch(
+      /\.a-source-list__search,\s*\.a-source-list__toolbar\s*\{[^}]*padding:\s*var\(--space-3\);/s,
+    );
   });
 
   it('keeps light-theme semantic colors readable on white surfaces', () => {

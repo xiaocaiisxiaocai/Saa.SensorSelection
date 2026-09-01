@@ -33,7 +33,7 @@ const resolvedIcon = computed(() => markRaw(props.icon ?? Inbox));
   display: grid;
   justify-items: center;
   gap: var(--space-3);
-  padding: var(--space-9) var(--space-6);
+  padding: var(--space-7) var(--space-5);
   text-align: center;
 }
 

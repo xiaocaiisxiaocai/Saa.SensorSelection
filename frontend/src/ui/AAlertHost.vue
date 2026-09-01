@@ -58,10 +58,10 @@ function onOpenChange(open: boolean) {
   left: 50%;
   z-index: var(--z-overlay);
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
   width: calc(var(--space-8) * 10);
   max-width: calc(100vw - var(--space-8));
-  padding: var(--space-7);
+  padding: var(--space-5);
   color: var(--label);
   background: var(--bg-elevated);
   border-radius: var(--radius-2xl);
@@ -75,7 +75,7 @@ function onOpenChange(open: boolean) {
 
 .a-alert__title {
   margin: 0;
-  font: var(--text-title-2);
+  font: var(--text-headline);
   font-weight: 600;
   letter-spacing: var(--tracking-title-2);
   text-align: center;

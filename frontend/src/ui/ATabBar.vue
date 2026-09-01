@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
   gap: var(--space-1);
   align-items: center;
   height: var(--control-height-lg);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-3);
   font: var(--text-caption);
   color: var(--label-2);
   background: transparent;

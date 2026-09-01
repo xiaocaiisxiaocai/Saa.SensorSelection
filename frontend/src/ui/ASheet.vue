@@ -129,12 +129,12 @@ function onOpenAutoFocus(event: Event) {
   flex-shrink: 0;
   place-items: center;
   min-height: var(--row-height-loose);
-  padding: var(--space-5) var(--space-9);
+  padding: var(--space-3) var(--space-8);
 }
 
 .a-sheet__title {
   margin: 0;
-  font: var(--text-title-2);
+  font: var(--text-headline);
   font-weight: 600;
   letter-spacing: var(--tracking-title-2);
   text-align: center;
@@ -150,7 +150,7 @@ function onOpenAutoFocus(event: Event) {
 .a-sheet__body {
   min-width: 0;
   min-height: 0;
-  padding: var(--space-6);
+  padding: var(--space-5);
   overflow: hidden auto;
 }
 
@@ -160,7 +160,7 @@ function onOpenAutoFocus(event: Event) {
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
 }
 
 .a-sheet--viewport .a-sheet__body {

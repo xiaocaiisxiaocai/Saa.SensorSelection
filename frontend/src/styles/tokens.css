@@ -72,7 +72,7 @@
   --text-field: 400 13px/18px var(--font-ui);
   --text-toolbar: 400 12px/18px var(--font-ui);
   --text-toolbar-em: 600 12px/18px var(--font-ui);
-  --text-caption: 400 13px/18px var(--font-ui);
+  --text-caption: 400 12px/18px var(--font-ui);
   --tracking-display: -0.5px;
   --tracking-title-1: -0.4px;
   --tracking-title-2: -0.3px;
@@ -88,12 +88,12 @@
   --space-7: 24px;
   --space-8: 32px;
   --space-9: 40px;
-  --sidebar-width: 168px;
-  --sidebar-collapsed-width: 64px;
+  --sidebar-width: 152px;
+  --sidebar-collapsed-width: 56px;
   --source-list-width: 220px;
-  --toolbar-height: 60px;
-  --row-height: 40px;
-  --row-height-loose: 48px;
+  --toolbar-height: 52px;
+  --row-height: 36px;
+  --row-height-loose: 44px;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -120,26 +120,26 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 
-  --control-height-sm: 28px;
-  --control-height-md: 32px;
-  --control-height-lg: 40px;
-  --control-height-xl: 48px;
+  --control-height-sm: 26px;
+  --control-height-md: 30px;
+  --control-height-lg: 34px;
+  --control-height-xl: 42px;
   --control-pad-sm: 8px;
-  --control-pad-md: 12px;
-  --control-pad-lg: 16px;
-  --control-pad-xl: 20px;
+  --control-pad-md: 10px;
+  --control-pad-lg: 12px;
+  --control-pad-xl: 16px;
   --touch-target: 44px;
   --z-popover: 60;
   --z-overlay: 50;
   --z-toast: 70;
   --overlay: rgb(0 0 0 / 24%);
   --overlay-blur: blur(2px);
-  --switch-track-md-width: 42px;
-  --switch-track-md-height: 26px;
-  --switch-track-lg-width: 56px;
-  --switch-track-lg-height: 34px;
+  --switch-track-md-width: 38px;
+  --switch-track-md-height: 22px;
+  --switch-track-lg-width: 48px;
+  --switch-track-lg-height: 28px;
   --switch-inset: 1px;
-  --stepper-nudge-height: 14px;
+  --stepper-nudge-height: 12px;
 }
 
 :root[data-theme='dark'] {
@@ -201,6 +201,17 @@
   --shadow-3: 0 8px 24px rgb(0 0 0 / 50%);
   --shadow-4: 0 24px 64px rgb(0 0 0 / 60%);
   --overlay: rgb(0 0 0 / 40%);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --row-height: 44px;
+    --row-height-loose: 52px;
+    --control-height-sm: 36px;
+    --control-height-md: 40px;
+    --control-height-lg: 44px;
+    --control-height-xl: 48px;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {

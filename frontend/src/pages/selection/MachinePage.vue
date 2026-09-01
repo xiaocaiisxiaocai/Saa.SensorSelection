@@ -848,7 +848,7 @@ async function closeTab(value: string) {
 .machine-process-context {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-3);
   min-width: 0;
   width: 100%;
   padding: 0 var(--space-1);
@@ -883,16 +883,16 @@ async function closeTab(value: string) {
 
 .machine-process-list {
   display: grid;
-  gap: 8px;
+  gap: var(--space-3);
 }
 
 .machine-process-list__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
-  padding: 8px 12px;
+  gap: var(--space-4);
+  min-height: var(--row-height-loose);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--separator);
   border-radius: 10px;
   background: var(--fill-4);
@@ -900,7 +900,7 @@ async function closeTab(value: string) {
 
 .machine-process-list__name {
   display: grid;
-  gap: 3px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -920,14 +920,14 @@ async function closeTab(value: string) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-3);
 }
 
 .machine-process-form {
   display: grid;
-  gap: 12px;
-  margin-top: 20px;
-  padding-top: 18px;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--separator);
 }
 

@@ -68,10 +68,10 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
 
 .a-toast {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: center;
   max-width: min(24rem, calc(100vw - var(--space-8)));
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   color: var(--label);
   background: var(--material-menu-bg);
   border-radius: var(--radius-pill);
@@ -103,7 +103,7 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
 
 .a-toast__message {
   margin: 0;
-  font: var(--text-body);
+  font: var(--text-control);
   color: var(--label);
 }
 

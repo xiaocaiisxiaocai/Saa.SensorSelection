@@ -18,7 +18,7 @@ withDefaults(
 <style scoped>
 .a-form-grid {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
 }

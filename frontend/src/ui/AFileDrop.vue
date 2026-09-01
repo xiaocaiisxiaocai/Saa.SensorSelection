@@ -137,7 +137,7 @@ function openPicker() {
   display: grid;
   gap: var(--space-2);
   justify-items: center;
-  padding: var(--space-7) var(--space-6);
+  padding: var(--space-5) var(--space-4);
   color: var(--label-2);
   text-align: center;
   cursor: pointer;

@@ -7,6 +7,7 @@ import {
 } from 'lucide-vue-next';
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   reactive,
@@ -50,6 +51,7 @@ import {
 } from '@/ui';
 
 const props = defineProps<{
+  focusRowId?: number;
   machineName: string;
   processId: number;
   section: MachineSectionItem;
@@ -78,6 +80,8 @@ const imageOpen = computed({
 });
 const page = ref(1);
 const pageSize = ref(20);
+const selectedTableRow = ref<string | number | null>(null);
+const tableHost = ref<HTMLElement | null>(null);
 let compactImagesMedia: MediaQueryList | null = null;
 const form = reactive({
   boardCharacteristicId: null as number | null,
@@ -333,6 +337,43 @@ function resetFilters() {
   page.value = 1;
 }
 
+watch(
+  () =>
+    [
+      props.focusRowId,
+      props.section.id,
+      props.machineName,
+      props.processId,
+      items.value.length,
+    ] as const,
+  async ([focusRowId]) => {
+    if (!focusRowId) {
+      selectedTableRow.value = null;
+      return;
+    }
+    const rowIndex = items.value.findIndex((item) => item.id === focusRowId);
+    if (rowIndex < 0) {
+      selectedTableRow.value = null;
+      return;
+    }
+    resetFilters();
+    page.value = Math.floor(rowIndex / pageSize.value) + 1;
+    await nextTick();
+    const tableRow = tableData.value.find(
+      (item) => item.source.id === focusRowId,
+    );
+    if (!tableRow) return;
+    selectedTableRow.value = tableRow.displayId;
+    await nextTick();
+    const row = tableHost.value?.querySelector<HTMLElement>(
+      `[data-row-key="${String(tableRow.displayId).replace(/"/g, '')}"]`,
+    );
+    row?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    row?.focus();
+  },
+  { immediate: true },
+);
+
 function processStepLabel(id: number | null) {
   if (id === null) return '';
   const item = store.processSteps.find((candidate) => candidate.id === id);
@@ -515,7 +556,7 @@ async function removeImage(index: number) {
       'machine-body--images-collapsed': isStructure && imagesCollapsed,
     }"
   >
-    <div class="selection-panel">
+    <div ref="tableHost" class="selection-panel">
       <div class="selection-toolbar machine-structure-toolbar">
         <ATokenField
           v-if="isStructure"
@@ -571,6 +612,7 @@ async function removeImage(index: number) {
         </AButton>
       </div>
       <ATable
+        v-model:selected-key="selectedTableRow"
         :columns="columns"
         :rows="tableData"
         row-key="displayId"

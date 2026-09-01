@@ -18,7 +18,12 @@ import {
   type MachineSectionKind,
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
+import MachineGlobalSearch from '@/pages/selection/machine/MachineGlobalSearch.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
+import type {
+  MachineStructureSearchDocument,
+  MachineStructureSearchResult,
+} from '@/pages/selection/machine/machine-structure-search';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess, useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -94,6 +99,15 @@ const machineCatalogTabs: TabItem[] = [
   { label: '结构', value: 'mechanism' },
   { label: '专案机型', value: 'project' },
 ];
+const machineViewTabs: TabItem[] = [
+  { label: '目录浏览', value: 'browse' },
+  { label: '条件查找', value: 'find' },
+];
+const activeMachineView = computed(() =>
+  activeMachineType.value === 'mechanism' && route.query.view === 'find'
+    ? 'find'
+    : 'browse',
+);
 const catalogGroups = computed(() =>
   filterMachineGroups(groups.value, activeMachineType.value),
 );
@@ -162,6 +176,104 @@ const selectedMachineKey = computed(() =>
     name: selection.value.item,
   }),
 );
+const machineModelItems = computed(() =>
+  store.dictionaryItems('machine-model'),
+);
+const boardCharacteristicItems = computed(() =>
+  store.dictionaryItems('board-characteristic'),
+);
+const machineModelOptions = computed(() =>
+  machineModelItems.value.map((item) => ({ label: item.name, value: item.id })),
+);
+const processStepOptions = computed(() =>
+  store.processSteps.map((item) => ({
+    label: `${item.layer} · ${item.name}`,
+    value: item.id,
+  })),
+);
+const boardCharacteristicOptions = computed(() =>
+  boardCharacteristicItems.value.map((item) => ({
+    label: item.name,
+    value: item.id,
+  })),
+);
+const globalSearchDocuments = computed<MachineStructureSearchDocument[]>(() => {
+  const documents: MachineStructureSearchDocument[] = [];
+  const mechanismGroups = filterMachineGroups(groups.value, 'mechanism');
+  for (const process of processes.value) {
+    for (const group of mechanismGroups) {
+      const treeItems = [
+        ...group.items.map((machineName) => ({
+          configuration: '',
+          machineName,
+        })),
+        ...(group.configurations ?? []).flatMap((configuration) =>
+          configuration.items.map((machineName) => ({
+            configuration: configuration.name,
+            machineName,
+          })),
+        ),
+      ];
+      for (const treeItem of treeItems) {
+        const sections = store
+          .resolvedMachineSections(treeItem.machineName, process.id)
+          .filter((section) => section.kind === 'structure');
+        for (const section of sections) {
+          for (const row of store.machineSectionRows(
+            section.id,
+            treeItem.machineName,
+            process.id,
+          )) {
+            const machineModel = machineModelItems.value.find(
+              (item) => item.id === row.machineModelId,
+            );
+            const processStep = store.processSteps.find(
+              (item) => item.id === row.processStepId,
+            );
+            const boardCharacteristic = boardCharacteristicItems.value.find(
+              (item) => item.id === row.boardCharacteristicId,
+            );
+            const sensors = row.sensorIds
+              .map((id) => store.sensors.find((sensor) => sensor.id === id))
+              .filter((sensor) => Boolean(sensor));
+            documents.push({
+              boardCharacteristicId: row.boardCharacteristicId,
+              boardCharacteristicName: boardCharacteristic?.name ?? '',
+              category: group.name,
+              configuration: treeItem.configuration,
+              machineModelId: row.machineModelId,
+              machineModelName: machineModel?.name ?? '',
+              machineName: treeItem.machineName,
+              processId: process.id,
+              processName: process.name,
+              processStepId: row.processStepId,
+              processStepName: processStep
+                ? `${processStep.layer} · ${processStep.name}`
+                : '',
+              rowId: row.id,
+              searchableText: [
+                row.role,
+                row.purpose,
+                row.note,
+                ...sensors.flatMap((sensor) => [
+                  sensor?.sensorType,
+                  sensor?.brand,
+                  sensor?.model,
+                  sensor?.spec,
+                ]),
+              ]
+                .filter(Boolean)
+                .join(' '),
+              sectionId: section.id,
+              sectionName: section.name,
+            });
+          }
+        }
+      }
+    }
+  }
+  return documents;
+});
 const displaySections = computed(() => {
   if (!selection.value.item) return [];
   return store
@@ -265,9 +377,11 @@ function addMachineContextQuery(
   query: Record<string, string>,
   processId = activeProcessId.value,
   catalog = activeMachineType.value,
+  view = activeMachineView.value,
 ) {
   if (processId !== 1) query.process = String(processId);
   if (catalog === 'project') query.catalog = catalog;
+  if (catalog === 'mechanism' && view === 'find') query.view = 'find';
   return query;
 }
 
@@ -434,8 +548,49 @@ function selectMachineCatalog(value: string) {
   }
   void router.replace({
     path: route.path,
-    query: addMachineContextQuery({}, activeProcessId.value, value),
+    query: addMachineContextQuery({}, activeProcessId.value, value, 'browse'),
   });
+}
+
+function selectMachineView(value: string) {
+  if (
+    activeMachineType.value !== 'mechanism' ||
+    (value !== 'browse' && value !== 'find') ||
+    value === activeMachineView.value
+  ) {
+    return;
+  }
+  const query: Record<string, string> = addMachineContextQuery(
+    {
+      category: selection.value.category,
+      item: selection.value.item,
+      ...(selection.value.configuration
+        ? { configuration: selection.value.configuration }
+        : {}),
+      ...(activeSection.value ? { section: activeSection.value } : {}),
+    },
+    activeProcessId.value,
+    activeMachineType.value,
+    value,
+  );
+  void router.replace({ path: route.path, query });
+}
+
+function openGlobalSearchResult(result: MachineStructureSearchResult) {
+  const query: Record<string, string> = addMachineContextQuery(
+    {
+      category: result.category,
+      item: result.machineName,
+      section: String(result.sectionId),
+      focusRow: String(result.rowIds[0] ?? ''),
+    },
+    result.processId,
+    'mechanism',
+    'browse',
+  );
+  if (!query.focusRow) delete query.focusRow;
+  if (result.configuration) query.configuration = result.configuration;
+  void router.replace({ path: route.path, query });
 }
 
 function resetProcessForm() {
@@ -646,15 +801,21 @@ async function closeTab(value: string) {
 <template>
   <section class="selection-page">
     <h1 class="visually-hidden">机型结构</h1>
-    <div class="selection-split">
+    <div
+      class="selection-split"
+      :class="{
+        'selection-split--global-search': activeMachineView === 'find',
+      }"
+    >
       <div class="machine-source-stack">
-        <div class="machine-process-context" aria-label="当前制程">
+        <div class="machine-process-context" aria-label="当前浏览制程">
+          <span class="machine-process-context__label">当前浏览制程</span>
           <ASelect
             v-model="processSelection"
             class="machine-process-context__select"
             :options="processOptions"
             placeholder="选择制程"
-            aria-label="当前制程"
+            aria-label="当前浏览制程"
             size="small"
           />
           <AButton
@@ -673,7 +834,25 @@ async function closeTab(value: string) {
           :tabs="machineCatalogTabs"
           @update:model-value="selectMachineCatalog"
         />
+        <div
+          v-if="activeMachineType === 'mechanism'"
+          class="machine-view-context"
+        >
+          <ATabBar
+            class="machine-view-tabs"
+            :model-value="activeMachineView"
+            :tabs="machineViewTabs"
+            @update:model-value="selectMachineView"
+          />
+          <span
+            v-if="activeMachineView === 'find'"
+            class="machine-view-context__hint"
+          >
+            全局查找不受当前浏览制程限制
+          </span>
+        </div>
         <EntitySource
+          v-if="activeMachineView === 'browse'"
           kind="machine"
           :machine-type="activeMachineType"
           :selected="selection.item"
@@ -683,7 +862,17 @@ async function closeTab(value: string) {
           @toggle-check="onToggleCheck"
         />
       </div>
-      <div v-if="selection.item" class="selection-panel">
+      <MachineGlobalSearch
+        v-if="activeMachineView === 'find'"
+        class="machine-global-search"
+        :documents="globalSearchDocuments"
+        :machine-model-options="machineModelOptions"
+        :process-step-options="processStepOptions"
+        :board-characteristic-options="boardCharacteristicOptions"
+        :process-options="processOptions"
+        @select="openGlobalSearchResult"
+      />
+      <div v-else-if="selection.item" class="selection-panel">
         <div v-if="auth.isAuthenticated" class="machine-report">
           <span class="selection-toolbar__count">
             已选 {{ selectedMachineItems.length }} /
@@ -733,6 +922,7 @@ async function closeTab(value: string) {
           :machine-name="selection.item"
           :process-id="activeProcessId"
           :section="activeSectionItem"
+          :focus-row-id="Number(route.query.focusRow) || undefined"
         />
         <AEmptyState
           v-else
@@ -848,6 +1038,20 @@ async function closeTab(value: string) {
   height: auto;
 }
 
+.selection-split--global-search {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.selection-split--global-search > .machine-source-stack {
+  height: auto;
+}
+
+.machine-global-search {
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .machine-process-context {
   display: flex;
   align-items: center;
@@ -862,6 +1066,12 @@ async function closeTab(value: string) {
   flex: 1;
   width: 150px;
   min-width: 120px;
+}
+
+.machine-process-context__label {
+  flex: none;
+  color: var(--label-2);
+  font: var(--text-caption);
 }
 
 .machine-process-context__manage {
@@ -882,6 +1092,41 @@ async function closeTab(value: string) {
 
 .machine-catalog-tabs :deep(.a-tab-bar__tab--selected) {
   font-weight: 600;
+}
+
+.machine-view-context {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+.machine-view-tabs {
+  width: 100%;
+  padding: 2px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--fill-4);
+}
+
+.machine-view-tabs :deep(.a-tab-bar__tab) {
+  flex: 1;
+  justify-content: center;
+  min-height: var(--control-height-sm);
+  border-radius: 6px;
+  font: var(--text-caption);
+}
+
+.machine-view-tabs :deep(.a-tab-bar__tab--selected) {
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+  font-weight: 600;
+}
+
+.machine-view-context__hint {
+  color: var(--label-2);
+  font: var(--text-caption);
+  text-align: center;
 }
 
 .machine-process-list {
@@ -957,6 +1202,14 @@ async function closeTab(value: string) {
 
   .machine-process-context__manage {
     padding-inline: var(--space-2);
+  }
+
+  .machine-process-context__label {
+    display: none;
+  }
+
+  .selection-split--global-search {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .machine-report {

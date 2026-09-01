@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { ASearchField, ASelect, ATokenField } from '@/ui';
 import { toast, useToastState } from '@/ui/toast';
+import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
 
@@ -163,8 +164,8 @@ describe('MachinePage', () => {
     expect(
       wrapper.get('.machine-source-stack > .machine-process-context'),
     ).toBeDefined();
-    expect(wrapper.find('.machine-process-context__label').exists()).toBe(
-      false,
+    expect(wrapper.get('.machine-process-context__label').text()).toBe(
+      '当前浏览制程',
     );
     expect(wrapper.text()).toContain('管理制程');
     expect(wrapper.get('.machine-process-context__manage').classes()).toContain(
@@ -185,6 +186,116 @@ describe('MachinePage', () => {
     expect(wrapper.text()).toContain('制程2注意事项');
     expect(wrapper.text()).toContain('标准输送段配置');
 
+    wrapper.unmount();
+  });
+
+  it('keeps the current browsing process while global structure search defaults to every process', async () => {
+    const wrapper = await mountPage(true, true);
+
+    expect(wrapper.text()).toContain('当前浏览制程');
+    expect(wrapper.text()).toContain('目录浏览');
+    expect(wrapper.text()).toContain('条件查找');
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '条件查找')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('全局查找不受当前浏览制程限制');
+    expect(wrapper.text()).toContain('全部制程');
+    expect(wrapper.text()).toContain('默认覆盖所有上层制程');
+    expect(wrapper.getComponent(ASelect).props('modelValue')).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('finds matching structures across processes and opens the selected process and row', async () => {
+    const wrapper = await mountPage(true, true);
+    const selectionStore = useSelectionStore();
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const machineName = panel.props('machineName') as string;
+    const section = panel.props('section') as { id: number; kind: string };
+    const sensor = selectionStore.sensors[0];
+    const machineModel = selectionStore.dictionaryItems('machine-model')[0];
+    const second = selectionStore.saveMachineProcess({
+      name: '制程2',
+      sort: 2,
+    });
+    if (!sensor || !machineModel || !second.ok) {
+      throw new Error('global search fixture failed');
+    }
+    const secondSection = selectionStore.saveExtraMachineSection(
+      machineName,
+      { kind: 'structure', name: '输送机构', sort: 1 },
+      undefined,
+      second.item.id,
+    );
+    if (!secondSection.ok) {
+      throw new Error('global search section fixture failed');
+    }
+    const firstRow = selectionStore.saveMachineSectionRow(
+      section.id,
+      machineName,
+      {
+        machineModelId: machineModel.id,
+        role: '制程1入料确认',
+        sensorIds: [sensor.id],
+      },
+      undefined,
+      1,
+    );
+    const secondRow = selectionStore.saveMachineSectionRow(
+      secondSection.item.id,
+      machineName,
+      {
+        machineModelId: machineModel.id,
+        role: '制程2出料确认',
+        sensorIds: [sensor.id],
+      },
+      undefined,
+      second.item.id,
+    );
+    if (!firstRow.ok || !secondRow.ok) {
+      throw new Error('global search row fixture failed');
+    }
+    await flushPromises();
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '条件查找')
+      ?.trigger('click');
+    await flushPromises();
+
+    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    const machineField = globalSearch
+      .findAllComponents(ATokenField)
+      .find((component) => component.props('placeholder') === '选择适用机型');
+    machineField?.vm.$emit('update:modelValue', [machineModel.id]);
+    await flushPromises();
+    await globalSearch
+      .findAll('button')
+      .find((button) => button.text() === '查找')
+      ?.trigger('click');
+    await flushPromises();
+
+    expect(globalSearch.text()).toContain('制程1（1个结构）');
+    expect(globalSearch.text()).toContain('制程2（1个结构）');
+    const secondResult = globalSearch.findAll(
+      '.machine-global-search__result',
+    )[1];
+    expect(secondResult).toBeDefined();
+    await secondResult?.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.vm.$route.query.view).toBeUndefined();
+    expect(wrapper.vm.$route.query.process).toBe(String(second.item.id));
+    expect(wrapper.vm.$route.query.focusRow).toBe(String(secondRow.item.id));
+    expect(wrapper.getComponent(MachineSectionPanel).props('processId')).toBe(
+      second.item.id,
+    );
+    expect(wrapper.getComponent(MachineSectionPanel).props('focusRowId')).toBe(
+      secondRow.item.id,
+    );
     wrapper.unmount();
   });
 

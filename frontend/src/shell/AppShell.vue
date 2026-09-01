@@ -421,7 +421,7 @@ watch(
   flex-shrink: 0;
   padding: var(--space-1) var(--space-2);
   font: var(--text-caption);
-  color: var(--label-3);
+  color: var(--label-placeholder);
   letter-spacing: var(--tracking-caption);
   background: var(--fill-3);
   border-radius: var(--radius-sm);

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-vue-next';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import AIconButton from './AIconButton.vue';
@@ -276,7 +282,7 @@ onBeforeUnmount(() => {
   left: 0;
   height: var(--space-1);
   pointer-events: none;
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
   transition:
     transform var(--dur-2) var(--ease-in-out),
     width var(--dur-2) var(--ease-in-out);
@@ -305,7 +311,8 @@ onBeforeUnmount(() => {
   );
 }
 
-.a-tab-bar__viewport[data-overflow-start][data-overflow-end] .a-tab-bar__scroller {
+.a-tab-bar__viewport[data-overflow-start][data-overflow-end]
+  .a-tab-bar__scroller {
   mask-image: linear-gradient(
     to right,
     transparent,

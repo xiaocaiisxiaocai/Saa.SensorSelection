@@ -106,7 +106,7 @@ function onClick(event: MouseEvent) {
 
 .a-button--filled {
   color: var(--label-on-color);
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
 }
 
 .a-button--filled:hover:not(:disabled) {

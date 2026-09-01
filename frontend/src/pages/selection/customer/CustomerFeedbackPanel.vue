@@ -59,17 +59,26 @@ const statusOptions = computed<SelectOption[]>(() =>
 );
 
 const items = computed(
-  () => store.crudItems('customer-feedback', props.entityName) as TimelineItem[],
+  () =>
+    store.crudItems('customer-feedback', props.entityName) as TimelineItem[],
 );
 const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
+      (typeFilters.value.length === 0 ||
+        typeFilters.value.includes(item.type)) &&
       (statusFilters.value.length === 0 ||
         statusFilters.value.includes(item.status)) &&
       (!value ||
-        [item.type, item.machine, item.problem, item.measure, item.date, item.status]
+        [
+          item.type,
+          item.machine,
+          item.problem,
+          item.measure,
+          item.date,
+          item.status,
+        ]
           .join(' ')
           .toLocaleLowerCase('zh-CN')
           .includes(value)),
@@ -114,9 +123,7 @@ watch(
 );
 
 function statusTone(status: string): BadgeTone {
-  const normalizedStatus = status
-    .trim()
-    .replace(/^\d+\s*[.、_\-:：]?\s*/, '');
+  const normalizedStatus = status.trim().replace(/^\d+\s*[.、_\-:：]?\s*/, '');
   if (normalizedStatus === '已解决') return 'green';
   if (normalizedStatus === '处理中' || normalizedStatus === '测试中') {
     return 'orange';
@@ -202,6 +209,7 @@ async function deleteItem(item: TimelineItem) {
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="问题分类"
+        aria-label="问题分类筛选"
         :max-visible-tokens="1"
       />
       <ATokenField
@@ -209,6 +217,7 @@ async function deleteItem(item: TimelineItem) {
         class="selection-toolbar__filter"
         :options="statusOptions"
         placeholder="处理状态"
+        aria-label="处理状态筛选"
         :max-visible-tokens="1"
       />
       <ASearchField
@@ -243,7 +252,12 @@ async function deleteItem(item: TimelineItem) {
       </template>
       <template #cell-actions="{ row }">
         <div class="table-actions">
-          <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
+          <AIconButton
+            :icon="Pencil"
+            label="编辑"
+            size="small"
+            @click="editItem(row)"
+          />
           <AIconButton
             :icon="Trash2"
             label="删除"
@@ -274,13 +288,18 @@ async function deleteItem(item: TimelineItem) {
             <span
               class="feedback-history__measure feedback-history__cell--center"
               :class="{
-                'feedback-history__measure--obsolete': entry.status === '已作废',
+                'feedback-history__measure--obsolete':
+                  entry.status === '已作废',
               }"
             >
               {{ entry.measure || '—' }}
             </span>
-            <span class="feedback-history__cell--center">{{ entry.date || '—' }}</span>
-            <span class="feedback-history__status feedback-history__cell--center">
+            <span class="feedback-history__cell--center">{{
+              entry.date || '—'
+            }}</span>
+            <span
+              class="feedback-history__status feedback-history__cell--center"
+            >
               <ABadge
                 :label="entry.status"
                 :tone="entry.status === '现行' ? 'green' : 'neutral'"
@@ -291,7 +310,11 @@ async function deleteItem(item: TimelineItem) {
         <div v-else class="feedback-history__empty">暂无改善对策历史</div>
       </div>
     </ASheet>
-    <ASheet v-model:open="dialogOpen" :title="editId ? '编辑反馈' : '新增反馈'" :width="560">
+    <ASheet
+      v-model:open="dialogOpen"
+      :title="editId ? '编辑反馈' : '新增反馈'"
+      :width="560"
+    >
       <AFormGrid>
         <AFormRow label="问题分类" required>
           <ASelect v-model="form.type" :options="typeOptions" />

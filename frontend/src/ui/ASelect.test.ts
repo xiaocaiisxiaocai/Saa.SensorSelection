@@ -7,6 +7,7 @@ import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ASelect from './ASelect.vue';
+import AFormRow from './AFormRow.vue';
 import type { SelectOption } from './types';
 
 const options: SelectOption[] = [
@@ -36,7 +37,37 @@ describe('ASelect', () => {
     const trigger = wrapper.get('[role="combobox"]');
 
     expect(trigger.attributes('aria-expanded')).toBe('false');
+    expect(trigger.attributes('aria-label')).toBe('选择状态');
     expect(trigger.text()).toContain('选择状态');
+  });
+
+  it('allows a standalone selector to expose a more specific accessible name', () => {
+    const wrapper = mount(ASelect, {
+      props: {
+        ariaLabel: '工艺制程筛选',
+        options,
+        placeholder: '工艺制程',
+      },
+    });
+
+    expect(wrapper.get('[role="combobox"]').attributes('aria-label')).toBe(
+      '工艺制程筛选',
+    );
+  });
+
+  it('keeps the visible form-row label as the accessible name', () => {
+    const wrapper = mount({
+      components: { AFormRow, ASelect },
+      data: () => ({ options }),
+      template:
+        '<AFormRow label="状态"><ASelect :options="options" placeholder="请选择状态" /></AFormRow>',
+    });
+    const trigger = wrapper.get('[role="combobox"]');
+    const label = wrapper.get('label');
+
+    expect(trigger.attributes('aria-label')).toBeUndefined();
+    expect(label.attributes('for')).toBe(trigger.attributes('id'));
+    expect(label.text()).toBe('状态');
   });
 
   it('shows the selected label and marks the option selected', async () => {
@@ -50,7 +81,9 @@ describe('ASelect', () => {
     await wrapper.get('[role="combobox"]').trigger('click');
     await nextTick();
 
-    const selected = document.querySelector('[role="option"][aria-selected="true"]');
+    const selected = document.querySelector(
+      '[role="option"][aria-selected="true"]',
+    );
     expect(selected?.textContent).toContain('备选');
 
     wrapper.unmount();
@@ -93,7 +126,9 @@ describe('ASelect', () => {
     await nextTick();
 
     expect(document.querySelector('.a-popover[data-state="open"]')).toBeNull();
-    expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([null]);
+    expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([
+      null,
+    ]);
     expect(wrapper.get('[role="combobox"]').text()).toContain('备选');
 
     wrapper.unmount();
@@ -152,7 +187,11 @@ describe('ASelect', () => {
     ];
     const wrapper = mount(ASelect, {
       attachTo: document.body,
-      props: { options: boardOptions, filterable: true, placeholder: '板件特性' },
+      props: {
+        options: boardOptions,
+        filterable: true,
+        placeholder: '板件特性',
+      },
     });
 
     await wrapper.get('[role="combobox"]').trigger('click');
@@ -161,7 +200,9 @@ describe('ASelect', () => {
     expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
     expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
     expect(
-      document.querySelector('[role="option"] .a-menu-item__label')?.getAttribute('title'),
+      document
+        .querySelector('[role="option"] .a-menu-item__label')
+        ?.getAttribute('title'),
     ).toBe('电镀 · PTH电镀');
     expect(selectSource).toContain('min-trigger-width');
     expect(menuSource).toMatch(

@@ -62,6 +62,7 @@ function onPageSizeChange(value: string | number | null) {
           :model-value="pageSize"
           size="small"
           :options="sizeOptions"
+          aria-label="每页显示数量"
           @update:model-value="onPageSizeChange"
         />
       </div>

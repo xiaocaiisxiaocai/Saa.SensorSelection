@@ -32,6 +32,7 @@ async function mountPage(authenticated = false) {
 describe('CustomerPage', () => {
   it('shows the four customer tabs and a seeded customer', async () => {
     const wrapper = await mountPage();
+    expect(wrapper.get('h1.visually-hidden').text()).toBe('客户管理');
     expect(wrapper.text()).toContain('客户通用要求');
     expect(wrapper.text()).toContain('制程注意事项');
     expect(wrapper.text()).toContain('感应器选用标准');
@@ -43,10 +44,9 @@ describe('CustomerPage', () => {
   it('gives short fields less width and descriptive fields more width', async () => {
     const wrapper = await mountPage(true);
     const widths = Object.fromEntries(
-      wrapper.findAll('th').map((header) => [
-        header.text(),
-        header.attributes('style'),
-      ]),
+      wrapper
+        .findAll('th')
+        .map((header) => [header.text(), header.attributes('style')]),
     );
 
     expect(widths).toMatchObject({
@@ -108,9 +108,15 @@ describe('CustomerPage', () => {
     const wrapper = await mountPage(true);
     const selectionStore = useSelectionStore();
     const customerName = selectionStore.entityGroups('customer')[0]?.items[0];
-    const requirementTypes = selectionStore.dictionaryNames('customer-req').slice(0, 3);
-    const requirementSource = selectionStore.dictionaryNames('customer-req-source')[0];
-    const processTypes = selectionStore.dictionaryNames('customer-proc').slice(0, 3);
+    const requirementTypes = selectionStore
+      .dictionaryNames('customer-req')
+      .slice(0, 3);
+    const requirementSource = selectionStore.dictionaryNames(
+      'customer-req-source',
+    )[0];
+    const processTypes = selectionStore
+      .dictionaryNames('customer-proc')
+      .slice(0, 3);
     const feedbackTypes = selectionStore
       .dictionaryNames('customer-feedback')
       .slice(0, 3);
@@ -248,10 +254,9 @@ describe('CustomerPage', () => {
     };
     const readWidths = () =>
       Object.fromEntries(
-        wrapper.findAll('th').map((header) => [
-          header.text(),
-          header.attributes('style'),
-        ]),
+        wrapper
+          .findAll('th')
+          .map((header) => [header.text(), header.attributes('style')]),
       );
 
     await clickTab('制程注意事项');
@@ -342,11 +347,15 @@ describe('CustomerPage', () => {
     expect(dialog?.textContent).toContain('2024-10-15');
     expect(dialog?.textContent).toContain('现行');
     expect(dialog?.textContent).toContain('已作废');
-    expect(dialog?.querySelectorAll('.feedback-history__cell--center')).toHaveLength(9);
+    expect(
+      dialog?.querySelectorAll('.feedback-history__cell--center'),
+    ).toHaveLength(9);
     const obsoleteMeasure = dialog?.querySelector(
       '.feedback-history__measure--obsolete',
     );
-    expect(obsoleteMeasure?.textContent).toContain('更换快速响应型真空表头后恢复稳定。');
+    expect(obsoleteMeasure?.textContent).toContain(
+      '更换快速响应型真空表头后恢复稳定。',
+    );
     expect(dialog?.textContent).not.toContain('版本序号');
     expect(dialog?.textContent).not.toContain('作废原因');
     expect(dialog?.textContent).not.toContain('操作人');

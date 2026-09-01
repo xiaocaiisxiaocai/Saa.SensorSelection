@@ -20,6 +20,7 @@ const props = withDefaults(
     disabled?: boolean;
     id?: string;
     invalid?: boolean;
+    ariaLabel?: string;
   }>(),
   {
     placeholder: '请选择',
@@ -28,7 +29,8 @@ const props = withDefaults(
 );
 
 const model = defineModel<string | number | null>({ default: null });
-const { id, describedBy, invalid, required } = useFormControl(props);
+const { id, describedBy, hasFormLabel, invalid, required } =
+  useFormControl(props);
 
 const open = ref(false);
 const query = ref('');
@@ -36,6 +38,9 @@ const listId = useId();
 const filterEl = ref<HTMLInputElement | null>(null);
 
 const selected = computed(() => findOption(props.options, model.value));
+const accessibleLabel = computed(
+  () => props.ariaLabel ?? (hasFormLabel.value ? undefined : props.placeholder),
+);
 const filtered = computed(() => filterOptions(props.options, query.value));
 const showClear = computed(
   () => Boolean(props.clearable) && !props.disabled && model.value != null,
@@ -87,6 +92,7 @@ watch(open, async (isOpen) => {
           :aria-invalid="invalid ? true : undefined"
           :aria-required="required ? true : undefined"
           :aria-describedby="describedBy"
+          :aria-label="accessibleLabel"
           :disabled="disabled"
         >
           <span

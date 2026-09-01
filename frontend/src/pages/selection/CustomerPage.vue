@@ -50,7 +50,6 @@ watch(
   { immediate: true },
 );
 
-
 function selectEntity(payload: { category: string; item: string }) {
   void router.replace({ path: route.path, query: payload });
 }
@@ -58,6 +57,7 @@ function selectEntity(payload: { category: string; item: string }) {
 
 <template>
   <section class="selection-page">
+    <h1 class="visually-hidden">客户管理</h1>
     <div class="selection-split">
       <EntitySource
         kind="customer"
@@ -87,10 +87,7 @@ function selectEntity(payload: { category: string; item: string }) {
           :entity-name="selection.item"
         />
       </div>
-      <AEmptyState
-        v-else
-        title="暂无客户，请在左侧新建区域和客户"
-      />
+      <AEmptyState v-else title="暂无客户，请在左侧新建区域和客户" />
     </div>
   </section>
 </template>

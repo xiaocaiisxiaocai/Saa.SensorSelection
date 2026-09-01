@@ -20,6 +20,7 @@ const props = withDefaults(
     disabled?: boolean;
     id?: string;
     invalid?: boolean;
+    ariaLabel?: string;
   }>(),
   {
     placeholder: '请选择',
@@ -28,7 +29,8 @@ const props = withDefaults(
 );
 
 const model = defineModel<Array<string | number>>({ default: () => [] });
-const { id, describedBy, invalid, required } = useFormControl(props);
+const { id, describedBy, hasFormLabel, invalid, required } =
+  useFormControl(props);
 
 const open = ref(false);
 const query = ref('');
@@ -38,6 +40,9 @@ const selected = computed(() =>
   model.value
     .map((value) => findOption(props.options, value))
     .filter((option): option is SelectOption => Boolean(option)),
+);
+const accessibleLabel = computed(
+  () => props.ariaLabel ?? (hasFormLabel.value ? undefined : props.placeholder),
 );
 const visible = computed(() => {
   if (props.maxVisibleTokens == null) {
@@ -84,6 +89,7 @@ function remove(value: string | number, event: Event) {
           :aria-invalid="invalid ? true : undefined"
           :aria-required="required ? true : undefined"
           :aria-describedby="describedBy"
+          :aria-label="accessibleLabel"
           :aria-disabled="disabled ? true : undefined"
         >
           <span

@@ -146,7 +146,8 @@ const selection = computed(() => {
   }
   const first = findEntityTreeItem(
     catalogGroups.value,
-    catalogGroups.value.flatMap((group) => listEntityGroupItems(group))[0] ?? '',
+    catalogGroups.value.flatMap((group) => listEntityGroupItems(group))[0] ??
+      '',
   );
   return {
     category: first?.category || catalogGroups.value[0]?.name || '',
@@ -644,6 +645,7 @@ async function closeTab(value: string) {
 
 <template>
   <section class="selection-page">
+    <h1 class="visually-hidden">机型结构</h1>
     <div class="selection-split">
       <div class="machine-source-stack">
         <div class="machine-process-context" aria-label="当前制程">
@@ -652,6 +654,7 @@ async function closeTab(value: string) {
             class="machine-process-context__select"
             :options="processOptions"
             placeholder="选择制程"
+            aria-label="当前制程"
             size="small"
           />
           <AButton

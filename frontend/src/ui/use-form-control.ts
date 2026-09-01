@@ -11,9 +11,8 @@ export function useFormControl(props: {
   const fallbackId = useId();
 
   return {
-    describedBy: computed(
-      () => props.describedBy ?? row?.describedBy.value,
-    ),
+    describedBy: computed(() => props.describedBy ?? row?.describedBy.value),
+    hasFormLabel: computed(() => Boolean(row)),
     id: computed(() => props.id ?? row?.id ?? fallbackId),
     invalid: computed(() => Boolean(props.invalid || row?.invalid.value)),
     required: computed(() => Boolean(row?.required.value)),

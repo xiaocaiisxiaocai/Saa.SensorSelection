@@ -41,16 +41,20 @@ const form = reactive({
 });
 
 const typeOptions = computed<SelectOption[]>(() =>
-  store.dictionaryNames('customer-proc').map((name) => ({ label: name, value: name })),
+  store
+    .dictionaryNames('customer-proc')
+    .map((name) => ({ label: name, value: name })),
 );
 const items = computed(
-  () => store.crudItems('customer-proc', props.entityName) as CustomerProcItem[],
+  () =>
+    store.crudItems('customer-proc', props.entityName) as CustomerProcItem[],
 );
 const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
+      (typeFilters.value.length === 0 ||
+        typeFilters.value.includes(item.type)) &&
       (!value ||
         [item.type, item.role, item.feature, item.sensorNote, item.note]
           .join(' ')
@@ -66,7 +70,12 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'type', label: '制程分类', width: 90 },
     { key: 'role', label: '制程作用', minWidth: 150, ellipsis: true },
     { key: 'feature', label: '制程特性', minWidth: 150, ellipsis: true },
-    { key: 'sensorNote', label: 'sensor使用注意事项', minWidth: 190, ellipsis: true },
+    {
+      key: 'sensorNote',
+      label: 'sensor使用注意事项',
+      minWidth: 190,
+      ellipsis: true,
+    },
     { key: 'note', label: '备注', minWidth: 130, ellipsis: true },
   ];
   if (writable.value) {
@@ -150,6 +159,7 @@ async function deleteItem(item: CustomerProcItem) {
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="制程分类"
+        aria-label="制程分类筛选"
         :max-visible-tokens="1"
       />
       <ASearchField
@@ -164,12 +174,21 @@ async function deleteItem(item: CustomerProcItem) {
       :columns="columns"
       :rows="filtered"
       row-key="id"
-      :empty-text="query.trim() || typeFilters.length ? '没有匹配的注意事项' : '暂无注意事项'"
+      :empty-text="
+        query.trim() || typeFilters.length
+          ? '没有匹配的注意事项'
+          : '暂无注意事项'
+      "
       striped
     >
       <template #cell-actions="{ row }">
         <div class="table-actions">
-          <AIconButton :icon="Pencil" label="编辑" size="small" @click="editItem(row)" />
+          <AIconButton
+            :icon="Pencil"
+            label="编辑"
+            size="small"
+            @click="editItem(row)"
+          />
           <AIconButton
             :icon="Trash2"
             label="删除"
@@ -180,7 +199,11 @@ async function deleteItem(item: CustomerProcItem) {
         </div>
       </template>
     </ATable>
-    <ASheet v-model:open="dialogOpen" :title="editId ? '编辑注意事项' : '新增注意事项'" :width="560">
+    <ASheet
+      v-model:open="dialogOpen"
+      :title="editId ? '编辑注意事项' : '新增注意事项'"
+      :width="560"
+    >
       <AFormGrid>
         <AFormRow label="制程分类" required>
           <ASelect v-model="form.type" :options="typeOptions" />

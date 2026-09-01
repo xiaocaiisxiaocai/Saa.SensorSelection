@@ -600,6 +600,7 @@ function saveReplace() {
 
 <template>
   <section class="selection-page">
+    <h1 class="visually-hidden">Sensor型号</h1>
     <ASegmentedControl v-model="mainTab" :segments="tabs" />
     <SensorSopFilePanel v-if="mainTab === 'sop-library'" />
     <SensorSopPanel
@@ -618,12 +619,14 @@ function saveReplace() {
           v-model="statusFilter"
           class="selection-toolbar__filter"
           :options="statusFilterOptions"
+          aria-label="状态筛选"
         />
         <ATokenField
           v-model="sensorTypeFilters"
           class="selection-toolbar__filter"
           :options="typeOptions"
           placeholder="感应器类型"
+          aria-label="感应器类型筛选"
           :max-visible-tokens="1"
         />
         <ASearchField

@@ -43,7 +43,9 @@ const form = reactive({
 });
 
 const typeOptions = computed<SelectOption[]>(() =>
-  store.dictionaryNames('customer-req').map((name) => ({ label: name, value: name })),
+  store
+    .dictionaryNames('customer-req')
+    .map((name) => ({ label: name, value: name })),
 );
 const sourceOptions = computed<SelectOption[]>(() =>
   store
@@ -58,11 +60,19 @@ const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return items.value.filter(
     (item) =>
-      (typeFilters.value.length === 0 || typeFilters.value.includes(item.type)) &&
+      (typeFilters.value.length === 0 ||
+        typeFilters.value.includes(item.type)) &&
       (sourceFilters.value.length === 0 ||
         sourceFilters.value.includes(item.source)) &&
       (!value ||
-        [item.type, item.machine, item.process, item.content, item.source, item.note]
+        [
+          item.type,
+          item.machine,
+          item.process,
+          item.content,
+          item.source,
+          item.note,
+        ]
           .join(' ')
           .toLocaleLowerCase('zh-CN')
           .includes(value)),
@@ -170,6 +180,7 @@ async function deleteItem(item: CustomerReqItem) {
         class="selection-toolbar__filter"
         :options="typeOptions"
         placeholder="要求分类"
+        aria-label="要求分类筛选"
         :max-visible-tokens="1"
       />
       <ATokenField
@@ -177,6 +188,7 @@ async function deleteItem(item: CustomerReqItem) {
         class="selection-toolbar__filter"
         :options="sourceOptions"
         placeholder="要求来源"
+        aria-label="要求来源筛选"
         :max-visible-tokens="1"
       />
       <ASearchField
@@ -185,7 +197,9 @@ async function deleteItem(item: CustomerReqItem) {
         placeholder="搜索分类、机型、制程、内容、来源或备注"
       />
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-      <AButton v-if="writable" variant="filled" @click="addItem">新增要求</AButton>
+      <AButton v-if="writable" variant="filled" @click="addItem">
+        新增要求
+      </AButton>
     </div>
     <ATable
       :columns="columns"

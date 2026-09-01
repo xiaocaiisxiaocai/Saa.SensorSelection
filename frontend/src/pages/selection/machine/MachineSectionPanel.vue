@@ -523,6 +523,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="typeOptions"
           placeholder="传感器类型"
+          aria-label="传感器类型筛选"
           :max-visible-tokens="1"
         />
         <ASelect
@@ -531,6 +532,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="machineModelOptions"
           placeholder="机型"
+          aria-label="机型筛选"
           filterable
           clearable
         />
@@ -540,6 +542,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="processStepOptions"
           placeholder="工艺制程"
+          aria-label="工艺制程筛选"
           filterable
           clearable
         />
@@ -549,6 +552,7 @@ async function removeImage(index: number) {
           class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="boardCharacteristicOptions"
           placeholder="板件特性"
+          aria-label="板件特性筛选"
           filterable
           clearable
         />

@@ -395,7 +395,7 @@ watch(open, (isOpen) => {
 .a-date-picker__day--selected,
 .a-date-picker__day--selected.a-date-picker__day--in-range {
   color: var(--label-on-color);
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
   border-radius: var(--radius-pill);
 }
 
@@ -405,7 +405,7 @@ watch(open, (isOpen) => {
   left: 50%;
   width: var(--space-1);
   height: var(--space-1);
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
   border-radius: var(--radius-pill);
   transform: translateX(-50%);
   content: '';

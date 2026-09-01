@@ -76,7 +76,7 @@ const { id, describedBy, invalid, required } = useFormControl(props);
 
 .a-checkbox[data-state='checked'],
 .a-checkbox[data-state='indeterminate'] {
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
   box-shadow: none;
 }
 

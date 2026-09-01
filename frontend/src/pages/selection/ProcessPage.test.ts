@@ -34,6 +34,7 @@ async function mountPage(writable = false) {
 describe('ProcessPage', () => {
   it('shows the intro tab without seed mock files and lists uploaded documents', async () => {
     const wrapper = await mountPage();
+    expect(wrapper.get('h1.visually-hidden').text()).toBe('制程管理');
     expect(wrapper.text()).toContain('制程介绍');
     expect(wrapper.text()).not.toContain('仅可预览，无下载权限');
 
@@ -121,7 +122,9 @@ describe('ProcessPage', () => {
     await nextTick();
 
     expect(layer.props('modelValue')).toBeNull();
-    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('');
+    expect(
+      wrapper.get<HTMLInputElement>('input[type="search"]').element.value,
+    ).toBe('');
     wrapper.unmount();
   });
 });

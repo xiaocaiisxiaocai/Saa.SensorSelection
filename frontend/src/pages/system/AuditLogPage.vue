@@ -73,10 +73,22 @@ const columns: TableColumn[] = [
   { key: 'timestamp', label: '时间', width: 180 },
   { key: 'username', label: '用户', width: 120 },
   { key: 'action', label: '操作', width: 120 },
-  { key: 'target', label: '目标', minWidth: 180, ellipsis: true, align: 'start' },
+  {
+    key: 'target',
+    label: '目标',
+    minWidth: 180,
+    ellipsis: true,
+    align: 'start',
+  },
   { key: 'detail', label: '详情', width: 96 },
   { key: 'result', label: '结果', width: 88 },
-  { key: 'error', label: '说明', minWidth: 180, ellipsis: true, align: 'start' },
+  {
+    key: 'error',
+    label: '说明',
+    minWidth: 180,
+    ellipsis: true,
+    align: 'start',
+  },
   { key: 'ip', label: 'IP', width: 120 },
 ];
 
@@ -163,6 +175,7 @@ function resetFilters() {
         class="selection-toolbar__filter"
         :options="actionOptions"
         placeholder="全部操作"
+        aria-label="操作类型筛选"
         clearable
       />
       <ASelect
@@ -170,6 +183,7 @@ function resetFilters() {
         class="selection-toolbar__filter"
         :options="resultOptions"
         placeholder="全部"
+        aria-label="操作结果筛选"
         clearable
       />
       <ADatePicker
@@ -209,7 +223,11 @@ function resetFilters() {
       <template #cell-error="{ value }">{{ value || '—' }}</template>
       <template #cell-ip="{ value }">{{ value || '—' }}</template>
     </ATable>
-    <APagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <APagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+    />
     <ASheet v-model:open="detailOpen" title="操作详情" :width="640">
       <dl v-if="selectedLog" class="audit-detail">
         <div class="audit-detail__row">

@@ -183,10 +183,7 @@ function saveItem() {
 }
 
 async function deleteItem(item: ProcessStepItem) {
-  const ok = await confirmDelete(
-    '删除工艺制程',
-    `确认删除“${item.name}”吗？`,
-  );
+  const ok = await confirmDelete('删除工艺制程', `确认删除“${item.name}”吗？`);
   if (!ok) return;
   toastResult(store.deleteProcessStep(item.id), '工艺制程已删除');
 }
@@ -194,6 +191,7 @@ async function deleteItem(item: ProcessStepItem) {
 
 <template>
   <section class="selection-page">
+    <h1 class="visually-hidden">制程管理</h1>
     <ASegmentedControl v-model="activeTab" :segments="tabs" />
 
     <ProcessIntroPanel v-if="activeTab === 'intro'" />
@@ -205,6 +203,7 @@ async function deleteItem(item: ProcessStepItem) {
           class="selection-toolbar__filter"
           :options="layerOptions"
           placeholder="制程分层"
+          aria-label="制程分层筛选"
           clearable
         />
         <ASearchField
@@ -213,7 +212,9 @@ async function deleteItem(item: ProcessStepItem) {
           placeholder="搜索制程、工艺、作用、特性或备注"
         />
         <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-        <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
+        <AButton v-if="writable" variant="filled" @click="addItem">
+          新增
+        </AButton>
       </div>
       <ATable
         :columns="stepColumns"
@@ -249,10 +250,18 @@ async function deleteItem(item: ProcessStepItem) {
       />
     </div>
 
-    <ASheet v-model:open="dialogOpen" :title="editId ? '编辑工艺制程' : '新增工艺制程'" :width="640">
+    <ASheet
+      v-model:open="dialogOpen"
+      :title="editId ? '编辑工艺制程' : '新增工艺制程'"
+      :width="640"
+    >
       <AFormGrid :columns="1">
         <AFormRow label="制程" required>
-          <ASelect v-model="form.layer" :options="layerOptions" placeholder="选择制程分层" />
+          <ASelect
+            v-model="form.layer"
+            :options="layerOptions"
+            placeholder="选择制程分层"
+          />
         </AFormRow>
         <AFormRow label="工艺制程" required>
           <AField v-model="form.name" :maxlength="40" />

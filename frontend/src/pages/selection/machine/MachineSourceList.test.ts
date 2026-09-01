@@ -100,6 +100,25 @@ describe('MachineSourceList', () => {
     wrapper.unmount();
   });
 
+  it('keeps tree labels on one line and exposes the complete text on hover', () => {
+    const wrapper = mountList();
+    const groupLabel = wrapper.get(
+      '.machine-tree-row--group .machine-tree-row__toggle span',
+    );
+    const configurationLabel = wrapper.get(
+      '.machine-tree-row--configuration .machine-tree-row__toggle span',
+    );
+    const itemLabel = wrapper.get('.machine-tree-row__name');
+
+    expect(groupLabel.attributes('title')).toBe('分类甲');
+    expect(configurationLabel.attributes('title')).toBe('配置甲');
+    expect(itemLabel.attributes('title')).toBe('配置机型一');
+
+    const source = wrapper.get('.machine-source').html();
+    expect(source).toContain('title="分类甲"');
+    wrapper.unmount();
+  });
+
   it('supports pointer dragging to widen and narrow the tree', async () => {
     const wrapper = mountList();
     const resizer = wrapper.get('[role="separator"]');

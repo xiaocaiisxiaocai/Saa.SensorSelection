@@ -49,6 +49,7 @@ describe('SensorPage', () => {
 
   it('shows an independent SOP tab before 型录 and 3D', async () => {
     const wrapper = await mountPage();
+    expect(wrapper.get('h1.visually-hidden').text()).toBe('Sensor型号');
     const labels = wrapper
       .findAll('.a-segmented button')
       .map((button) => button.text());

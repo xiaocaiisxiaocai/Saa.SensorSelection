@@ -1,7 +1,8 @@
 :root {
   color-scheme: light;
 
-  --sys-blue: #0066cc;
+  --sys-blue: #005eb8;
+  --sys-blue-solid: #0066cc;
   --sys-green: #16733c;
   --sys-red: #c9182b;
   --sys-orange: #9a4d00;
@@ -11,8 +12,8 @@
   --sys-purple: #af52de;
   --sys-pink: #ff2d55;
   --sys-gray: #8e8e93;
-  --sys-blue-fill: rgb(0 102 204 / 12%);
-  --sys-blue-fill-strong: rgb(0 102 204 / 18%);
+  --sys-blue-fill: rgb(0 94 184 / 12%);
+  --sys-blue-fill-strong: rgb(0 94 184 / 18%);
   --sys-green-fill: rgb(22 115 60 / 14%);
   --sys-red-fill: rgb(201 24 43 / 14%);
   --sys-red-fill-strong: rgb(201 24 43 / 18%);
@@ -34,7 +35,7 @@
   --label-2: rgb(60 60 67 / 60%);
   --label-3: rgb(60 60 67 / 30%);
   --label-4: rgb(60 60 67 / 18%);
-  --label-placeholder: #5f5f63;
+  --label-placeholder: #59595e;
 
   --separator: rgb(60 60 67 / 29%);
   --separator-opaque: #c6c6c8;
@@ -145,7 +146,8 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --sys-blue: #0a84ff;
+  --sys-blue: #66b3ff;
+  --sys-blue-solid: #0066cc;
   --sys-green: #30d158;
   --sys-red: #ff453a;
   --sys-orange: #ff9f0a;
@@ -154,8 +156,8 @@
   --sys-indigo: #5e5ce6;
   --sys-purple: #bf5af2;
   --sys-pink: #ff375f;
-  --sys-blue-fill: rgb(10 132 255 / 22%);
-  --sys-blue-fill-strong: rgb(10 132 255 / 32%);
+  --sys-blue-fill: rgb(102 179 255 / 18%);
+  --sys-blue-fill-strong: rgb(102 179 255 / 28%);
   --sys-green-fill: rgb(48 209 88 / 22%);
   --sys-red-fill: rgb(255 69 58 / 22%);
   --sys-red-fill-strong: rgb(255 69 58 / 32%);
@@ -177,7 +179,7 @@
   --label-2: rgb(235 235 245 / 60%);
   --label-3: rgb(235 235 245 / 30%);
   --label-4: rgb(235 235 245 / 16%);
-  --label-placeholder: #b4b4bb;
+  --label-placeholder: #b8b8c0;
 
   --separator: rgb(84 84 88 / 65%);
   --separator-opaque: #38383a;

@@ -38,8 +38,22 @@ describe('ATokenField', () => {
 
     expect(wrapper.text()).toContain('漫反射 · OMRON E3Z-D61');
     expect(wrapper.text()).toContain('对射 · KEYENCE PZ-G51N');
-    expect(wrapper.find('[aria-label="移除 漫反射 · OMRON E3Z-D61"]').exists()).toBe(
-      true,
+    expect(
+      wrapper.find('[aria-label="移除 漫反射 · OMRON E3Z-D61"]').exists(),
+    ).toBe(true);
+  });
+
+  it('exposes a meaningful accessible name for standalone multi-select filters', () => {
+    const wrapper = mount(ATokenField, {
+      props: {
+        ariaLabel: '传感器类型筛选',
+        options,
+        placeholder: '传感器类型',
+      },
+    });
+
+    expect(wrapper.get('[role="combobox"]').attributes('aria-label')).toBe(
+      '传感器类型筛选',
     );
   });
 
@@ -102,7 +116,9 @@ describe('ATokenField', () => {
       },
     });
 
-    await wrapper.get('[aria-label="移除 漫反射 · OMRON E3Z-D61"]').trigger('click');
+    await wrapper
+      .get('[aria-label="移除 漫反射 · OMRON E3Z-D61"]')
+      .trigger('click');
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['pzg']]);
     expect(document.querySelector('.a-popover')).toBeNull();

@@ -93,6 +93,7 @@ describe('MachinePage', () => {
   });
   it('separates mechanism and project machines under every process', async () => {
     const wrapper = await mountPage(true, true);
+    expect(wrapper.get('h1.visually-hidden').text()).toBe('机型结构');
     const catalogTabs = wrapper.get('.machine-catalog-tabs');
     const tabLabels = catalogTabs
       .findAll('[role="tab"]')
@@ -719,6 +720,9 @@ describe('MachinePage', () => {
     );
     expect(machineSourceListSource).toMatch(
       /\.machine-source__tree\s*\{[^}]*overflow:\s*hidden auto;/s,
+    );
+    expect(machineSourceListSource).toMatch(
+      /\.machine-tree-row__toggle span,\s*\.machine-tree-row__name\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s,
     );
     expect(entitySource).toMatch(
       /<MachineSourceList[\s\S]*?:storage-key="`selection:source-list-width:\$\{kind\}:v5`"/,

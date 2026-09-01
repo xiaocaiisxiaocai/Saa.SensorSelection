@@ -673,7 +673,7 @@ onMounted(restoreWidth);
           >
             <ChevronDown v-if="openGroups.has(group.name)" :size="15" />
             <ChevronRight v-else :size="15" />
-            <span>{{ group.name }}</span>
+            <span :title="group.name">{{ group.name }}</span>
           </button>
           <span class="machine-tree-row__count">{{
             groupItemCount(group)
@@ -765,7 +765,9 @@ onMounted(restoreWidth);
                   :size="14"
                 />
                 <ChevronRight v-else :size="14" />
-                <span>{{ configuration.name }}</span>
+                <span :title="configuration.name">{{
+                  configuration.name
+                }}</span>
               </button>
               <span class="machine-tree-row__count">{{
                 configuration.items.length
@@ -890,7 +892,9 @@ onMounted(restoreWidth);
                     })
                   "
                 >
-                <span class="machine-tree-row__name">{{ item }}</span>
+                <span class="machine-tree-row__name" :title="item">{{
+                  item
+                }}</span>
                 <span v-if="editable" class="machine-tree-row__tools">
                   <button
                     class="machine-tree-row__tool"
@@ -986,7 +990,7 @@ onMounted(restoreWidth);
                 })
               "
             >
-            <span class="machine-tree-row__name">{{ item }}</span>
+            <span class="machine-tree-row__name" :title="item">{{ item }}</span>
             <span v-if="editable" class="machine-tree-row__tools">
               <button
                 class="machine-tree-row__tool"
@@ -1192,11 +1196,13 @@ onMounted(restoreWidth);
 .machine-tree-row__name {
   min-width: 0;
   flex: 1;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .machine-tree-row__count {
-  color: var(--label-3);
+  color: var(--label-placeholder);
   font: var(--text-caption);
 }
 
@@ -1239,6 +1245,6 @@ onMounted(restoreWidth);
 .machine-source__action--primary {
   color: var(--label-on-color);
   border-color: var(--sys-blue);
-  background: var(--sys-blue);
+  background: var(--sys-blue-solid);
 }
 </style>

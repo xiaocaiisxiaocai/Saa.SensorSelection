@@ -84,9 +84,21 @@ const table = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ATable.vue'),
   'utf8',
 );
+const machineSourceList = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'pages',
+    'selection',
+    'machine',
+    'MachineSourceList.vue',
+  ),
+  'utf8',
+);
 
 const requiredTokens = [
   '--sys-blue',
+  '--sys-blue-solid',
   '--sys-green',
   '--sys-red',
   '--sys-orange',
@@ -220,6 +232,22 @@ describe('tokens.css', () => {
     ]) {
       expect(contrastOnWhite(getHex(name)), name).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('keeps dark-theme accent text and filled controls readable', () => {
+    expect(tokens).toMatch(/:root\s*\{[\s\S]*--sys-blue-solid:\s*#0066cc;/i);
+    expect(tokens).toMatch(
+      /:root\[data-theme='dark'\]\s*\{[\s\S]*--sys-blue:\s*#66b3ff;[\s\S]*--sys-blue-solid:\s*#0066cc;/i,
+    );
+    expect(button).toMatch(
+      /\.a-button--filled\s*\{[^}]*background:\s*var\(--sys-blue-solid\);/s,
+    );
+    expect(appShell).toMatch(
+      /\.search kbd\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
+    expect(machineSourceList).toMatch(
+      /\.machine-tree-row__count\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
+    );
   });
 
   it('uses the compact caption scale consistently for small controls', () => {

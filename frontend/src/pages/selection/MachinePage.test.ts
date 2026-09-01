@@ -556,6 +556,107 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
+  it('filters structure records from searchable machine-model and board-characteristic dropdowns', async () => {
+    window.localStorage.clear();
+    const wrapper = await mountPage();
+    const selectionStore = useSelectionStore();
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const machineName = panel.props('machineName') as string;
+    const section = panel.props('section') as { id: number; kind: string };
+    const [firstMachineModel, secondMachineModel] =
+      selectionStore.dictionaryItems('machine-model');
+    const [firstBoardCharacteristic, secondBoardCharacteristic] =
+      selectionStore.dictionaryItems('board-characteristic');
+    const sensor = selectionStore.sensors[0];
+
+    expect(section.kind).toBe('structure');
+    expect(firstMachineModel).toBeDefined();
+    expect(secondMachineModel).toBeDefined();
+    expect(firstBoardCharacteristic).toBeDefined();
+    expect(secondBoardCharacteristic).toBeDefined();
+    expect(sensor).toBeDefined();
+    if (
+      !firstMachineModel ||
+      !secondMachineModel ||
+      !firstBoardCharacteristic ||
+      !secondBoardCharacteristic ||
+      !sensor
+    ) {
+      return;
+    }
+
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        boardCharacteristicId: firstBoardCharacteristic.id,
+        machineModelId: firstMachineModel.id,
+        note: '',
+        purpose: '',
+        role: '字典筛选-第一项',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    expect(
+      selectionStore.saveMachineSectionRow(section.id, machineName, {
+        boardCharacteristicId: secondBoardCharacteristic.id,
+        machineModelId: secondMachineModel.id,
+        note: '',
+        purpose: '',
+        role: '字典筛选-第二项',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+    await flushPromises();
+
+    const selects = panel.findAllComponents(ASelect);
+    const machineModelFilter = selects.find(
+      (component) => component.props('placeholder') === '机型',
+    );
+    const boardCharacteristicFilter = selects.find(
+      (component) => component.props('placeholder') === '板件特性',
+    );
+
+    expect(machineModelFilter).toBeDefined();
+    expect(machineModelFilter?.props('filterable')).toBe(true);
+    expect(machineModelFilter?.props('clearable')).toBe(true);
+    expect(machineModelFilter?.props('options')).toEqual(
+      selectionStore.dictionaryItems('machine-model').map((item) => ({
+        label: item.name,
+        value: item.id,
+      })),
+    );
+    expect(boardCharacteristicFilter).toBeDefined();
+    expect(boardCharacteristicFilter?.props('filterable')).toBe(true);
+    expect(boardCharacteristicFilter?.props('clearable')).toBe(true);
+    expect(boardCharacteristicFilter?.props('options')).toEqual(
+      selectionStore.dictionaryItems('board-characteristic').map((item) => ({
+        label: item.name,
+        value: item.id,
+      })),
+    );
+
+    machineModelFilter?.vm.$emit('update:modelValue', secondMachineModel.id);
+    await flushPromises();
+    expect(panel.text()).toContain('字典筛选-第二项');
+    expect(panel.text()).not.toContain('字典筛选-第一项');
+
+    await panel.get('button[aria-label="重置筛选"]').trigger('click');
+    boardCharacteristicFilter?.vm.$emit(
+      'update:modelValue',
+      firstBoardCharacteristic.id,
+    );
+    await flushPromises();
+    expect(panel.text()).toContain('字典筛选-第一项');
+    expect(panel.text()).not.toContain('字典筛选-第二项');
+
+    await panel.get('button[aria-label="重置筛选"]').trigger('click');
+    await flushPromises();
+    expect(machineModelFilter?.props('modelValue')).toBeNull();
+    expect(boardCharacteristicFilter?.props('modelValue')).toBeNull();
+    expect(panel.text()).toContain('字典筛选-第一项');
+    expect(panel.text()).toContain('字典筛选-第二项');
+    wrapper.unmount();
+  });
+
   it('keeps structure labels compact and gives specifications more room', async () => {
     const wrapper = await mountPage(true, true);
     const headers = wrapper.findAll('.a-table thead th');

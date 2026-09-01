@@ -50,7 +50,9 @@ const dialogOpen = ref(false);
 const editId = ref<number>();
 const query = ref('');
 const sensorTypeFilters = ref<Array<string | number>>([]);
+const machineModelFilter = ref<string | number | null>(null);
 const processStepFilter = ref<string | number | null>(null);
+const boardCharacteristicFilter = ref<string | number | null>(null);
 const preview = ref<MachineRowImage | null>(null);
 const imageOpen = computed({
   get: () => Boolean(preview.value),
@@ -131,7 +133,9 @@ const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
     sensorTypeFilters.value.length > 0 ||
-    processStepFilter.value !== null,
+    machineModelFilter.value !== null ||
+    processStepFilter.value !== null ||
+    boardCharacteristicFilter.value !== null,
 );
 const filtered = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
@@ -147,8 +151,22 @@ const filtered = computed(() => {
     }
     if (
       isStructure.value &&
+      machineModelFilter.value !== null &&
+      item.machineModelId !== Number(machineModelFilter.value)
+    ) {
+      return false;
+    }
+    if (
+      isStructure.value &&
       processStepFilter.value !== null &&
       item.processStepId !== Number(processStepFilter.value)
+    ) {
+      return false;
+    }
+    if (
+      isStructure.value &&
+      boardCharacteristicFilter.value !== null &&
+      item.boardCharacteristicId !== Number(boardCharacteristicFilter.value)
     ) {
       return false;
     }
@@ -237,15 +255,27 @@ watch(
   () => {
     query.value = '';
     sensorTypeFilters.value = [];
+    machineModelFilter.value = null;
     processStepFilter.value = null;
+    boardCharacteristicFilter.value = null;
     page.value = 1;
     dialogOpen.value = false;
     preview.value = null;
   },
 );
-watch([query, sensorTypeFilters, processStepFilter, pageSize], () => {
-  page.value = 1;
-});
+watch(
+  [
+    query,
+    sensorTypeFilters,
+    machineModelFilter,
+    processStepFilter,
+    boardCharacteristicFilter,
+    pageSize,
+  ],
+  () => {
+    page.value = 1;
+  },
+);
 
 function sensorRecords(item: MachineSectionRow): SensorItem[] {
   return (item.sensorIds ?? [])
@@ -256,7 +286,9 @@ function sensorRecords(item: MachineSectionRow): SensorItem[] {
 function resetFilters() {
   query.value = '';
   sensorTypeFilters.value = [];
+  machineModelFilter.value = null;
   processStepFilter.value = null;
+  boardCharacteristicFilter.value = null;
   page.value = 1;
 }
 
@@ -440,27 +472,45 @@ async function removeImage(index: number) {
     :class="{ 'machine-body--with-images': isStructure }"
   >
     <div class="selection-panel">
-      <div class="selection-toolbar">
+      <div class="selection-toolbar machine-structure-toolbar">
         <ATokenField
           v-if="isStructure"
           v-model="sensorTypeFilters"
-          class="selection-toolbar__filter"
+          class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="typeOptions"
           placeholder="传感器类型"
           :max-visible-tokens="1"
         />
         <ASelect
           v-if="isStructure"
+          v-model="machineModelFilter"
+          class="selection-toolbar__filter machine-structure-toolbar__select"
+          :options="machineModelOptions"
+          placeholder="机型"
+          filterable
+          clearable
+        />
+        <ASelect
+          v-if="isStructure"
           v-model="processStepFilter"
-          class="selection-toolbar__filter"
+          class="selection-toolbar__filter machine-structure-toolbar__select"
           :options="processStepOptions"
           placeholder="工艺制程"
           filterable
           clearable
         />
+        <ASelect
+          v-if="isStructure"
+          v-model="boardCharacteristicFilter"
+          class="selection-toolbar__filter machine-structure-toolbar__select"
+          :options="boardCharacteristicOptions"
+          placeholder="板件特性"
+          filterable
+          clearable
+        />
         <ASearchField
           v-model="query"
-          class="selection-toolbar__filter"
+          class="selection-toolbar__filter machine-structure-toolbar__search"
           :placeholder="
             isStructure
               ? '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注'
@@ -479,7 +529,9 @@ async function removeImage(index: number) {
         :empty-text="
           query.trim() ||
             sensorTypeFilters.length ||
-            processStepFilter !== null
+            machineModelFilter !== null ||
+            processStepFilter !== null ||
+            boardCharacteristicFilter !== null
             ? '没有匹配的记录'
             : '暂无记录'
         "
@@ -648,3 +700,26 @@ async function removeImage(index: number) {
     :alt="preview.fileName"
   />
 </template>
+
+<style scoped>
+.machine-structure-toolbar {
+  gap: var(--space-2);
+}
+
+.machine-structure-toolbar
+  .a-select.machine-structure-toolbar__select,
+.machine-structure-toolbar
+  .a-token-field.machine-structure-toolbar__select {
+  flex: 1 1 8.25rem;
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 9.25rem;
+}
+
+.machine-structure-toolbar
+  .a-control.machine-structure-toolbar__search {
+  flex: 4 1 16rem;
+  width: auto;
+  min-width: 12rem;
+}
+</style>

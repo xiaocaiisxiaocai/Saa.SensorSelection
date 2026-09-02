@@ -35,6 +35,7 @@ const dialogOpen = ref(false);
 const historyOpen = ref(false);
 const historyItem = ref<TimelineItem>();
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const query = ref('');
 const typeFilters = ref<Array<string | number>>([]);
 const statusFilters = ref<Array<string | number>>([]);
@@ -132,6 +133,7 @@ function statusTone(status: string): BadgeTone {
 }
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     date: null,
@@ -155,6 +157,7 @@ function addItem() {
 }
 
 function editItem(item: TimelineItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     date: item.date || null,
@@ -173,6 +176,7 @@ function showHistory(item: TimelineItem) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveCrud(
     'customer-feedback',
     props.entityName,
@@ -224,6 +228,7 @@ async function deleteItem(item: TimelineItem) {
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、机型、问题点、对策、时间或状态"
+        aria-label="搜索客户反馈"
       />
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
@@ -316,7 +321,13 @@ async function deleteItem(item: TimelineItem) {
       :width="560"
     >
       <AFormGrid>
-        <AFormRow label="问题分类" required>
+        <AFormRow
+          label="问题分类"
+          required
+          :error="
+            validationAttempted && !form.type ? '请选择问题分类' : undefined
+          "
+        >
           <ASelect v-model="form.type" :options="typeOptions" />
         </AFormRow>
         <AFormRow label="适用机型">
@@ -325,10 +336,24 @@ async function deleteItem(item: TimelineItem) {
         <AFormRow label="反馈时间">
           <ADatePicker v-model="form.date" placeholder="选择日期" />
         </AFormRow>
-        <AFormRow label="处理状态" required>
+        <AFormRow
+          label="处理状态"
+          required
+          :error="
+            validationAttempted && !form.status ? '请选择处理状态' : undefined
+          "
+        >
           <ASelect v-model="form.status" :options="statusOptions" />
         </AFormRow>
-        <AFormRow label="问题点" required>
+        <AFormRow
+          label="问题点"
+          required
+          :error="
+            validationAttempted && !form.problem.trim()
+              ? '请输入问题点'
+              : undefined
+          "
+        >
           <ATextArea v-model="form.problem" :rows="3" :maxlength="600" />
         </AFormRow>
         <AFormRow label="改善对策">

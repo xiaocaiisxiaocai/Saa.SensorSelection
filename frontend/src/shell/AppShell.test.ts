@@ -54,6 +54,19 @@ describe('AppShell', () => {
     document.body.innerHTML = '';
   });
 
+  it('offers a keyboard skip link that targets the main content', async () => {
+    const { wrapper } = await mountShell();
+    const skipLink = wrapper.get('a.skip-link');
+    const main = wrapper.get('main');
+
+    expect(skipLink.text()).toBe('跳到主要内容');
+    expect(skipLink.attributes('href')).toBe('#main-content');
+    expect(main.attributes('id')).toBe('main-content');
+    expect(main.attributes('tabindex')).toBe('-1');
+
+    wrapper.unmount();
+  });
+
   it('submits global search when the desktop input receives Enter', async () => {
     const { router, wrapper } = await mountShell();
     const input = wrapper.get('input[aria-label="全局搜索"]');

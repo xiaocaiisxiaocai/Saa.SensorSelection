@@ -66,6 +66,7 @@ async function remove(item: SensorSopFileItem) {
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索标题或文件名"
+        aria-label="搜索型录文件"
       />
     </div>
     <AFileDrop
@@ -111,7 +112,11 @@ async function remove(item: SensorSopFileItem) {
       :open="Boolean(preview)"
       :title="preview?.title || '预览 PDF'"
       viewport
-      @update:open="(open) => { if (!open) preview = null }"
+      @update:open="
+        (open) => {
+          if (!open) preview = null;
+        }
+      "
     >
       <APdfViewer
         v-if="preview"

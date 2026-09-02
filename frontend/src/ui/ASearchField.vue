@@ -7,6 +7,7 @@ import { useFormControl } from './use-form-control';
 
 const props = withDefaults(
   defineProps<{
+    ariaLabel?: string;
     describedBy?: string;
     disabled?: boolean;
     id?: string;
@@ -21,7 +22,15 @@ const props = withDefaults(
 );
 
 const model = defineModel<string>({ default: '' });
-const { id, describedBy, invalid, required } = useFormControl(props);
+const { id, describedBy, hasFormLabel, invalid, required } =
+  useFormControl(props);
+if (
+  import.meta.env.DEV &&
+  !hasFormLabel.value &&
+  !props.ariaLabel?.trim()
+) {
+  throw new Error('ASearchField requires an ariaLabel or AFormRow label');
+}
 const focused = ref(false);
 const input = ref<HTMLInputElement | null>(null);
 
@@ -62,6 +71,7 @@ function focusFromSurface(event: MouseEvent) {
       :value="model"
       :placeholder="placeholder"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       :aria-invalid="invalid ? true : undefined"
       :aria-required="required ? true : undefined"
       :aria-describedby="describedBy"

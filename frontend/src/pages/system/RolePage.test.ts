@@ -54,14 +54,33 @@ describe('RolePage', () => {
     expect(document.body.textContent).toContain('查看业务数据');
     expect(document.body.textContent).toContain('查看系统管理');
 
-    const group = [...document.querySelectorAll('.permission-group__head')].find(
-      (node) => node.textContent?.includes('业务'),
-    );
-    group?.querySelector('[role="checkbox"]')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true }),
-    );
+    const group = [
+      ...document.querySelectorAll('.permission-group__head'),
+    ].find((node) => node.textContent?.includes('业务'));
+    group
+      ?.querySelector('[role="checkbox"]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await nextTick();
     expect(document.body.textContent).toContain('已选 2 / 3');
+    wrapper.unmount();
+  });
+
+  it('shows field-level errors when required role fields are empty', async () => {
+    const wrapper = await mountPage();
+    await wrapper.get('button').trigger('click');
+    await nextTick();
+
+    const saveButton = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '保存',
+    );
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+
+    expect(
+      [...document.querySelectorAll('.a-form-row__error')].map((item) =>
+        item.textContent?.trim(),
+      ),
+    ).toEqual(['请输入角色标识', '请输入角色名称']);
     wrapper.unmount();
   });
 });

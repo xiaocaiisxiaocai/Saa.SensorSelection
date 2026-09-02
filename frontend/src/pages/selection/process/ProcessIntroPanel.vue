@@ -13,13 +13,7 @@ import { formatFileSize, readDataUrl } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  AFileDrop,
-  AIconButton,
-  APdfViewer,
-  ASearchField,
-  ASheet,
-} from '@/ui';
+import { AFileDrop, AIconButton, APdfViewer, ASearchField, ASheet } from '@/ui';
 
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -80,6 +74,7 @@ async function remove(item: ControlledFileItem) {
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索文件名"
+        aria-label="搜索制程文件"
       />
     </div>
     <AFileDrop
@@ -134,7 +129,11 @@ async function remove(item: ControlledFileItem) {
       :open="Boolean(preview)"
       title="预览 PDF"
       viewport
-      @update:open="(open) => { if (!open) preview = null }"
+      @update:open="
+        (open) => {
+          if (!open) preview = null;
+        }
+      "
     >
       <APdfViewer
         v-if="preview"

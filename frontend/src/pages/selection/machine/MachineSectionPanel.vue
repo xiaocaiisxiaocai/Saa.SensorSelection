@@ -64,6 +64,7 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 const dialogOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const query = ref('');
 const sensorTypeFilters = ref<Array<string | number>>([]);
 const machineModelFilter = ref<string | number | null>(null);
@@ -420,6 +421,7 @@ function sensorOptionLabel(item: SensorItem) {
 }
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     boardCharacteristicId: null,
@@ -440,6 +442,7 @@ function addItem() {
 }
 
 function editItem(item: MachineSectionRow) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     boardCharacteristicId: item.boardCharacteristicId,
@@ -456,6 +459,7 @@ function editItem(item: MachineSectionRow) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveMachineSectionRow(
     props.section.id,
     props.machineName,
@@ -600,6 +604,7 @@ async function removeImage(index: number) {
         <ASearchField
           v-model="query"
           class="selection-toolbar__filter machine-structure-toolbar__search"
+          :aria-label="isStructure ? '搜索结构内容' : '搜索机型注意事项'"
           :placeholder="
             isStructure
               ? '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注'
@@ -726,7 +731,15 @@ async function removeImage(index: number) {
     :width="isStructure ? 640 : 480"
   >
     <AFormGrid v-if="isStructure" :columns="1">
-      <AFormRow label="功能作用" required>
+      <AFormRow
+        label="功能作用"
+        required
+        :error="
+          validationAttempted && !form.role.trim()
+            ? '请输入功能作用'
+            : undefined
+        "
+      >
         <AField v-model="form.role" :maxlength="80" />
       </AFormRow>
       <AFormRow label="机型" hint="可选；来自“数据字典 → 机型”。">
@@ -760,6 +773,11 @@ async function removeImage(index: number) {
         label="关联传感器"
         required
         hint="规格和型号来自 Sensor型号；目录替换后这里会自动更新。"
+        :error="
+          validationAttempted && form.sensorIds.length === 0
+            ? '请选择关联传感器'
+            : undefined
+        "
       >
         <ATokenField
           v-model="form.sensorIds"
@@ -777,10 +795,26 @@ async function removeImage(index: number) {
       </AFormRow>
     </AFormGrid>
     <AFormGrid v-else :columns="1">
-      <AFormRow label="注意分类" required>
+      <AFormRow
+        label="注意分类"
+        required
+        :error="
+          validationAttempted && !form.role.trim()
+            ? '请输入注意分类'
+            : undefined
+        "
+      >
         <AField v-model="form.role" :maxlength="80" />
       </AFormRow>
-      <AFormRow label="事项名称" required>
+      <AFormRow
+        label="事项名称"
+        required
+        :error="
+          validationAttempted && !form.name.trim()
+            ? '请输入事项名称'
+            : undefined
+        "
+      >
         <AField v-model="form.name" :maxlength="80" />
       </AFormRow>
       <AFormRow label="说明">

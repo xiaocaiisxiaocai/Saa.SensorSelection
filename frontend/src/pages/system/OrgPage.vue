@@ -38,6 +38,7 @@ const selectedId = ref<number | null>(null);
 const dialogOpen = ref(false);
 const dialogParent = ref<null | number>(null);
 const editingNode = ref<null | OrgUnitNode>(null);
+const validationAttempted = ref(false);
 const saving = ref(false);
 const form = reactive({
   level: '' as string | null,
@@ -105,6 +106,7 @@ async function loadData() {
 }
 
 function openCreate(parentId: null | number) {
+  validationAttempted.value = false;
   dialogParent.value = parentId;
   editingNode.value = null;
   Object.assign(form, { level: null, name: '', sortOrder: 0 });
@@ -112,6 +114,7 @@ function openCreate(parentId: null | number) {
 }
 
 function openEdit(node: OrgUnitNode) {
+  validationAttempted.value = false;
   dialogParent.value = node.parentId;
   editingNode.value = node;
   Object.assign(form, {
@@ -123,15 +126,14 @@ function openEdit(node: OrgUnitNode) {
 }
 
 async function saveOrg() {
+  validationAttempted.value = true;
   if (!form.name.trim()) {
     toast.warning('请输入组织名称');
     return;
   }
   if (
     !canPlaceOrgLevel(parentNode.value?.level, form.level) ||
-    descendantLevels.value.some(
-      (level) => !canPlaceOrgLevel(form.level, level),
-    )
+    descendantLevels.value.some((level) => !canPlaceOrgLevel(form.level, level))
   ) {
     toast.warning(ORG_LEVEL_INVERTED_MESSAGE);
     return;
@@ -236,12 +238,33 @@ async function removeOrg(node: OrgUnitNode) {
       :width="480"
     >
       <AFormGrid :columns="1">
-        <AFormRow label="组织名称" required>
-          <AField v-model="form.name" :maxlength="64" placeholder="如：电控事业部" />
+        <AFormRow
+          label="组织名称"
+          required
+          :error="
+            validationAttempted && !form.name.trim()
+              ? '请输入组织名称'
+              : undefined
+          "
+        >
+          <AField
+            v-model="form.name"
+            :maxlength="64"
+            placeholder="如：电控事业部"
+          />
         </AFormRow>
         <AFormRow
           label="层级"
           hint="事业部 > 部门 > 课别，允许跳级"
+          :error="
+            validationAttempted &&
+              (!canPlaceOrgLevel(parentNode?.level, form.level) ||
+                descendantLevels.some(
+                  (level) => !canPlaceOrgLevel(form.level, level),
+                ))
+              ? ORG_LEVEL_INVERTED_MESSAGE
+              : undefined
+          "
         >
           <ASelect
             v-model="form.level"
@@ -257,7 +280,9 @@ async function removeOrg(node: OrgUnitNode) {
       </AFormGrid>
       <template #footer>
         <AButton @click="dialogOpen = false">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveOrg">保存</AButton>
+        <AButton variant="filled" :loading="saving" @click="saveOrg">
+          保存
+        </AButton>
       </template>
     </ASheet>
   </section>

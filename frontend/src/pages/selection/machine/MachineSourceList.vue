@@ -602,7 +602,12 @@ onMounted(restoreWidth);
     <div class="machine-source__search-row">
       <label class="machine-source__search">
         <Search :size="15" />
-        <input v-model="query" placeholder="搜索分类、配置或机型…">
+        <input
+          v-model="query"
+          type="search"
+          aria-label="搜索分类、配置或机型"
+          placeholder="搜索分类、配置或机型…"
+        >
       </label>
       <AIconButton
         :icon="allGroupsExpanded ? ChevronsUp : ChevronsDown"

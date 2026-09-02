@@ -48,8 +48,12 @@ describe('LoginPage', () => {
   it('renders brand headings and footer', async () => {
     const wrapper = await mountLogin();
     expect(wrapper.find('.login__title').text()).toBe('感应器选型系统');
-    expect(wrapper.find('.login__subtitle').text()).toBe('Symtek Automation China');
-    expect(wrapper.find('.login-layout__footer').text()).toContain('Symtek Automation China');
+    expect(wrapper.find('.login__subtitle').text()).toBe(
+      'Symtek Automation China',
+    );
+    expect(wrapper.find('.login-layout__footer').text()).toContain(
+      'Symtek Automation China',
+    );
     wrapper.unmount();
   });
 
@@ -73,6 +77,14 @@ describe('LoginPage', () => {
     const wrapper = await mountLogin();
     await wrapper.get('form').trigger('submit');
     expect(warning).toHaveBeenCalledWith('请输入用户名和密码');
+    expect(
+      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+    ).toEqual(['请输入用户名', '请输入密码']);
+
+    await wrapper.findAll('input')[0].setValue('admin');
+    expect(
+      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+    ).toEqual(['请输入密码']);
     wrapper.unmount();
   });
 

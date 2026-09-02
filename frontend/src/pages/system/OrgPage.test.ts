@@ -82,4 +82,21 @@ describe('OrgPage', () => {
     expect(levels).toEqual(['课别']);
     wrapper.unmount();
   });
+
+  it('shows a field-level error when the organization name is empty', async () => {
+    const wrapper = await mountPage();
+    await wrapper.get('button').trigger('click');
+    await nextTick();
+
+    const saveButton = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '保存',
+    );
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+
+    expect(
+      document.querySelector('.a-form-row__error')?.textContent?.trim(),
+    ).toBe('请输入组织名称');
+    wrapper.unmount();
+  });
 });

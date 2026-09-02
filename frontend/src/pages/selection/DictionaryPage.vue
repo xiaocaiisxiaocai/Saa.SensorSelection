@@ -29,6 +29,7 @@ const writable = computed(() => canWrite('selection:write'));
 const activeCode = ref(DICTIONARY_DEFINITIONS[0]?.code || '');
 const dialogOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const form = reactive({
   name: '',
   sort: 1,
@@ -54,9 +55,7 @@ const columns = computed<TableColumn[]>(() => {
   return cols;
 });
 const rows = computed(() => items.value);
-const sheetTitle = computed(() =>
-  editId.value ? '编辑字典项' : '新增字典项',
-);
+const sheetTitle = computed(() => (editId.value ? '编辑字典项' : '新增字典项'));
 
 watch(activeCode, () => {
   dialogOpen.value = false;
@@ -64,6 +63,7 @@ watch(activeCode, () => {
 });
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     name: '',
@@ -77,6 +77,7 @@ function addItem() {
 }
 
 function editItem(item: DictionaryItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     name: item.name,
@@ -87,6 +88,7 @@ function editItem(item: DictionaryItem) {
 
 function saveItem() {
   if (!activeCode.value) return;
+  validationAttempted.value = true;
   const result = store.saveDictionaryItem(
     activeCode.value,
     { name: form.name.trim(), sort: form.sort },
@@ -161,7 +163,15 @@ async function deleteItem(item: DictionaryItem) {
 
     <ASheet v-model:open="dialogOpen" :title="sheetTitle" :width="480">
       <AFormGrid :columns="1">
-        <AFormRow label="字典项名称" required>
+        <AFormRow
+          label="字典项名称"
+          required
+          :error="
+            validationAttempted && !form.name.trim()
+              ? '请输入字典项名称'
+              : undefined
+          "
+        >
           <AField v-model="form.name" :maxlength="40" />
         </AFormRow>
         <AFormRow label="排序">

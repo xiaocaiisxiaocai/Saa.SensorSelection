@@ -234,6 +234,30 @@ describe('tokens.css', () => {
     }
   });
 
+  it('keeps secondary text readable on light content surfaces', () => {
+    const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const match = light.match(
+      /--label-2:\s*rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*(\d+)%\s*\)/,
+    );
+    expect(match).not.toBeNull();
+
+    const alpha = Number(match?.[4] ?? 0) / 100;
+    const channels = [1, 2, 3].map((index) => {
+      const foreground = Number(match?.[index] ?? 0);
+      return (foreground * alpha + 255 * (1 - alpha)) / 255;
+    });
+    const luminance = channels
+      .map((value) =>
+        value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+      )
+      .reduce(
+        (sum, value, index) => sum + [0.2126, 0.7152, 0.0722][index]! * value,
+        0,
+      );
+
+    expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('keeps dark-theme accent text and filled controls readable', () => {
     expect(tokens).toMatch(/:root\s*\{[\s\S]*--sys-blue-solid:\s*#0066cc;/i);
     expect(tokens).toMatch(

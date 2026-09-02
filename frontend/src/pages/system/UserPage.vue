@@ -42,6 +42,8 @@ const passwordOpen = ref(false);
 const editingId = ref<number>();
 const passwordUserId = ref<number>();
 const saving = ref(false);
+const userValidationAttempted = ref(false);
+const passwordValidationAttempted = ref(false);
 const form = reactive({
   displayName: '',
   isActive: true,
@@ -95,6 +97,7 @@ async function loadData() {
 }
 
 function openCreate() {
+  userValidationAttempted.value = false;
   editingId.value = undefined;
   Object.assign(form, {
     displayName: '',
@@ -108,6 +111,7 @@ function openCreate() {
 }
 
 function openEdit(user: RbacUser) {
+  userValidationAttempted.value = false;
   editingId.value = user.id;
   Object.assign(form, {
     displayName: user.displayName,
@@ -124,6 +128,7 @@ function openEdit(user: RbacUser) {
 }
 
 async function saveUser() {
+  userValidationAttempted.value = true;
   if (!form.username.trim() || !form.displayName.trim()) {
     toast.warning('请填写用户名和显示名');
     return;
@@ -163,6 +168,7 @@ async function saveUser() {
 }
 
 function openPassword(user: RbacUser) {
+  passwordValidationAttempted.value = false;
   passwordUserId.value = user.id;
   newPassword.value = '';
   passwordOpen.value = true;
@@ -170,6 +176,7 @@ function openPassword(user: RbacUser) {
 
 async function savePassword() {
   if (!passwordUserId.value) return;
+  passwordValidationAttempted.value = true;
   if (newPassword.value.length < 4) {
     toast.warning('新密码至少 4 位');
     return;
@@ -207,7 +214,9 @@ function orgPath(user: RbacUser) {
   <section class="selection-page">
     <div class="selection-toolbar">
       <h1 class="docs-heading">用户管理</h1>
-      <AButton v-if="writable" variant="filled" @click="openCreate">新增用户</AButton>
+      <AButton v-if="writable" variant="filled" @click="openCreate">
+        新增用户
+      </AButton>
     </div>
     <ATable
       :columns="columns"
@@ -234,7 +243,12 @@ function orgPath(user: RbacUser) {
       </template>
       <template #cell-actions="{ row }">
         <div class="table-actions">
-          <AIconButton :icon="Pencil" label="编辑" size="small" @click="openEdit(row)" />
+          <AIconButton
+            :icon="Pencil"
+            label="编辑"
+            size="small"
+            @click="openEdit(row)"
+          />
           <AIconButton
             :icon="KeyRound"
             label="重置密码"
@@ -257,7 +271,15 @@ function orgPath(user: RbacUser) {
       :width="520"
     >
       <AFormGrid>
-        <AFormRow label="用户名" required>
+        <AFormRow
+          label="用户名"
+          required
+          :error="
+            userValidationAttempted && !form.username.trim()
+              ? '请输入用户名'
+              : undefined
+          "
+        >
           <AField
             v-model="form.username"
             :maxlength="64"
@@ -265,7 +287,16 @@ function orgPath(user: RbacUser) {
             :disabled="Boolean(editingId)"
           />
         </AFormRow>
-        <AFormRow v-if="!editingId" label="初始密码" required>
+        <AFormRow
+          v-if="!editingId"
+          label="初始密码"
+          required
+          :error="
+            userValidationAttempted && form.password.length < 4
+              ? '密码至少 4 位'
+              : undefined
+          "
+        >
           <AField
             v-model="form.password"
             type="password"
@@ -273,8 +304,20 @@ function orgPath(user: RbacUser) {
             placeholder="至少 4 位"
           />
         </AFormRow>
-        <AFormRow label="显示名" required>
-          <AField v-model="form.displayName" :maxlength="64" placeholder="姓名或称呼" />
+        <AFormRow
+          label="显示名"
+          required
+          :error="
+            userValidationAttempted && !form.displayName.trim()
+              ? '请输入显示名'
+              : undefined
+          "
+        >
+          <AField
+            v-model="form.displayName"
+            :maxlength="64"
+            placeholder="姓名或称呼"
+          />
         </AFormRow>
         <AFormRow label="角色">
           <ASelect
@@ -297,11 +340,21 @@ function orgPath(user: RbacUser) {
       </AFormGrid>
       <template #footer>
         <AButton @click="dialogOpen = false">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveUser">保存</AButton>
+        <AButton variant="filled" :loading="saving" @click="saveUser">
+          保存
+        </AButton>
       </template>
     </ASheet>
     <ASheet v-model:open="passwordOpen" title="重置密码" :width="420">
-      <AFormRow label="新密码" required>
+      <AFormRow
+        label="新密码"
+        required
+        :error="
+          passwordValidationAttempted && newPassword.length < 4
+            ? '新密码至少 4 位'
+            : undefined
+        "
+      >
         <AField
           v-model="newPassword"
           type="password"

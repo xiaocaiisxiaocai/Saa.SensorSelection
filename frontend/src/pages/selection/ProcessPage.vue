@@ -47,6 +47,7 @@ const query = ref(String(route.query.q || ''));
 const layerFilter = ref<string | null>(null);
 const dialogOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const page = ref(1);
 const pageSize = ref(20);
 const form = reactive({
@@ -128,6 +129,7 @@ watch(
 );
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     feature: '',
@@ -150,6 +152,7 @@ function addItem() {
 }
 
 function editItem(item: ProcessStepItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     feature: item.feature,
@@ -162,6 +165,7 @@ function editItem(item: ProcessStepItem) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveProcessStep(
     {
       feature: form.feature.trim(),
@@ -210,6 +214,7 @@ async function deleteItem(item: ProcessStepItem) {
           v-model="query"
           class="selection-toolbar__filter"
           placeholder="搜索制程、工艺、作用、特性或备注"
+          aria-label="搜索制程"
         />
         <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
         <AButton v-if="writable" variant="filled" @click="addItem">
@@ -256,14 +261,26 @@ async function deleteItem(item: ProcessStepItem) {
       :width="640"
     >
       <AFormGrid :columns="1">
-        <AFormRow label="制程" required>
+        <AFormRow
+          label="制程"
+          required
+          :error="validationAttempted && !form.layer ? '请选择制程' : undefined"
+        >
           <ASelect
             v-model="form.layer"
             :options="layerOptions"
             placeholder="选择制程分层"
           />
         </AFormRow>
-        <AFormRow label="工艺制程" required>
+        <AFormRow
+          label="工艺制程"
+          required
+          :error="
+            validationAttempted && !form.name.trim()
+              ? '请输入工艺制程'
+              : undefined
+          "
+        >
           <AField v-model="form.name" :maxlength="40" />
         </AFormRow>
         <AFormRow label="作用">

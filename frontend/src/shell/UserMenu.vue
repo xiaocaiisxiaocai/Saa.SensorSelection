@@ -13,6 +13,7 @@ const router = useRouter();
 
 const passwordOpen = ref(false);
 const saving = ref(false);
+const validationAttempted = ref(false);
 const form = reactive({
   confirmPassword: '',
   currentPassword: '',
@@ -37,6 +38,7 @@ function goLogin() {
 }
 
 function openPassword() {
+  validationAttempted.value = false;
   Object.assign(form, {
     confirmPassword: '',
     currentPassword: '',
@@ -46,6 +48,7 @@ function openPassword() {
 }
 
 async function savePassword() {
+  validationAttempted.value = true;
   if (!form.currentPassword || !form.newPassword) {
     toast.warning('请输入当前密码和新密码');
     return;
@@ -106,7 +109,15 @@ async function onSelect(id: string) {
   <AButton v-else size="small" variant="tinted" @click="goLogin">登录</AButton>
   <ASheet v-model:open="passwordOpen" title="修改密码" :width="420">
     <div class="password-form">
-      <AFormRow label="当前密码" required>
+      <AFormRow
+        label="当前密码"
+        required
+        :error="
+          validationAttempted && !form.currentPassword
+            ? '请输入当前密码'
+            : undefined
+        "
+      >
         <AField
           v-model="form.currentPassword"
           type="password"
@@ -116,7 +127,19 @@ async function onSelect(id: string) {
           placeholder="请输入当前密码"
         />
       </AFormRow>
-      <AFormRow label="新密码" required>
+      <AFormRow
+        label="新密码"
+        required
+        :error="
+          validationAttempted && form.newPassword.length < 4
+            ? '新密码至少 4 位'
+            : validationAttempted &&
+              form.newPassword === form.currentPassword &&
+              form.newPassword
+              ? '新密码不能与当前密码相同'
+              : undefined
+        "
+      >
         <AField
           v-model="form.newPassword"
           type="password"
@@ -125,7 +148,15 @@ async function onSelect(id: string) {
           placeholder="至少 4 位"
         />
       </AFormRow>
-      <AFormRow label="确认新密码" required>
+      <AFormRow
+        label="确认新密码"
+        required
+        :error="
+          validationAttempted && form.confirmPassword !== form.newPassword
+            ? '两次输入的新密码不一致'
+            : undefined
+        "
+      >
         <AField
           v-model="form.confirmPassword"
           type="password"
@@ -137,7 +168,9 @@ async function onSelect(id: string) {
     </div>
     <template #footer>
       <AButton @click="passwordOpen = false">取消</AButton>
-      <AButton variant="filled" :loading="saving" @click="savePassword">保存</AButton>
+      <AButton variant="filled" :loading="saving" @click="savePassword">
+        保存
+      </AButton>
     </template>
   </ASheet>
 </template>

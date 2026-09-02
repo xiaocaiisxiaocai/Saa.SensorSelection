@@ -173,6 +173,7 @@ watch(
       'app-shell--drawer-open': compactViewport && mobileSidebarOpen,
     }"
   >
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header
       class="toolbar material-toolbar"
       :class="{ 'toolbar--scrolled': contentScrolled }"
@@ -293,7 +294,12 @@ watch(
         @click="mobileSidebarOpen = false"
       />
 
-      <main class="content" @scroll="onContentScroll">
+      <main
+        id="main-content"
+        class="content"
+        tabindex="-1"
+        @scroll="onContentScroll"
+      >
         <div v-if="connecting" class="content__loading">
           <ASpinner :size="24" />
         </div>
@@ -310,6 +316,27 @@ watch(
   height: 100dvh;
   background: var(--bg-window);
   color: var(--label);
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: var(--z-toast);
+  padding: var(--space-3) var(--space-4);
+  color: var(--label-on-color);
+  text-decoration: none;
+  background: var(--sys-blue-solid);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  transform: translateY(calc(-100% - var(--space-5)));
+  transition: transform var(--dur-1) ease;
+}
+
+.skip-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--shadow-1);
+  transform: translateY(0);
 }
 
 .toolbar {

@@ -57,6 +57,8 @@ const sensorTypeFilters = ref<Array<string | number>>(
 const dialogOpen = ref(false);
 const replaceOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
+const replaceValidationAttempted = ref(false);
 const focusSopId = ref<null | number>(initialSopId());
 const focusModel3dId = ref<null | number>(initialModel3dId());
 const linkedPreview = ref<{
@@ -370,6 +372,7 @@ function statusTone(status: string): BadgeTone {
 }
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     brand: '',
@@ -450,6 +453,7 @@ function addItem() {
 }
 
 function editItem(item: SensorItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     brand: item.brand,
@@ -467,6 +471,7 @@ function editItem(item: SensorItem) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveSensor(
     {
       ...form,
@@ -564,6 +569,7 @@ function openRelatedSensor(item: SensorItem) {
 }
 
 function openReplace(item: SensorItem) {
+  replaceValidationAttempted.value = false;
   replaceSource.value = item;
   replaceTargetId.value = null;
   replaceNote.value = '';
@@ -573,6 +579,7 @@ function openReplace(item: SensorItem) {
 function saveReplace() {
   const source = replaceSource.value;
   if (!source) return;
+  replaceValidationAttempted.value = true;
   if (!replaceTargetId.value) {
     toast.error('请选择要替换的现用型号');
     return;
@@ -633,6 +640,7 @@ function saveReplace() {
           v-model="query"
           class="selection-toolbar__filter"
           placeholder="搜索类型、品牌、型号、料号、停用或问题点"
+          aria-label="搜索 Sensor 型号"
         />
         <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
         <AButton aria-label="导出 Excel" @click="exportExcel">
@@ -770,7 +778,13 @@ function saveReplace() {
       :width="680"
     >
       <AFormGrid :columns="3">
-        <AFormRow label="状态" required>
+        <AFormRow
+          label="状态"
+          required
+          :error="
+            validationAttempted && !form.status ? '请选择状态' : undefined
+          "
+        >
           <ASelect v-model="form.status" :options="statusOptions" />
         </AFormRow>
         <AFormRow label="料号">
@@ -780,7 +794,15 @@ function saveReplace() {
             placeholder="可选"
           />
         </AFormRow>
-        <AFormRow label="感应器类型" required>
+        <AFormRow
+          label="感应器类型"
+          required
+          :error="
+            validationAttempted && !form.sensorType
+              ? '请选择感应器类型'
+              : undefined
+          "
+        >
           <ASelect v-model="form.sensorType" :options="typeOptions" />
         </AFormRow>
       </AFormGrid>
@@ -788,7 +810,13 @@ function saveReplace() {
         <AFormRow label="品牌">
           <AField v-model="form.brand" :maxlength="60" />
         </AFormRow>
-        <AFormRow label="型号" required>
+        <AFormRow
+          label="型号"
+          required
+          :error="
+            validationAttempted && !form.model.trim() ? '请输入型号' : undefined
+          "
+        >
           <AField v-model="form.model" :maxlength="100" />
         </AFormRow>
       </AFormGrid>
@@ -832,14 +860,30 @@ function saveReplace() {
         {{ replaceSource?.model }}
       </p>
       <AFormGrid :columns="1">
-        <AFormRow label="要替换的现用型号" required>
+        <AFormRow
+          label="要替换的现用型号"
+          required
+          :error="
+            replaceValidationAttempted && !replaceTargetId
+              ? '请选择要替换的现用型号'
+              : undefined
+          "
+        >
           <ASelect
             v-model="replaceTargetId"
             :options="replaceCandidates"
             placeholder="请选择现用型号"
           />
         </AFormRow>
-        <AFormRow label="问题点" required>
+        <AFormRow
+          label="问题点"
+          required
+          :error="
+            replaceValidationAttempted && !replaceNote.trim()
+              ? '请填写问题点'
+              : undefined
+          "
+        >
           <ATextArea
             v-model="replaceNote"
             :rows="3"

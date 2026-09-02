@@ -55,6 +55,8 @@ const dialogOpen = ref(false);
 const processDialogOpen = ref(false);
 const editId = ref<number>();
 const processEditId = ref<number>();
+const tabValidationAttempted = ref(false);
+const processValidationAttempted = ref(false);
 const form = reactive({
   kind: 'structure' as MachineSectionKind,
   name: '',
@@ -594,6 +596,7 @@ function openGlobalSearchResult(result: MachineStructureSearchResult) {
 }
 
 function resetProcessForm() {
+  processValidationAttempted.value = false;
   processEditId.value = undefined;
   Object.assign(processForm, {
     name: '',
@@ -607,11 +610,13 @@ function openProcessManager() {
 }
 
 function editProcess(item: MachineProcessItem) {
+  processValidationAttempted.value = false;
   processEditId.value = item.id;
   Object.assign(processForm, { name: item.name, sort: item.sort });
 }
 
 function saveProcess() {
+  processValidationAttempted.value = true;
   const result = store.saveMachineProcess(
     { name: processForm.name.trim(), sort: processForm.sort },
     processEditId.value,
@@ -729,6 +734,7 @@ async function generateReport() {
 }
 
 function openAddTab() {
+  tabValidationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     kind: 'structure' as MachineSectionKind,
@@ -743,6 +749,7 @@ function openRenameTab(value: string) {
     (item) => String(item.id) === value,
   );
   if (!section) return;
+  tabValidationAttempted.value = false;
   editId.value = section.id;
   Object.assign(form, {
     kind: section.kind,
@@ -755,6 +762,7 @@ function openRenameTab(value: string) {
 function saveTab() {
   const machineName = selection.value.item;
   if (!machineName) return;
+  tabValidationAttempted.value = true;
   const result = store.saveExtraMachineSection(
     machineName,
     { kind: form.kind, name: form.name.trim(), sort: form.sort },
@@ -967,7 +975,15 @@ async function closeTab(value: string) {
       <div class="machine-process-form">
         <h3>{{ processEditId ? '编辑制程' : '新增制程' }}</h3>
         <AFormGrid :columns="2">
-          <AFormRow label="制程名称" required>
+          <AFormRow
+            label="制程名称"
+            required
+            :error="
+              processValidationAttempted && !processForm.name.trim()
+                ? '请输入制程名称'
+                : undefined
+            "
+          >
             <AField
               v-model="processForm.name"
               :maxlength="40"
@@ -997,7 +1013,15 @@ async function closeTab(value: string) {
       :width="420"
     >
       <AFormGrid :columns="1">
-        <AFormRow label="Tab 名称" required>
+        <AFormRow
+          label="Tab 名称"
+          required
+          :error="
+            tabValidationAttempted && !form.name.trim()
+              ? '请输入 Tab 名称'
+              : undefined
+          "
+        >
           <AField v-model="form.name" :maxlength="40" />
         </AFormRow>
         <AFormRow label="Tab 类型" required>

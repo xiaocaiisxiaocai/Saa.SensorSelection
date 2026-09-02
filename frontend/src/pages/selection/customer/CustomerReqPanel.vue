@@ -30,6 +30,7 @@ const writable = computed(() => canWrite('selection:write'));
 
 const dialogOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const query = ref('');
 const typeFilters = ref<Array<string | number>>([]);
 const sourceFilters = ref<Array<string | number>>([]);
@@ -109,6 +110,7 @@ watch(
 );
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     content: '',
@@ -132,6 +134,7 @@ function addItem() {
 }
 
 function editItem(item: CustomerReqItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     content: item.content,
@@ -145,6 +148,7 @@ function editItem(item: CustomerReqItem) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveCrud(
     'customer-req',
     props.entityName,
@@ -195,6 +199,7 @@ async function deleteItem(item: CustomerReqItem) {
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、机型、制程、内容、来源或备注"
+        aria-label="搜索客户要求"
       />
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">
@@ -236,10 +241,22 @@ async function deleteItem(item: CustomerReqItem) {
       :width="560"
     >
       <AFormGrid>
-        <AFormRow label="要求分类" required>
+        <AFormRow
+          label="要求分类"
+          required
+          :error="
+            validationAttempted && !form.type ? '请选择要求分类' : undefined
+          "
+        >
           <ASelect v-model="form.type" :options="typeOptions" />
         </AFormRow>
-        <AFormRow label="来源" required>
+        <AFormRow
+          label="来源"
+          required
+          :error="
+            validationAttempted && !form.source ? '请选择来源' : undefined
+          "
+        >
           <ASelect v-model="form.source" :options="sourceOptions" />
         </AFormRow>
         <AFormRow label="适用机型">
@@ -252,7 +269,15 @@ async function deleteItem(item: CustomerReqItem) {
         <AFormRow label="适用制程">
           <AField v-model="form.process" :maxlength="100" />
         </AFormRow>
-        <AFormRow label="要求内容" required>
+        <AFormRow
+          label="要求内容"
+          required
+          :error="
+            validationAttempted && !form.content.trim()
+              ? '请输入要求内容'
+              : undefined
+          "
+        >
           <ATextArea v-model="form.content" :rows="3" :maxlength="600" />
         </AFormRow>
         <AFormRow label="备注">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Lock, Monitor, Moon, Sun, User } from 'lucide-vue-next';
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getStoredToken } from '@/api';
@@ -19,7 +19,16 @@ const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
+const validationAttempted = ref(false);
 const form = reactive({ username: '', password: '' });
+const usernameError = computed(() =>
+  validationAttempted.value && !form.username.trim()
+    ? '请输入用户名'
+    : undefined,
+);
+const passwordError = computed(() =>
+  validationAttempted.value && !form.password ? '请输入密码' : undefined,
+);
 let backendReady: null | Promise<void> = null;
 
 const themeOptions: {
@@ -54,6 +63,7 @@ async function enterAsGuest() {
 
 async function submit() {
   if (loading.value) return;
+  validationAttempted.value = true;
   const username = form.username.trim();
   const password = form.password;
 
@@ -128,7 +138,7 @@ onMounted(async () => {
         </div>
 
         <form class="login__form" @submit.prevent="submit">
-          <AFormRow label="用户名" required>
+          <AFormRow label="用户名" required :error="usernameError">
             <AField
               v-model="form.username"
               :prefix-icon="User"
@@ -139,7 +149,7 @@ onMounted(async () => {
               placeholder="请输入用户名"
             />
           </AFormRow>
-          <AFormRow label="密码" required>
+          <AFormRow label="密码" required :error="passwordError">
             <AField
               v-model="form.password"
               :prefix-icon="Lock"

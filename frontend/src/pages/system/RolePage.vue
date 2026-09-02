@@ -30,6 +30,7 @@ const permissions = ref<PermissionInfo[]>([]);
 const dialogOpen = ref(false);
 const editing = ref<null | RbacRole>(null);
 const saving = ref(false);
+const validationAttempted = ref(false);
 const form = reactive({
   code: '',
   description: '',
@@ -84,7 +85,9 @@ function isProtected(role: RbacRole) {
 }
 
 function groupState(items: PermissionInfo[]) {
-  const selected = items.filter((item) => form.permissionIds.includes(item.id)).length;
+  const selected = items.filter((item) =>
+    form.permissionIds.includes(item.id),
+  ).length;
   if (selected === 0) return false;
   if (selected === items.length) return true;
   return 'indeterminate' as const;
@@ -100,12 +103,19 @@ function toggleGroup(items: PermissionInfo[], checked: boolean) {
 }
 
 function openCreate() {
+  validationAttempted.value = false;
   editing.value = null;
-  Object.assign(form, { code: '', description: '', name: '', permissionIds: [] });
+  Object.assign(form, {
+    code: '',
+    description: '',
+    name: '',
+    permissionIds: [],
+  });
   dialogOpen.value = true;
 }
 
 function openEdit(role: RbacRole) {
+  validationAttempted.value = false;
   editing.value = role;
   Object.assign(form, {
     code: role.code,
@@ -125,6 +135,7 @@ function togglePermission(id: number, checked: boolean) {
 }
 
 async function saveRole() {
+  validationAttempted.value = true;
   if (!form.code.trim() || !form.name.trim()) {
     toast.warning('请填写角色标识和名称');
     return;
@@ -180,7 +191,9 @@ async function removeRole(role: RbacRole) {
   <section class="selection-page">
     <div class="selection-toolbar">
       <h1 class="docs-heading">角色管理</h1>
-      <AButton v-if="writable" variant="filled" @click="openCreate">新增角色</AButton>
+      <AButton v-if="writable" variant="filled" @click="openCreate">
+        新增角色
+      </AButton>
     </div>
     <ATable
       :columns="columns"
@@ -209,7 +222,12 @@ async function removeRole(role: RbacRole) {
       </template>
       <template #cell-actions="{ row }">
         <div v-if="!isProtected(row)" class="table-actions">
-          <AIconButton :icon="Pencil" label="编辑" size="small" @click="openEdit(row)" />
+          <AIconButton
+            :icon="Pencil"
+            label="编辑"
+            size="small"
+            @click="openEdit(row)"
+          />
           <AIconButton
             :icon="Trash2"
             label="删除"
@@ -226,7 +244,19 @@ async function removeRole(role: RbacRole) {
       :width="560"
     >
       <AFormGrid>
-        <AFormRow label="角色标识" required>
+        <AFormRow
+          label="角色标识"
+          required
+          :error="
+            validationAttempted && !form.code.trim()
+              ? '请输入角色标识'
+              : validationAttempted &&
+                editing === null &&
+                !/^[a-z][\w:-]*$/i.test(form.code.trim())
+                ? '字母开头，可含字母、数字、冒号、下划线和短横线'
+                : undefined
+          "
+        >
           <AField
             v-model="form.code"
             :maxlength="64"
@@ -234,8 +264,20 @@ async function removeRole(role: RbacRole) {
             :disabled="Boolean(editing)"
           />
         </AFormRow>
-        <AFormRow label="角色名称" required>
-          <AField v-model="form.name" :maxlength="64" placeholder="如：Sensor 管理员" />
+        <AFormRow
+          label="角色名称"
+          required
+          :error="
+            validationAttempted && !form.name.trim()
+              ? '请输入角色名称'
+              : undefined
+          "
+        >
+          <AField
+            v-model="form.name"
+            :maxlength="64"
+            placeholder="如：Sensor 管理员"
+          />
         </AFormRow>
         <AFormRow label="描述" wide>
           <ATextArea
@@ -272,7 +314,9 @@ async function removeRole(role: RbacRole) {
               >
                 <ACheckbox
                   :model-value="form.permissionIds.includes(item.id)"
-                  @update:model-value="togglePermission(item.id, $event === true)"
+                  @update:model-value="
+                    togglePermission(item.id, $event === true)
+                  "
                 />
                 {{ item.name }}
               </label>
@@ -282,7 +326,9 @@ async function removeRole(role: RbacRole) {
       </AFormGrid>
       <template #footer>
         <AButton @click="dialogOpen = false">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveRole">保存</AButton>
+        <AButton variant="filled" :loading="saving" @click="saveRole">
+          保存
+        </AButton>
       </template>
     </ASheet>
   </section>

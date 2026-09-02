@@ -110,4 +110,23 @@ describe('UserPage', () => {
     );
     wrapper.unmount();
   });
+
+  it('shows field-level errors when a new user is incomplete', async () => {
+    const wrapper = await mountPage();
+    await wrapper.get('button').trigger('click');
+    await nextTick();
+
+    const saveButton = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '保存',
+    );
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+
+    expect(
+      [...document.querySelectorAll('.a-form-row__error')].map((item) =>
+        item.textContent?.trim(),
+      ),
+    ).toEqual(['请输入用户名', '密码至少 4 位', '请输入显示名']);
+    wrapper.unmount();
+  });
 });

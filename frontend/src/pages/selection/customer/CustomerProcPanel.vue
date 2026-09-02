@@ -30,6 +30,7 @@ const writable = computed(() => canWrite('selection:write'));
 
 const dialogOpen = ref(false);
 const editId = ref<number>();
+const validationAttempted = ref(false);
 const query = ref('');
 const typeFilters = ref<Array<string | number>>([]);
 const form = reactive({
@@ -93,6 +94,7 @@ watch(
 );
 
 function resetForm() {
+  validationAttempted.value = false;
   editId.value = undefined;
   Object.assign(form, {
     feature: '',
@@ -114,6 +116,7 @@ function addItem() {
 }
 
 function editItem(item: CustomerProcItem) {
+  validationAttempted.value = false;
   editId.value = item.id;
   Object.assign(form, {
     feature: item.feature,
@@ -126,6 +129,7 @@ function editItem(item: CustomerProcItem) {
 }
 
 function saveItem() {
+  validationAttempted.value = true;
   const result = store.saveCrud(
     'customer-proc',
     props.entityName,
@@ -166,6 +170,7 @@ async function deleteItem(item: CustomerProcItem) {
         v-model="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、作用、特性、sensor注意或备注"
+        aria-label="搜索制程注意事项"
       />
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
       <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
@@ -205,13 +210,35 @@ async function deleteItem(item: CustomerProcItem) {
       :width="560"
     >
       <AFormGrid>
-        <AFormRow label="制程分类" required>
+        <AFormRow
+          label="制程分类"
+          required
+          :error="
+            validationAttempted && !form.type ? '请选择制程分类' : undefined
+          "
+        >
           <ASelect v-model="form.type" :options="typeOptions" />
         </AFormRow>
-        <AFormRow label="制程作用" required>
+        <AFormRow
+          label="制程作用"
+          required
+          :error="
+            validationAttempted && !form.role.trim()
+              ? '请输入制程作用'
+              : undefined
+          "
+        >
           <AField v-model="form.role" :maxlength="80" />
         </AFormRow>
-        <AFormRow label="制程特性" required>
+        <AFormRow
+          label="制程特性"
+          required
+          :error="
+            validationAttempted && !form.feature.trim()
+              ? '请输入制程特性'
+              : undefined
+          "
+        >
           <ATextArea v-model="form.feature" :rows="2" :maxlength="500" />
         </AFormRow>
         <AFormRow label="sensor使用注意事项">

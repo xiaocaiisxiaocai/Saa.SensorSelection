@@ -21,6 +21,7 @@ describe('AFormRow', () => {
     expect(input.attributes('aria-invalid')).toBe('true');
     expect(input.attributes('aria-describedby')).toBe(error.attributes('id'));
     expect(error.text()).toBe('请输入用户名');
+    expect(error.attributes('role')).toBe('alert');
   });
 
   it('spans the full grid when wide', () => {

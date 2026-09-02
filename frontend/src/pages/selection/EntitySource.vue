@@ -76,6 +76,9 @@ const machineGroups = computed(() =>
 const groupOpen = ref(false);
 const itemOpen = ref(false);
 const configurationOpen = ref(false);
+const groupValidationAttempted = ref(false);
+const configurationValidationAttempted = ref(false);
+const itemValidationAttempted = ref(false);
 const editingGroup = ref<string>();
 const editingItem = ref<string>();
 const editingItemCategory = ref<string>();
@@ -108,8 +111,7 @@ const categoryOptions = computed(() =>
   (props.kind === 'machine'
     ? machineGroups.value
     : store.entityGroups(props.kind)
-  )
-    .map((group) => ({ label: group.name, value: group.name })),
+  ).map((group) => ({ label: group.name, value: group.name })),
 );
 const configurationOptions = computed(() => [
   { label: '无配置（直接归入分类）', value: '' },
@@ -148,6 +150,7 @@ function movedIndex(prev: string[], next: string[]) {
 }
 
 function openCreateGroup() {
+  groupValidationAttempted.value = false;
   editingGroup.value = undefined;
   groupForm.name = '';
   groupForm.sort = store.entityGroups(props.kind).length + 1;
@@ -155,6 +158,7 @@ function openCreateGroup() {
 }
 
 function openEditGroup(name: string) {
+  groupValidationAttempted.value = false;
   editingGroup.value = name;
   groupForm.name = name;
   groupForm.sort =
@@ -164,6 +168,7 @@ function openEditGroup(name: string) {
 }
 
 function openCreateConfiguration(category?: string) {
+  configurationValidationAttempted.value = false;
   const target = category || machineGroups.value[0]?.name || '';
   editingConfiguration.value = undefined;
   configurationForm.category = target;
@@ -178,6 +183,7 @@ function openEditConfiguration(payload: {
   category: string;
   configuration: string;
 }) {
+  configurationValidationAttempted.value = false;
   editingConfiguration.value = payload.configuration;
   configurationForm.category = payload.category;
   configurationForm.name = payload.configuration;
@@ -193,6 +199,7 @@ function openEditConfiguration(payload: {
 function openCreateItem(
   payload?: string | { category: string; configuration: string | null },
 ) {
+  itemValidationAttempted.value = false;
   editingItem.value = undefined;
   editingItemCategory.value = undefined;
   editingItemConfiguration.value = undefined;
@@ -223,6 +230,7 @@ function openEditItem(payload: {
   configuration?: string | null;
   item: string;
 }) {
+  itemValidationAttempted.value = false;
   editingItem.value = payload.item;
   itemForm.category = payload.category || payload.group || '';
   itemForm.configuration = payload.configuration || '';
@@ -242,6 +250,7 @@ function openEditItem(payload: {
 }
 
 function saveGroup() {
+  groupValidationAttempted.value = true;
   const result = store.saveEntityGroup(
     props.kind,
     {
@@ -271,6 +280,7 @@ function saveGroup() {
 }
 
 function saveConfiguration() {
+  configurationValidationAttempted.value = true;
   const result = store.saveMachineConfiguration(
     configurationForm.category,
     { name: configurationForm.name.trim(), sort: configurationForm.sort },
@@ -322,6 +332,7 @@ async function removeGroup(name: string) {
 }
 
 function saveItem() {
+  itemValidationAttempted.value = true;
   const previous = editingItem.value;
   const category = itemForm.category;
   const name = itemForm.name.trim();
@@ -424,10 +435,7 @@ function onReorderMachineGroups(payload: {
     (group) => group.name === newName,
   );
   if (oldIndex < 0 || newIndex < 0) return;
-  toastResult(
-    store.reorderEntityGroups('machine', oldIndex, newIndex),
-    '',
-  );
+  toastResult(store.reorderEntityGroups('machine', oldIndex, newIndex), '');
 }
 
 function onReorderMachineConfigurations(payload: {
@@ -529,7 +537,15 @@ function onReorderMachineItems(payload: {
       :title="editingGroup ? `编辑${groupLabel}` : `新建${groupLabel}`"
       :width="420"
     >
-      <AFormRow :label="`${groupLabel}名称`" required>
+      <AFormRow
+        :label="`${groupLabel}名称`"
+        required
+        :error="
+          groupValidationAttempted && !groupForm.name.trim()
+            ? `请输入${groupLabel}名称`
+            : undefined
+        "
+      >
         <AField v-model="groupForm.name" :maxlength="40" />
       </AFormRow>
       <AFormRow label="排序" required>
@@ -556,13 +572,29 @@ function onReorderMachineItems(payload: {
       :title="editingConfiguration ? '编辑配置' : '新建配置'"
       :width="420"
     >
-      <AFormRow label="分类" required>
+      <AFormRow
+        label="分类"
+        required
+        :error="
+          configurationValidationAttempted && !configurationForm.category
+            ? '请选择分类'
+            : undefined
+        "
+      >
         <ASelect
           v-model="configurationForm.category"
           :options="categoryOptions"
         />
       </AFormRow>
-      <AFormRow label="配置名称" required>
+      <AFormRow
+        label="配置名称"
+        required
+        :error="
+          configurationValidationAttempted && !configurationForm.name.trim()
+            ? '请输入配置名称'
+            : undefined
+        "
+      >
         <AField v-model="configurationForm.name" :maxlength="40" />
       </AFormRow>
       <AFormRow label="排序" required>
@@ -579,7 +611,15 @@ function onReorderMachineItems(payload: {
       :title="editingItem ? `编辑${itemLabel}` : `新建${itemLabel}`"
       :width="420"
     >
-      <AFormRow :label="groupLabel" required>
+      <AFormRow
+        :label="groupLabel"
+        required
+        :error="
+          itemValidationAttempted && !itemForm.category
+            ? `请选择${groupLabel}`
+            : undefined
+        "
+      >
         <ASelect v-model="itemForm.category" :options="categoryOptions" />
       </AFormRow>
       <AFormRow
@@ -591,7 +631,15 @@ function onReorderMachineItems(payload: {
           :options="configurationOptions"
         />
       </AFormRow>
-      <AFormRow :label="`${itemLabel}名称`" required>
+      <AFormRow
+        :label="`${itemLabel}名称`"
+        required
+        :error="
+          itemValidationAttempted && !itemForm.name.trim()
+            ? `请输入${itemLabel}名称`
+            : undefined
+        "
+      >
         <AField v-model="itemForm.name" :maxlength="40" />
       </AFormRow>
       <AFormRow label="排序" required>

@@ -36,7 +36,9 @@ provide(formRowKey, {
       <span v-if="required" class="visually-hidden">必填</span>
     </label>
     <slot />
-    <p v-if="error" :id="messageId" class="a-form-row__error">{{ error }}</p>
+    <p v-if="error" :id="messageId" class="a-form-row__error" role="alert">
+      {{ error }}
+    </p>
     <p v-else-if="hint" :id="messageId" class="a-form-row__hint">{{ hint }}</p>
   </div>
 </template>

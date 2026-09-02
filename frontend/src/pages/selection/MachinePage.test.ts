@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { ASearchField, ASelect, ATokenField } from '@/ui';
 import { toast, useToastState } from '@/ui/toast';
+import EntitySource from './EntitySource.vue';
 import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
@@ -33,6 +34,22 @@ const machineSourceListSource = readFileSync(
     dirname(fileURLToPath(import.meta.url)),
     'machine',
     'MachineSourceList.vue',
+  ),
+  'utf8',
+);
+const machineGlobalSearchSource = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    'machine',
+    'MachineGlobalSearch.vue',
+  ),
+  'utf8',
+);
+const machineSectionPanelSource = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    'machine',
+    'MachineSectionPanel.vue',
   ),
   'utf8',
 );
@@ -199,6 +216,15 @@ describe('MachinePage', () => {
     expect(browsingProcess).toBeDefined();
     expect(wrapper.text()).toContain('目录浏览');
     expect(wrapper.text()).toContain('条件查找');
+    expect(wrapper.get('.selection-split').attributes('style')).toContain(
+      '--machine-source-width: 240px',
+    );
+
+    wrapper.getComponent(EntitySource).vm.$emit('resize', 300);
+    await flushPromises();
+    expect(wrapper.get('.selection-split').attributes('style')).toContain(
+      '--machine-source-width: 300px',
+    );
 
     await wrapper
       .findAll('button')
@@ -206,9 +232,12 @@ describe('MachinePage', () => {
       ?.trigger('click');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('全局查找不受当前浏览制程限制');
+    expect(wrapper.text()).not.toContain('全局查找不受当前浏览制程限制');
     expect(wrapper.text()).toContain('全部制程');
-    expect(wrapper.text()).toContain('默认覆盖所有上层制程');
+    expect(wrapper.text()).not.toContain('默认覆盖所有上层制程');
+    expect(wrapper.get('.selection-split').attributes('style')).toContain(
+      '--machine-source-width: 300px',
+    );
     expect(wrapper.getComponent(ASelect).props('modelValue')).toBe(1);
     wrapper.unmount();
   });
@@ -271,6 +300,11 @@ describe('MachinePage', () => {
     await flushPromises();
 
     const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    expect(
+      globalSearch
+        .findAllComponents(ATokenField)
+        .every((field) => field.props('maxVisibleTokens') === 3),
+    ).toBe(true);
     const machineField = globalSearch
       .findAllComponents(ATokenField)
       .find((component) => component.props('placeholder') === '选择适用机型');
@@ -889,6 +923,12 @@ describe('MachinePage', () => {
     expect(selectionPageCss).not.toMatch(
       /\.machine-images \.a-file-drop\s*\{[^}]*width:\s*calc\(100% \+[^}]*\}/s,
     );
+    expect(machineSectionPanelSource).toContain(
+      'class="image-card__preview"',
+    );
+    expect(machineSectionPanelSource).not.toMatch(
+      /<button[^>]*class="image-card"/,
+    );
   });
 
   it('auto-collapses the schematic rail on compact desktop widths and lets users reopen it', async () => {
@@ -916,18 +956,36 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('stacks the source tree above content with a bounded height on narrow screens', () => {
+  it('keeps medium widths side by side and stacks only on narrow screens', () => {
     expect(selectionPageCss).toMatch(
-      /@media \(width < 60rem\)[\s\S]*\.selection-split\s*\{[^}]*grid-template-rows:\s*minmax\(12rem,\s*42vh\)\s+minmax\(0,\s*1fr\);/s,
+      /@media \(width <= 60rem\)[\s\S]*\.selection-split\s*\{[^}]*grid-template-rows:\s*minmax\(12rem,\s*42vh\)\s+minmax\(0,\s*1fr\);/s,
     );
     expect(selectionPageCss).toMatch(
-      /@media \(width < 60rem\)[\s\S]*\.entity-source\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
+      /@media \(width <= 60rem\)[\s\S]*\.entity-source\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
     );
     expect(machinePageSource).toMatch(
-      /@media \(width < 60rem\)[\s\S]*\.machine-source-stack\s*\{[^}]*width:\s*100%;/s,
+      /@media \(width <= 60rem\)[\s\S]*\.machine-source-stack\s*\{[^}]*width:\s*100%;/s,
     );
     expect(machinePageSource).toMatch(
-      /@media \(width < 60rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/s,
+      /@media \(width <= 60rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(9rem,\s*1fr\) minmax\(8rem,\s*1fr\);/s,
+    );
+    expect(machinePageSource).toMatch(
+      /@media \(width <= 40rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/s,
+    );
+    expect(machinePageSource).toMatch(
+      /@media \(48rem < width <= 60rem\)[\s\S]*\.selection-split--machine\s*\{[^}]*grid-template-columns:/s,
+    );
+    expect(machineGlobalSearchSource).toMatch(
+      /@media \(48rem < width <= 60rem\)[\s\S]*\.machine-global-search\s*\{[^}]*grid-template-columns:/s,
+    );
+    expect(machineGlobalSearchSource).toMatch(
+      /@media \(width <= 48rem\)[\s\S]*\.machine-global-search\s*\{[^}]*grid-template-columns:\s*1fr;/s,
+    );
+  });
+
+  it('keeps the structure filters and actions in a deterministic compact grid', () => {
+    expect(machineSectionPanelSource).toMatch(
+      /\.machine-structure-toolbar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(7rem,\s*1\.2fr\)\s+repeat\(3,\s*minmax\(6\.25rem,\s*1fr\)\)\s+minmax\(7\.5rem,\s*2\.6fr\)\s+auto\s+auto;/s,
     );
   });
 

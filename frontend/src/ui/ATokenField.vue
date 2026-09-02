@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { Check, ChevronDown, X } from 'lucide-vue-next';
-import { computed, ref, useId } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+} from 'vue';
 import { ListboxItem, ListboxItemIndicator, ListboxRoot } from 'reka-ui';
 
 import APopover from './APopover.vue';
 import ATooltip from './ATooltip.vue';
 import { filterOptions, findOption } from './select-options';
+import { fitVisibleTokenCount } from './token-field-layout';
 import type { ControlSize, SelectOption } from './types';
 import { useFormControl } from './use-form-control';
 
@@ -29,12 +38,16 @@ const props = withDefaults(
 );
 
 const model = defineModel<Array<string | number>>({ default: () => [] });
-const { id, describedBy, hasFormLabel, invalid, required } =
+const { id, describedBy, hasFormLabel, labelledBy, invalid, required } =
   useFormControl(props);
 
 const open = ref(false);
 const query = ref('');
 const listId = useId();
+const trigger = ref<HTMLElement | null>(null);
+const fittedVisibleLimit = ref<number | null>(null);
+let triggerResizeObserver: ResizeObserver | null = null;
+let mounted = false;
 
 const selected = computed(() =>
   model.value
@@ -44,24 +57,157 @@ const selected = computed(() =>
 const accessibleLabel = computed(
   () => props.ariaLabel ?? (hasFormLabel.value ? undefined : props.placeholder),
 );
+const visibleLimit = computed(() => {
+  if (props.maxVisibleTokens == null) return selected.value.length;
+  return Math.min(
+    props.maxVisibleTokens,
+    fittedVisibleLimit.value ?? props.maxVisibleTokens,
+  );
+});
 const visible = computed(() => {
-  if (props.maxVisibleTokens == null) {
-    return selected.value;
-  }
-
-  return selected.value.slice(0, props.maxVisibleTokens);
+  return selected.value.slice(0, visibleLimit.value);
 });
 const hidden = computed(() => {
-  if (props.maxVisibleTokens == null) {
-    return [];
-  }
-
-  return selected.value.slice(props.maxVisibleTokens);
+  return selected.value.slice(visibleLimit.value);
 });
 const overflowLabel = computed(() =>
   hidden.value.map((option) => option.label).join('、'),
 );
 const filtered = computed(() => filterOptions(props.options, query.value));
+
+function pixelValue(value: string | null | undefined): number {
+  const parsed = Number.parseFloat(value ?? '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function measuredTextWidth(
+  context: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  letterSpacing: number,
+): number {
+  context.font = font;
+  return (
+    context.measureText(text).width +
+    Math.max(0, text.length - 1) * letterSpacing
+  );
+}
+
+function updateVisibleTokens() {
+  const element = trigger.value;
+  if (
+    !element ||
+    props.maxVisibleTokens == null ||
+    selected.value.length === 0
+  ) {
+    fittedVisibleLimit.value = null;
+    return;
+  }
+
+  const label = element.querySelector<HTMLElement>(
+    '.a-token-field__chip-label',
+  );
+  const chip = element.querySelector<HTMLElement>('.a-token-field__chip');
+  const remove = element.querySelector<HTMLElement>(
+    '.a-token-field__chip-remove',
+  );
+  const context = document.createElement('canvas').getContext('2d');
+  if (!label || !chip || !remove || !context || element.clientWidth <= 0) {
+    fittedVisibleLimit.value = props.maxVisibleTokens;
+    return;
+  }
+
+  const triggerStyle = window.getComputedStyle(element);
+  const labelStyle = window.getComputedStyle(label);
+  const chipStyle = window.getComputedStyle(chip);
+  const more = element.querySelector<HTMLElement>('.a-token-field__more');
+  const moreStyle = more ? window.getComputedStyle(more) : null;
+  const gap = pixelValue(triggerStyle.columnGap || triggerStyle.gap);
+  const availableWidth =
+    element.clientWidth -
+    pixelValue(triggerStyle.paddingInlineStart || triggerStyle.paddingLeft) -
+    pixelValue(triggerStyle.paddingInlineEnd || triggerStyle.paddingRight);
+  const labelFont = labelStyle.font || triggerStyle.font;
+  const labelLetterSpacing = pixelValue(labelStyle.letterSpacing);
+  const chipChrome =
+    pixelValue(chipStyle.paddingInlineStart || chipStyle.paddingLeft) +
+    pixelValue(chipStyle.paddingInlineEnd || chipStyle.paddingRight) +
+    pixelValue(chipStyle.columnGap || chipStyle.gap) +
+    remove.getBoundingClientRect().width;
+  const fallbackMorePadding =
+    pixelValue(triggerStyle.getPropertyValue('--space-3')) * 2;
+  const moreChrome = moreStyle
+    ? pixelValue(moreStyle.paddingInlineStart || moreStyle.paddingLeft) +
+      pixelValue(moreStyle.paddingInlineEnd || moreStyle.paddingRight)
+    : fallbackMorePadding;
+  const moreFont = moreStyle?.font || labelFont;
+  const moreLetterSpacing = pixelValue(
+    moreStyle?.letterSpacing ?? labelStyle.letterSpacing,
+  );
+  const tokenWidths = selected.value.map(
+    (option) =>
+      measuredTextWidth(
+        context,
+        option.label,
+        labelFont,
+        labelLetterSpacing,
+      ) + chipChrome,
+  );
+
+  fittedVisibleLimit.value = fitVisibleTokenCount({
+    availableWidth,
+    tokenWidths,
+    gap,
+    maxVisibleTokens: props.maxVisibleTokens,
+    overflowWidth: (hiddenCount) =>
+      measuredTextWidth(
+        context,
+        `+${hiddenCount}`,
+        moreFont,
+        moreLetterSpacing,
+      ) + moreChrome,
+  });
+}
+
+function scheduleVisibleTokenUpdate() {
+  void nextTick(updateVisibleTokens);
+}
+
+function refreshVisibleTokens() {
+  // Recalculate against the current trigger before Vue paints the new
+  // selection, then verify once more after the DOM update. This prevents a
+  // stale token count from briefly pushing the overflow badge under the
+  // chevron when another option is selected.
+  updateVisibleTokens();
+  scheduleVisibleTokenUpdate();
+}
+
+watch(
+  () => [
+    props.maxVisibleTokens,
+    props.size,
+    selected.value.map((option) => option.label).join('\u0000'),
+  ],
+  refreshVisibleTokens,
+  { flush: 'sync' },
+);
+
+onMounted(() => {
+  mounted = true;
+  scheduleVisibleTokenUpdate();
+  if (trigger.value && typeof ResizeObserver !== 'undefined') {
+    triggerResizeObserver = new ResizeObserver(updateVisibleTokens);
+    triggerResizeObserver.observe(trigger.value);
+  }
+  void document.fonts?.ready.then(() => {
+    if (mounted) updateVisibleTokens();
+  });
+});
+
+onBeforeUnmount(() => {
+  mounted = false;
+  triggerResizeObserver?.disconnect();
+});
 
 function remove(value: string | number, event: Event) {
   event.preventDefault();
@@ -76,6 +222,7 @@ function remove(value: string | number, event: Event) {
       <template #trigger>
         <div
           :id="id"
+          ref="trigger"
           class="a-control a-token-field__trigger"
           :class="{
             'a-control--disabled': disabled,
@@ -89,6 +236,7 @@ function remove(value: string | number, event: Event) {
           :aria-invalid="invalid ? true : undefined"
           :aria-required="required ? true : undefined"
           :aria-describedby="describedBy"
+          :aria-labelledby="labelledBy"
           :aria-label="accessibleLabel"
           :aria-disabled="disabled ? true : undefined"
         >
@@ -219,7 +367,7 @@ function remove(value: string | number, event: Event) {
 }
 
 .a-token-field__chip {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   max-width: 100%;
   padding: 0 var(--space-1) 0 var(--space-3);
 }

@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +15,10 @@ const groups: SourceGroup[] = [
 ];
 
 const storageKey = 'apple-frontend:test-source-list';
+const sourceListSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ASourceList.vue'),
+  'utf8',
+);
 
 function mountList(
   props: Partial<{
@@ -163,6 +171,14 @@ describe('ASourceList', () => {
     await nextTick();
 
     expect(wrapper.text()).toContain('没有匹配“不存在”的结果');
+    wrapper.unmount();
+  });
+
+  it('keeps the source tree vertical without a horizontal scrollbar', () => {
+    const wrapper = mountList({ editable: true, sortable: true });
+    expect(sourceListSource).toMatch(
+      /\.a-source-list__groups\s*\{[^}]*overflow:\s*hidden auto;/s,
+    );
     wrapper.unmount();
   });
 });

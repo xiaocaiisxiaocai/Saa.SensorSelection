@@ -558,7 +558,7 @@ onMounted(restoreWidth);
   flex: 1;
   min-height: 0;
   padding: 0 0 var(--space-3);
-  overflow: auto;
+  overflow: hidden auto;
 }
 
 .a-source-list__row {

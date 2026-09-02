@@ -181,7 +181,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'partNumber', label: '料号', width: 120, mono: true },
     { key: 'sensorType', label: '感应器类型', width: 120 },
     { key: 'brand', label: '品牌', width: 88 },
-    { key: 'model', label: '型号', width: 140, mono: true, fixed: 'start' },
+    { key: 'model', label: '型号', width: 140, mono: true },
     ...(showDisabledDetails.value
       ? [
           { key: 'replacedAt', label: '停用时间', width: 112 },
@@ -194,14 +194,14 @@ const columns = computed<TableColumn[]>(() => {
         ]
       : []),
     { key: 'relation', label: '替换关系', minWidth: 180 },
-    { key: 'spec', label: '规格参数', minWidth: 140, ellipsis: true },
-    { key: 'feature', label: '特性与注意', minWidth: 140, ellipsis: true },
-    { key: 'scene', label: '适用场景', minWidth: 120, ellipsis: true },
+    { key: 'spec', label: '规格参数', minWidth: 180, ellipsis: true },
+    { key: 'feature', label: '特性与注意', minWidth: 200, ellipsis: true },
+    { key: 'scene', label: '适用场景', minWidth: 160, ellipsis: true },
     { key: 'sop', label: '关联型录', minWidth: 140 },
     { key: 'model3d', label: '关联 3D', minWidth: 140 },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
+    cols.push({ key: 'actions', label: '操作', width: 72, fixed: 'end' });
   }
   return cols;
 });

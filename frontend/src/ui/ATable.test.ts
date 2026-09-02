@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { h, nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -5,6 +9,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import ATable from './ATable.vue';
 import ATooltip from './ATooltip.vue';
 import type { TableColumn } from './types';
+
+const tableSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'ATable.vue'),
+  'utf8',
+);
 
 interface SensorRow {
   id: string;
@@ -72,6 +81,24 @@ describe('ATable', () => {
     expect(wrapper.get('td').classes()).toContain('a-table__cell--start');
   });
 
+  it('keeps declared column widths instead of crushing text on narrow screens', () => {
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'model', label: '型号', width: 100 },
+          { key: 'note', label: '说明', minWidth: 220 },
+          { key: 'actions', label: '操作' },
+        ],
+        rows,
+        rowKey: 'id',
+      },
+    });
+
+    expect(wrapper.get('table').attributes('style')).toContain(
+      'min-width: 440px',
+    );
+  });
+
   it('keeps a fixed-start identity column visible during horizontal scrolling', () => {
     const wrapper = mount(ATable, {
       props: {
@@ -86,6 +113,32 @@ describe('ATable', () => {
 
     expect(wrapper.get('th').classes()).toContain('a-table__cell--fixed-start');
     expect(wrapper.get('td').classes()).toContain('a-table__cell--fixed-start');
+  });
+
+  it('ignores fixed-start on non-leading columns to prevent overlap', () => {
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'note', label: '说明' },
+          { key: 'model', label: '型号', fixed: 'start' },
+        ],
+        rows,
+        rowKey: 'id',
+      },
+    });
+
+    expect(wrapper.findAll('th')[1]?.classes()).not.toContain(
+      'a-table__cell--fixed-start',
+    );
+    expect(wrapper.findAll('td')[1]?.classes()).not.toContain(
+      'a-table__cell--fixed-start',
+    );
+  });
+
+  it('releases fixed columns on narrow screens', () => {
+    expect(tableSource).toMatch(
+      /@media \(width <= 40rem\)[\s\S]*\.a-table__cell--fixed\s*\{[^}]*position:\s*static;/s,
+    );
   });
 
   it('renders a custom cell slot', () => {
@@ -244,7 +297,7 @@ describe('ATable', () => {
       props: { columns, rows: manyRows, rowKey: 'id', virtual: true },
     });
 
-    // JSDOM 中 clientHeight 默认为 0，需要模拟容器高度（4 行 × 40px = 160px）
+    // JSDOM 中 clientHeight 默认为 0，需要模拟容器高度。
     Object.defineProperty(wrapper.element, 'clientHeight', {
       value: 160,
       configurable: true,

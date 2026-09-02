@@ -561,7 +561,10 @@ async function removeImage(index: number) {
     }"
   >
     <div ref="tableHost" class="selection-panel">
-      <div class="selection-toolbar machine-structure-toolbar">
+      <div
+        class="selection-toolbar machine-structure-toolbar"
+        :class="{ 'machine-structure-toolbar--notes': !isStructure }"
+      >
         <ATokenField
           v-if="isStructure"
           v-model="sensorTypeFilters"
@@ -644,7 +647,20 @@ async function removeImage(index: number) {
           <span v-else>—</span>
         </template>
         <template v-if="isStructure" #cell-spec="{ row }">
-          <div class="spec-lines">{{ row.spec || '—' }}</div>
+          <div class="machine-spec-cell">
+            <template v-if="row.sensor">
+              <div class="machine-spec-cell__header">
+                <span class="machine-spec-cell__brand">{{ row.sensor.brand }}</span>
+                <span class="machine-spec-cell__model">{{ row.sensor.model }}</span>
+              </div>
+              <div v-if="row.sensor.spec" class="machine-spec-cell__spec">
+                {{ row.sensor.spec }}
+              </div>
+            </template>
+            <template v-else>
+              <div class="spec-lines">{{ row.spec || '—' }}</div>
+            </template>
+          </div>
         </template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
@@ -704,25 +720,30 @@ async function removeImage(index: number) {
       >
         请先新增内容后再添加图片
       </p>
-      <button
+      <div
         v-for="(image, index) in images"
         v-show="!imagesCollapsed"
         :key="`${image.fileName}-${index}`"
         class="image-card"
-        type="button"
-        @click="preview = image"
       >
-        <img :src="image.dataUrl" :alt="image.fileName">
-        <span>{{ image.fileName }}</span>
+        <button
+          class="image-card__preview"
+          type="button"
+          :aria-label="`预览 ${image.fileName}`"
+          @click="preview = image"
+        >
+          <img :src="image.dataUrl" :alt="image.fileName">
+          <span>{{ image.fileName }}</span>
+        </button>
         <AIconButton
           v-if="writable"
           :icon="Trash2"
           label="删除"
           size="small"
           variant="destructive"
-          @click.stop="removeImage(index)"
+          @click="removeImage(index)"
         />
-      </button>
+      </div>
     </aside>
   </div>
   <ASheet
@@ -839,20 +860,70 @@ async function removeImage(index: number) {
 
 <style scoped>
 .machine-structure-toolbar {
+  display: grid;
+  grid-template-columns:
+    minmax(7rem, 1.2fr) repeat(3, minmax(6.25rem, 1fr))
+    minmax(7.5rem, 2.6fr) auto auto;
   gap: var(--space-2);
+}
+
+.machine-structure-toolbar--notes {
+  grid-template-columns: minmax(12rem, 1fr) auto auto;
 }
 
 .machine-structure-toolbar .a-select.machine-structure-toolbar__select,
 .machine-structure-toolbar .a-token-field.machine-structure-toolbar__select {
-  flex: 1 1 8.25rem;
-  width: auto;
-  min-width: 7.5rem;
-  max-width: 9.25rem;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }
 
 .machine-structure-toolbar .a-control.machine-structure-toolbar__search {
-  flex: 4 1 16rem;
-  width: auto;
-  min-width: 12rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (width <= 48rem) {
+  .machine-structure-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .machine-structure-toolbar__search {
+    grid-column: 1 / -1;
+  }
+}
+
+.machine-spec-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 2px 0;
+}
+
+.machine-spec-cell__header {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font: var(--text-field);
+  line-height: 1.3;
+}
+
+.machine-spec-cell__brand {
+  font-weight: 600;
+  color: var(--label);
+}
+
+.machine-spec-cell__model {
+  font-family: var(--font-mono);
+  color: var(--sys-blue);
+  font-weight: 500;
+}
+
+.machine-spec-cell__spec {
+  font: var(--text-caption);
+  color: var(--label-2);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 </style>

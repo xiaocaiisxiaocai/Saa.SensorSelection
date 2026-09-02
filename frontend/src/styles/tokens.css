@@ -37,18 +37,24 @@
   --label-4: rgb(60 60 67 / 18%);
   --label-placeholder: #59595e;
 
-  --separator: rgb(60 60 67 / 29%);
-  --separator-opaque: #c6c6c8;
+  --separator: rgb(60 60 67 / 16%);
+  --separator-opaque: #dededf;
 
-  --fill-1: rgb(120 120 128 / 20%);
-  --fill-2: rgb(120 120 128 / 16%);
-  --fill-3: rgb(118 118 128 / 12%);
-  --fill-4: rgb(116 116 128 / 8%);
+  --fill-1: rgb(120 120 128 / 16%);
+  --fill-2: rgb(120 120 128 / 10%);
+  --fill-3: rgb(118 118 128 / 6%);
+  --fill-4: rgb(116 116 128 / 3%);
 
-  --bg-window: #ececee;
+  --bg-window: #f5f5f7;
   --bg-content: #fff;
-  --bg-grouped: #f2f2f7;
+  --bg-grouped: #fbfbfd;
   --bg-elevated: #fff;
+
+  --surface-0: #fafafa;
+  --surface-1: #f5f5f5;
+  --surface-2: #eeeeee;
+  --surface-3: #e8e8e8;
+  --surface-4: #e0e0e0;
 
   --material-sidebar-bg: rgb(246 246 248 / 72%);
   --material-toolbar-bg: rgb(255 255 255 / 72%);
@@ -63,11 +69,11 @@
     ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', consolas,
     monospace;
 
-  --text-display: 700 32px/40px var(--font-ui);
-  --text-title-1: 600 28px/34px var(--font-ui);
-  --text-title-2: 600 22px/28px var(--font-ui);
-  --text-headline: 600 17px/24px var(--font-ui);
-  --text-body: 400 17px/24px var(--font-ui);
+  --text-display: 700 28px/36px var(--font-ui);
+  --text-title-1: 600 24px/30px var(--font-ui);
+  --text-title-2: 600 20px/26px var(--font-ui);
+  --text-headline: 600 15px/22px var(--font-ui);
+  --text-body: 400 15px/22px var(--font-ui);
   --text-control: 400 15px/22px var(--font-ui);
   --text-control-em: 600 15px/22px var(--font-ui);
   --text-field: 400 13px/18px var(--font-ui);
@@ -89,6 +95,11 @@
   --space-7: 24px;
   --space-8: 32px;
   --space-9: 40px;
+
+  --page-padding: var(--space-6);
+  --section-gap: var(--space-5);
+  --card-padding: var(--space-4);
+  --list-item-padding: var(--space-3) var(--space-4);
   --sidebar-width: 152px;
   --sidebar-collapsed-width: 56px;
   --source-list-width: 220px;
@@ -158,7 +169,7 @@
   --sys-pink: #ff375f;
   --sys-blue-fill: rgb(102 179 255 / 18%);
   --sys-blue-fill-strong: rgb(102 179 255 / 28%);
-  --sys-green-fill: rgb(48 209 88 / 22%);
+  --sys-green-fill: rgb(48 209 88 / 16%);
   --sys-red-fill: rgb(255 69 58 / 22%);
   --sys-red-fill-strong: rgb(255 69 58 / 32%);
   --sys-orange-fill: rgb(255 159 10 / 22%);
@@ -193,6 +204,12 @@
   --bg-content: #1c1c1e;
   --bg-grouped: #000;
   --bg-elevated: #2c2c2e;
+
+  --surface-0: #05070c;
+  --surface-1: #0a0d12;
+  --surface-2: #0f131c;
+  --surface-3: #161d2b;
+  --surface-4: #1e2636;
 
   --material-sidebar-bg: rgb(30 30 32 / 72%);
   --material-toolbar-bg: rgb(28 28 30 / 72%);

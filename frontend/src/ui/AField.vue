@@ -8,6 +8,7 @@ import { useFormControl } from './use-form-control';
 
 const props = withDefaults(
   defineProps<{
+    ariaLabel?: string;
     autocomplete?: string;
     clearable?: boolean;
     describedBy?: string;
@@ -88,6 +89,7 @@ function clear() {
       :autocomplete="autocomplete"
       :maxlength="maxlength"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       :aria-invalid="invalid ? true : undefined"
       :aria-required="required ? true : undefined"
       :aria-describedby="describedBy"

@@ -40,6 +40,7 @@ describe('ATabBar', () => {
     expect(wrapper.emitted('rename')?.[0]).toEqual(['station']);
     expect(wrapper.emitted('close')?.[0]).toEqual(['station']);
     expect(wrapper.emitted('add')).toHaveLength(1);
+    expect(wrapper.find('button button').exists()).toBe(false);
   });
 
   it('keeps overflow nudges in the tab bar flow instead of overlaying tabs', () => {

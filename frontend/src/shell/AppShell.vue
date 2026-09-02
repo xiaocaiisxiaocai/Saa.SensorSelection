@@ -15,7 +15,7 @@ import { ABanner, ASpinner, ATooltip } from '@/ui';
 import { toast } from '@/ui/toast';
 
 const SIDEBAR_STORAGE_KEY = 'apple-frontend:sidebar-collapsed';
-const COMPACT_MEDIA_QUERY = '(width < 960px)';
+const COMPACT_MEDIA_QUERY = '(width <= 960px)';
 
 const route = useRoute();
 const router = useRouter();
@@ -204,9 +204,11 @@ watch(
       >
         <Search :size="18" :stroke-width="1.5" aria-hidden="true" />
         <input
+          id="global-search-input"
           ref="searchInput"
           v-model="searchQuery"
           type="search"
+          name="globalSearch"
           aria-label="全局搜索"
           autocomplete="off"
           placeholder="搜索客户、制程、机型或型号"
@@ -617,7 +619,7 @@ watch(
   min-height: calc(var(--space-9) * 6);
 }
 
-@media (width < 960px) {
+@media (width <= 960px) {
   .toolbar {
     grid-template-columns: auto minmax(8rem, 1fr) auto;
     gap: var(--space-3);

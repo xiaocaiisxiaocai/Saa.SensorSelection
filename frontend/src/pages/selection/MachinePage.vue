@@ -39,8 +39,15 @@ import {
   ASheet,
   AStepper,
   ATabBar,
+  ATooltip,
   type TabItem,
 } from '@/ui';
+import {
+  clampSourceListWidth,
+  MACHINE_SOURCE_LIST_DEFAULT_WIDTH,
+  MACHINE_SOURCE_LIST_MAX_WIDTH,
+  MACHINE_SOURCE_LIST_MIN_WIDTH,
+} from '@/ui/source-list';
 
 import '../shared/selection-page.css';
 
@@ -69,6 +76,28 @@ const processForm = reactive({
 const activeSection = ref('');
 const checkedMachineKeys = ref<string[]>([]);
 const reportGenerating = ref(false);
+const machineSourceStorageKey = 'selection:source-list-width:machine:v5';
+
+function restoredMachineSourceWidth() {
+  try {
+    const stored = Number(localStorage.getItem(machineSourceStorageKey));
+    if (Number.isFinite(stored) && stored > 0) {
+      return clampSourceListWidth(
+        stored,
+        MACHINE_SOURCE_LIST_MIN_WIDTH,
+        MACHINE_SOURCE_LIST_MAX_WIDTH,
+      );
+    }
+  } catch {
+    // Keep the shared default when browser storage is unavailable.
+  }
+  return MACHINE_SOURCE_LIST_DEFAULT_WIDTH;
+}
+
+const machineSourceWidth = ref(restoredMachineSourceWidth());
+const machineSourceStyle = computed(() => ({
+  '--machine-source-width': `${machineSourceWidth.value}px`,
+}));
 
 const groups = computed(() => store.entityGroups('machine'));
 const processes = computed(() => store.machineProcesses);
@@ -578,6 +607,14 @@ function selectMachineView(value: string) {
   void router.replace({ path: route.path, query });
 }
 
+function syncMachineSourceWidth(width: number) {
+  machineSourceWidth.value = clampSourceListWidth(
+    width,
+    MACHINE_SOURCE_LIST_MIN_WIDTH,
+    MACHINE_SOURCE_LIST_MAX_WIDTH,
+  );
+}
+
 function openGlobalSearchResult(result: MachineStructureSearchResult) {
   const query: Record<string, string> = addMachineContextQuery(
     {
@@ -811,7 +848,9 @@ async function closeTab(value: string) {
     <h1 class="visually-hidden">机型结构</h1>
     <div
       class="selection-split"
+      :style="machineSourceStyle"
       :class="{
+        'selection-split--machine': activeMachineView === 'browse',
         'selection-split--global-search': activeMachineView === 'find',
       }"
     >
@@ -851,12 +890,6 @@ async function closeTab(value: string) {
             :tabs="machineViewTabs"
             @update:model-value="selectMachineView"
           />
-          <span
-            v-if="activeMachineView === 'find'"
-            class="machine-view-context__hint"
-          >
-            全局查找不受当前浏览制程限制
-          </span>
         </div>
         <EntitySource
           v-if="activeMachineView === 'browse'"
@@ -866,6 +899,7 @@ async function closeTab(value: string) {
           :selected-key="selectedMachineKey"
           :checked-items="auth.isAuthenticated ? checkedMachineKeys : undefined"
           @select="selectEntity"
+          @resize="syncMachineSourceWidth"
           @toggle-check="onToggleCheck"
         />
       </div>
@@ -898,21 +932,47 @@ async function closeTab(value: string) {
           >
             清空
           </AButton>
-          <AButton
-            variant="filled"
-            :disabled="selectedMachineItems.length === 0"
-            :loading="reportGenerating"
-            @click="generateReport"
+          <ATooltip
+            :content="
+              selectedMachineItems.length === 0
+                ? '请先在左侧勾选至少一个机型'
+                : ''
+            "
+            :disabled="selectedMachineItems.length > 0"
           >
-            生成并下载报告
-          </AButton>
-          <AButton
-            variant="borderless"
-            :disabled="selectedMachineItems.length === 0"
-            @click="previewReport"
+            <template #trigger>
+              <span class="inline-flex">
+                <AButton
+                  variant="filled"
+                  :disabled="selectedMachineItems.length === 0"
+                  :loading="reportGenerating"
+                  @click="generateReport"
+                >
+                  生成并下载报告
+                </AButton>
+              </span>
+            </template>
+          </ATooltip>
+          <ATooltip
+            :content="
+              selectedMachineItems.length === 0
+                ? '请先在左侧勾选至少一个机型'
+                : ''
+            "
+            :disabled="selectedMachineItems.length > 0"
           >
-            预览 / 打印 PDF
-          </AButton>
+            <template #trigger>
+              <span class="inline-flex">
+                <AButton
+                  variant="tinted"
+                  :disabled="selectedMachineItems.length === 0"
+                  @click="previewReport"
+                >
+                  预览 / 打印 PDF
+                </AButton>
+              </span>
+            </template>
+          </ATooltip>
         </div>
         <ATabBar
           :model-value="activeSection"
@@ -1050,7 +1110,7 @@ async function closeTab(value: string) {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  width: max-content;
+  width: var(--machine-source-width, 240px);
   max-width: 100%;
   min-width: 0;
   min-height: 0;
@@ -1058,6 +1118,7 @@ async function closeTab(value: string) {
 
 .machine-source-stack > .entity-source {
   flex: 1;
+  width: 100%;
   height: auto;
 }
 
@@ -1078,7 +1139,7 @@ async function closeTab(value: string) {
 .machine-process-context {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   width: 100%;
   padding: 0 var(--space-1);
@@ -1087,8 +1148,7 @@ async function closeTab(value: string) {
 
 .machine-process-context__select {
   flex: 1;
-  width: 150px;
-  min-width: 120px;
+  min-width: 0;
 }
 
 .machine-process-context__manage {
@@ -1107,6 +1167,11 @@ async function closeTab(value: string) {
   font: var(--text-caption);
 }
 
+.machine-catalog-tabs :deep(.a-tab-bar__item),
+.machine-view-tabs :deep(.a-tab-bar__item) {
+  flex: 1;
+}
+
 .machine-catalog-tabs :deep(.a-tab-bar__tab--selected) {
   font-weight: 600;
 }
@@ -1122,28 +1187,32 @@ async function closeTab(value: string) {
   width: 100%;
   padding: 2px;
   border: 1px solid var(--separator);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--fill-4);
+}
+
+.machine-view-tabs :deep(.a-tab-bar__scroller) {
+  gap: 2px;
 }
 
 .machine-view-tabs :deep(.a-tab-bar__tab) {
   flex: 1;
   justify-content: center;
   min-height: var(--control-height-sm);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font: var(--text-caption);
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 
 .machine-view-tabs :deep(.a-tab-bar__tab--selected) {
-  background: var(--surface-1);
+  background: var(--bg-content);
   box-shadow: var(--shadow-1);
   font-weight: 600;
+  color: var(--label);
 }
 
-.machine-view-context__hint {
-  color: var(--label-2);
-  font: var(--text-caption);
-  text-align: center;
+.machine-view-tabs :deep(.a-tab-bar__indicator) {
+  display: none;
 }
 
 .machine-process-list {
@@ -1201,7 +1270,7 @@ async function closeTab(value: string) {
   font: var(--text-control-em);
 }
 
-@media (width < 60rem) {
+@media (width <= 60rem) {
   .machine-source-stack {
     width: 100%;
     height: 100%;
@@ -1227,7 +1296,7 @@ async function closeTab(value: string) {
 
   .machine-report {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: auto auto minmax(9rem, 1fr) minmax(8rem, 1fr);
     gap: var(--space-2);
   }
 
@@ -1238,6 +1307,34 @@ async function closeTab(value: string) {
 
   .machine-report :deep(.a-button) {
     width: 100%;
+  }
+}
+
+@media (width <= 40rem) {
+  .machine-report {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (48rem < width <= 60rem) {
+  .selection-split--machine {
+    grid-template-columns:
+      clamp(200px, var(--machine-source-width, 220px), 220px)
+      minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .selection-split--machine > .machine-source-stack {
+    width: clamp(200px, var(--machine-source-width, 220px), 220px);
+  }
+
+  .selection-split--machine .entity-source {
+    height: 100%;
+  }
+
+  .selection-split--machine :deep(.entity-source > .machine-source) {
+    width: 100% !important;
+    max-width: none !important;
   }
 }
 </style>

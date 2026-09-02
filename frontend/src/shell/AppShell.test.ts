@@ -114,26 +114,31 @@ describe('AppShell', () => {
 
   it('uses an off-canvas navigation drawer on compact viewports', async () => {
     const listeners = new Set<(event: MediaQueryListEvent) => void>();
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query.includes('960px'),
-      media: query,
-      onchange: null,
-      addEventListener: (
-        _type: string,
-        listener: (event: MediaQueryListEvent) => void,
-      ) => listeners.add(listener),
-      removeEventListener: (
-        _type: string,
-        listener: (event: MediaQueryListEvent) => void,
-      ) => listeners.delete(listener),
-      dispatchEvent: () => true,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    }));
+    const mediaQueries: string[] = [];
+    vi.stubGlobal('matchMedia', (query: string) => {
+      mediaQueries.push(query);
+      return {
+        matches: query.includes('960px'),
+        media: query,
+        onchange: null,
+        addEventListener: (
+          _type: string,
+          listener: (event: MediaQueryListEvent) => void,
+        ) => listeners.add(listener),
+        removeEventListener: (
+          _type: string,
+          listener: (event: MediaQueryListEvent) => void,
+        ) => listeners.delete(listener),
+        dispatchEvent: () => true,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      };
+    });
 
     const { wrapper } = await mountShell();
     const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
 
+    expect(mediaQueries).toContain('(width <= 960px)');
     expect(wrapper.classes()).toContain('app-shell--compact');
     expect(toggle().attributes('aria-expanded')).toBe('false');
     expect(wrapper.find('.sidebar-backdrop').exists()).toBe(false);

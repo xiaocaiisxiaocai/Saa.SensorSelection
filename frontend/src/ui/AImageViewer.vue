@@ -134,7 +134,7 @@ watch(open, (isOpen) => {
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
         >
-          <img :src="src" :alt="alt ?? ''" :style="imageStyle">
+          <img :src="src" :alt="alt ?? ''" :style="imageStyle" loading="lazy" decoding="async">
         </div>
       </DialogContent>
     </DialogPortal>

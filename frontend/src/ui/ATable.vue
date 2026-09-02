@@ -7,8 +7,9 @@ import ATooltip from './ATooltip.vue';
 import type { TableColumn, TableRowHeight } from './types';
 
 // 行高常量与 tokens.css 中 --row-height / --row-height-loose 保持同步
-const ROW_HEIGHT_COMPACT = 40;
-const ROW_HEIGHT_LOOSE = 48;
+const ROW_HEIGHT_COMPACT = 36;
+const ROW_HEIGHT_LOOSE = 44;
+const DEFAULT_COLUMN_MIN_WIDTH = 120;
 /** 虚拟滚动上下各额外预渲染的行数，避免快速滚动时出现空白 */
 const OVERSCAN = 5;
 
@@ -55,6 +56,14 @@ const scrollTop = ref(0);
 
 const unitRowHeight = computed(() =>
   props.rowHeight === 'loose' ? ROW_HEIGHT_LOOSE : ROW_HEIGHT_COMPACT,
+);
+
+const tableMinWidth = computed(() =>
+  props.columns.reduce(
+    (total, column) =>
+      total + (column.width ?? column.minWidth ?? DEFAULT_COLUMN_MIN_WIDTH),
+    0,
+  ),
 );
 
 /** 当前可视范围（行下标，左闭右开） */
@@ -161,6 +170,13 @@ function tooltipText(row: T, column: TableColumn<T>): string {
 
 function isActionColumn(column: TableColumn<T>): boolean {
   return column.key === 'actions' || column.fixed === 'end';
+}
+
+function fixedSide(column: TableColumn<T>, columnIndex: number) {
+  if (column.fixed === 'start') {
+    return columnIndex === 0 ? 'start' : undefined;
+  }
+  return column.fixed;
 }
 
 const hoverTip = ref('');
@@ -299,18 +315,21 @@ watch(
     @scroll="onScroll"
     @keydown="onScrollerKeydown"
   >
-    <table>
+    <table :style="{ minWidth: `${tableMinWidth}px` }">
       <thead>
         <tr>
           <th
-            v-for="column in columns"
+            v-for="(column, columnIndex) in columns"
             :key="column.key"
             scope="col"
             :class="[
               `a-table__cell--${column.align ?? 'start'}`,
               {
-                'a-table__cell--fixed': Boolean(column.fixed),
-                [`a-table__cell--fixed-${column.fixed}`]: Boolean(column.fixed),
+                'a-table__cell--fixed': Boolean(
+                  fixedSide(column, columnIndex),
+                ),
+                [`a-table__cell--fixed-${fixedSide(column, columnIndex)}`]:
+                  Boolean(fixedSide(column, columnIndex)),
               },
             ]"
             :style="cellStyle(column)"
@@ -342,15 +361,20 @@ watch(
           @click="onRowClick(row)"
           @keydown="onRowKeydown($event, row)"
         >
-          <template v-for="column in columns" :key="column.key">
+          <template
+            v-for="(column, columnIndex) in columns"
+            :key="column.key"
+          >
             <td
               v-if="cellRowSpan(column, row, virtualRange.start + i) !== 0"
               :class="[
                 `a-table__cell--${column.align ?? 'start'}`,
                 {
-                  'a-table__cell--fixed': Boolean(column.fixed),
-                  [`a-table__cell--fixed-${column.fixed}`]: Boolean(
-                    column.fixed,
+                  'a-table__cell--fixed': Boolean(
+                    fixedSide(column, columnIndex),
+                  ),
+                  [`a-table__cell--fixed-${fixedSide(column, columnIndex)}`]: Boolean(
+                    fixedSide(column, columnIndex),
                   ),
                   'a-table__cell--mono': column.mono,
                 },
@@ -418,9 +442,12 @@ watch(
 <style scoped>
 .a-table {
   position: relative;
+  box-sizing: border-box;
   min-width: 0;
   overflow: auto;
   background: var(--bg-content);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
 }
 
 .a-table--overflow-end {
@@ -478,7 +505,7 @@ th {
   font: var(--text-control-em);
   color: var(--label);
   white-space: nowrap;
-  background: var(--bg-content);
+  background: var(--bg-grouped);
 }
 
 .a-table--scrolled th {
@@ -554,6 +581,12 @@ tbody tr:hover {
   pointer-events: none;
   content: '';
   background: linear-gradient(to right, transparent, var(--bg-content));
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.a-table--overflow-end .a-table__cell--fixed-end::before {
+  opacity: 1;
 }
 
 .a-table__cell--fixed-start::before {
@@ -565,6 +598,12 @@ tbody tr:hover {
   pointer-events: none;
   content: '';
   background: linear-gradient(to left, transparent, var(--bg-content));
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.a-table--overflow-start .a-table__cell--fixed-start::before {
+  opacity: 1;
 }
 
 th.a-table__cell--fixed {
@@ -625,6 +664,16 @@ tbody tr:hover .a-table__cell--fixed,
   }
 }
 
+@media (width <= 40rem) {
+  .a-table__cell--fixed {
+    position: static;
+  }
+
+  .a-table__cell--fixed::before {
+    display: none;
+  }
+}
+
 /* 虚拟滚动占位行：不显示分隔线，不响应 hover/选中/斑马纹 */
 .a-table__spacer {
   pointer-events: none;
@@ -633,5 +682,13 @@ tbody tr:hover .a-table__cell--fixed,
 
 .a-table__spacer td {
   box-shadow: none;
+}
+
+tbody tr:last-child td {
+  box-shadow: none;
+}
+
+tbody tr:last-child td.a-table__cell--fixed {
+  box-shadow: inset 0.5px 0 0 var(--separator);
 }
 </style>

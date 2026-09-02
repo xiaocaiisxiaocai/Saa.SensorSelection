@@ -1,9 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
 import ASelect from '@/ui/ASelect.vue';
 import AuditLogPage from './AuditLogPage.vue';
+
+const auditSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'AuditLogPage.vue'),
+  'utf8',
+);
 
 const log: AuditLogItem = {
   action: 'auth.login',
@@ -78,5 +87,14 @@ describe('AuditLogPage', () => {
     expect(selects[0]?.props('modelValue')).toBe('');
     expect(selects[1]?.props('modelValue')).toBe('');
     wrapper.unmount();
+  });
+
+  it('uses a compact deterministic desktop toolbar and a narrow-screen layout', () => {
+    expect(auditSource).toMatch(
+      /\.audit-toolbar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/s,
+    );
+    expect(auditSource).toMatch(
+      /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
+    );
   });
 });

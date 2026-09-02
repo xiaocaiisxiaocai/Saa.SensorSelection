@@ -1,8 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { EntityGroup } from '@/domain';
 import MachineSourceList from './MachineSourceList.vue';
+
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'MachineSourceList.vue'),
+  'utf8',
+);
 
 const groups: EntityGroup[] = [
   {
@@ -76,6 +85,7 @@ describe('MachineSourceList', () => {
     );
     expect(wrapper.get('aside').attributes('style')).toContain('width: 276px');
     expect(localStorage.getItem(storageKey)).toBe('276');
+    expect(wrapper.emitted('resize')?.at(-1)).toEqual([276]);
     wrapper.unmount();
   });
 
@@ -117,6 +127,12 @@ describe('MachineSourceList', () => {
     const source = wrapper.get('.machine-source').html();
     expect(source).toContain('title="分类甲"');
     wrapper.unmount();
+  });
+
+  it('stretches category toggles across the compact row click target', () => {
+    expect(source).toMatch(
+      /\.machine-tree-row__toggle\s*\{[^}]*align-self:\s*stretch;/s,
+    );
   });
 
   it('supports pointer dragging to widen and narrow the tree', async () => {
@@ -181,8 +197,14 @@ describe('MachineSourceList', () => {
         .every((button) => button.attributes('tabindex') === '-1'),
     ).toBe(true);
     expect(
-      wrapper.findAll('[data-node-kind="item"][tabindex="0"]'),
+      wrapper.findAll('.machine-tree-row__select[tabindex="0"]'),
     ).toHaveLength(1);
+    expect(
+      wrapper.findAll('.machine-tree-row__check input').every(
+        (checkbox) => checkbox.attributes('tabindex') === '-1',
+      ),
+    ).toBe(true);
+    expect(wrapper.find('[role="button"] button').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -205,7 +227,7 @@ describe('MachineSourceList', () => {
   it('supports selecting and checking a machine from its keyboard row', async () => {
     const wrapper = mountList({ checkedItems: [] });
     const row = wrapper.get(
-      '[data-node-kind="item"][data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
+      '.machine-tree-row__select[data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
     );
 
     await row.trigger('keydown', { key: 'Enter' });
@@ -232,7 +254,7 @@ describe('MachineSourceList', () => {
   it('reorders sibling machines with Alt plus arrow keys', async () => {
     const wrapper = mountList();
     const row = wrapper.get(
-      '[data-node-kind="item"][data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
+      '.machine-tree-row__select[data-category="分类甲"][data-configuration="配置甲"][data-item="配置机型一"]',
     );
 
     await row.trigger('keydown', { key: 'ArrowDown', altKey: true });
@@ -311,7 +333,9 @@ describe('MachineSourceList', () => {
       checkedItems: [firstKey],
     });
     const checkboxes = wrapper.findAll('input[type="checkbox"]');
-    const duplicateRows = wrapper.findAll('[data-item="同名机型"]');
+    const duplicateRows = wrapper.findAll(
+      '[data-node-kind="item"][data-item="同名机型"]',
+    );
 
     expect(
       checkboxes.map(

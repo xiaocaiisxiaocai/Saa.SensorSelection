@@ -61,7 +61,7 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
-  it('keeps the model identity column visible while the table scrolls horizontally', async () => {
+  it('does not pin a non-leading model column over the preceding columns', async () => {
     const wrapper = await mountPage();
     const table = wrapper.getComponent({ name: 'ATable' });
     const columns = table.props('columns') as Array<{
@@ -69,9 +69,25 @@ describe('SensorPage', () => {
       fixed?: 'start' | 'end';
     }>;
 
-    expect(columns.find((column) => column.key === 'model')?.fixed).toBe(
-      'start',
+    expect(columns.find((column) => column.key === 'model')?.fixed).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('keeps prose-heavy columns wide enough for compact readable rows', async () => {
+    const wrapper = await mountPage({}, writer);
+    const table = wrapper.getComponent({ name: 'ATable' });
+    const columns = table.props('columns') as Array<{
+      key: string;
+      minWidth?: number;
+      width?: number;
+    }>;
+
+    expect(columns.find((column) => column.key === 'spec')?.minWidth).toBe(180);
+    expect(columns.find((column) => column.key === 'feature')?.minWidth).toBe(
+      200,
     );
+    expect(columns.find((column) => column.key === 'scene')?.minWidth).toBe(160);
+    expect(columns.find((column) => column.key === 'actions')?.width).toBe(72);
     wrapper.unmount();
   });
 

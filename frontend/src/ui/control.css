@@ -6,6 +6,7 @@
   padding: 0 var(--control-pad-md);
   font: var(--text-field);
   background: var(--fill-2);
+  border: 0;
   border-radius: var(--radius-md);
   transition:
     background-color var(--dur-1) var(--ease-out),

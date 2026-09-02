@@ -22,6 +22,9 @@ describe('AFileDrop', () => {
 
     expect(wrapper.text()).toContain('PDF');
     expect(wrapper.text()).toContain('8 MB');
+    expect(wrapper.get('input[type="file"]').attributes('aria-label')).toBe(
+      '将文件拖到此处，或点击选择',
+    );
   });
 
   it('emits valid files and toasts invalid ones', async () => {

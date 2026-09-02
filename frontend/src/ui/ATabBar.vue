@@ -48,7 +48,9 @@ function updateMetrics() {
     return;
   }
 
-  const selected = root.querySelector<HTMLElement>('[aria-selected="true"]');
+  const selected = root.querySelector<HTMLElement>(
+    '.a-tab-bar__item[data-selected]',
+  );
   if (selected) {
     indicatorX.value = selected.offsetLeft;
     indicatorWidth.value = selected.offsetWidth;
@@ -140,21 +142,30 @@ onBeforeUnmount(() => {
         @scroll="updateMetrics"
         @keydown="onKeydown"
       >
-        <button
+        <div
           v-for="tab in tabs"
           :key="tab.value"
-          class="a-tab-bar__tab"
+          class="a-tab-bar__item"
           :class="{
-            'a-tab-bar__tab--selected': tab.value === model,
-            'a-tab-bar__tab--actions': tab.renamable || tab.closable,
+            'a-tab-bar__item--selected': tab.value === model,
+            'a-tab-bar__item--actions': tab.renamable || tab.closable,
           }"
-          type="button"
-          role="tab"
-          :aria-selected="tab.value === model"
-          :tabindex="tab.value === model ? 0 : -1"
-          @click="select(tab.value)"
+          :data-selected="tab.value === model ? '' : undefined"
         >
-          <span class="a-tab-bar__label">{{ tab.label }}</span>
+          <button
+            class="a-tab-bar__tab"
+            :class="{
+              'a-tab-bar__tab--selected': tab.value === model,
+              'a-tab-bar__tab--actions': tab.renamable || tab.closable,
+            }"
+            type="button"
+            role="tab"
+            :aria-selected="tab.value === model"
+            :tabindex="tab.value === model ? 0 : -1"
+            @click="select(tab.value)"
+          >
+            <span class="a-tab-bar__label">{{ tab.label }}</span>
+          </button>
           <span v-if="tab.renamable || tab.closable" class="a-tab-bar__actions">
             <AIconButton
               v-if="tab.renamable"
@@ -172,7 +183,7 @@ onBeforeUnmount(() => {
               @click.stop="emit('close', tab.value)"
             />
           </span>
-        </button>
+        </div>
         <span
           class="a-tab-bar__indicator"
           :style="{
@@ -232,14 +243,20 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.a-tab-bar__tab {
+.a-tab-bar__item {
   position: relative;
   z-index: 1;
   display: inline-flex;
   flex-shrink: 0;
-  gap: var(--space-1);
   align-items: center;
   height: var(--control-height-lg);
+}
+
+.a-tab-bar__tab {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  align-self: stretch;
   padding: 0 var(--space-3);
   font: var(--text-caption);
   color: var(--label-2);
@@ -268,11 +285,11 @@ onBeforeUnmount(() => {
   transition: opacity var(--dur-1) var(--ease-out);
 }
 
-.a-tab-bar__tab:hover .a-tab-bar__actions {
+.a-tab-bar__item:hover .a-tab-bar__actions {
   opacity: 0.35;
 }
 
-.a-tab-bar__tab .a-tab-bar__actions:hover {
+.a-tab-bar__item .a-tab-bar__actions:hover {
   opacity: 1;
 }
 

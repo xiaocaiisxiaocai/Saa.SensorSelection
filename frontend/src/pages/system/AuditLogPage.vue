@@ -163,16 +163,17 @@ function resetFilters() {
 
 <template>
   <section class="selection-page">
-    <div class="selection-toolbar">
+    <div class="selection-toolbar audit-toolbar">
       <h1 class="docs-heading">操作日志</h1>
       <AField
         v-model="filters.username"
-        class="selection-toolbar__filter"
+        class="selection-toolbar__filter audit-toolbar__user"
         placeholder="操作用户"
+        aria-label="操作用户"
       />
       <ASelect
         v-model="filters.action"
-        class="selection-toolbar__filter"
+        class="selection-toolbar__filter audit-toolbar__action"
         :options="actionOptions"
         placeholder="全部操作"
         aria-label="操作类型筛选"
@@ -180,7 +181,7 @@ function resetFilters() {
       />
       <ASelect
         v-model="filters.result"
-        class="selection-toolbar__filter"
+        class="selection-toolbar__filter audit-toolbar__result"
         :options="resultOptions"
         placeholder="全部"
         aria-label="操作结果筛选"
@@ -188,6 +189,7 @@ function resetFilters() {
       />
       <ADatePicker
         v-model="filters.dateRange"
+        class="audit-toolbar__date"
         range
         :placeholder="['开始时间', '结束时间']"
       />
@@ -281,6 +283,36 @@ function resetFilters() {
 </template>
 
 <style scoped>
+.audit-toolbar {
+  display: grid;
+  grid-template-columns:
+    auto minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
+    minmax(17rem, 1.5fr) auto auto;
+  gap: var(--space-2);
+}
+
+.audit-toolbar .docs-heading {
+  margin-right: 0;
+}
+
+.audit-toolbar .selection-toolbar__filter,
+.audit-toolbar__date {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (width <= 60rem) {
+  .audit-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-toolbar .docs-heading,
+  .audit-toolbar__user,
+  .audit-toolbar__date {
+    grid-column: 1 / -1;
+  }
+}
+
 .audit-detail {
   display: grid;
   gap: var(--space-3);

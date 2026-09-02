@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, Info, Search } from 'lucide-vue-next';
+import { ArrowRight, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 import {
@@ -104,7 +104,7 @@ function resultTags(result: MachineStructureSearchResult): string[] {
           :options="machineModelOptions"
           placeholder="选择适用机型"
           filterable
-          :max-visible-tokens="1"
+          :max-visible-tokens="3"
         />
       </AFormRow>
       <AFormRow label="工艺制程">
@@ -113,7 +113,7 @@ function resultTags(result: MachineStructureSearchResult): string[] {
           :options="processStepOptions"
           placeholder="选择工艺制程"
           filterable
-          :max-visible-tokens="1"
+          :max-visible-tokens="3"
         />
       </AFormRow>
       <AFormRow label="板件特性">
@@ -122,16 +122,16 @@ function resultTags(result: MachineStructureSearchResult): string[] {
           :options="boardCharacteristicOptions"
           placeholder="选择板件特性"
           filterable
-          :max-visible-tokens="1"
+          :max-visible-tokens="3"
         />
       </AFormRow>
-      <AFormRow label="上层制程" hint="默认覆盖所有上层制程">
+      <AFormRow label="上层制程">
         <ATokenField
           v-model="processIds"
           :options="processOptions"
           :placeholder="processScopeLabel"
           filterable
-          :max-visible-tokens="1"
+          :max-visible-tokens="3"
         />
       </AFormRow>
       <AFormRow label="关键词">
@@ -162,10 +162,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
           <span v-if="coveredProcesses">覆盖：{{ coveredProcesses }}</span>
           <span v-else>全部上层制程均无匹配结果</span>
         </header>
-        <div class="machine-global-search__notice">
-          <Info :size="16" />
-          <span>点击结果后切回目录浏览，自动选择所属制程并定位记录</span>
-        </div>
         <div v-if="groups.length" class="machine-global-search__groups">
           <section
             v-for="group in groups"
@@ -203,7 +199,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
       <AEmptyState
         v-else
         title="按条件查找全部结构"
-        description="请选择适用机型、工艺制程、板件特性，或输入关键词"
       >
         <template #icon>
           <Search :size="36" />
@@ -216,7 +211,9 @@ function resultTags(result: MachineStructureSearchResult): string[] {
 <style scoped>
 .machine-global-search {
   display: grid;
-  grid-template-columns: minmax(16.5rem, 19rem) minmax(0, 1fr);
+  grid-template-columns:
+    clamp(280px, var(--machine-source-width, 300px), 320px)
+    minmax(0, 1fr);
   gap: var(--space-4);
   min-width: 0;
   min-height: 0;
@@ -277,18 +274,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
 .machine-global-search__meta {
   color: var(--label-2);
   font: var(--text-caption);
-}
-
-.machine-global-search__notice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-height-sm);
-  padding: var(--space-2) var(--space-3);
-  color: var(--sys-blue);
-  font: var(--text-caption);
-  border-radius: var(--radius-md);
-  background: var(--sys-blue-fill);
 }
 
 .machine-global-search__groups,
@@ -369,7 +354,15 @@ function resultTags(result: MachineStructureSearchResult): string[] {
   font: var(--text-control-em);
 }
 
-@media (width < 60rem) {
+@media (48rem < width <= 60rem) {
+  .machine-global-search {
+    grid-template-columns:
+      clamp(200px, var(--machine-source-width, 220px), 220px)
+      minmax(0, 1fr);
+  }
+}
+
+@media (width <= 48rem) {
   .machine-global-search {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(18rem, 1fr);

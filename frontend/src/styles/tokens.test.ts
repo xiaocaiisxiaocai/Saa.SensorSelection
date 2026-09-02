@@ -198,12 +198,34 @@ describe('tokens.css', () => {
     expect(table).toMatch(
       /th,\s*td\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-3\);/s,
     );
+    expect(table).toMatch(/const ROW_HEIGHT_COMPACT = 36;/);
+    expect(table).toMatch(/const ROW_HEIGHT_LOOSE = 44;/);
     expect(sheet).toMatch(
       /\.a-sheet__body\s*\{[^}]*padding:\s*var\(--space-5\);/s,
     );
     expect(sourceList).toMatch(
       /\.a-source-list__search,\s*\.a-source-list__toolbar\s*\{[^}]*padding:\s*var\(--space-3\);/s,
     );
+  });
+
+  it('keeps the machine directory beside its content on medium desktop widths', () => {
+    expect(machinePage).toContain("'selection-split--machine': activeMachineView === 'browse'");
+    expect(machinePage).toMatch(
+      /@media \(48rem < width <= 60rem\)[\s\S]*\.selection-split--machine\s*\{[\s\S]*grid-template-columns:[\s\S]*clamp\(200px, var\(--machine-source-width, 220px\), 220px\)[\s\S]*minmax\(0, 1fr\);/,
+    );
+  });
+
+  it('frames shared data tables without turning them into a heavy cell grid', () => {
+    expect(table).toMatch(
+      /\.a-table\s*\{[^}]*border:\s*1px solid var\(--separator\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
+    );
+    expect(table).toMatch(
+      /th\s*\{[^}]*background:\s*var\(--bg-grouped\);/s,
+    );
+    expect(table).toMatch(
+      /tbody tr:last-child td\s*\{[^}]*box-shadow:\s*none;/s,
+    );
+    expect(table).not.toMatch(/td\s*\{[^}]*border-right:/s);
   });
 
   it('keeps light-theme semantic colors readable on white surfaces', () => {
@@ -232,6 +254,13 @@ describe('tokens.css', () => {
     ]) {
       expect(contrastOnWhite(getHex(name)), name).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('keeps dark green status badges readable on striped table rows', () => {
+    const dark = tokens.match(
+      /:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/,
+    )?.[1] ?? '';
+    expect(dark).toMatch(/--sys-green-fill:\s*rgb\(48 209 88 \/ 16%\)/);
   });
 
   it('keeps secondary text readable on light content surfaces', () => {
@@ -285,6 +314,9 @@ describe('tokens.css', () => {
 
   it('keeps body copy unchanged while compacting fields and dropdown options', () => {
     expect(tokens).toMatch(/--text-control:\s*400 15px\/22px/);
+    expect(tokens).toMatch(/--text-body:\s*400 15px\/22px/);
+    expect(tokens).toMatch(/--text-headline:\s*600 15px\/22px/);
+    expect(tokens).not.toMatch(/--text-(?:display|title-1|title-2|headline|body):[^;]*clamp\(/);
     expect(tokens).toMatch(/--text-field:\s*400 13px\/18px/);
     expect(reset).toMatch(/html\s*\{[^}]*font:\s*var\(--text-control\);/s);
     expect(controls).toMatch(
@@ -332,6 +364,12 @@ describe('tokens.css', () => {
       /\.machine-catalog-tabs\s+:deep\(\.a-tab-bar__tab--selected\)\s*\{[^}]*font-weight:\s*600;/s,
     );
     expect(tokens).toMatch(/--text-control:\s*400 15px\/22px/);
+    expect(selectionPage).toMatch(
+      /\.selection-toolbar \.a-select\.selection-toolbar__filter\s*\{[^}]*flex:\s*0 1 10rem;[^}]*min-width:\s*7\.5rem;/s,
+    );
+    expect(selectionPage).toMatch(
+      /\.selection-toolbar \.a-control\.selection-toolbar__filter\s*\{[^}]*flex:\s*1 1 16rem;[^}]*min-width:\s*12rem;/s,
+    );
   });
 
   it('uses a dedicated readable color for field placeholders in both themes', () => {

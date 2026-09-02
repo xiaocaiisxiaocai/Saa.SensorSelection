@@ -6,6 +6,7 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import AFormRow from './AFormRow.vue';
 import ATokenField from './ATokenField.vue';
 import type { SelectOption } from './types';
 
@@ -57,6 +58,22 @@ describe('ATokenField', () => {
     );
   });
 
+  it('uses the visible form label as the accessible name inside a form row', () => {
+    const wrapper = mount({
+      components: { AFormRow, ATokenField },
+      data: () => ({ options }),
+      template:
+        '<AFormRow label="板件特性"><ATokenField :options="options" placeholder="选择板件特性" /></AFormRow>',
+    });
+
+    const label = wrapper.get('label');
+    const combobox = wrapper.get('[role="combobox"]');
+    expect(combobox.attributes('aria-labelledby')).toBe(
+      label.attributes('id'),
+    );
+    expect(combobox.attributes('aria-label')).toBeUndefined();
+  });
+
   it('shows every selected token unless a collapse limit is set', () => {
     const wrapper = mount(ATokenField, {
       props: {
@@ -98,7 +115,7 @@ describe('ATokenField', () => {
       /\.a-token-field__trigger\s*\{[^}]*flex-wrap:\s*nowrap;/s,
     );
     expect(tokenFieldSource).toMatch(
-      /\.a-token-field__chip\s*\{[^}]*flex:\s*1 1 auto;/s,
+      /\.a-token-field__chip\s*\{[^}]*flex:\s*0 0 auto;/s,
     );
     expect(tokenFieldSource).toMatch(
       /\.a-token-field__more\s*\{[^}]*flex:\s*0 0 auto;/s,

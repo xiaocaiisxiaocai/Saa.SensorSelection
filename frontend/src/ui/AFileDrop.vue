@@ -120,6 +120,7 @@ function openPicker() {
       ref="inputEl"
       class="visually-hidden"
       type="file"
+      :aria-label="title"
       :accept="accept"
       :multiple="multiple"
       :disabled="disabled"

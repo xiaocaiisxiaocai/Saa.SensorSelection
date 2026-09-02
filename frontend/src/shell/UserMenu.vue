@@ -182,7 +182,7 @@ async function onSelect(id: string) {
   min-height: var(--control-height-sm);
   padding: var(--space-1) var(--space-3);
   font: var(--text-caption);
-  color: var(--label-2);
+  color: var(--label);
   background: var(--fill-3);
   border: 0;
   border-radius: var(--radius-pill);

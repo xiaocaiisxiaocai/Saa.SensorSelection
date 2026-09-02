@@ -12,6 +12,7 @@ const props = defineProps<{
 }>();
 
 const controlId = useId();
+const labelId = `${controlId}-label`;
 const messageId = `${controlId}-message`;
 
 const describedBy = computed(() =>
@@ -23,6 +24,7 @@ const required = computed(() => Boolean(props.required));
 provide(formRowKey, {
   describedBy,
   id: controlId,
+  labelId,
   invalid,
   required,
 });
@@ -30,7 +32,7 @@ provide(formRowKey, {
 
 <template>
   <div class="a-form-row" :class="{ 'a-form-row--wide': wide }">
-    <label class="a-form-row__label" :for="controlId">
+    <label :id="labelId" class="a-form-row__label" :for="controlId">
       {{ label }}
       <span v-if="required" class="a-form-row__req" aria-hidden="true" />
       <span v-if="required" class="visually-hidden">必填</span>

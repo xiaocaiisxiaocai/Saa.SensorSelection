@@ -49,6 +49,7 @@ const emit = defineEmits<{
       checked: boolean;
     },
   ];
+  resize: [width: number];
 }>();
 
 const store = useSelectionStore();
@@ -516,6 +517,7 @@ function onReorderMachineItems(payload: {
       :max-width="listMaxWidth"
       :default-width="listDefaultWidth"
       :storage-key="`selection:source-list-width:${kind}:v5`"
+      @resize="emit('resize', $event)"
       @select="emit('select', $event)"
       @toggle-check="emit('toggleCheck', $event)"
       @create-group="openCreateGroup"

@@ -84,6 +84,7 @@ const emit = defineEmits<{
       newIndex: number;
     },
   ];
+  resize: [width: number];
 }>();
 
 const query = ref('');
@@ -394,6 +395,7 @@ function clampWidth(value: number) {
 
 function persistWidth(next: number) {
   width.value = clampWidth(next);
+  emit('resize', width.value);
   try {
     localStorage.setItem(props.storageKey, String(width.value));
   } catch {
@@ -407,6 +409,7 @@ function restoreWidth() {
     const parsed = stored === null ? Number.NaN : Number(stored);
     if (Number.isFinite(parsed)) {
       width.value = clampWidth(parsed);
+      emit('resize', width.value);
       return;
     }
   } catch {
@@ -414,6 +417,7 @@ function restoreWidth() {
   }
 
   width.value = clampWidth(props.defaultWidth);
+  emit('resize', width.value);
 }
 
 function onResizeKey(event: KeyboardEvent) {
@@ -440,6 +444,7 @@ function startResize(event: PointerEvent) {
 
   const onMove = (moveEvent: PointerEvent) => {
     width.value = clampWidth(startWidth + moveEvent.clientX - startX);
+    emit('resize', width.value);
   };
   const finish = () => {
     persistWidth(width.value);
@@ -830,32 +835,8 @@ onMounted(restoreWidth);
                 :data-category="group.name"
                 :data-configuration="configuration.name"
                 :data-item="item"
-                :data-tree-key="itemKey(group.name, configuration.name, item)"
-                :tabindex="rowTabIndex(group.name, configuration.name, item)"
-                role="button"
-                :aria-current="
-                  isSelected(group.name, configuration.name, item)
-                    ? 'true'
-                    : undefined
-                "
-                aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
                 @dragover="allowDrop"
                 @drop="onItemDrop($event, group.name, configuration.name, item)"
-                @click="
-                  focusedItemKey = itemKey(
-                    group.name,
-                    configuration.name,
-                    item,
-                  );
-                  emit('select', {
-                    category: group.name,
-                    configuration: configuration.name,
-                    item,
-                  });
-                "
-                @keydown="
-                  onItemKeydown($event, group.name, configuration.name, item)
-                "
               >
                 <button
                   v-if="canSort"
@@ -877,29 +858,65 @@ onMounted(restoreWidth);
                 >
                   <GripVertical :size="14" :stroke-width="1.5" />
                 </button>
-                <input
+                <label
                   v-if="checkedItems"
-                  type="checkbox"
-                  tabindex="-1"
-                  :aria-label="`选择 ${item}`"
-                  :checked="
-                    checkedItems.includes(
-                      itemKey(group.name, configuration.name, item),
-                    )
-                  "
+                  class="machine-tree-row__check"
                   @click.stop
-                  @change="
-                    emit('toggleCheck', {
+                >
+                  <input
+                    type="checkbox"
+                    tabindex="-1"
+                    :aria-label="`选择 ${item}`"
+                    :checked="
+                      checkedItems.includes(
+                        itemKey(group.name, configuration.name, item),
+                      )
+                    "
+                    @change="
+                      emit('toggleCheck', {
+                        category: group.name,
+                        configuration: configuration.name,
+                        item,
+                        checked: ($event.target as HTMLInputElement).checked,
+                      })
+                    "
+                  >
+                </label>
+                <button
+                  class="machine-tree-row__select"
+                  type="button"
+                  :data-category="group.name"
+                  :data-configuration="configuration.name"
+                  :data-item="item"
+                  :data-tree-key="itemKey(group.name, configuration.name, item)"
+                  :tabindex="rowTabIndex(group.name, configuration.name, item)"
+                  :aria-label="item"
+                  :aria-current="
+                    isSelected(group.name, configuration.name, item)
+                      ? 'true'
+                      : undefined
+                  "
+                  aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
+                  @click="
+                    focusedItemKey = itemKey(
+                      group.name,
+                      configuration.name,
+                      item,
+                    );
+                    emit('select', {
                       category: group.name,
                       configuration: configuration.name,
                       item,
-                      checked: ($event.target as HTMLInputElement).checked,
-                    })
+                    });
+                  "
+                  @keydown="
+                    onItemKeydown($event, group.name, configuration.name, item)
                   "
                 >
-                <span class="machine-tree-row__name" :title="item">{{
-                  item
-                }}</span>
+                  <span class="machine-tree-row__name" :title="item">{{
+                    item
+                  }}</span>
+                </button>
                 <span v-if="editable" class="machine-tree-row__tools">
                   <button
                     class="machine-tree-row__tool"
@@ -947,24 +964,8 @@ onMounted(restoreWidth);
             :data-category="group.name"
             data-configuration=""
             :data-item="item"
-            :data-tree-key="itemKey(group.name, null, item)"
-            :tabindex="rowTabIndex(group.name, null, item)"
-            role="button"
-            :aria-current="
-              isSelected(group.name, null, item) ? 'true' : undefined
-            "
-            aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
             @dragover="allowDrop"
             @drop="onItemDrop($event, group.name, null, item)"
-            @click="
-              focusedItemKey = itemKey(group.name, null, item);
-              emit('select', {
-                category: group.name,
-                configuration: null,
-                item,
-              });
-            "
-            @keydown="onItemKeydown($event, group.name, null, item)"
           >
             <button
               v-if="canSort"
@@ -979,23 +980,53 @@ onMounted(restoreWidth);
             >
               <GripVertical :size="14" :stroke-width="1.5" />
             </button>
-            <input
+            <label
               v-if="checkedItems"
-              type="checkbox"
-              tabindex="-1"
-              :aria-label="`选择 ${item}`"
-              :checked="checkedItems.includes(itemKey(group.name, null, item))"
+              class="machine-tree-row__check"
               @click.stop
-              @change="
-                emit('toggleCheck', {
+            >
+              <input
+                type="checkbox"
+                tabindex="-1"
+                :aria-label="`选择 ${item}`"
+                :checked="
+                  checkedItems.includes(itemKey(group.name, null, item))
+                "
+                @change="
+                  emit('toggleCheck', {
+                    category: group.name,
+                    configuration: null,
+                    item,
+                    checked: ($event.target as HTMLInputElement).checked,
+                  })
+                "
+              >
+            </label>
+            <button
+              class="machine-tree-row__select"
+              type="button"
+              :data-category="group.name"
+              data-configuration=""
+              :data-item="item"
+              :data-tree-key="itemKey(group.name, null, item)"
+              :tabindex="rowTabIndex(group.name, null, item)"
+              :aria-label="item"
+              :aria-current="
+                isSelected(group.name, null, item) ? 'true' : undefined
+              "
+              aria-keyshortcuts="Enter Space F2 Delete ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End"
+              @click="
+                focusedItemKey = itemKey(group.name, null, item);
+                emit('select', {
                   category: group.name,
                   configuration: null,
                   item,
-                  checked: ($event.target as HTMLInputElement).checked,
-                })
+                });
               "
+              @keydown="onItemKeydown($event, group.name, null, item)"
             >
-            <span class="machine-tree-row__name" :title="item">{{ item }}</span>
+              <span class="machine-tree-row__name" :title="item">{{ item }}</span>
+            </button>
             <span v-if="editable" class="machine-tree-row__tools">
               <button
                 class="machine-tree-row__tool"
@@ -1043,7 +1074,7 @@ onMounted(restoreWidth);
   flex-shrink: 0;
   min-width: 0;
   height: 100%;
-  padding: 12px;
+  padding: 10px 12px;
   border-right: 1px solid var(--separator);
   overflow: hidden;
   background: var(--bg-content);
@@ -1084,10 +1115,16 @@ onMounted(restoreWidth);
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--fill-3);
   color: var(--label-2);
   font: var(--text-caption);
+  transition: background-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+
+.machine-source__search:focus-within {
+  background: var(--fill-2);
+  box-shadow: var(--focus-ring);
 }
 
 .machine-source__search input {
@@ -1113,11 +1150,31 @@ onMounted(restoreWidth);
   justify-content: center;
   gap: 4px;
   border: 1px solid var(--separator);
-  border-radius: 6px;
-  background: var(--bg-content);
+  border-radius: var(--radius-sm);
+  background: var(--fill-4);
   color: var(--label);
   font: var(--text-caption);
   cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.machine-source__action:hover {
+  background: var(--fill-3);
+  border-color: var(--separator-opaque);
+}
+
+.machine-source__action--primary {
+  color: var(--sys-blue);
+  border-color: var(--sys-blue-fill-strong);
+  background: var(--sys-blue-fill);
+  font-weight: 500;
+}
+
+.machine-source__action--primary:hover {
+  background: var(--sys-blue-fill-strong);
 }
 
 .machine-source__tree {
@@ -1125,38 +1182,41 @@ onMounted(restoreWidth);
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 3px;
+  gap: 2px;
   overflow: hidden auto;
 }
 
 .machine-tree-row {
   position: relative;
-  min-height: 32px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--label);
   font: var(--text-caption);
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 
 .machine-tree-row--group {
-  font-weight: 650;
+  font-weight: 600;
+  padding: 0 4px;
 }
 
 .machine-tree-row--configuration {
   padding-left: 14px;
+  padding-right: 4px;
   color: var(--label-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .machine-tree-row--item {
-  padding: 4px 4px 4px 34px;
+  padding: 3px 4px 3px 30px;
   cursor: pointer;
 }
 
 .machine-tree-row--direct {
-  padding-left: 20px;
+  padding-left: 16px;
 }
 
 .machine-tree-row--item:hover,
@@ -1169,6 +1229,7 @@ onMounted(restoreWidth);
   min-width: 0;
   flex: 1;
   display: flex;
+  align-self: stretch;
   align-items: center;
   gap: 5px;
   padding: 0;
@@ -1191,10 +1252,50 @@ onMounted(restoreWidth);
   background: transparent;
   color: var(--label-3);
   cursor: grab;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.machine-tree-row__check {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.machine-tree-row__check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--sys-blue);
+  cursor: pointer;
+}
+
+.machine-tree-row__select {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  align-self: stretch;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
 }
 
 .machine-tree-row__handle:active {
   cursor: grabbing;
+}
+
+.machine-tree-row:hover .machine-tree-row__handle,
+.machine-tree-row:focus-within .machine-tree-row__handle {
+  opacity: 1;
 }
 
 .machine-tree-row__toggle span,
@@ -1207,8 +1308,12 @@ onMounted(restoreWidth);
 }
 
 .machine-tree-row__count {
-  color: var(--label-placeholder);
+  padding: 0 6px;
   font: var(--text-caption);
+  line-height: 16px;
+  color: var(--label-placeholder);
+  background: var(--fill-3);
+  border-radius: var(--radius-pill);
 }
 
 .machine-tree-row__tools {
@@ -1232,8 +1337,8 @@ onMounted(restoreWidth);
 }
 
 .machine-tree-row__tool {
-  width: 25px;
-  height: 25px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -1241,15 +1346,17 @@ onMounted(restoreWidth);
   background: transparent;
   color: var(--label-2);
   cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+.machine-tree-row__tool:hover {
+  background: var(--fill-3);
+  color: var(--label);
 }
 
 .machine-tree-row__tool:last-child:hover {
+  background: var(--sys-red-fill);
   color: var(--sys-red);
-}
-
-.machine-source__action--primary {
-  color: var(--label-on-color);
-  border-color: var(--sys-blue);
-  background: var(--sys-blue-solid);
 }
 </style>

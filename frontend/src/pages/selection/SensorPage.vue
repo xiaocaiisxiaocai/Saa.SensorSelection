@@ -185,7 +185,7 @@ const tableData = computed(() => {
 });
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'status', label: '状态', width: 88 },
+    { key: 'status', label: '状态', width: 88, fixed: 'start' },
     { key: 'partNumber', label: '料号', width: 120, mono: true },
     { key: 'sensorType', label: '感应器类型', width: 120 },
     { key: 'brand', label: '品牌', width: 88 },

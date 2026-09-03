@@ -52,7 +52,7 @@ const tableRows = computed(() =>
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'name', label: '名称', minWidth: 220, align: 'start' },
+    { key: 'name', label: '名称', minWidth: 220, align: 'start', fixed: 'start' },
     { key: 'level', label: '层级', width: 100 },
     { key: 'childCount', label: '子节点', width: 88 },
     { key: 'userCount', label: '人数', width: 72 },

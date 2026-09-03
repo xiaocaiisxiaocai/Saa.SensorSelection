@@ -152,11 +152,12 @@ describe('AppShell', () => {
     wrapper.unmount();
   });
 
-  it('silently uses local data when the backend is offline', async () => {
+  it('clearly reports backend unavailability instead of showing local demo data', async () => {
     const { wrapper } = await mountShell('offline');
 
-    expect(wrapper.text()).not.toContain('后端服务不可用');
-    expect(wrapper.text()).not.toContain('重新连接');
+    expect(wrapper.text()).toContain('无法连接后端服务');
+    expect(wrapper.text()).toContain('未加载演示数据');
+    expect(wrapper.text()).toContain('重新连接');
 
     wrapper.unmount();
   });

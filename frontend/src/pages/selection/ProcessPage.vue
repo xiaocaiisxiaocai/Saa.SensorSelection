@@ -87,7 +87,7 @@ const tableData = computed(() => {
 
 const stepColumns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'layer', label: '制程', width: 64 },
+    { key: 'layer', label: '制程', width: 64, fixed: 'start' },
     { key: 'name', label: '工艺制程', minWidth: 140 },
     { key: 'role', label: '作用', minWidth: 160, ellipsis: true },
     { key: 'feature', label: '制程特性', minWidth: 160, ellipsis: true },

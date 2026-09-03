@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 using Saa.SensorSelection.Api.Models;
 using Saa.SensorSelection.Api.Services;
@@ -22,6 +23,54 @@ public static class DbSeeder
         EnsureRoles(db);
         EnsureOrganizationHierarchy(db);
         EnsureAdminUser(db, configuration);
+        EnsureDemoStore(db, configuration);
+    }
+
+    private static void EnsureDemoStore(AppDbContext db, IConfiguration configuration)
+    {
+        // 业务演示数据只在开发环境显式开启；生产环境默认保持空库，不把演示数据带入真实业务。
+        if (!configuration.GetValue<bool>("Seed:LoadDemoStore") || db.StoreEntries.Any())
+        {
+            return;
+        }
+
+        var path = Path.Combine(AppContext.BaseDirectory, "Data", "demo-store.json");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            // 演示 store 不携带二进制附件；避免写入指向不存在 StoredFiles 的悬空 /api/files 链接。
+            if (property.Value.GetRawText().Contains(
+                    "/api/files/",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            db.StoreEntries.Add(new StoreEntry
+            {
+                Key = property.Name,
+                Json = property.Value.GetRawText(),
+                UpdatedAt = now,
+            });
+        }
+
+        db.SaveChanges();
     }
 
     private static void EnsureOrganizationHierarchy(AppDbContext db)

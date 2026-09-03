@@ -32,6 +32,21 @@ function createRepo(storage?: StorageLike) {
 }
 
 describe('createSelectionRepository persist', () => {
+  it('does not create demo data when production mode disables frontend seeds', () => {
+    const repo = createSelectionRepository({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
+      demoData: false,
+    });
+
+    expect(repo.getEntityGroups('customer')).toEqual([]);
+    expect(repo.getEntityGroups('machine')).toEqual([]);
+    expect(repo.getMachineProcesses()).toEqual([]);
+    expect(repo.getProcessSteps()).toEqual([]);
+    expect(repo.getSensors()).toEqual([]);
+    expect(repo.getDictionaryItems('sensor-type')).toEqual([]);
+  });
+
   it('rolls memory back when setItem returns false', () => {
     const repo = createRepo({
       getItem: () => null,

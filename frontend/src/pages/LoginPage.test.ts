@@ -133,7 +133,7 @@ describe('LoginPage', () => {
     await vi.waitFor(() => {
       expect(window.localStorage.getItem('symtek_token')).toBeNull();
       expect(getStore).toHaveBeenCalled();
-      expect(replaceAll).toHaveBeenCalled();
+      expect(replaceAll).not.toHaveBeenCalled();
     });
     wrapper.unmount();
   });

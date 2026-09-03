@@ -87,7 +87,7 @@ const hasActiveFilters = computed(
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '要求分类', width: 90 },
+    { key: 'type', label: '要求分类', width: 90, fixed: 'start' },
     { key: 'machine', label: '适用机型', width: 90 },
     { key: 'process', label: '适用制程', width: 130 },
     { key: 'content', label: '要求内容', minWidth: 230, ellipsis: true },

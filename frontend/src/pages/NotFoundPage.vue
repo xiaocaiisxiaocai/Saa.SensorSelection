@@ -19,10 +19,12 @@ import { RouterLink } from 'vue-router';
   place-content: center;
   justify-items: center;
   width: 100%;
+  min-width: 0;
   min-height: 100%;
   max-width: 36rem;
   padding: var(--space-6);
   margin: auto;
+  overflow-y: auto;
   text-align: center;
 }
 

@@ -46,7 +46,7 @@ const items = computed(() =>
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'sort', label: '排序', width: 72 },
+    { key: 'sort', label: '排序', width: 72, fixed: 'start' },
     { key: 'name', label: '字典项名称', minWidth: 200 },
   ];
   if (writable.value) {

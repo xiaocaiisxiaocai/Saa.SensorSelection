@@ -39,6 +39,42 @@ describe('selection store', () => {
     expect(store.backendStatus).toBe('online');
   });
 
+  it('renders demo records only when they come from the backend store', async () => {
+    vi.spyOn(api, 'getStore').mockResolvedValue({
+      'entity-groups:customer': [{ name: '演示客户', items: ['客户A'] }],
+      'entity-groups:machine': [{ name: '输送机构', items: ['演示机型'] }],
+      'machine-processes:all': [
+        { id: 1, name: '制程1', sort: 1, locked: true },
+      ],
+      'dict:sensor-status': [{ id: 1, name: '现用', sort: 1 }],
+      'dict:sensor-type': [{ id: 1, name: '漫反射', sort: 1 }],
+      'sensor-catalog:all': [
+        {
+          id: 1,
+          model: 'BACKEND-E3Z',
+          brand: 'OMRON',
+          sensorType: '漫反射',
+          status: '现用',
+        },
+      ],
+    });
+    const store = useSelectionStore();
+
+    await store.initBackend();
+
+    expect(store.entityGroups('customer')).toEqual([
+      { name: '演示客户', items: ['客户A'] },
+    ]);
+    expect(store.entityGroups('machine')).toContainEqual(
+      expect.objectContaining({
+        name: '输送机构',
+        items: ['演示机型'],
+        machineType: 'mechanism',
+      }),
+    );
+    expect(store.sensors[0]?.model).toBe('BACKEND-E3Z');
+  });
+
   it('deduplicates concurrent backend initialization', async () => {
     let resolveStore!: (store: Record<string, unknown[]>) => void;
     const getStore = vi.spyOn(api, 'getStore').mockImplementation(

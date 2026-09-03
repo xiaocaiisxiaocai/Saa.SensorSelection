@@ -141,6 +141,10 @@ describe('ATable', () => {
     );
   });
 
+  it('uses tabular figures for consistent numeric comparison', () => {
+    expect(tableSource).toMatch(/font-variant-numeric:\s*tabular-nums;/);
+  });
+
   it('renders a custom cell slot', () => {
     const wrapper = mount(ATable, {
       props: { columns, rows, rowKey: 'id' },

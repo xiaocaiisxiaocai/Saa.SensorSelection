@@ -255,7 +255,13 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
     : undefined;
   const cols: TableColumn<MachineTableRow>[] = isStructure.value
     ? [
-        { key: 'role', label: '功能作用', minWidth: 90, rowSpan },
+        {
+          key: 'role',
+          label: '功能作用',
+          minWidth: 90,
+          rowSpan,
+          fixed: 'start',
+        },
         { key: 'machineModelName', label: '机型', minWidth: 100, rowSpan },
         {
           key: 'processStepName',
@@ -281,7 +287,7 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
         { key: 'note', label: '备注', minWidth: 96, ellipsis: true, rowSpan },
       ]
     : [
-        { key: 'role', label: '注意分类', width: 120 },
+        { key: 'role', label: '注意分类', width: 120, fixed: 'start' },
         { key: 'name', label: '事项名称', minWidth: 140 },
         { key: 'desc', label: '说明', minWidth: 180, ellipsis: true },
         { key: 'note', label: '备注', minWidth: 120, ellipsis: true },

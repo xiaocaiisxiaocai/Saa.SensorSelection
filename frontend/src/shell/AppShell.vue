@@ -37,6 +37,9 @@ const searchHotkey = /Mac|iPhone|iPad/i.test(navigator.platform)
 const groups = computed(() => navGroupsFor(auth.permissions));
 
 const connecting = computed(() => selection.backendStatus === 'connecting');
+const backendUnavailable = computed(
+  () => selection.backendStatus === 'offline',
+);
 const sidebarExpanded = computed(() =>
   compactViewport.value ? mobileSidebarOpen.value : !collapsed.value,
 );
@@ -244,6 +247,14 @@ watch(
         message="登录已失效，请重新登录"
         action-label="去登录"
         @action="router.push('/login')"
+      />
+    </div>
+    <div v-else-if="backendUnavailable" class="shell-banner">
+      <ABanner
+        tone="warning"
+        message="无法连接后端服务，页面未加载演示数据。请连接后端后重试。"
+        action-label="重新连接"
+        @action="selection.reconnect()"
       />
     </div>
 

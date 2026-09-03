@@ -4,13 +4,10 @@ import { computed, ref } from 'vue';
 import { api } from '@/api';
 import {
   BackendStorage,
-  buildDefaultStore,
   buildSearchIndex,
   createSelectionRepository,
   CRUD_DEFAULTS,
-  MACHINE_DETAILS,
   listEntityGroupItems,
-  migrateSelectionSeedStore,
   SENSOR_DATA,
   STORAGE_KEY,
   type BackendSyncStatus,
@@ -31,23 +28,21 @@ import {
   type Sensor3dFileItem,
   type SensorSopFileItem,
   type SensorSopItem,
-  type StorageLike,
   type TimelineItem,
 } from '@/domain';
 import { toast } from '@/ui/toast';
 
 type Repository = ReturnType<typeof createSelectionRepository>;
 
-const browserStorage: StorageLike | undefined =
-  typeof window === 'undefined' ? undefined : window.localStorage;
+// Vitest 页面夹具仍可使用可控的演示数据；开发/生产构建永远关闭前端种子。
+const testFixturesEnabled = import.meta.env.MODE === 'test';
 
-function createLocalRepository(
-  storage: StorageLike | undefined = browserStorage,
-) {
+function createLocalRepository() {
   return createSelectionRepository({
     crudDefaults: CRUD_DEFAULTS,
     sensorData: SENSOR_DATA,
-    storage,
+    // 页面初始化前不读取浏览器缓存，也不生成前端演示数据；所有业务数据必须来自后端。
+    demoData: testFixturesEnabled,
   });
 }
 
@@ -144,7 +139,8 @@ export const useSelectionStore = defineStore('selection', () => {
     }
     return buildSearchIndex({
       customerGroups: repository.getEntityGroups('customer'),
-      machineDetails: MACHINE_DETAILS,
+      // 机型描述必须由后端 store 提供，前端不再注入演示条目。
+      machineDetails: {},
       machineGroups,
       machineSectionHits,
       processSteps: processSteps.value,
@@ -261,13 +257,12 @@ export const useSelectionStore = defineStore('selection', () => {
           deleteKey: (key) => api.deleteKey(key),
           writeAll: (store) => api.replaceAll(store),
         },
-        local: browserStorage as StorageLike,
-        migrateOnEmpty: true,
-        seedDefaults: buildDefaultStore({
-          crudDefaults: CRUD_DEFAULTS,
-          sensorData: SENSOR_DATA,
-        }),
-        seedMigration: migrateSelectionSeedStore,
+        // localStorage 仅作为后端成功后的快照缓存，不能在后端为空时回灌或充当数据源。
+        local: {
+          getItem: () => null,
+          setItem: () => undefined,
+        },
+        migrateOnEmpty: false,
         onStatus: (status) => {
           backendStatus.value = status;
         },
@@ -277,19 +272,13 @@ export const useSelectionStore = defineStore('selection', () => {
           toast.error(`写入后端失败：${message}`);
         },
       });
-      const result = await bridge.init();
+      await bridge.init();
       repository = createSelectionRepository({
         crudDefaults: CRUD_DEFAULTS,
         sensorData: SENSOR_DATA,
+        demoData: testFixturesEnabled,
         storage: bridge,
       });
-      if (result.migrated) {
-        backendMessage.value = '已将本地数据导入后端（迁移完成）';
-        toast.success('已将本地数据导入后端（迁移完成）');
-      } else if (result.seeded) {
-        backendMessage.value = '已将内置基础数据初始化到后端';
-        toast.success('已将内置基础数据初始化到后端');
-      }
       touch();
     })();
     initPromise = running.catch(() => {

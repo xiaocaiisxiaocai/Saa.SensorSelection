@@ -50,7 +50,7 @@ const permissionGroups = computed(() => {
 });
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'code', label: '标识', minWidth: 120 },
+    { key: 'code', label: '标识', minWidth: 120, fixed: 'start' },
     { key: 'name', label: '名称', minWidth: 130 },
     { key: 'description', label: '描述', minWidth: 180 },
     { key: 'permissions', label: '权限', minWidth: 240 },

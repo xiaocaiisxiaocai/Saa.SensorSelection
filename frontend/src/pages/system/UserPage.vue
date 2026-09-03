@@ -63,7 +63,7 @@ const roleOptions = computed(() =>
 const orgNodes = computed(() => toTreeSelectNodes(orgUnits.value));
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'username', label: '用户名', minWidth: 120 },
+    { key: 'username', label: '用户名', minWidth: 120, fixed: 'start' },
     { key: 'displayName', label: '显示名', minWidth: 120 },
     { key: 'roles', label: '角色', minWidth: 160 },
     { key: 'org', label: '所属组织', minWidth: 180 },

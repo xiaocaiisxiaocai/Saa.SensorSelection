@@ -1,0 +1,1534 @@
+{
+  "customer-feedback:健鼎集团": [],
+  "customer-feedback:庆鼎": [
+    {
+      "id": 1,
+      "type": "选型配置异常",
+      "machine": "中间六轴机",
+      "problem": "快速运行时吸板失败率偏高，影响产能。",
+      "measure": "更换快速响应型真空表头后恢复稳定。",
+      "date": "2024-10-15",
+      "status": "04 已解决",
+      "measureHistory": []
+    }
+  ],
+  "customer-feedback:通用客户": [],
+  "customer-feedback:鹏鼎集团": [
+    {
+      "id": 1,
+      "type": "03 选型优化",
+      "machine": "ALL",
+      "problem": "輸送使用京東方光電感應器不良\n",
+      "measure": "更換SICK  GTB6光電\n",
+      "date": "2024-10-15",
+      "status": "04 已解决"
+    },
+    {
+      "id": 2,
+      "type": "01 sensor品质异常",
+      "machine": "ESG设备",
+      "problem": "尋tray激光使用OPT無法穩定檢測，誤判率1%\n",
+      "measure": "更換基恩士激光LR-ZB250AN\n",
+      "date": "2026-08-25",
+      "status": "03 测试中"
+    }
+  ],
+  "customer-proc:庆鼎": [
+    {
+      "id": 1,
+      "type": "DES 制程",
+      "role": "板件传送检测",
+      "feature": "进出口设置漫反射传感器",
+      "sensorNote": "镜头保持清洁",
+      "note": "首件确认检测距离"
+    }
+  ],
+  "customer-proc:景旺": [
+    {
+      "id": 1,
+      "type": "AOI 制程",
+      "role": "板件定位",
+      "feature": "定位精度不大于 0.1mm",
+      "sensorNote": "保持镜头清洁",
+      "note": "每班点检一次"
+    }
+  ],
+  "customer-proc:鹏鼎集团": [
+    {
+      "id": 1,
+      "type": "电镀线",
+      "role": "\"目的：镀通孔，实现多层板之间的互联 化学沉铜：在绝缘的孔壁上形成最初的，薄的化学铜箔 电镀铜加厚：将铜箔加厚到要求的厚度\"",
+      "feature": "板子孔多，含铜量高，板子一般较厚，板件较反光\n",
+      "sensorNote": "检测板件需使用需近接开关，输送M18，手臂M30",
+      "note": ""
+    }
+  ],
+  "customer-req:健鼎集团": [],
+  "customer-req:庆鼎": [
+    {
+      "id": 1,
+      "type": "输送段",
+      "machine": "ALL",
+      "process": "DES显影",
+      "content": "进板前确认板件到位后再启动输送",
+      "source": "客户要求",
+      "note": "首件验证时确认传感器响应"
+    },
+    {
+      "id": 2,
+      "type": "出板检测",
+      "machine": "ALL",
+      "process": "DES显影",
+      "content": "出板信号确认后再进入下一工序",
+      "source": "客户要求",
+      "note": "与下游设备联锁"
+    }
+  ],
+  "customer-req:景旺": [
+    {
+      "id": 1,
+      "type": "掉板检测",
+      "machine": "ALL",
+      "process": "压合",
+      "content": "中段与末端均需设置掉板检测",
+      "source": "验收规范",
+      "note": "联动停机并记录报警"
+    },
+    {
+      "id": 2,
+      "type": "进板检测",
+      "machine": "ALL",
+      "process": "AOI检测",
+      "content": "进入 AOI 前需确认板件边缘无遮挡",
+      "source": "客户要求",
+      "note": "避免误触发检测"
+    }
+  ],
+  "customer-req:通用客户": [],
+  "customer-req:鹏鼎集团": [
+    {
+      "id": 1,
+      "type": "01 sensor标准",
+      "machine": "ALL",
+      "process": "ALL",
+      "content": "检测板件的光电（输送/手臂）光电感应器需更换为sick GTB6",
+      "source": "02 厂外改善",
+      "note": "C-E010101011\t光電開關GTB6-N1211(NPN)(SICK) 檢測距離:10~140mm"
+    },
+    {
+      "id": 2,
+      "type": "05 客户要求",
+      "machine": "ALL",
+      "process": "ALL",
+      "content": "停止/工控机和门锁解除按钮需要使用圆形透明护盖（可挂锁））",
+      "source": "03 客户要求",
+      "note": ""
+    }
+  ],
+  "customer-sop:健鼎集团": [],
+  "customer-sop:崇达集团": [],
+  "customer-sop:广合集团": [],
+  "customer-sop:泰国泰兴": [],
+  "customer-sop:泰国耀华": [],
+  "customer-sop:泰国超颖": [],
+  "customer-sop:泰国鹏鼎": [],
+  "customer-sop:深南集团": [],
+  "customer-sop:深联集团": [],
+  "customer-sop:通用客户": [],
+  "customer-sop:鹏鼎集团": [
+    {
+      "id": 1,
+      "kind": "pdf",
+      "dataUrl": "/api/files/debde030-1b06-4e8f-aa2b-258b21488445/content",
+      "fileName": "⑨ 感应器安装标准.pdf",
+      "mimeType": "application/pdf",
+      "size": 2930953,
+      "uploadedAt": "2026-08-25T08:52:03.626Z"
+    },
+    {
+      "id": 2,
+      "kind": "pdf",
+      "dataUrl": "/api/files/8e44ed7e-e5ec-450a-a0f6-c117cb1431dc/content",
+      "fileName": "① 输送配置标准SOP V2.1.pdf",
+      "mimeType": "application/pdf",
+      "size": 6457090,
+      "uploadedAt": "2026-08-25T08:52:08.388Z"
+    }
+  ],
+  "dict:board-characteristic": [
+    {
+      "id": 1,
+      "name": "板架有孔，无法安装镜片",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "板架有孔，可安装镜片",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "板架无孔",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "平板有孔，无法安装镜片",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "平板有孔，可安装镜片",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "平板无孔，金属材质",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "平板无孔，电木材质",
+      "sort": 7
+    },
+    {
+      "id": 8,
+      "name": "透明板",
+      "sort": 8
+    },
+    {
+      "id": 9,
+      "name": "小板件",
+      "sort": 9
+    }
+  ],
+  "dict:customer-feedback": [
+    {
+      "id": 1,
+      "name": "01 sensor品质异常",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 两片检测品质异常",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 选型优化",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "04 标准不完善",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "05 厂外改善建议",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "06 客户改善要求",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "07 验规要求",
+      "sort": 7
+    },
+    {
+      "id": 8,
+      "name": "08 其他",
+      "sort": 8
+    }
+  ],
+  "dict:customer-feedback-status": [
+    {
+      "id": 1,
+      "name": "01 待处理",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 处理中",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 测试中",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "04 已解决",
+      "sort": 4
+    }
+  ],
+  "dict:customer-proc": [
+    {
+      "id": 1,
+      "name": "DES 制程",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "AOI 制程",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "压合制程",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "防焊制程",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "电镀线",
+      "sort": 5
+    }
+  ],
+  "dict:customer-req": [
+    {
+      "id": 1,
+      "name": "01 sensor标准",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 两片检测标准",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 智能化需求",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "04 验规需求",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "05 客户要求",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "06 制程要求",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "07 特殊规格",
+      "sort": 7
+    }
+  ],
+  "dict:customer-req-source": [
+    {
+      "id": 1,
+      "name": "01 验收规范",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 厂外改善",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 客户要求",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "04 产品迭代",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "05 标准SOP",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "06 其他",
+      "sort": 6
+    }
+  ],
+  "dict:machine-model": [
+    {
+      "id": 1,
+      "name": "中间六轴机",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "中间翻板机",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "中间输送机",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "龙门式传送机",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "单边投板机",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "单边收板机",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "双边投板机",
+      "sort": 7
+    },
+    {
+      "id": 8,
+      "name": "双边收板机",
+      "sort": 8
+    },
+    {
+      "id": 9,
+      "name": "盒装投板机",
+      "sort": 9
+    },
+    {
+      "id": 10,
+      "name": "AOI专用机",
+      "sort": 10
+    },
+    {
+      "id": 11,
+      "name": "压合专用机",
+      "sort": 11
+    },
+    {
+      "id": 12,
+      "name": "标准输送段",
+      "sort": 12
+    },
+    {
+      "id": 13,
+      "name": "六轴机械手",
+      "sort": 13
+    },
+    {
+      "id": 14,
+      "name": "台车系统",
+      "sort": 14
+    }
+  ],
+  "dict:process-layer": [
+    {
+      "id": 1,
+      "name": "开料",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "内层前处理",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "DES",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "AOI",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "配板",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "棕化",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "压合",
+      "sort": 7
+    },
+    {
+      "id": 8,
+      "name": "钻孔",
+      "sort": 8
+    },
+    {
+      "id": 9,
+      "name": "电镀",
+      "sort": 9
+    },
+    {
+      "id": 10,
+      "name": "外层前处理",
+      "sort": 10
+    }
+  ],
+  "dict:sensor-status": [
+    {
+      "id": 1,
+      "name": "01 现用",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 备选",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 停用",
+      "sort": 3
+    }
+  ],
+  "dict:sensor-type": [
+    {
+      "id": 1,
+      "name": "01 漫反射",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "02 对照式",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "03 镜片式",
+      "sort": 3
+    },
+    {
+      "id": 4,
+      "name": "04 光纤式",
+      "sort": 4
+    },
+    {
+      "id": 5,
+      "name": "05 槽型光电",
+      "sort": 5
+    },
+    {
+      "id": 6,
+      "name": "06 近接式",
+      "sort": 6
+    },
+    {
+      "id": 7,
+      "name": "07 静电容式",
+      "sort": 7
+    },
+    {
+      "id": 8,
+      "name": "08 真空式",
+      "sort": 8
+    },
+    {
+      "id": 9,
+      "name": "09 激光式",
+      "sort": 9
+    },
+    {
+      "id": 10,
+      "name": "10 颜色判别",
+      "sort": 10
+    },
+    {
+      "id": 11,
+      "name": "11 超声波",
+      "sort": 11
+    }
+  ],
+  "entity-groups:customer": [
+    {
+      "name": "华东",
+      "items": [
+        "鹏鼎集团",
+        "健鼎集团",
+        "通用客户"
+      ]
+    },
+    {
+      "name": "华南",
+      "items": [
+        "广合集团",
+        "崇达集团",
+        "深联集团",
+        "深南集团"
+      ]
+    },
+    {
+      "name": "SAT",
+      "items": [
+        "泰国鹏鼎",
+        "泰国超颖",
+        "泰国耀华",
+        "泰国泰兴"
+      ]
+    }
+  ],
+  "entity-groups:machine": [
+    {
+      "name": "输送机构",
+      "items": [
+        "01 标准输送段配置",
+        "02 标准收板机配置",
+        "03 标准放板机配置",
+        "04 寻边输送配置",
+        "05 特殊制程配置",
+        "06 特殊客户配置"
+      ],
+      "configurations": [
+        {
+          "name": "标准输送段配置",
+          "items": [
+            "01 单段输送段（搭配）",
+            "02 多段输送段（搭配）",
+            "03 单段输送机（PLC）",
+            "04 多段输送机（PLC）"
+          ]
+        },
+        {
+          "name": "收板机配置",
+          "items": [
+            "01 入料输送（L-RACK）",
+            "02 入料输送（平板/BOX）",
+            "03 入料输送（上顶平板）",
+            "04 入料输送（ESG拍板区）",
+            "05 入料输送（ESG组合区）",
+            "06 入料输送（三点寻边）",
+            "07 入料输送（五点寻边）",
+            "08 入料输送（小板件）"
+          ]
+        },
+        {
+          "name": "放板机配置",
+          "items": [
+            "01 出料输送（L-RACK）",
+            "02 出料输送（平板/BOX）",
+            "03 出料输送（上顶平板）",
+            "04 出料输送（ESG拍板区）",
+            "05 出料输送（ESG组合区）",
+            "06 出料输送（反转NG）",
+            "07 出料输送（读码触发）",
+            "08 出料输送（小板件）"
+          ]
+        },
+        {
+          "name": "标准中间段配置",
+          "items": [
+            "01 可掀式（CSC5）",
+            "02 太阳式翻板机（SB-100）",
+            "03 翻板机（SB-309G）",
+            "04 转向机（ST-103）",
+            "05 转角机（ST-201）"
+          ]
+        },
+        {
+          "name": "特殊制程配置",
+          "items": [
+            "01 电镀区配置要求",
+            "02 近接安装规范"
+          ]
+        },
+        {
+          "name": "客户特殊配置",
+          "items": [
+            "01 宏恒胜",
+            "02 庆鼎HC厂"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "拍板机构",
+      "items": [
+        "01 无刷拍板",
+        "02 伺服拍板",
+        "03 寻边定位",
+        "04 特殊定位"
+      ],
+      "configurations": [
+        {
+          "name": "无刷拍板",
+          "items": [
+            "01 中心拍板",
+            "02 靠边拍板",
+            "03 序列拍板"
+          ]
+        },
+        {
+          "name": "伺服拍板",
+          "items": [
+            "01 中心拍板",
+            "02 靠边拍板",
+            "03 序列拍板"
+          ]
+        },
+        {
+          "name": "寻边定位",
+          "items": [
+            "01 单点寻边",
+            "02 三点寻边",
+            "03 五点寻边"
+          ]
+        },
+        {
+          "name": "特殊定位",
+          "items": [
+            "01 气浮平台"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "手臂机构",
+      "items": [
+        "01 吸盘机构",
+        "02 手臂模组机构"
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "伺服模组配置",
+      "items": [
+        "六轴机械手",
+        "01 手臂模组",
+        "02 工位升降模组",
+        "03 移栽横移模组"
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "吸盘机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "标准收板机",
+          "items": [
+            "01 取板手臂（常规）",
+            "02 取板手臂（电镀）",
+            "03 取板手臂（集成式）",
+            "04 取纸手臂（收）",
+            "05 取板吸tray手臂（收）",
+            "06 勾tray手臂（ESG）"
+          ]
+        },
+        {
+          "name": "标准放板机",
+          "items": [
+            "01 取板手臂（常规）",
+            "02 取板手臂（电镀）",
+            "03 取板手臂（集成式）",
+            "04 取板手臂（隔纸）",
+            "05 取纸手臂（放）",
+            "06 取板吸tray手臂（放）",
+            "07 取板吸纸手臂（放）",
+            "08 勾tray手臂（ESG）"
+          ]
+        },
+        {
+          "name": "特殊客户",
+          "items": [
+            "01 宏恒胜",
+            "02 庆鼎HC"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "完板方式",
+      "items": [],
+      "configurations": [
+        {
+          "name": "L-RACK",
+          "items": [
+            "01 板架有孔，无法安装镜片",
+            "02 板架有孔，可安装镜片",
+            "03 板架无孔"
+          ]
+        },
+        {
+          "name": "平板",
+          "items": [
+            "01 平板有孔，无法安装镜片",
+            "02 平板有孔，可安装镜片",
+            "03 平板无孔，金属材质",
+            "04 平板无孔，电木材质"
+          ]
+        },
+        {
+          "name": "BOX",
+          "items": [
+            "01 BOX"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "伺服模组机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "横移机构",
+          "items": [
+            "01 手臂横移"
+          ]
+        },
+        {
+          "name": "升降机构",
+          "items": [
+            "01 手臂升降（标准模组）",
+            "02 手臂升降（自制模组）",
+            "03 牙叉升降",
+            "04 暂存牙叉升降",
+            "05 勾tray升降模组（ESG）",
+            "06 龙门升降模组（台达版）",
+            "07 龙门升降模组（汇川版）"
+          ]
+        },
+        {
+          "name": "调宽机构",
+          "items": [
+            "01 伺服调宽（标准）",
+            "02 伺服调宽（特殊）",
+            "03 电缸调宽（标准）"
+          ]
+        },
+        {
+          "name": "移栽机构",
+          "items": [
+            "01 平台移栽（标准）",
+            "02 平台移栽（多定点）"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "工位升降机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "伺服升降",
+          "items": [
+            "01 牙叉升降",
+            "02 牙叉暂存升降",
+            "03 滚筒输送升降"
+          ]
+        },
+        {
+          "name": "马达升降",
+          "items": [
+            "01 台车升降（三相马达）",
+            "02 纸/板台升降（单相马达）",
+            "03 纸/板台升降（三相马达）"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "台车工位机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "台车确认",
+          "items": [
+            "01 固定台车（外部对接）",
+            "02 固定台车（内部对接）",
+            "03 AGV对接"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "板架工位机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "板架确认",
+          "items": [
+            "01 L-RACK（扣锁）",
+            "02 L-RACK（PIN定位）",
+            "03 平板",
+            "04 BOX",
+            "05 TRAY",
+            "06 L插架"
+          ]
+        },
+        {
+          "name": "载具共用",
+          "items": [
+            "01 L插架&L-Rack 判别",
+            "02 tray/BOX判别",
+            "03 多种tray（ESG）"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "暂存机构",
+      "items": [],
+      "configurations": [
+        {
+          "name": "NG暂存机构",
+          "items": [
+            "01 NG板架（斜立式）",
+            "02 NG板架（平板）",
+            "03 NG板架（拉门）"
+          ]
+        },
+        {
+          "name": "DM机构",
+          "items": [
+            "01 DM板架（斜立式）",
+            "02 DM板架（平板）",
+            "03 DM滑台"
+          ]
+        },
+        {
+          "name": "多层架",
+          "items": [
+            "01 多层暂存架"
+          ]
+        }
+      ],
+      "machineType": "mechanism"
+    },
+    {
+      "name": "专案机型",
+      "items": [
+        "CSL(U)R-802（插框机）",
+        "CSZR-102（ESG设备）",
+        "CSL(U)R-605（L-RACK）",
+        "CSL(U)R-625（tray式）",
+        "CSL(U)R-638（L插架）",
+        "CSC-371（LDI移栽）",
+        "CSL(U)R-247（四轴）",
+        "CSL(U)-713（U型架）"
+      ],
+      "machineType": "project"
+    }
+  ],
+  "machine-extra-sections:01 中心拍板": [],
+  "machine-extra-sections:01 入料输送（L-RACK）": [],
+  "machine-extra-sections:01 单段输送段（搭配）": [
+    {
+      "id": 1001,
+      "name": "输送机构",
+      "sort": 1,
+      "kind": "structure",
+      "scope": "machine"
+    }
+  ],
+  "machine-extra-sections:01 吸盘机构": [],
+  "machine-extra-sections:01 宏恒胜": [],
+  "machine-extra-sections:01 手臂模组": [],
+  "machine-extra-sections:01 无刷拍板": [],
+  "machine-extra-sections:01 标准输送段配置": [
+    {
+      "id": 1,
+      "name": "输送机构",
+      "sort": 1,
+      "kind": "structure",
+      "scope": "machine"
+    }
+  ],
+  "machine-extra-sections:02 伺服拍板": [],
+  "machine-extra-sections:02 入料输送（平板/BOX）": [],
+  "machine-extra-sections:02 多段输送段（搭配）": [],
+  "machine-extra-sections:02 工位升降模组": [],
+  "machine-extra-sections:02 庆鼎HC厂": [],
+  "machine-extra-sections:02 手臂模组机构": [],
+  "machine-extra-sections:02 标准收板机配置": [],
+  "machine-extra-sections:02 靠边拍板": [],
+  "machine-extra-sections:03 入料输送（上顶平板）": [],
+  "machine-extra-sections:03 单段输送机（PLC）": [],
+  "machine-extra-sections:03 寻边定位": [],
+  "machine-extra-sections:03 序列拍板": [],
+  "machine-extra-sections:03 标准放板机配置": [],
+  "machine-extra-sections:03 移栽横移模组": [],
+  "machine-extra-sections:04 入料输送（ESG拍板区）": [],
+  "machine-extra-sections:04 多段输送机（PLC）": [],
+  "machine-extra-sections:04 寻边输送配置": [
+    {
+      "id": 1,
+      "name": "输送机构",
+      "sort": 1,
+      "kind": "structure",
+      "scope": "machine"
+    }
+  ],
+  "machine-extra-sections:04 特殊定位": [],
+  "machine-extra-sections:05 入料输送（ESG组合区）": [],
+  "machine-extra-sections:05 特殊制程配置": [],
+  "machine-extra-sections:06 入料输送（三点寻边）": [],
+  "machine-extra-sections:06 入料输送（平板%2FBOX）": [],
+  "machine-extra-sections:06 特殊客户配置": [],
+  "machine-extra-sections:07 入料输送（五点寻边）": [],
+  "machine-extra-sections:@process:2:01 单段输送段（搭配）": [],
+  "machine-extra-sections:@process:2:01 标准输送段配置": [],
+  "machine-extra-sections:@process:2:CSL(U)R-802（插框机）": [],
+  "machine-extra-sections:CSL(U)R-802（插框机）": [],
+  "machine-extra-sections:CSZR-102（ESG设备）": [],
+  "machine-extra-sections:六轴机械手": [],
+  "machine-global-sections:all": [
+    {
+      "id": 1,
+      "name": "输送机构",
+      "sort": 1,
+      "kind": "structure",
+      "scope": "global"
+    },
+    {
+      "id": 2,
+      "name": "手臂机构",
+      "sort": 2,
+      "kind": "structure",
+      "scope": "global"
+    },
+    {
+      "id": 3,
+      "name": "台车工位结构",
+      "sort": 3,
+      "kind": "structure",
+      "scope": "global"
+    },
+    {
+      "id": 4,
+      "name": "机型注意事项",
+      "sort": 4,
+      "kind": "notes",
+      "scope": "global",
+      "locked": true
+    }
+  ],
+  "machine-processes:all": [
+    {
+      "id": 1,
+      "name": "制程1",
+      "sort": 1,
+      "locked": true
+    },
+    {
+      "id": 2,
+      "name": "制程2",
+      "sort": 2
+    }
+  ],
+  "machine-section-images:1001:01 单段输送段（搭配）": [],
+  "machine-section-images:1001:07 入料输送（五点寻边）": [],
+  "machine-section-images:1001:@process:2:01 单段输送段（搭配）": [],
+  "machine-section-images:1001:CSL(U)R-802（插框机）": [],
+  "machine-section-images:1:01 手臂模组": [],
+  "machine-section-images:1:01 标准输送段配置": [
+    {
+      "dataUrl": "/api/files/c9cde945-1a21-4efb-9c95-33cbe6285410/content",
+      "fileName": "输送机（PLC）.png",
+      "mimeType": "image/png",
+      "size": 182900,
+      "fileId": "c9cde945-1a21-4efb-9c95-33cbe6285410"
+    }
+  ],
+  "machine-section-images:1:02 工位升降模组": [],
+  "machine-section-images:1:02 标准收板机配置": [],
+  "machine-section-images:1:03 寻边定位": [],
+  "machine-section-images:1:03 标准放板机配置": [],
+  "machine-section-images:1:04 寻边输送配置": [
+    {
+      "dataUrl": "/api/files/9dd9bbba-c7ba-4b87-b7d1-f008e3b2e609/content",
+      "fileName": "1.png",
+      "mimeType": "image/png",
+      "size": 58548,
+      "fileId": "9dd9bbba-c7ba-4b87-b7d1-f008e3b2e609"
+    },
+    {
+      "dataUrl": "/api/files/b2ae2e77-42bb-4463-9330-62ca6940cced/content",
+      "fileName": "154053qZqfb.jpg",
+      "mimeType": "image/jpeg",
+      "size": 290806,
+      "fileId": "b2ae2e77-42bb-4463-9330-62ca6940cced"
+    }
+  ],
+  "machine-section-images:1:05 特殊制程配置": [],
+  "machine-section-images:1:06 特殊客户配置": [],
+  "machine-section-images:2:01 标准输送段配置": [],
+  "machine-section-images:2:04 寻边输送配置": [],
+  "machine-section-images:3:01 标准输送段配置": [],
+  "machine-section-images:3:04 寻边输送配置": [],
+  "machine-section-rows:1001:01 单段输送段（搭配）": [],
+  "machine-section-rows:1001:07 入料输送（五点寻边）": [],
+  "machine-section-rows:1001:@process:2:01 单段输送段（搭配）": [],
+  "machine-section-rows:1001:CSL(U)R-802（插框机）": [],
+  "machine-section-rows:1:01 吸盘机构": [],
+  "machine-section-rows:1:01 手臂模组": [],
+  "machine-section-rows:1:01 无刷拍板": [],
+  "machine-section-rows:1:01 标准输送段配置": [
+    {
+      "id": 1,
+      "role": "入料确认",
+      "sensorIds": [
+        1,
+        2,
+        3
+      ],
+      "sensorType": "01 漫反射",
+      "spec": "检测距离 0~300mm；12~24V DC；PNP/NPN；IP67、检测距离 0~500mm；10~30V DC；PNP/NPN；IP67、检测距离 0~200mm；12~24V DC；PNP；IP67",
+      "purpose": "确认板件入料",
+      "name": "",
+      "desc": "",
+      "note": ""
+    },
+    {
+      "id": 2,
+      "role": "出料确认",
+      "sensorIds": [
+        1,
+        2,
+        3
+      ],
+      "sensorType": "01 漫反射",
+      "spec": "检测距离 0~300mm；12~24V DC；PNP/NPN；IP67、检测距离 0~500mm；10~30V DC；PNP/NPN；IP67、检测距离 0~200mm；12~24V DC；PNP；IP67",
+      "purpose": "确认板件出料",
+      "name": "",
+      "desc": "",
+      "note": ""
+    }
+  ],
+  "machine-section-rows:1:02 伺服拍板": [],
+  "machine-section-rows:1:02 工位升降模组": [],
+  "machine-section-rows:1:02 手臂模组机构": [],
+  "machine-section-rows:1:02 标准收板机配置": [],
+  "machine-section-rows:1:03 寻边定位": [],
+  "machine-section-rows:1:03 标准放板机配置": [],
+  "machine-section-rows:1:03 移栽横移模组": [],
+  "machine-section-rows:1:04 寻边输送配置": [
+    {
+      "id": 4,
+      "role": "测试",
+      "sensorIds": [
+        1,
+        4,
+        8
+      ],
+      "sensorType": "01 漫反射、02 对照式、04 光纤式",
+      "spec": "检测距离 0~300mm；12~24V DC；PNP/NPN；IP67、检测距离 0~10m；12~24V DC；PNP/NPN；IP67、感应距离 4mm；12~24V DC；NPN-NO；IP67",
+      "purpose": "111",
+      "name": "",
+      "desc": "",
+      "note": "111"
+    }
+  ],
+  "machine-section-rows:1:04 特殊定位": [],
+  "machine-section-rows:1:05 特殊制程配置": [],
+  "machine-section-rows:1:06 特殊客户配置": [],
+  "machine-section-rows:1:六轴机械手": [],
+  "machine-section-rows:2:01 吸盘机构": [],
+  "machine-section-rows:2:01 手臂模组": [],
+  "machine-section-rows:2:01 无刷拍板": [],
+  "machine-section-rows:2:01 标准输送段配置": [],
+  "machine-section-rows:2:02 伺服拍板": [],
+  "machine-section-rows:2:02 工位升降模组": [],
+  "machine-section-rows:2:02 手臂模组机构": [],
+  "machine-section-rows:2:02 标准收板机配置": [],
+  "machine-section-rows:2:03 寻边定位": [],
+  "machine-section-rows:2:03 标准放板机配置": [],
+  "machine-section-rows:2:03 移栽横移模组": [],
+  "machine-section-rows:2:04 寻边输送配置": [],
+  "machine-section-rows:2:04 特殊定位": [],
+  "machine-section-rows:2:05 特殊制程配置": [],
+  "machine-section-rows:2:06 入料输送（平板%2FBOX）": [],
+  "machine-section-rows:2:06 特殊客户配置": [],
+  "machine-section-rows:2:六轴机械手": [],
+  "machine-section-rows:3:01 吸盘机构": [],
+  "machine-section-rows:3:01 手臂模组": [],
+  "machine-section-rows:3:01 无刷拍板": [],
+  "machine-section-rows:3:01 标准输送段配置": [],
+  "machine-section-rows:3:02 伺服拍板": [],
+  "machine-section-rows:3:02 工位升降模组": [],
+  "machine-section-rows:3:02 手臂模组机构": [],
+  "machine-section-rows:3:02 标准收板机配置": [],
+  "machine-section-rows:3:03 寻边定位": [],
+  "machine-section-rows:3:03 标准放板机配置": [],
+  "machine-section-rows:3:03 移栽横移模组": [],
+  "machine-section-rows:3:04 寻边输送配置": [],
+  "machine-section-rows:3:04 特殊定位": [],
+  "machine-section-rows:3:05 特殊制程配置": [],
+  "machine-section-rows:3:06 入料输送（平板%2FBOX）": [],
+  "machine-section-rows:3:06 特殊客户配置": [],
+  "machine-section-rows:3:六轴机械手": [],
+  "machine-section-rows:4:01 标准输送段配置": [],
+  "machine-section-rows:4:02 工位升降模组": [],
+  "machine-section-rows:4:03 寻边定位": [],
+  "machine-section-rows:4:04 寻边输送配置": [],
+  "machine-section-rows:4:05 特殊制程配置": [],
+  "machine-section-rows:4:06 入料输送（平板%2FBOX）": [],
+  "machine-section-rows:4:06 特殊客户配置": [],
+  "meta:seed-version": [
+    {
+      "version": 12
+    }
+  ],
+  "process-intro:all": [],
+  "process-steps:all": [
+    {
+      "id": 1,
+      "layer": "电镀",
+      "name": "PTH电镀沉铜",
+      "role": "目的：镀通孔，实现多层板之间的互联\n化学沉铜：在绝缘的孔壁上形成最初的，薄的化学铜箔\n电镀铜加厚：将铜箔加厚到要求的厚度",
+      "feature": "板子孔多，含铜量高，板子一般较厚",
+      "note": "建议使用近接开关检测板子-输送M18,手臂M30"
+    },
+    {
+      "id": 2,
+      "layer": "电镀",
+      "name": "VCP电镀",
+      "role": "垂直连续电镀，垂直悬挂，连续缓慢的通过电镀槽，加厚在板子孔内和表面的铜箔厚度",
+      "feature": "板子孔多，含铜量高，板子一般较厚，需垂直上料到主线",
+      "note": "建议使用近接开关检测板子-输送M18,手臂M30"
+    },
+    {
+      "id": 3,
+      "layer": "电镀",
+      "name": "填孔电镀",
+      "role": "填充板子上的通孔/盲孔",
+      "feature": "经过填孔电镀后，板子孔较少，含铜量高，板子一般较厚",
+      "note": ""
+    },
+    {
+      "id": 4,
+      "layer": "电镀",
+      "name": "研磨",
+      "role": "分十六轴研磨和十二轴研磨，实现极致的铜面清洁度，粗糙度和附着力",
+      "feature": "板子孔多，含铜量高，板子一般较厚",
+      "note": ""
+    }
+  ],
+  "sensor-3d:all": [],
+  "sensor-catalog:all": [
+    {
+      "id": 1,
+      "status": "03 停用",
+      "partNumber": "",
+      "sensorType": "01 漫反射",
+      "brand": "OMRON",
+      "model": "E3Z-D61",
+      "spec": "检测距离 0~300mm；12~24V DC；PNP/NPN；IP67",
+      "feature": "检测物体漫反射光量，适用于不透明物体的有无检测；需注意被测物表面颜色与光泽对检测距离的影响",
+      "scene": "PCB板检测、输送线板件有无、掉板检测、完板确认",
+      "sopId": 7,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 2,
+      "status": "02 备选",
+      "partNumber": "",
+      "sensorType": "01 漫反射",
+      "brand": "SICK",
+      "model": "WL12-2B530",
+      "spec": "检测距离 0~500mm；10~30V DC；PNP/NPN；IP67",
+      "feature": "检测物体漫反射光量，适用于不透明物体的有无检测；需注意被测物表面颜色与光泽对检测距离的影响",
+      "scene": "PCB板检测、输送线板件有无、掉板检测、完板确认",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 3,
+      "status": "02 备选",
+      "partNumber": "",
+      "sensorType": "01 漫反射",
+      "brand": "Keyence",
+      "model": "PZ-G61CP",
+      "spec": "检测距离 0~200mm；12~24V DC；PNP；IP67",
+      "feature": "检测物体漫反射光量，适用于不透明物体的有无检测；需注意被测物表面颜色与光泽对检测距离的影响",
+      "scene": "PCB板检测、输送线板件有无、掉板检测、完板确认",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 4,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "02 对照式",
+      "brand": "OMRON",
+      "model": "E3Z-T61",
+      "spec": "检测距离 0~10m；12~24V DC；PNP/NPN；IP67",
+      "feature": "发射器与接收器相对安装，检测光束遮断，适合透明或半透明物体；安装时注意发射器与接收器轴线对准",
+      "scene": "投板口检测、宽度检测、透明板检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 5,
+      "status": "02 备选",
+      "partNumber": "",
+      "sensorType": "02 对照式",
+      "brand": "SICK",
+      "model": "WS12-3D2430",
+      "spec": "检测距离 0~7m；10~30V DC；PNP；IP67",
+      "feature": "发射器与接收器相对安装，检测光束遮断，适合透明或半透明物体；安装时注意发射器与接收器轴线对准",
+      "scene": "投板口检测、宽度检测、透明板检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 6,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "03 镜片式",
+      "brand": "OMRON",
+      "model": "E2E-X5MF1",
+      "spec": "感应距离 5mm；12~24V DC；NPN-NO；IP67",
+      "feature": "感应金属体接近，无接触检测，响应速度快；检测距离受被测金属材质影响，需按实际情况校正",
+      "scene": "气缸行程确认、机械手臂位置、台车定位",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 7,
+      "status": "02 备选",
+      "partNumber": "",
+      "sensorType": "03 镜片式",
+      "brand": "Autonics",
+      "model": "PR12-4DN",
+      "spec": "感应距离 4mm；10~30V DC；NPN；IP67",
+      "feature": "感应金属体接近，无接触检测，响应速度快；检测距离受被测金属材质影响，需按实际情况校正",
+      "scene": "气缸行程确认、机械手臂位置、台车定位",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 8,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "04 光纤式",
+      "brand": "OMRON",
+      "model": "E2K-X4ME1",
+      "spec": "感应距离 4mm；12~24V DC；NPN-NO；IP67",
+      "feature": "可检测金属和非金属物体，对液体及粉粒体有效；灵敏度需现场调整，注意周围环境湿度变化影响",
+      "scene": "盒装板件检测、料位检测、非金属部件有无",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 9,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "05 槽型光电",
+      "brand": "OMRON",
+      "model": "E3X-DA11-S",
+      "spec": "检测距离依光纤；12~24V DC；NPN/PNP；IP67",
+      "feature": "通过光纤传导光信号，可在狭窄空间安装；光纤头需定期清洁，弯曲半径不得小于规格要求",
+      "scene": "狭小空间检测、高精度定位、小物体检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 10,
+      "status": "02 备选",
+      "partNumber": "",
+      "sensorType": "05 槽型光电",
+      "brand": "Keyence",
+      "model": "FS-V21R",
+      "spec": "检测距离依光纤；12~24V DC；NPN/PNP；IP67",
+      "feature": "通过光纤传导光信号，可在狭窄空间安装；光纤头需定期清洁，弯曲半径不得小于规格要求",
+      "scene": "狭小空间检测、高精度定位、小物体检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 11,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "06 近接式",
+      "brand": "Keyence",
+      "model": "LV-H62",
+      "spec": "检测距离 20~300mm；12~24V DC；NPN/PNP；IP67",
+      "feature": "激光束检测，精度高，检测距离远；激光为2类激光产品，避免直视光束",
+      "scene": "精密定位、小目标检测、高速检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 12,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "07 静电容式",
+      "brand": "SICK",
+      "model": "UM30-213113",
+      "spec": "检测距离 30~300mm；10~30V DC；PNP；IP67",
+      "feature": "超声波检测，不受颜色影响，适合透明物体；温度变化会影响检测精度，需补偿",
+      "scene": "透明物体检测、液位检测、料位检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    },
+    {
+      "id": 13,
+      "status": "01 现用",
+      "partNumber": "",
+      "sensorType": "08 真空式",
+      "brand": "PISCO",
+      "model": "ZSE10",
+      "spec": "检测范围 -101~101kPa；12~24V DC；NPN/PNP；IP40",
+      "feature": "检测气压或液压，用于真空吸附确认；定期校验压力值，清理压力接口",
+      "scene": "真空吸盘确认、气缸压力监控、泄漏检测",
+      "sopId": null,
+      "model3dId": null,
+      "replacesId": null,
+      "replacedById": null,
+      "problemNote": "",
+      "replacedAt": ""
+    }
+  ],
+  "sensor-sop-file:all": [],
+  "sensor-sop:all": [
+    {
+      "id": 1,
+      "title": "① 输送配置标准SOP V2.1",
+      "fileName": "① 输送配置标准SOP V2.1.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/8d12d04f-55f3-4376-b757-813cd7615813/content",
+      "size": 6457090,
+      "uploadedAt": "2026-08-25T12:23:19.185Z"
+    },
+    {
+      "id": 2,
+      "title": "② 输送拍板安装SOP V2.0",
+      "fileName": "② 输送拍板安装SOP V2.0.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/0ef1216b-484d-43ed-ad25-c5dd271295d8/content",
+      "size": 1496134,
+      "uploadedAt": "2026-08-25T12:23:21.518Z"
+    },
+    {
+      "id": 3,
+      "title": "③ 手臂掉板完板检知安装SOP V2.0",
+      "fileName": "③ 手臂掉板完板检知安装SOP V2.0.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/2f66a50e-a5f5-4fad-b330-c1ef8a511611/content",
+      "size": 1282715,
+      "uploadedAt": "2026-08-25T12:23:23.965Z"
+    },
+    {
+      "id": 4,
+      "title": "④ 模组&升降感应器配置SOP V2.0",
+      "fileName": "④ 模组&升降感应器配置SOP V2.0.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/6efe94c7-985d-422e-8916-a80564891af7/content",
+      "size": 3053554,
+      "uploadedAt": "2026-08-25T12:23:29.237Z"
+    },
+    {
+      "id": 5,
+      "title": "⑤ 台车板架确认工位 V2.0",
+      "fileName": "⑤ 台车板架确认工位 V2.0.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/9f95a509-616f-4858-8165-35ef978229f8/content",
+      "size": 1326912,
+      "uploadedAt": "2026-08-25T12:23:31.513Z"
+    },
+    {
+      "id": 6,
+      "title": "⑥ DM&NG板架感应器配置SOP V2.0",
+      "fileName": "⑥ DM&NG板架感应器配置SOP V2.0.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/28b32f82-4fa2-46d2-99f6-12fc26ff24a7/content",
+      "size": 1151709,
+      "uploadedAt": "2026-08-25T12:23:33.537Z"
+    },
+    {
+      "id": 7,
+      "title": "⑦ 感应器附录",
+      "fileName": "⑦ 感应器附录.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/cce682ba-dd0a-496a-bf33-b43fb69fb977/content",
+      "size": 4759548,
+      "uploadedAt": "2026-08-25T12:23:36.190Z"
+    },
+    {
+      "id": 8,
+      "title": "⑧ 感应器原理",
+      "fileName": "⑧ 感应器原理.pdf",
+      "mimeType": "application/pdf",
+      "dataUrl": "/api/files/4c09915d-1cee-45f2-9807-4a4c10dc5c9c/content",
+      "size": 602684,
+      "uploadedAt": "2026-08-25T12:23:37.827Z"
+    }
+  ]
+}

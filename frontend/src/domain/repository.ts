@@ -102,10 +102,13 @@ function entityKindDefinition(kind: string) {
 export function createSelectionRepository({
   storage,
   sensorData,
+  demoData = true,
 }: {
   crudDefaults: CrudDefaults;
   sensorData: Record<string, SensorTypeDefinition>;
   storage?: StorageLike;
+  /** 仅用于生成后端演示数据/测试夹具；生产页面必须关闭。 */
+  demoData?: boolean;
 }) {
   let store: PersistedStore;
   try {
@@ -113,16 +116,18 @@ export function createSelectionRepository({
   } catch {
     store = parsePersistedStore(null);
   }
-  const currentSeedVersion =
-    Number(
-      (store['meta:seed-version']?.[0] as { version?: unknown } | undefined)
-        ?.version,
-    ) || 0;
-  store = migrateSelectionSeedStore(
-    store,
-    currentSeedVersion,
-    SEED_VERSION,
-  ).store;
+  if (demoData) {
+    const currentSeedVersion =
+      Number(
+        (store['meta:seed-version']?.[0] as { version?: unknown } | undefined)
+          ?.version,
+      ) || 0;
+    store = migrateSelectionSeedStore(
+      store,
+      currentSeedVersion,
+      SEED_VERSION,
+    ).store;
+  }
 
   function persist(snapshot: PersistedStore): boolean {
     try {
@@ -293,14 +298,18 @@ export function createSelectionRepository({
       (item) => item.name,
     );
     if (!Array.isArray(store[key])) {
-      store[key] = createSensorCatalogDefaults(sensorData).map((item) => ({
-        ...item,
-        status:
-          findSensorStatusName(
-            statusNames,
-            isSensorStatus(item.status, 'current') ? 'current' : 'alternate',
-          ) ?? item.status,
-      }));
+      store[key] = demoData
+        ? createSensorCatalogDefaults(sensorData).map((item) => ({
+            ...item,
+            status:
+              findSensorStatusName(
+                statusNames,
+                isSensorStatus(item.status, 'current')
+                  ? 'current'
+                  : 'alternate',
+              ) ?? item.status,
+          }))
+        : [];
     }
     store[key] = normalizeSensorItems(store[key], typeNames, statusNames);
     return store[key] as SensorItem[];
@@ -342,12 +351,14 @@ export function createSelectionRepository({
     const key = keyFor('machine-processes', 'all');
     const source = Array.isArray(store[key])
       ? store[key]
-      : [defaultMachineProcess];
+      : demoData
+        ? [defaultMachineProcess]
+        : [];
     let items = normalizeMachineProcesses(source);
     const defaultIndex = items.findIndex((item) => item.id === 1);
-    if (defaultIndex === -1) {
+    if (demoData && defaultIndex === -1) {
       items = normalizeMachineProcesses([defaultMachineProcess, ...items]);
-    } else {
+    } else if (defaultIndex >= 0) {
       items[defaultIndex] = { ...items[defaultIndex], locked: true };
     }
     store[key] = items;
@@ -925,10 +936,10 @@ export function createSelectionRepository({
   function getProcessSteps(): ProcessStepItem[] {
     const key = keyFor('process-steps', 'all');
     if (!Array.isArray(store[key])) {
-      store[key] = createProcessStepDefaults();
+      store[key] = demoData ? createProcessStepDefaults() : [];
     }
     store[key] = normalizeProcessSteps(store[key]);
-    if (store[key].length === 0) {
+    if (demoData && store[key].length === 0) {
       store[key] = createProcessStepDefaults();
     }
     return store[key] as ProcessStepItem[];
@@ -1004,11 +1015,15 @@ export function createSelectionRepository({
 
   function getGeneralStructureLabelMap(): Record<number, string> {
     const key = generalStructureLabelsKey();
-    const map: Record<number, string> = { ...GENERAL_STRUCTURE_SECTION_LABELS };
+    const map: Record<number, string> = demoData
+      ? { ...GENERAL_STRUCTURE_SECTION_LABELS }
+      : {};
     if (!Array.isArray(store[key])) {
-      store[key] = Object.entries(GENERAL_STRUCTURE_SECTION_LABELS).map(
-        ([id, name]) => ({ id: Number(id), name }),
-      );
+      store[key] = demoData
+        ? Object.entries(GENERAL_STRUCTURE_SECTION_LABELS).map(
+            ([id, name]) => ({ id: Number(id), name }),
+          )
+        : [];
     }
     for (const row of store[key]) {
       if (!row || typeof row !== 'object') continue;
@@ -1044,15 +1059,19 @@ export function createSelectionRepository({
   function getGlobalMachineSections(): MachineSectionItem[] {
     const key = keyFor('machine-global-sections', 'all');
     if (!Array.isArray(store[key])) {
-      store[key] = MACHINE_SECTION_SEED.map((item) => ({ ...item }));
+      store[key] = demoData
+        ? MACHINE_SECTION_SEED.map((item) => ({ ...item }))
+        : [];
     }
     store[key] = normalizeMachineSections(store[key], { allowNotes: true });
-    if (store[key].length === 0) {
+    if (demoData && store[key].length === 0) {
       store[key] = normalizeMachineSections(
         MACHINE_SECTION_SEED.map((item) => ({ ...item })),
         { allowNotes: true },
       );
     }
+
+    if (!demoData) return store[key] as MachineSectionItem[];
 
     const mistakenNames: Record<number, string> = {
       1: '标准输送段',
@@ -1727,7 +1746,9 @@ export function createSelectionRepository({
     const key = keyFor(listId, entityName);
     if (!Array.isArray(store[key])) {
       store[key] =
-        listId === 'customer-sop' ? createDefaultControlledDocuments() : [];
+        demoData && listId === 'customer-sop'
+          ? createDefaultControlledDocuments()
+          : [];
     }
     const allowedKinds =
       listId === 'process-intro'
@@ -1852,11 +1873,13 @@ export function createSelectionRepository({
       store[key] =
         legacyKey && Array.isArray(store[legacyKey])
           ? store[legacyKey]
-          : createDictionaryDefaults(code);
+          : demoData
+            ? createDictionaryDefaults(code)
+            : [];
     }
 
     store[key] = normalizeDictionaryItems(store[key]);
-    if (store[key].length === 0) {
+    if (demoData && store[key].length === 0) {
       store[key] = createDictionaryDefaults(code);
     }
 
@@ -2071,10 +2094,10 @@ export function createSelectionRepository({
     if (!entityKindDefinition(kind)) return [];
     const key = entityGroupsKey(kind);
     if (!Array.isArray(store[key])) {
-      store[key] = createEntityGroupDefaults(kind);
+      store[key] = demoData ? createEntityGroupDefaults(kind) : [];
     }
     store[key] = normalizeEntityGroups(store[key], kind);
-    if (store[key].length === 0) {
+    if (demoData && store[key].length === 0) {
       store[key] = createEntityGroupDefaults(kind);
     }
     return store[key] as EntityGroup[];
@@ -2736,6 +2759,7 @@ export function buildDefaultStore({
     storage: fakeStorage,
     crudDefaults,
     sensorData,
+    demoData: true,
   });
   repo.getEntityGroups('customer');
   repo.getEntityGroups('machine');

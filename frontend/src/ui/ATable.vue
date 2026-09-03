@@ -475,6 +475,7 @@ td {
   padding: var(--space-1) var(--space-3);
   overflow: hidden;
   font: var(--text-control);
+  font-variant-numeric: tabular-nums;
   color: var(--label);
   text-align: center;
   vertical-align: middle;

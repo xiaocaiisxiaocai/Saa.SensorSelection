@@ -70,7 +70,7 @@ const hasActiveFilters = computed(
 );
 
 const columns: TableColumn[] = [
-  { key: 'timestamp', label: '时间', width: 180 },
+  { key: 'timestamp', label: '时间', width: 180, fixed: 'start' },
   { key: 'username', label: '用户', width: 120 },
   { key: 'action', label: '操作', width: 120 },
   {

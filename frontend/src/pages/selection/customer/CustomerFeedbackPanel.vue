@@ -98,7 +98,7 @@ const historyRows = computed(() =>
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '问题分类', width: 100 },
+    { key: 'type', label: '问题分类', width: 100, fixed: 'start' },
     { key: 'machine', label: '适用机型', width: 90 },
     { key: 'problem', label: '问题点', minWidth: 205, ellipsis: true },
     { key: 'measure', label: '改善对策', minWidth: 205, ellipsis: true },

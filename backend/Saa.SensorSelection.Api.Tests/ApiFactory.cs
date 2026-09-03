@@ -24,6 +24,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // 测试必须使用隔离配置，不能加载开发环境的业务演示种子。
+        builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath}");
     }
 

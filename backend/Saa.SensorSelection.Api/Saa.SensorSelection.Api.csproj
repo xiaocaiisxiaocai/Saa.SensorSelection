@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Update="Data/demo-store.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
     <!-- 设计时迁移工具用（dotnet-ef），运行时不需要 -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">

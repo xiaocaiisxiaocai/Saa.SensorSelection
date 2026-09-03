@@ -116,6 +116,8 @@ const requiredTokens = [
   '--separator',
   '--separator-opaque',
   '--control-stroke',
+  '--scrollbar-thumb',
+  '--scrollbar-thumb-hover',
   '--fill-1',
   '--bg-window',
   '--bg-content',

@@ -85,16 +85,19 @@ const processSteps: ProcessStepItem[] = [
 ];
 
 const machineModels = [{ id: 3, name: '中间输送机', sort: 1 }];
-const boardCharacteristics = [
-  { id: 4, name: '平板无孔，金属材质', sort: 1 },
-];
+const boardCharacteristics = [{ id: 4, name: '平板无孔，金属材质', sort: 1 }];
 
 describe('buildMachineTableRows', () => {
   it('expands each selected sensor into a physical row and keeps the group metadata', () => {
     const result = buildMachineTableRows([row], sensors, true);
 
     expect(result).toHaveLength(3);
-    expect(result.map((item) => item.sensorType)).toEqual(['漫反射', '对射', '静电容']);
+    expect(result.map((item) => item.sensorType)).toEqual([
+      '漫反射',
+      '对射',
+      '静电容',
+    ]);
+    expect(result.map((item) => item.groupEnd)).toEqual([false, false, true]);
     expect(result.map((item) => item.spec)).toEqual([
       'OMRON E3Z-D61 · 检测距离 0~300mm',
       'OMRON E3Z-T61 · 检测距离 0~10m',

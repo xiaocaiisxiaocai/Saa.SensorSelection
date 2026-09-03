@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Maximize2,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -610,7 +611,7 @@ async function removeImage(index: number) {
           :aria-label="isStructure ? '搜索结构内容' : '搜索机型注意事项'"
           :placeholder="
             isStructure
-              ? '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注'
+              ? '搜索规格、型号或功能'
               : '搜索注意分类、事项名称、说明或备注'
           "
         />
@@ -636,7 +637,13 @@ async function removeImage(index: number) {
         striped
       >
         <template v-if="isStructure" #cell-sensorType="{ row }">
-          <div v-if="sensorTypeList(row).length" class="badge-wrap">
+          <div
+            v-if="sensorTypeList(row).length"
+            class="badge-wrap machine-sensor-entry"
+            :class="{
+              'machine-sensor-entry--continued': !row.groupEnd,
+            }"
+          >
             <ABadge
               v-for="type in sensorTypeList(row)"
               :key="type"
@@ -644,14 +651,31 @@ async function removeImage(index: number) {
               tone="blue"
             />
           </div>
-          <span v-else>—</span>
+          <span
+            v-else
+            class="machine-sensor-entry"
+            :class="{
+              'machine-sensor-entry--continued': !row.groupEnd,
+            }"
+          >
+            —
+          </span>
         </template>
         <template v-if="isStructure" #cell-spec="{ row }">
-          <div class="machine-spec-cell">
+          <div
+            class="machine-spec-cell machine-sensor-entry"
+            :class="{
+              'machine-sensor-entry--continued': !row.groupEnd,
+            }"
+          >
             <template v-if="row.sensor">
               <div class="machine-spec-cell__header">
-                <span class="machine-spec-cell__brand">{{ row.sensor.brand }}</span>
-                <span class="machine-spec-cell__model">{{ row.sensor.model }}</span>
+                <span class="machine-spec-cell__brand">{{
+                  row.sensor.brand
+                }}</span>
+                <span class="machine-spec-cell__model">{{
+                  row.sensor.model
+                }}</span>
               </div>
               <div v-if="row.sensor.spec" class="machine-spec-cell__spec">
                 {{ row.sensor.spec }}
@@ -733,16 +757,28 @@ async function removeImage(index: number) {
           @click="preview = image"
         >
           <img :src="image.dataUrl" :alt="image.fileName">
-          <span>{{ image.fileName }}</span>
         </button>
-        <AIconButton
-          v-if="writable"
-          :icon="Trash2"
-          label="删除"
-          size="small"
-          variant="destructive"
-          @click="removeImage(index)"
-        />
+        <div class="image-card__footer">
+          <span class="image-card__name" :title="image.fileName">
+            {{ image.fileName }}
+          </span>
+          <div class="image-card__actions">
+            <AIconButton
+              :icon="Maximize2"
+              :label="`放大预览 ${image.fileName}`"
+              size="small"
+              @click="preview = image"
+            />
+            <AIconButton
+              v-if="writable"
+              :icon="Trash2"
+              :label="`删除 ${image.fileName}`"
+              size="small"
+              variant="destructive"
+              @click="removeImage(index)"
+            />
+          </div>
+        </div>
       </div>
     </aside>
   </div>
@@ -899,6 +935,17 @@ async function removeImage(index: number) {
   gap: 2px;
   text-align: left;
   padding: 2px 0;
+}
+
+.machine-sensor-entry {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  padding-block: var(--space-2);
+}
+
+.machine-sensor-entry--continued {
+  border-bottom: 1px solid var(--separator);
 }
 
 .machine-spec-cell__header {

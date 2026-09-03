@@ -40,6 +40,8 @@
   --separator: rgb(60 60 67 / 16%);
   --separator-opaque: #dededf;
   --control-stroke: rgb(60 60 67 / 36%);
+  --scrollbar-thumb: rgb(60 60 67 / 22%);
+  --scrollbar-thumb-hover: rgb(60 60 67 / 34%);
 
   --fill-1: rgb(120 120 128 / 16%);
   --fill-2: rgb(120 120 128 / 10%);
@@ -197,6 +199,8 @@
   --separator: rgb(84 84 88 / 65%);
   --separator-opaque: #38383a;
   --control-stroke: rgb(235 235 245 / 42%);
+  --scrollbar-thumb: rgb(235 235 245 / 24%);
+  --scrollbar-thumb-hover: rgb(235 235 245 / 38%);
 
   --fill-1: rgb(120 120 128 / 36%);
   --fill-2: rgb(120 120 128 / 32%);

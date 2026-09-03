@@ -67,6 +67,16 @@ const sharedSourceListSource = readFileSync(
   ),
   'utf8',
 );
+const globalCss = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'styles',
+    'global.css',
+  ),
+  'utf8',
+);
 
 async function mountPage(
   authenticated = false,
@@ -641,9 +651,7 @@ describe('MachinePage', () => {
     await flushPromises();
 
     const search = panel.getComponent(ASearchField);
-    expect(search.props('placeholder')).toBe(
-      '搜索功能作用、机型、工艺制程、板件特性、传感器类型、规格、作用或备注',
-    );
+    expect(search.props('placeholder')).toBe('搜索规格、型号或功能');
 
     search.vm.$emit('update:modelValue', secondProcessStep.name);
     await flushPromises();
@@ -926,11 +934,40 @@ describe('MachinePage', () => {
     expect(selectionPageCss).not.toMatch(
       /\.machine-images \.a-file-drop\s*\{[^}]*width:\s*calc\(100% \+[^}]*\}/s,
     );
-    expect(machineSectionPanelSource).toContain(
-      'class="image-card__preview"',
+    expect(machineSectionPanelSource).toContain('class="image-card__preview"');
+    expect(machineSectionPanelSource).toContain('class="image-card__footer"');
+    expect(machineSectionPanelSource).toContain('class="image-card__name"');
+    expect(machineSectionPanelSource).toContain('class="image-card__actions"');
+    expect(machineSectionPanelSource).toContain(':icon="Maximize2"');
+    expect(selectionPageCss).toMatch(
+      /\.image-card__footer\s*\{[^}]*border-top:\s*1px solid var\(--separator\);/s,
     );
     expect(machineSectionPanelSource).not.toMatch(
       /<button[^>]*class="image-card"/,
+    );
+  });
+
+  it('uses aligned separators for sensor entries inside a compound row', () => {
+    expect(machineSectionPanelSource).toContain(
+      "'machine-sensor-entry--continued': !row.groupEnd",
+    );
+    expect(machineSectionPanelSource).toContain(
+      'class="machine-spec-cell machine-sensor-entry"',
+    );
+    expect(machineSectionPanelSource).toMatch(
+      /\.machine-sensor-entry--continued\s*\{[^}]*border-bottom:\s*1px solid var\(--separator\);/s,
+    );
+  });
+
+  it('uses a slim overlay scrollbar throughout the app', () => {
+    expect(globalCss).toMatch(
+      /\*::-webkit-scrollbar\s*\{[^}]*width:\s*6px;[^}]*height:\s*6px;/s,
+    );
+    expect(globalCss).toMatch(
+      /\*::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*transparent;/s,
+    );
+    expect(globalCss).toMatch(
+      /\*:hover::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*var\(--scrollbar-thumb\);/s,
     );
   });
 

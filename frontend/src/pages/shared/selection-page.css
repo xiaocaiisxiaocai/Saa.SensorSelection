@@ -332,9 +332,9 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  background: var(--bg-content);
+  gap: 0;
+  padding: 0;
+  background: var(--fill-4);
   border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
@@ -349,15 +349,46 @@
 .image-card__preview {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   width: 100%;
-  padding: 0;
+  padding: var(--space-2);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   background: transparent;
   border: 0;
+}
+
+.image-card__preview:focus-visible {
+  outline: 0;
+  box-shadow: inset var(--focus-ring);
+}
+
+.image-card__footer {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-2);
+  background: var(--bg-content);
+  border-top: 1px solid var(--separator);
+}
+
+.image-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--text-caption);
+  color: var(--label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  align-items: center;
 }
 
 .image-card:hover {

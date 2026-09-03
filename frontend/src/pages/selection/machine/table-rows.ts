@@ -9,6 +9,7 @@ export interface MachineTableRow extends MachineSectionRow {
   displayId: string;
   groupSize: number;
   groupStart: boolean;
+  groupEnd: boolean;
   machineModelName: string;
   processStepName: string;
   boardCharacteristicName: string;
@@ -56,6 +57,7 @@ export function buildMachineTableRows(
       displayId: `${item.id}-${index}-${sensor?.id ?? 'legacy'}`,
       groupSize: displaySensors.length,
       groupStart: index === 0,
+      groupEnd: index === displaySensors.length - 1,
       machineModelName,
       processStepName,
       boardCharacteristicName,

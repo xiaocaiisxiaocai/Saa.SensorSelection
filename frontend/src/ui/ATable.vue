@@ -463,17 +463,6 @@ watch(
   box-shadow: var(--focus-ring);
 }
 
-.a-table::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.a-table::-webkit-scrollbar-thumb {
-  background: var(--fill-1);
-  border: 2px solid var(--bg-content);
-  border-radius: var(--radius-pill);
-}
-
 table {
   width: 100%;
   table-layout: fixed;

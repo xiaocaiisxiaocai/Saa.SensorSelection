@@ -334,8 +334,8 @@
   flex-direction: column;
   gap: 0;
   padding: 0;
-  background: var(--fill-4);
-  border: 1px solid var(--separator);
+  background: var(--bg-content);
+  border: 1px solid var(--separator-opaque);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
   overflow: hidden;
@@ -350,13 +350,22 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: var(--space-2);
+  padding: 0;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   background: transparent;
   border: 0;
+}
+
+.image-card__media {
+  display: grid;
+  width: 100%;
+  min-height: 126px;
+  padding: var(--space-2);
+  background: var(--fill-3);
+  place-items: center;
 }
 
 .image-card__preview:focus-visible {
@@ -405,7 +414,7 @@
 .image-card img {
   width: 100%;
   height: 110px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: var(--radius-sm);
   background: var(--fill-4);
 }

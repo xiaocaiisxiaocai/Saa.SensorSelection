@@ -480,7 +480,7 @@ describe('MachinePage', () => {
     });
     const addStructure = structurePanel
       .findAll('button')
-      .find((button) => button.text() === '新增');
+      .find((button) => button.text() === '新增选型');
     await addStructure?.trigger('click');
     await flushPromises();
     const processSelect = structurePanel
@@ -509,7 +509,7 @@ describe('MachinePage', () => {
     });
     const addNotes = notesPanel
       .findAll('button')
-      .find((button) => button.text() === '新增');
+      .find((button) => button.text() === '新增事项');
     await addNotes?.trigger('click');
     await flushPromises();
     expect(
@@ -561,7 +561,7 @@ describe('MachinePage', () => {
     });
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '新增')
+      .find((button) => button.text() === '新增选型')
       ?.trigger('click');
     await flushPromises();
 
@@ -938,12 +938,44 @@ describe('MachinePage', () => {
     expect(machineSectionPanelSource).toContain('class="image-card__footer"');
     expect(machineSectionPanelSource).toContain('class="image-card__name"');
     expect(machineSectionPanelSource).toContain('class="image-card__actions"');
+    expect(machineSectionPanelSource).toContain('class="image-card__media"');
     expect(machineSectionPanelSource).toContain(':icon="Maximize2"');
+    expect(selectionPageCss).toMatch(
+      /\.image-card\s*\{[^}]*background:\s*var\(--bg-content\);[^}]*border:\s*1px solid var\(--separator-opaque\);[^}]*overflow:\s*hidden;/s,
+    );
+    expect(selectionPageCss).toMatch(
+      /\.image-card__media\s*\{[^}]*background:\s*var\(--fill-3\);/s,
+    );
     expect(selectionPageCss).toMatch(
       /\.image-card__footer\s*\{[^}]*border-top:\s*1px solid var\(--separator\);/s,
     );
+    expect(selectionPageCss).toMatch(
+      /\.image-card img\s*\{[^}]*object-fit:\s*contain;/s,
+    );
     expect(machineSectionPanelSource).not.toMatch(
       /<button[^>]*class="image-card"/,
+    );
+  });
+
+  it('labels the table authoring action as a new selection', async () => {
+    const wrapper = await mountPage(true, true);
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const button = panel.get('button[aria-label="新增选型"]');
+
+    expect(button.text()).toContain('新增选型');
+    expect(button.find('svg').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('keeps the new selection action readable when the content panel narrows', () => {
+    expect(machineSectionPanelSource).toMatch(
+      /\.machine-body\s*>\s*\.selection-panel\s*\{[^}]*container-type:\s*inline-size;/s,
+    );
+    expect(machineSectionPanelSource).toMatch(
+      /\.machine-structure-toolbar\s*>\s*\.a-button:last-child\s*\{[^}]*min-width:\s*6rem;/s,
+    );
+    expect(machineSectionPanelSource).toMatch(
+      /@container\s*\(width\s*<=\s*48rem\)\s*\{[\s\S]*?\.machine-structure-toolbar__search\s*\{[^}]*grid-column:\s*1\s*\/\s*3;/s,
     );
   });
 

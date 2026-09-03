@@ -4,6 +4,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Pencil,
+  Plus,
   Trash2,
 } from 'lucide-vue-next';
 import {
@@ -616,8 +617,14 @@ async function removeImage(index: number) {
           "
         />
         <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-        <AButton v-if="writable" variant="filled" @click="addItem">
-          新增
+        <AButton
+          v-if="writable"
+          variant="filled"
+          :aria-label="isStructure ? '新增选型' : '新增事项'"
+          @click="addItem"
+        >
+          <Plus :size="14" :stroke-width="1.5" />
+          {{ isStructure ? '新增选型' : '新增事项' }}
         </AButton>
       </div>
       <ATable
@@ -756,7 +763,9 @@ async function removeImage(index: number) {
           :aria-label="`预览 ${image.fileName}`"
           @click="preview = image"
         >
-          <img :src="image.dataUrl" :alt="image.fileName">
+          <span class="image-card__media">
+            <img :src="image.dataUrl" :alt="image.fileName">
+          </span>
         </button>
         <div class="image-card__footer">
           <span class="image-card__name" :title="image.fileName">
@@ -895,6 +904,10 @@ async function removeImage(index: number) {
 </template>
 
 <style scoped>
+.machine-body > .selection-panel {
+  container-type: inline-size;
+}
+
 .machine-structure-toolbar {
   display: grid;
   grid-template-columns:
@@ -917,6 +930,20 @@ async function removeImage(index: number) {
 .machine-structure-toolbar .a-control.machine-structure-toolbar__search {
   width: 100%;
   min-width: 0;
+}
+
+.machine-structure-toolbar > .a-button:last-child {
+  min-width: 6rem;
+}
+
+@container (width <= 48rem) {
+  .machine-structure-toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .machine-structure-toolbar__search {
+    grid-column: 1 / 3;
+  }
 }
 
 @media (width <= 48rem) {

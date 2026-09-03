@@ -264,6 +264,11 @@
   align-content: start;
 }
 
+.machine-images:not(.machine-images--collapsed) {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--separator);
+}
+
 .machine-images__header {
   display: flex;
   gap: var(--space-2);
@@ -527,5 +532,16 @@
 
   .permission-group__items {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (width <= 48rem) {
+  .selection-split--machine > .selection-panel {
+    overflow: hidden auto;
+  }
+
+  .selection-split--machine > .selection-panel > .machine-body {
+    flex: 0 0 auto;
+    min-height: 36rem;
   }
 }

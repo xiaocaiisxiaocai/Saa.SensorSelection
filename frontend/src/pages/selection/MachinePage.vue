@@ -914,76 +914,83 @@ async function closeTab(value: string) {
         @select="openGlobalSearchResult"
       />
       <div v-else-if="selection.item" class="selection-panel">
-        <div v-if="auth.isAuthenticated" class="machine-report">
-          <span class="selection-toolbar__count">
-            已选 {{ selectedMachineItems.length }} /
-            {{ availableMachineItems.length }} 个机型
-          </span>
-          <AButton
-            variant="borderless"
-            @click="checkedMachineKeys = [...availableMachineKeys]"
-          >
-            全选机型
-          </AButton>
-          <AButton
-            variant="borderless"
-            :disabled="selectedMachineItems.length === 0"
-            @click="checkedMachineKeys = []"
-          >
-            清空
-          </AButton>
-          <ATooltip
-            :content="
-              selectedMachineItems.length === 0
-                ? '请先在左侧勾选至少一个机型'
-                : ''
-            "
-            :disabled="selectedMachineItems.length > 0"
-          >
-            <template #trigger>
-              <span class="inline-flex">
-                <AButton
-                  variant="filled"
-                  :disabled="selectedMachineItems.length === 0"
-                  :loading="reportGenerating"
-                  @click="generateReport"
-                >
-                  生成并下载报告
-                </AButton>
-              </span>
-            </template>
-          </ATooltip>
-          <ATooltip
-            :content="
-              selectedMachineItems.length === 0
-                ? '请先在左侧勾选至少一个机型'
-                : ''
-            "
-            :disabled="selectedMachineItems.length > 0"
-          >
-            <template #trigger>
-              <span class="inline-flex">
-                <AButton
-                  variant="tinted"
-                  :disabled="selectedMachineItems.length === 0"
-                  @click="previewReport"
-                >
-                  预览 / 打印 PDF
-                </AButton>
-              </span>
-            </template>
-          </ATooltip>
+        <div class="machine-panel-header">
+          <ATabBar
+            class="machine-section-tabs"
+            :model-value="activeSection"
+            :tabs="tabs"
+            :addable="writable"
+            add-label="新增 Tab"
+            @update:model-value="onTabChange"
+            @add="openAddTab"
+            @rename="openRenameTab"
+            @close="closeTab"
+          />
+          <div v-if="auth.isAuthenticated" class="machine-report">
+            <span class="selection-toolbar__count">
+              已选 {{ selectedMachineItems.length }} /
+              {{ availableMachineItems.length }} 个机型
+            </span>
+            <AButton
+              variant="borderless"
+              size="small"
+              @click="checkedMachineKeys = [...availableMachineKeys]"
+            >
+              全选机型
+            </AButton>
+            <AButton
+              variant="borderless"
+              size="small"
+              :disabled="selectedMachineItems.length === 0"
+              @click="checkedMachineKeys = []"
+            >
+              清空
+            </AButton>
+            <ATooltip
+              :content="
+                selectedMachineItems.length === 0
+                  ? '请先在左侧勾选至少一个机型'
+                  : ''
+              "
+              :disabled="selectedMachineItems.length > 0"
+            >
+              <template #trigger>
+                <span class="inline-flex">
+                  <AButton
+                    variant="filled"
+                    size="small"
+                    :disabled="selectedMachineItems.length === 0"
+                    :loading="reportGenerating"
+                    @click="generateReport"
+                  >
+                    生成并下载报告
+                  </AButton>
+                </span>
+              </template>
+            </ATooltip>
+            <ATooltip
+              :content="
+                selectedMachineItems.length === 0
+                  ? '请先在左侧勾选至少一个机型'
+                  : ''
+              "
+              :disabled="selectedMachineItems.length > 0"
+            >
+              <template #trigger>
+                <span class="inline-flex">
+                  <AButton
+                    variant="tinted"
+                    size="small"
+                    :disabled="selectedMachineItems.length === 0"
+                    @click="previewReport"
+                  >
+                    预览 / 打印 PDF
+                  </AButton>
+                </span>
+              </template>
+            </ATooltip>
+          </div>
         </div>
-        <ATabBar
-          :model-value="activeSection"
-          :tabs="tabs"
-          :addable="writable"
-          add-label="新增 Tab"
-          @update:model-value="onTabChange"
-          @add="openAddTab"
-          @rename="openRenameTab"
-          @close="closeTab"
-        />
         <MachineSectionPanel
           v-if="activeSectionItem"
           :machine-name="selection.item"
@@ -1116,6 +1123,10 @@ async function closeTab(value: string) {
   min-height: 0;
 }
 
+.selection-split--machine > .machine-source-stack {
+  box-shadow: inset -1px 0 0 var(--separator);
+}
+
 .machine-source-stack > .entity-source {
   flex: 1;
   width: 100%;
@@ -1215,6 +1226,44 @@ async function closeTab(value: string) {
   display: none;
 }
 
+.machine-panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--control-height-lg);
+  border-bottom: 1px solid var(--separator);
+}
+
+.machine-section-tabs {
+  flex: 1 1 auto;
+  min-width: 12rem;
+}
+
+.machine-section-tabs :deep(.a-tab-bar__tab) {
+  min-height: var(--control-height-md);
+}
+
+.machine-panel-header .machine-report {
+  flex: 0 0 auto;
+  gap: var(--space-2);
+  padding: 0;
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.machine-panel-header .machine-report .selection-toolbar__count {
+  margin-right: auto;
+  font: var(--text-toolbar);
+}
+
+.machine-panel-header .machine-report :deep(.a-button) {
+  white-space: nowrap;
+}
+
 .machine-process-list {
   display: grid;
   gap: var(--space-3);
@@ -1307,6 +1356,20 @@ async function closeTab(value: string) {
 
   .machine-report :deep(.a-button) {
     width: 100%;
+  }
+}
+
+@media (width <= 70rem) {
+  .machine-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-bottom: var(--space-2);
+  }
+
+  .machine-panel-header .machine-report {
+    width: 100%;
+    margin-left: 0;
   }
 }
 

@@ -915,6 +915,9 @@ describe('MachinePage', () => {
 
   it('widens uploaded schematic previews without changing the upload control', () => {
     expect(selectionPageCss).toMatch(
+      /\.machine-images:not\(\.machine-images--collapsed\)\s*\{[^}]*padding-left:\s*var\(--space-3\);[^}]*border-left:\s*1px solid var\(--separator\);/s,
+    );
+    expect(selectionPageCss).toMatch(
       /\.machine-images \.image-card\s*\{[^}]*justify-self:\s*end;[^}]*width:\s*calc\(100% \+ var\(--space-4\)\);/s,
     );
     expect(selectionPageCss).toMatch(
@@ -981,6 +984,28 @@ describe('MachinePage', () => {
     expect(machineGlobalSearchSource).toMatch(
       /@media \(width <= 48rem\)[\s\S]*\.machine-global-search\s*\{[^}]*grid-template-columns:\s*1fr;/s,
     );
+    expect(selectionPageCss).toMatch(
+      /@media \(width <= 48rem\)[\s\S]*\.selection-split--machine > \.selection-panel\s*\{[^}]*overflow:\s*hidden auto;/s,
+    );
+    expect(selectionPageCss).toMatch(
+      /@media \(width <= 48rem\)[\s\S]*\.selection-split--machine > \.selection-panel > \.machine-body\s*\{[^}]*min-height:\s*36rem;/s,
+    );
+  });
+
+  it('combines the active section and report actions into one desktop context bar', async () => {
+    const wrapper = await mountPage(true, true);
+    const header = wrapper.get('.machine-panel-header');
+
+    expect(header.find('.machine-section-tabs').exists()).toBe(true);
+    expect(header.find('.machine-report').exists()).toBe(true);
+    expect(machinePageSource).toMatch(
+      /\.machine-panel-header\s*\{[^}]*display:\s*flex;[^}]*border-bottom:\s*1px solid var\(--separator\);/s,
+    );
+    expect(machinePageSource).toMatch(
+      /@media \(width <= 70rem\)[\s\S]*\.machine-panel-header\s*\{[^}]*align-items:\s*stretch;[^}]*flex-direction:\s*column;/s,
+    );
+
+    wrapper.unmount();
   });
 
   it('keeps the structure filters and actions in a deterministic compact grid', () => {

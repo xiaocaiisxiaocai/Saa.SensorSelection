@@ -45,6 +45,10 @@ public class OrgUnitService(AppDbContext db)
         CreateOrgUnitRequest request,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return RbacResult<OrgUnitListItem>.Fail("组织名称不能为空");
+        }
         if (request.ParentId is int parentId)
         {
             var parent = await db.OrgUnits.FirstOrDefaultAsync(org => org.Id == parentId, ct);
@@ -79,6 +83,11 @@ public class OrgUnitService(AppDbContext db)
         if (org is null)
         {
             return RbacResult<OrgUnitListItem>.Fail("组织不存在");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return RbacResult<OrgUnitListItem>.Fail("组织名称不能为空");
         }
 
         if (request.ParentId is int parentId)
@@ -152,7 +161,8 @@ public class OrgUnitService(AppDbContext db)
             .ToArrayAsync(ct);
         var byId = all.ToDictionary(item => item.Id);
         var current = candidate;
-        while (byId.TryGetValue(current, out var node))
+        var visited = new HashSet<int>();
+        while (byId.TryGetValue(current, out var node) && visited.Add(current))
         {
             if (node.ParentId is int parentId)
             {
@@ -179,10 +189,12 @@ public class OrgUnitService(AppDbContext db)
         var children = all.ToLookup(org => org.ParentId);
         var levels = new List<string>();
         var stack = new Stack<int>([id]);
+        var visited = new HashSet<int>();
         var skipSelf = true;
         while (stack.Count > 0)
         {
             var current = stack.Pop();
+            if (!visited.Add(current)) continue;
             if (!skipSelf)
             {
                 var node = all.First(item => item.Id == current);

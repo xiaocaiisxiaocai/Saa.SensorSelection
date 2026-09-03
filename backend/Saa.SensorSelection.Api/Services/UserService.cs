@@ -27,11 +27,7 @@ public class UserService(AppDbContext db, ProfileService profiles)
             .Select(user => user.OrgUnitId!.Value)
             .Distinct()
             .ToArray();
-        var pathCache = new Dictionary<int, string>();
-        foreach (var orgId in orgIds)
-        {
-            pathCache[orgId] = await profiles.BuildPathAsync(orgId, ct);
-        }
+        var pathCache = await profiles.BuildPathsAsync(orgIds, ct);
 
         return users
             .Select(user => new UserListItem(
@@ -59,6 +55,11 @@ public class UserService(AppDbContext db, ProfileService profiles)
         CancellationToken ct = default)
     {
         var username = request.Username.Trim();
+        if (string.IsNullOrWhiteSpace(username) ||
+            string.IsNullOrWhiteSpace(request.DisplayName))
+        {
+            return RbacResult<UserListItem>.Fail("用户名和显示名不能为空");
+        }
         if (await db.Users.AnyAsync(user => user.Username == username, ct))
         {
             return RbacResult<UserListItem>.Fail("用户名已存在");
@@ -116,6 +117,11 @@ public class UserService(AppDbContext db, ProfileService profiles)
         if (user is null)
         {
             return RbacResult<UserListItem>.Fail("用户不存在");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.DisplayName))
+        {
+            return RbacResult<UserListItem>.Fail("显示名不能为空");
         }
 
         if (request.OrgUnitId is int orgId &&

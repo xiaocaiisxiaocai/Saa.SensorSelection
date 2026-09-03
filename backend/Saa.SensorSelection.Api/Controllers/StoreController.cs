@@ -22,17 +22,17 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     /// <summary>返回全部 key → JSON 数组（匿名可读）。</summary>
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        return Ok(await store.GetAllAsync());
+        return Ok(await store.GetAllAsync(ct));
     }
 
     /// <summary>通过查询参数读取单个 key，避免代理二次解码业务键。</summary>
     [HttpGet("by-key")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetByQueryKey([FromQuery] string key)
+    public async Task<IActionResult> GetByQueryKey([FromQuery] string key, CancellationToken ct)
     {
-        var result = await store.GetByKeyAsync(key);
+        var result = await store.GetByKeyAsync(key, ct);
         if (!result.Found)
         {
             return NotFound(new { message = $"key 不存在: {key}" });
@@ -47,9 +47,10 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     [Authorize(Policy = "selection:write")]
     public async Task<IActionResult> ReplaceEntityGroups(
         string kind,
-        [FromBody] JsonElement payload)
+        [FromBody] JsonElement payload,
+        CancellationToken ct)
     {
-        var result = await store.ReplaceEntityGroupsAsync(kind, payload);
+        var result = await store.ReplaceEntityGroupsAsync(kind, payload, ct);
         var target = $"entity-groups:{kind}";
         await audit.WriteAsync(
             "store.entity-groups.reorder",
@@ -58,7 +59,8 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
                 ? $"数据类型：数组；分类数：{payload.GetArrayLength()}"
                 : $"数据类型：{JsonKind(payload.ValueKind)}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         if (!result.Success)
         {
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });
@@ -70,9 +72,9 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     /// <summary>整体导入：以提交对象全量替换数据仓库（首次接入时迁移 localStorage 数据用）。</summary>
     [HttpPut]
     [Authorize(Policy = "selection:write")]
-    public async Task<IActionResult> ReplaceAll([FromBody] JsonElement payload)
+    public async Task<IActionResult> ReplaceAll([FromBody] JsonElement payload, CancellationToken ct)
     {
-        var result = await store.ReplaceAllAsync(payload);
+        var result = await store.ReplaceAllAsync(payload, ct);
         var keyCount = payload.ValueKind == JsonValueKind.Object
             ? payload.EnumerateObject().Count()
             : 0;
@@ -80,7 +82,8 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             "store.replace-all",
             detail: $"数据类型：{JsonKind(payload.ValueKind)}；key数：{keyCount}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         if (!result.Success)
         {
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });
@@ -94,16 +97,18 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     [Authorize(Policy = "selection:write")]
     public async Task<IActionResult> UpsertByQueryKey(
         [FromQuery] string key,
-        [FromBody] JsonElement value)
+        [FromBody] JsonElement value,
+        CancellationToken ct)
     {
-        var result = await store.UpsertAsync(key, value);
+        var result = await store.UpsertAsync(key, value, ct);
         var itemCount = value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : 0;
         await audit.WriteAsync(
             "store.upsert",
             target: key,
             detail: $"数据类型：{JsonKind(value.ValueKind)}；记录数：{itemCount}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         if (!result.Success)
         {
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });
@@ -119,15 +124,16 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     /// <summary>通过查询参数删除单个 key。</summary>
     [HttpDelete("by-key")]
     [Authorize(Policy = "selection:write")]
-    public async Task<IActionResult> DeleteByQueryKey([FromQuery] string key)
+    public async Task<IActionResult> DeleteByQueryKey([FromQuery] string key, CancellationToken ct)
     {
-        var result = await store.DeleteAsync(key);
+        var result = await store.DeleteAsync(key, ct);
         await audit.WriteAsync(
             "store.delete",
             target: key,
             detail: result.Found ? $"删除目标：{key}" : "删除目标不存在",
             success: result.Found,
-            error: result.Found ? null : "key 不存在");
+            error: result.Found ? null : "key 不存在",
+            ct: ct);
         if (!result.Found)
         {
             return NotFound(new { message = $"key 不存在: {key}" });

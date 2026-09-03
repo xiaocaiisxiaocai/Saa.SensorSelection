@@ -14,17 +14,17 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     /// <summary>角色列表（含权限）。</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<RoleListItem>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List()
+    public async Task<IActionResult> List(CancellationToken ct)
     {
-        return Ok(await roles.ListAsync());
+        return Ok(await roles.ListAsync(ct));
     }
 
     /// <summary>全部权限清单（角色编辑界面勾选用）。</summary>
     [HttpGet("permissions")]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionInfo>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListPermissions()
+    public async Task<IActionResult> ListPermissions(CancellationToken ct)
     {
-        return Ok(await roles.ListPermissionsAsync());
+        return Ok(await roles.ListPermissionsAsync(ct));
     }
 
     /// <summary>创建角色。</summary>
@@ -32,9 +32,9 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:role:write")]
     [ProducesResponseType(typeof(RoleListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateRoleRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateRoleRequest request, CancellationToken ct)
     {
-        var result = await roles.CreateAsync(request);
+        var result = await roles.CreateAsync(request, ct);
         await audit.WriteAsync(
             "role.create",
             target: result.Value?.Code ?? request.Code,
@@ -42,7 +42,8 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
                 ? $"角色：{result.Value!.Name}；权限数：{result.Value.Permissions.Count}；系统角色：{(result.Value.IsSystem ? "是" : "否")}"
                 : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -53,9 +54,9 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:role:write")]
     [ProducesResponseType(typeof(RoleListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateRoleRequest request)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateRoleRequest request, CancellationToken ct)
     {
-        var result = await roles.UpdateAsync(id, request);
+        var result = await roles.UpdateAsync(id, request, ct);
         await audit.WriteAsync(
             "role.update",
             target: result.Value?.Code ?? $"#{id}",
@@ -63,7 +64,8 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
                 ? $"角色：{result.Value!.Name}；权限数：{result.Value.Permissions.Count}；系统角色：{(result.Value.IsSystem ? "是" : "否")}"
                 : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -74,15 +76,16 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:role:write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var result = await roles.DeleteAsync(id);
+        var result = await roles.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "role.delete",
             target: $"#{id}",
             detail: $"角色ID：{id}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });

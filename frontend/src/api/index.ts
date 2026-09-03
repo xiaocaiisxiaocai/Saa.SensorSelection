@@ -152,7 +152,7 @@ async function readMessage(
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body !== null) {
+  if (init?.body != null) {
     headers.set('Content-Type', 'application/json');
   }
   const token = getStoredToken();
@@ -197,7 +197,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   const headers = new Headers(init?.headers);
-  if (init?.body !== null) {
+  if (init?.body != null) {
     headers.set('Content-Type', 'application/json');
   }
   const token = getStoredToken();

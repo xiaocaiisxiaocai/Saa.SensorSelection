@@ -16,9 +16,9 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         new(StringComparer.OrdinalIgnoreCase) { "customer", "machine" };
 
     /// <summary>读取全部 key → JSON 数组。</summary>
-    public async Task<JsonObject> GetAllAsync()
+    public async Task<JsonObject> GetAllAsync(CancellationToken ct = default)
     {
-        var entries = await db.StoreEntries.AsNoTracking().OrderBy(e => e.Key).ToListAsync();
+        var entries = await db.StoreEntries.AsNoTracking().OrderBy(e => e.Key).ToListAsync(ct);
         var payload = new JsonObject();
         foreach (var entry in entries)
         {
@@ -29,16 +29,16 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
     }
 
     /// <summary>读取单个 key 的 JSON 文本。</summary>
-    public async Task<StoreReadResult> GetByKeyAsync(string key)
+    public async Task<StoreReadResult> GetByKeyAsync(string key, CancellationToken ct = default)
     {
-        var entry = await db.StoreEntries.AsNoTracking().FirstOrDefaultAsync(e => e.Key == key);
+        var entry = await db.StoreEntries.AsNoTracking().FirstOrDefaultAsync(e => e.Key == key, ct);
         return entry == null
             ? new StoreReadResult(false, null)
             : new StoreReadResult(true, entry.Json);
     }
 
     /// <summary>整体导入：以提交对象全量替换数据仓库（首次接入时迁移 localStorage 数据用）。</summary>
-    public async Task<StoreWriteResult> ReplaceAllAsync(JsonElement store)
+    public async Task<StoreWriteResult> ReplaceAllAsync(JsonElement store, CancellationToken ct = default)
     {
         if (store.ValueKind != JsonValueKind.Object)
         {
@@ -72,7 +72,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         var now = DateTime.UtcNow;
         var existing = await db.StoreEntries
             .Where(e => submittedKeys.Contains(e.Key))
-            .ToDictionaryAsync(e => e.Key);
+            .ToDictionaryAsync(e => e.Key, ct);
 
         foreach (var property in store.EnumerateObject())
         {
@@ -98,15 +98,15 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         // 一次数据库调用删除所有不在本次提交中的旧 key
         await db.StoreEntries
             .Where(e => !submittedKeys.Contains(e.Key))
-            .ExecuteDeleteAsync();
+            .ExecuteDeleteAsync(ct);
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         await storedFiles.DeleteOrphansAsync();
         return StoreWriteResult.Ok();
     }
 
     /// <summary>写入单个 key 的 JSON 数组（新增或覆盖，并发首写冲突时回退为覆盖更新）。</summary>
-    public async Task<StoreWriteResult> UpsertAsync(string key, JsonElement value)
+    public async Task<StoreWriteResult> UpsertAsync(string key, JsonElement value, CancellationToken ct = default)
     {
         if (key.Length == 0 || key.Length > 200)
         {
@@ -126,7 +126,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
         var json = detached.Json!;
         db.StoredFiles.AddRange(detached.Files);
-        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key);
+        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
         if (entry == null)
         {
             var added = db.StoreEntries.Add(new StoreEntry
@@ -137,13 +137,13 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             });
             try
             {
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(ct);
             }
             catch (DbUpdateException)
             {
                 // 并发首次写入同 key（主键冲突）：放弃本次插入，改为覆盖更新
                 db.Entry(added.Entity).State = EntityState.Detached;
-                var existing = await db.StoreEntries.FindAsync(key);
+                var existing = await db.StoreEntries.FindAsync([key], ct);
                 if (existing == null)
                 {
                     throw;
@@ -151,14 +151,14 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
                 existing.Json = json;
                 existing.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(ct);
             }
         }
         else
         {
             entry.Json = json;
             entry.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(ct);
         }
 
         await storedFiles.DeleteOrphansAsync();
@@ -170,7 +170,8 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
     /// </summary>
     public async Task<StoreWriteResult> ReplaceEntityGroupsAsync(
         string kind,
-        JsonElement value)
+        JsonElement value,
+        CancellationToken ct = default)
     {
         var normalizedKind = kind.Trim().ToLowerInvariant();
         if (!EntityKinds.Contains(normalizedKind))
@@ -323,20 +324,20 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         }
 
         var normalized = JsonSerializer.SerializeToElement(groups);
-        return await UpsertAsync($"entity-groups:{normalizedKind}", normalized);
+        return await UpsertAsync($"entity-groups:{normalizedKind}", normalized, ct);
     }
 
     /// <summary>删除单个 key，返回是否实际存在。</summary>
-    public async Task<StoreDeleteResult> DeleteAsync(string key)
+    public async Task<StoreDeleteResult> DeleteAsync(string key, CancellationToken ct = default)
     {
-        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key);
+        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
         if (entry == null)
         {
             return new StoreDeleteResult(false);
         }
 
         db.StoreEntries.Remove(entry);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         await storedFiles.DeleteOrphansAsync();
         return new StoreDeleteResult(true);
     }

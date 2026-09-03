@@ -88,9 +88,10 @@ export class BackendStorage implements StorageLike {
         await this.transport.deleteKey?.(key);
         this.synced.delete(key);
         this.lastError = null;
+        this.status = 'online';
         this.snapshotLocal();
       } catch (error) {
-        this.handleFailure(key, prev, error);
+        this.handleFailure(key, undefined, prev, error);
       }
     });
   }
@@ -107,9 +108,10 @@ export class BackendStorage implements StorageLike {
           this.cache.set(key, persisted);
         }
         this.lastError = null;
+        this.status = 'online';
         this.snapshotLocal();
       } catch (error) {
-        this.handleFailure(key, prev, error);
+        this.handleFailure(key, value, prev, error);
       }
     });
   }
@@ -145,11 +147,24 @@ export class BackendStorage implements StorageLike {
     return JSON.stringify(value);
   }
 
-  private handleFailure(key: string, prev: unknown[] | undefined, error: unknown) {
-    if (prev === undefined) {
-      this.cache.delete(key);
-    } else {
-      this.cache.set(key, prev);
+  private handleFailure(
+    key: string,
+    attempted: unknown[] | undefined,
+    prev: unknown[] | undefined,
+    error: unknown,
+  ) {
+    // 只回滚仍然代表本次失败写入的乐观值；如果队列中已有更新编辑，
+    // 必须保留更新值，避免后续成功写入后缓存停留在旧快照。
+    const stillRepresentsAttempt =
+      attempted === undefined
+        ? this.cache.get(key) === undefined
+        : sameValue(this.cache.get(key), attempted);
+    if (stillRepresentsAttempt) {
+      if (prev === undefined) {
+        this.cache.delete(key);
+      } else {
+        this.cache.set(key, prev);
+      }
     }
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;

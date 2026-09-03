@@ -23,9 +23,9 @@ public class FilesController(AppDbContext db) : ControllerBase
 
     [HttpGet("{id:guid}/content")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetContent(Guid id)
+    public async Task<IActionResult> GetContent(Guid id, CancellationToken ct)
     {
-        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(item => item.Id == id);
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(item => item.Id == id, ct);
         if (file is null) return NotFound(new { message = "文件不存在或已被删除" });
 
         var etag = $"\"{file.Id:N}\"";

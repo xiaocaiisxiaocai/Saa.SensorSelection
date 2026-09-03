@@ -12,9 +12,9 @@ public class HealthController(AppDbContext db) : ControllerBase
 {
     /// <summary>健康检查：同时探测数据库连通性（部署探活/排障用）。</summary>
     [HttpGet]
-    public async Task<IActionResult> Get()
+    public async Task<IActionResult> Get(CancellationToken ct)
     {
-        var dbOk = await db.Database.CanConnectAsync();
+        var dbOk = await db.Database.CanConnectAsync(ct);
         if (!dbOk)
         {
             return StatusCode(

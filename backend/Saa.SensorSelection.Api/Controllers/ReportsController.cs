@@ -19,7 +19,7 @@ public sealed class ReportsController(MachineSchematicReportService reportServic
     /// </summary>
     [HttpPost("machine-schematic")]
     [Authorize]
-    [RequestSizeLimit(10_000_000)]
+    [RequestSizeLimit(100_000_000)]
     public IActionResult BuildMachineSchematic([FromBody] MachineSchematicReportRequest request)
     {
         var result = reportService.Build(request);
@@ -28,7 +28,7 @@ public sealed class ReportsController(MachineSchematicReportService reportServic
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });
         }
 
-        var fileName = $"machine-schematic-report-{DateTime.Now:yyyyMMdd-HHmmss}.html";
+        var fileName = $"machine-schematic-report-{DateTime.UtcNow:yyyyMMdd-HHmmss}.html";
         return File(
             Encoding.UTF8.GetBytes(result.Html!),
             "text/html",

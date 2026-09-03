@@ -70,23 +70,38 @@ public class ProfileService(AppDbContext db)
     /// <summary>从节点向上回溯父链，生成「事业部 / 部门 / 课别」路径。</summary>
     public async Task<string> BuildPathAsync(int orgUnitId, CancellationToken ct = default)
     {
+        var paths = await BuildPathsAsync([orgUnitId], ct);
+        return paths.GetValueOrDefault(orgUnitId, string.Empty);
+    }
+
+    /// <summary>一次加载组织树，为同一请求中的多个用户批量生成路径。</summary>
+    public async Task<IReadOnlyDictionary<int, string>> BuildPathsAsync(
+        IEnumerable<int> orgUnitIds,
+        CancellationToken ct = default)
+    {
         var all = await db.OrgUnits
             .AsNoTracking()
             .Select(org => new { org.Id, org.Name, org.ParentId })
             .ToArrayAsync(ct);
         var byId = all.ToDictionary(item => item.Id);
-        var names = new List<string>();
-        var current = orgUnitId;
-        while (byId.TryGetValue(current, out var node))
+        var result = new Dictionary<int, string>();
+        foreach (var orgUnitId in orgUnitIds.Distinct())
         {
-            names.Add(node.Name);
-            if (node.ParentId is not int parentId)
+            var names = new List<string>();
+            var visited = new HashSet<int>();
+            var current = orgUnitId;
+            while (byId.TryGetValue(current, out var node) && visited.Add(current))
             {
-                break;
+                names.Add(node.Name);
+                if (node.ParentId is not int parentId)
+                {
+                    break;
+                }
+                current = parentId;
             }
-            current = parentId;
+            names.Reverse();
+            result[orgUnitId] = string.Join(" / ", names);
         }
-        names.Reverse();
-        return string.Join(" / ", names);
+        return result;
     }
 }

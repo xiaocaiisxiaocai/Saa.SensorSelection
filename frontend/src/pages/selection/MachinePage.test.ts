@@ -347,6 +347,26 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
+  it('enables global search when only an upper process is selected', async () => {
+    const wrapper = await mountPage(true, true);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '条件查找')
+      ?.trigger('click');
+    await flushPromises();
+
+    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    const processField = globalSearch.findAllComponents(ATokenField)[3];
+    processField?.vm.$emit('update:modelValue', [1]);
+    await flushPromises();
+
+    const searchButton = globalSearch
+      .findAll('button')
+      .find((button) => button.text() === '查找');
+    expect(searchButton?.attributes('disabled')).toBeUndefined();
+    wrapper.unmount();
+  });
+
   it('hides every report operation when not signed in', async () => {
     const wrapper = await mountPage();
     expect(wrapper.text()).not.toContain('生成并下载报告');

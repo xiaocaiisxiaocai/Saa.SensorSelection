@@ -34,7 +34,11 @@ builder.Services.AddSingleton<JwtService>();
 
 builder.Services
     .AddOptions<RateLimitOptions>()
-    .Bind(builder.Configuration.GetSection(RateLimitOptions.SectionName));
+    .Bind(builder.Configuration.GetSection(RateLimitOptions.SectionName))
+    .Validate(options => options.MaxFailures > 0, "RateLimit:MaxFailures 必须大于 0")
+    .Validate(options => options.WindowMinutes > 0, "RateLimit:WindowMinutes 必须大于 0")
+    .Validate(options => options.MaxTrackedKeys > 0, "RateLimit:MaxTrackedKeys 必须大于 0")
+    .ValidateOnStart();
 builder.Services.AddSingleton<LoginRateLimiter>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>

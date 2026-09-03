@@ -457,9 +457,12 @@ export function createSelectionRepository({
 
       const rows = getMachineSectionRows(sectionId, machineName, processId);
       if (callback(rows)) {
-        store[key] = normalizeMachineSectionRows(rows, {
-          allowImage: true,
-          sensorItems: getSensors(),
+      store[key] = normalizeMachineSectionRows(rows, {
+        allowImage: true,
+        boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+        machineModelItems: getDictionaryItems('machine-model'),
+        processStepItems: getProcessSteps(),
+        sensorItems: getSensors(),
         });
       }
     }
@@ -1466,7 +1469,13 @@ export function createSelectionRepository({
     const allowImage = sectionAllowsImage(numericId, machineName, processId);
     store[key] = normalizeMachineSectionRows(
       Array.isArray(store[key]) ? store[key] : [],
-      { allowImage, sensorItems: getSensors() },
+      {
+        allowImage,
+        boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+        machineModelItems: getDictionaryItems('machine-model'),
+        processStepItems: getProcessSteps(),
+        sensorItems: getSensors(),
+      },
     );
     return store[key] as MachineSectionRow[];
   }
@@ -1690,6 +1699,9 @@ export function createSelectionRepository({
     }
     const normalized = normalizeMachineSectionRows([base], {
       allowImage,
+      boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+      machineModelItems: getDictionaryItems('machine-model'),
+      processStepItems: getProcessSteps(),
       sensorItems: getSensors(),
     })[0];
     if (!normalized) return { ok: false, reason: 'validation' };
@@ -1709,6 +1721,9 @@ export function createSelectionRepository({
       )
     ] = normalizeMachineSectionRows(items, {
       allowImage,
+      boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+      machineModelItems: getDictionaryItems('machine-model'),
+      processStepItems: getProcessSteps(),
       sensorItems: getSensors(),
     });
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
@@ -1734,6 +1749,9 @@ export function createSelectionRepository({
       )
     ] = normalizeMachineSectionRows(items, {
       allowImage: sectionAllowsImage(numericId, machineName, processId),
+      boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+      machineModelItems: getDictionaryItems('machine-model'),
+      processStepItems: getProcessSteps(),
       sensorItems: getSensors(),
     });
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };

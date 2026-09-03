@@ -14,9 +14,9 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     /// <summary>组织节点列表（扁平，前端组树；含子级数与挂载用户数）。</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<OrgUnitListItem>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List()
+    public async Task<IActionResult> List(CancellationToken ct)
     {
-        return Ok(await orgUnits.ListAsync());
+        return Ok(await orgUnits.ListAsync(ct));
     }
 
     /// <summary>创建组织节点（父级可自由指定，支持跳级）。</summary>
@@ -24,9 +24,9 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [Authorize(Policy = "rbac:org:write")]
     [ProducesResponseType(typeof(OrgUnitListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateOrgUnitRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateOrgUnitRequest request, CancellationToken ct)
     {
-        var result = await orgUnits.CreateAsync(request);
+        var result = await orgUnits.CreateAsync(request, ct);
         await audit.WriteAsync(
             "org.create",
             target: result.Value?.Name ?? request.Name,
@@ -34,7 +34,8 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
                 ? FormatDetail(result.Value!)
                 : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -45,9 +46,9 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [Authorize(Policy = "rbac:org:write")]
     [ProducesResponseType(typeof(OrgUnitListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateOrgUnitRequest request)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateOrgUnitRequest request, CancellationToken ct)
     {
-        var result = await orgUnits.UpdateAsync(id, request);
+        var result = await orgUnits.UpdateAsync(id, request, ct);
         await audit.WriteAsync(
             "org.update",
             target: result.Value?.Name ?? $"#{id}",
@@ -55,7 +56,8 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
                 ? FormatDetail(result.Value!)
                 : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -66,15 +68,16 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [Authorize(Policy = "rbac:org:write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var result = await orgUnits.DeleteAsync(id);
+        var result = await orgUnits.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "org.delete",
             target: $"#{id}",
             detail: $"组织ID：{id}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });

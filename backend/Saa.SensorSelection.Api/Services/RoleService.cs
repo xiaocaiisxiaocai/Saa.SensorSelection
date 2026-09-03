@@ -62,6 +62,10 @@ public class RoleService(AppDbContext db)
         CancellationToken ct = default)
     {
         var code = request.Code.Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            return RbacResult<RoleListItem>.Fail("角色标识和角色名称不能为空");
+        }
         if (await db.Roles.AnyAsync(role => role.Code == code, ct))
         {
             return RbacResult<RoleListItem>.Fail("角色标识已存在");
@@ -105,6 +109,10 @@ public class RoleService(AppDbContext db)
         if (role is null)
         {
             return RbacResult<RoleListItem>.Fail("角色不存在");
+        }
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return RbacResult<RoleListItem>.Fail("角色名称不能为空");
         }
         if (role.IsSystem)
         {

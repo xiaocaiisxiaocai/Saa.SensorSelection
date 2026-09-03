@@ -25,7 +25,12 @@ public class LoginRateLimiter(IOptions<RateLimitOptions> options)
         lock (queue)
         {
             Prune(queue, now);
-            return queue.Count >= _options.MaxFailures;
+            var blocked = queue.Count >= _options.MaxFailures;
+            if (queue.Count == 0)
+            {
+                _failures.TryRemove(key, out _);
+            }
+            return blocked;
         }
     }
 
@@ -38,6 +43,7 @@ public class LoginRateLimiter(IOptions<RateLimitOptions> options)
             queue.Enqueue(now);
             Prune(queue, now);
         }
+        CleanupStaleKeys(now, key);
     }
 
     /// <summary>登录成功时清除该用户的失败记录。</summary>
@@ -53,6 +59,33 @@ public class LoginRateLimiter(IOptions<RateLimitOptions> options)
             queue.Dequeue();
         }
     }
+
+    private void CleanupStaleKeys(DateTimeOffset now, string currentKey)
+    {
+        if (_failures.Count <= _options.MaxTrackedKeys) return;
+
+        foreach (var entry in _failures)
+        {
+            lock (entry.Value)
+            {
+                Prune(entry.Value, now);
+                if (entry.Value.Count == 0)
+                {
+                    _failures.TryRemove(entry.Key, out _);
+                }
+            }
+        }
+
+        // Keep the dictionary bounded even when every tracked key is active.
+        foreach (var entry in _failures)
+        {
+            if (_failures.Count <= _options.MaxTrackedKeys || entry.Key == currentKey)
+            {
+                continue;
+            }
+            _failures.TryRemove(entry.Key, out _);
+        }
+    }
 }
 
 /// <summary>登录限流配置：见 appsettings.json 的 RateLimit 节。</summary>
@@ -65,6 +98,9 @@ public class RateLimitOptions
 
     /// <summary>统计窗口（分钟）。</summary>
     public int WindowMinutes { get; set; } = 10;
+
+    /// <summary>最多保留的用户名/IP 组合数，避免随机 key 持续占用内存。</summary>
+    public int MaxTrackedKeys { get; set; } = 10_000;
 
     public TimeSpan Window => TimeSpan.FromMinutes(WindowMinutes);
 }

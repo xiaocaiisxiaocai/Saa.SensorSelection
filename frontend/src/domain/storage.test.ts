@@ -190,6 +190,38 @@ describe('BackendStorage', () => {
     expect(writeFailureMsg).toMatch(/write blocked/);
   });
 
+  it('keeps the newest optimistic value when an earlier queued write fails', async () => {
+    let releaseFirst!: () => void;
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const transport = createFakeTransport({ a: [{ v: 1 }] });
+    let writes = 0;
+    const originalWrite = transport.writeKey;
+    transport.writeKey = async (key, value) => {
+      writes += 1;
+      if (writes === 1) {
+        await firstWrite;
+        throw new Error('first write failed');
+      }
+      await originalWrite(key, value);
+    };
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+    });
+    await bridge.init();
+
+    bridge.setItem('a', JSON.stringify([{ v: 2 }]));
+    bridge.setItem('a', JSON.stringify([{ v: 3 }]));
+    releaseFirst();
+    await bridge.queue;
+
+    expect(bridge.status).toBe('online');
+    expect(bridge.getItem('a')).toBe('[{"v":3}]');
+    expect(transport.remote.get('a')).toEqual([{ v: 3 }]);
+  });
+
   it('does not read or write local data when fetch fails', async () => {
     const localMemory = new Map<string, string>();
     localMemory.set(STORAGE_KEY, JSON.stringify({ cached: [{ id: 1 }] }));

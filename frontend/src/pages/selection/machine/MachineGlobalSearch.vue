@@ -37,6 +37,7 @@ const submitted = ref(false);
 
 const hasCriteria = computed(
   () =>
+    processIds.value.length > 0 ||
     machineModelIds.value.length > 0 ||
     processStepIds.value.length > 0 ||
     boardCharacteristicIds.value.length > 0 ||

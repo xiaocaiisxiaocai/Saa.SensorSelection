@@ -16,9 +16,9 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     /// <summary>用户列表（含角色、所属组织）。</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<UserListItem>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List()
+    public async Task<IActionResult> List(CancellationToken ct)
     {
-        return Ok(await users.ListAsync());
+        return Ok(await users.ListAsync(ct));
     }
 
     /// <summary>创建用户。</summary>
@@ -26,15 +26,16 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:user:write")]
     [ProducesResponseType(typeof(UserListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateUserRequest request, CancellationToken ct)
     {
-        var result = await users.CreateAsync(request);
+        var result = await users.CreateAsync(request, ct);
         await audit.WriteAsync(
             "user.create",
             target: result.Value?.Username ?? request.Username,
             detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -45,15 +46,16 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:user:write")]
     [ProducesResponseType(typeof(UserListItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request, CancellationToken ct)
     {
-        var result = await users.UpdateAsync(id, request);
+        var result = await users.UpdateAsync(id, request, ct);
         await audit.WriteAsync(
             "user.update",
             target: result.Value?.Username ?? $"#{id}",
             detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(result.Value)
             : BadRequest(new { message = result.Error });
@@ -64,15 +66,16 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:user:write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request)
+    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
-        var result = await users.ResetPasswordAsync(id, request.Password);
+        var result = await users.ResetPasswordAsync(id, request.Password, ct);
         await audit.WriteAsync(
             "user.reset-password",
             target: $"#{id}",
             detail: result.Success ? "密码已重置" : "密码重置失败",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
@@ -83,16 +86,17 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [Authorize(Policy = "rbac:user:write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var result = await users.DeleteAsync(id, username);
+        var result = await users.DeleteAsync(id, username, ct);
         await audit.WriteAsync(
             "user.delete",
             target: $"#{id}",
             detail: $"用户ID：{id}",
             success: result.Success,
-            error: result.Error);
+            error: result.Error,
+            ct: ct);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });

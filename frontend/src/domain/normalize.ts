@@ -660,7 +660,12 @@ function normalizeSensorIds(
         .filter((value) => Number.isSafeInteger(value) && value > 0)
     : [];
   const unique = [...new Set(requested)];
-  if (unique.length > 0 || sensorItems.length === 0) return unique;
+  if (unique.length > 0) {
+    if (sensorItems.length === 0) return unique;
+    const validIds = new Set(sensorItems.map((sensor) => sensor.id));
+    return unique.filter((id) => validIds.has(id));
+  }
+  if (sensorItems.length === 0) return unique;
 
   const type = storedText(item.sensorType).trim();
   const spec = storedText(item.spec).trim().toLocaleLowerCase('zh-CN');
@@ -695,8 +700,17 @@ export function normalizeMachineSectionRows(
   source: unknown,
   {
     allowImage,
+    boardCharacteristicItems = [],
+    machineModelItems = [],
+    processStepItems = [],
     sensorItems = [],
-  }: { allowImage?: boolean; sensorItems?: SensorItem[] } = {},
+  }: {
+    allowImage?: boolean;
+    boardCharacteristicItems?: DictionaryItem[];
+    machineModelItems?: DictionaryItem[];
+    processStepItems?: ProcessStepItem[];
+    sensorItems?: SensorItem[];
+  } = {},
 ): MachineSectionRow[] {
   const usedIds = new Set<number>();
   const nextIdRef = { value: 1 };
@@ -707,27 +721,27 @@ export function normalizeMachineSectionRows(
       const machineModelId = Number(item.machineModelId);
       const processStepId = Number(item.processStepId);
       const boardCharacteristicId = Number(item.boardCharacteristicId);
+      const referenceId = <T extends { id: number }>(
+        value: number,
+        items: T[],
+      ) =>
+        Number.isSafeInteger(value) &&
+        value > 0 &&
+        (items.length === 0 || items.some((candidate) => candidate.id === value))
+          ? value
+          : null;
       const row: MachineSectionRow = {
         id,
         role: storedText(item.role),
-        machineModelId:
-          allowImage &&
-          Number.isSafeInteger(machineModelId) &&
-          machineModelId > 0
-            ? machineModelId
-            : null,
-        processStepId:
-          allowImage &&
-          Number.isSafeInteger(processStepId) &&
-          processStepId > 0
-            ? processStepId
-            : null,
-        boardCharacteristicId:
-          allowImage &&
-          Number.isSafeInteger(boardCharacteristicId) &&
-          boardCharacteristicId > 0
-            ? boardCharacteristicId
-            : null,
+        machineModelId: allowImage
+          ? referenceId(machineModelId, machineModelItems)
+          : null,
+        processStepId: allowImage
+          ? referenceId(processStepId, processStepItems)
+          : null,
+        boardCharacteristicId: allowImage
+          ? referenceId(boardCharacteristicId, boardCharacteristicItems)
+          : null,
         sensorIds: normalizeSensorIds(item, sensorItems),
         sensorType: storedText(item.sensorType),
         spec: storedText(item.spec),

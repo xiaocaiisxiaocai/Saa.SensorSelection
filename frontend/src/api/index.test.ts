@@ -91,6 +91,20 @@ describe('api client', () => {
     }
   });
 
+  it('does not add a JSON content type to GET requests', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ username: 'admin' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.me();
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers;
+    expect(headers).toBeInstanceOf(Headers);
+    expect(headers instanceof Headers ? headers.get('Content-Type') : null).toBeNull();
+  });
+
   it('sends store keys as query values so encoded slashes cannot become route segments', async () => {
     storeToken('tok');
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>

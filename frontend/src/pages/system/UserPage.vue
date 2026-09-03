@@ -327,7 +327,7 @@ function orgPath(user: RbacUser) {
             clearable
           />
         </AFormRow>
-        <AFormRow label="所属组织">
+        <AFormRow label="所属组织" wide>
           <ATreeSelect
             v-model="form.orgUnitId"
             :nodes="orgNodes"

@@ -10,6 +10,7 @@ export { default as AFileDrop } from './AFileDrop.vue';
 export { default as AFilterResetButton } from './AFilterResetButton.vue';
 export { default as AFormGrid } from './AFormGrid.vue';
 export { default as AFormRow } from './AFormRow.vue';
+export { default as AHighlightText } from './AHighlightText.vue';
 export { default as AIconButton } from './AIconButton.vue';
 export { default as AImageViewer } from './AImageViewer.vue';
 export { default as AMenu } from './AMenu.vue';

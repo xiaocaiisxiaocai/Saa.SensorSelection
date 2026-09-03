@@ -68,7 +68,7 @@ const { id, describedBy, invalid, required } = useFormControl(props);
   background: var(--bg-content);
   border: 0;
   border-radius: var(--radius-xs);
-  box-shadow: inset 0 0 0 1px var(--separator);
+  box-shadow: inset 0 0 0 1px var(--control-stroke);
   transition:
     background-color var(--dur-1) var(--ease-out),
     box-shadow var(--dur-1) var(--ease-out);

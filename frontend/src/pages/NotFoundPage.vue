@@ -16,10 +16,14 @@ import { RouterLink } from 'vue-router';
 .missing {
   display: grid;
   gap: var(--space-4);
-  align-content: start;
-  justify-items: start;
+  place-content: center;
+  justify-items: center;
+  width: 100%;
+  min-height: 100%;
   max-width: 36rem;
-  padding: var(--space-6) 0;
+  padding: var(--space-6);
+  margin: auto;
+  text-align: center;
 }
 
 h1 {

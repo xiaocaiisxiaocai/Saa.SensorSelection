@@ -47,16 +47,19 @@ describe('SensorPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows an independent SOP tab before 型录 and 3D', async () => {
+  it('separates the model workspace from SOP, 型录 and 3D resources', async () => {
     const wrapper = await mountPage();
     expect(wrapper.get('h1.visually-hidden').text()).toBe('Sensor型号');
     const labels = wrapper
       .findAll('.a-segmented button')
       .map((button) => button.text());
 
-    expect(labels.slice(0, 3)).toEqual(['SOP', '型录', '3D']);
+    expect(labels).toEqual(['型号', 'SOP', '型录', '3D']);
     expect(wrapper.text()).toContain('现用');
-    expect(wrapper.text()).toContain('全部');
+    expect(wrapper.getComponent(ASelect).props('options')).toContainEqual({
+      label: '全部',
+      value: '全部',
+    });
     expect(wrapper.text()).toContain('感应器类型');
     wrapper.unmount();
   });
@@ -69,7 +72,9 @@ describe('SensorPage', () => {
       fixed?: 'start' | 'end';
     }>;
 
-    expect(columns.find((column) => column.key === 'model')?.fixed).toBeUndefined();
+    expect(
+      columns.find((column) => column.key === 'model')?.fixed,
+    ).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -86,8 +91,10 @@ describe('SensorPage', () => {
     expect(columns.find((column) => column.key === 'feature')?.minWidth).toBe(
       200,
     );
-    expect(columns.find((column) => column.key === 'scene')?.minWidth).toBe(160);
-    expect(columns.find((column) => column.key === 'actions')?.width).toBe(72);
+    expect(columns.find((column) => column.key === 'scene')?.minWidth).toBe(
+      160,
+    );
+    expect(columns.find((column) => column.key === 'actions')?.width).toBe(96);
     wrapper.unmount();
   });
 
@@ -95,6 +102,7 @@ describe('SensorPage', () => {
     const wrapper = await mountPage({ tab: 'sop-library' }, writer);
     expect(wrapper.text()).toContain('暂无 SOP 文件');
     expect(wrapper.text()).toContain('仅支持 PDF，不超过 8 MB');
+    expect(wrapper.find('[aria-label="搜索 SOP 文件"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -126,6 +134,7 @@ describe('SensorPage', () => {
 
   it('previews PDF files from the document workspace', async () => {
     const wrapper = await mountPage({ tab: 'sop' }, writer);
+    expect(wrapper.find('[aria-label="搜索型录文件"]').exists()).toBe(true);
     const store = useSelectionStore();
     expect(
       store.saveSensorSop({
@@ -147,6 +156,22 @@ describe('SensorPage', () => {
       '产品资料',
     );
 
+    wrapper.unmount();
+  });
+
+  it('returns from a resource workspace to the previous model status', async () => {
+    const wrapper = await mountPage({ tab: '备选' }, writer);
+    const tabs = wrapper.findAll('[role="tab"]');
+
+    await tabs.find((tab) => tab.text() === 'SOP')!.trigger('click');
+    await nextTick();
+    await tabs[0]!.trigger('click');
+    await nextTick();
+
+    expect(wrapper.getComponent(ASelect).props('modelValue')).toBe('备选');
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+      '型号',
+    );
     wrapper.unmount();
   });
 
@@ -238,7 +263,7 @@ describe('SensorPage', () => {
       '产品资料',
     );
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
-      '现用',
+      '型号',
     );
 
     document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
@@ -255,7 +280,7 @@ describe('SensorPage', () => {
       '三维图纸',
     );
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
-      '现用',
+      '型号',
     );
 
     wrapper.unmount();

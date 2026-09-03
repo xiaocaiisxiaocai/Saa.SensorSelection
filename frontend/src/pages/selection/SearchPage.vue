@@ -4,7 +4,14 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { SearchItem } from '@/domain';
 import { useSelectionStore } from '@/stores/selection';
-import { ABadge, AEmptyState, ASegmentedControl, type BadgeTone, type SegmentOption } from '@/ui';
+import {
+  ABadge,
+  AEmptyState,
+  AHighlightText,
+  ASegmentedControl,
+  type BadgeTone,
+  type SegmentOption,
+} from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -30,12 +37,23 @@ const results = computed(() =>
     : allResults.value.filter((item) => item.type === activeType.value),
 );
 
+const resultCounts = computed(() => {
+  const counts: Record<SearchItem['type'], number> = {
+    customer: 0,
+    process: 0,
+    machine: 0,
+    sensor: 0,
+  };
+  for (const item of allResults.value) counts[item.type] += 1;
+  return counts;
+});
+
 const tabs = computed<SegmentOption[]>(() => [
   { label: '全部', value: 'all', badge: allResults.value.length },
-  { label: '客户', value: 'customer' },
-  { label: '制程', value: 'process' },
-  { label: '机型', value: 'machine' },
-  { label: 'Sensor', value: 'sensor' },
+  { label: '客户', value: 'customer', badge: resultCounts.value.customer },
+  { label: '制程', value: 'process', badge: resultCounts.value.process },
+  { label: '机型', value: 'machine', badge: resultCounts.value.machine },
+  { label: 'Sensor', value: 'sensor', badge: resultCounts.value.sensor },
 ]);
 
 const typeLabel: Record<SearchItem['type'], string> = {
@@ -81,12 +99,21 @@ function openResult(item: SearchItem) {
       description="换个关键词试试，可搜索客户、制程、机型和 Sensor 型号"
     />
     <ul v-else class="search-list">
-      <li v-for="(item, index) in results" :key="`${item.path}-${item.title}-${index}`">
+      <li
+        v-for="(item, index) in results"
+        :key="`${item.path}-${item.title}-${index}`"
+      >
         <button type="button" @click="openResult(item)">
-          <span class="search-list__title">{{ item.title }}</span>
+          <span class="search-list__title">
+            <AHighlightText :text="item.title" :query="query" />
+          </span>
           <ABadge :label="typeLabel[item.type]" :tone="typeTone[item.type]" />
-          <span class="search-list__meta">{{ item.category }}</span>
-          <span class="search-list__sub">{{ item.sub }}</span>
+          <span class="search-list__meta">
+            <AHighlightText :text="item.category" :query="query" />
+          </span>
+          <span class="search-list__sub">
+            <AHighlightText :text="item.sub" :query="query" />
+          </span>
         </button>
       </li>
     </ul>

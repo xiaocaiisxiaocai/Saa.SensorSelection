@@ -325,9 +325,7 @@ watch(
             :class="[
               `a-table__cell--${column.align ?? 'start'}`,
               {
-                'a-table__cell--fixed': Boolean(
-                  fixedSide(column, columnIndex),
-                ),
+                'a-table__cell--fixed': Boolean(fixedSide(column, columnIndex)),
                 [`a-table__cell--fixed-${fixedSide(column, columnIndex)}`]:
                   Boolean(fixedSide(column, columnIndex)),
               },
@@ -361,10 +359,7 @@ watch(
           @click="onRowClick(row)"
           @keydown="onRowKeydown($event, row)"
         >
-          <template
-            v-for="(column, columnIndex) in columns"
-            :key="column.key"
-          >
+          <template v-for="(column, columnIndex) in columns" :key="column.key">
             <td
               v-if="cellRowSpan(column, row, virtualRange.start + i) !== 0"
               :class="[
@@ -373,9 +368,8 @@ watch(
                   'a-table__cell--fixed': Boolean(
                     fixedSide(column, columnIndex),
                   ),
-                  [`a-table__cell--fixed-${fixedSide(column, columnIndex)}`]: Boolean(
-                    fixedSide(column, columnIndex),
-                  ),
+                  [`a-table__cell--fixed-${fixedSide(column, columnIndex)}`]:
+                    Boolean(fixedSide(column, columnIndex)),
                   'a-table__cell--mono': column.mono,
                 },
               ]"
@@ -502,7 +496,7 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
-  font: var(--text-control-em);
+  font: var(--text-field-em);
   color: var(--label);
   white-space: nowrap;
   background: var(--bg-grouped);
@@ -560,7 +554,7 @@ tbody tr:hover {
   white-space: nowrap;
   background: var(--bg-content);
   box-shadow:
-    inset 0.5px 0 0 var(--separator),
+    inset 0.5px 0 0 var(--control-stroke),
     inset 0 -0.5px 0 var(--separator);
 }
 
@@ -689,6 +683,6 @@ tbody tr:last-child td {
 }
 
 tbody tr:last-child td.a-table__cell--fixed {
-  box-shadow: inset 0.5px 0 0 var(--separator);
+  box-shadow: inset 0.5px 0 0 var(--control-stroke);
 }
 </style>

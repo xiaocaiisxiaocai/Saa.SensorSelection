@@ -18,7 +18,10 @@ async function mountSearch(q: string) {
   setActivePinia(pinia);
   await router.push({ path: '/selection/search', query: { q } });
   await router.isReady();
-  return { router, wrapper: mount(SearchPage, { global: { plugins: [pinia, router] } }) };
+  return {
+    router,
+    wrapper: mount(SearchPage, { global: { plugins: [pinia, router] } }),
+  };
 }
 
 describe('SearchPage', () => {
@@ -26,6 +29,10 @@ describe('SearchPage', () => {
     const { wrapper } = await mountSearch('庆鼎');
     expect(wrapper.text()).toContain('搜索“庆鼎”');
     expect(wrapper.text()).toContain('客户');
+    expect(wrapper.find('mark').text()).toBe('庆鼎');
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toMatch(
+      /全部\d+/,
+    );
     wrapper.unmount();
   });
 });

@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 
 import type { SegmentedSize, SegmentOption } from './types';
 
@@ -25,7 +32,9 @@ const selectedIndex = computed(() => {
 });
 
 function updateThumb() {
-  const selected = root.value?.querySelector<HTMLElement>('[aria-selected="true"]');
+  const selected = root.value?.querySelector<HTMLElement>(
+    '[aria-selected="true"]',
+  );
   if (!selected) {
     thumbX.value = 0;
     thumbWidth.value = 0;
@@ -181,7 +190,7 @@ watch(
 
 .a-segmented--medium .a-segmented__tab {
   height: var(--control-height-md);
-  font: var(--text-control);
+  font: var(--text-field);
 }
 
 .a-segmented--large .a-segmented__tab {

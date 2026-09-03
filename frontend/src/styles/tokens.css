@@ -39,6 +39,7 @@
 
   --separator: rgb(60 60 67 / 16%);
   --separator-opaque: #dededf;
+  --control-stroke: rgb(60 60 67 / 36%);
 
   --fill-1: rgb(120 120 128 / 16%);
   --fill-2: rgb(120 120 128 / 10%);
@@ -77,6 +78,7 @@
   --text-control: 400 15px/22px var(--font-ui);
   --text-control-em: 600 15px/22px var(--font-ui);
   --text-field: 400 13px/18px var(--font-ui);
+  --text-field-em: 600 13px/18px var(--font-ui);
   --text-toolbar: 400 12px/18px var(--font-ui);
   --text-toolbar-em: 600 12px/18px var(--font-ui);
   --text-caption: 400 12px/18px var(--font-ui);
@@ -194,6 +196,7 @@
 
   --separator: rgb(84 84 88 / 65%);
   --separator-opaque: #38383a;
+  --control-stroke: rgb(235 235 245 / 42%);
 
   --fill-1: rgb(120 120 128 / 36%);
   --fill-2: rgb(120 120 128 / 32%);

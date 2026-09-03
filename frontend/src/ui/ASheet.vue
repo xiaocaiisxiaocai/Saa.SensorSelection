@@ -110,7 +110,9 @@ function onOpenAutoFocus(event: Event) {
   color: var(--label);
   background: var(--bg-elevated);
   border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-4), inset 0 0 0 0.5px var(--separator);
+  box-shadow:
+    var(--shadow-4),
+    inset 0 0 0 0.5px var(--separator);
   transform: translate(-50%, -50%);
 }
 
@@ -159,7 +161,7 @@ function onOpenAutoFocus(event: Event) {
   flex-shrink: 0;
   gap: var(--space-3);
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: var(--space-4) var(--space-5);
 }
 

@@ -43,7 +43,7 @@ const actionOptions: SelectOption[] = [
   ...Object.entries(ACTION_LABELS).map(([value, label]) => ({ label, value })),
 ];
 const resultOptions: SelectOption[] = [
-  { label: '全部', value: '' },
+  { label: '全部结果', value: '' },
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
 ];
@@ -183,7 +183,7 @@ function resetFilters() {
         v-model="filters.result"
         class="selection-toolbar__filter audit-toolbar__result"
         :options="resultOptions"
-        placeholder="全部"
+        placeholder="全部结果"
         aria-label="操作结果筛选"
         clearable
       />
@@ -212,7 +212,11 @@ function resetFilters() {
       <template #cell-action="{ row }">{{ actionLabel(row.action) }}</template>
       <template #cell-target="{ value }">{{ value || '—' }}</template>
       <template #cell-detail="{ row }">
-        <AButton size="small" variant="tinted" @click.stop="openDetail(row)">
+        <AButton
+          size="small"
+          variant="borderless"
+          @click.stop="openDetail(row)"
+        >
           查看
         </AButton>
       </template>
@@ -278,6 +282,9 @@ function resetFilters() {
           <dd>{{ selectedLog.error || '—' }}</dd>
         </div>
       </dl>
+      <template #footer>
+        <AButton @click="detailOpen = false">关闭</AButton>
+      </template>
     </ASheet>
   </section>
 </template>

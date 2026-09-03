@@ -107,13 +107,24 @@ const sopOptions = computed<SelectOption[]>(() =>
 const model3dOptions = computed<SelectOption[]>(() =>
   store.sensor3dFiles.map((item) => ({ label: item.title, value: item.id })),
 );
+const resourceTabs = ['sop-library', 'sop', '3d'];
 const tabs = computed<SegmentOption[]>(() => [
+  { label: '型号', value: 'models' },
   { label: 'SOP', value: 'sop-library' },
   { label: '型录', value: 'sop' },
   { label: '3D', value: '3d' },
-  ...statusNames.value.map((name) => ({ label: name, value: name })),
-  { label: '全部', value: '全部' },
 ]);
+const lastStatusTab = ref(
+  resourceTabs.includes(mainTab.value)
+    ? findSensorStatusName(statusNames.value, 'current') || '全部'
+    : mainTab.value,
+);
+const sectionTab = computed({
+  get: () => (resourceTabs.includes(mainTab.value) ? mainTab.value : 'models'),
+  set: (value: string) => {
+    mainTab.value = value === 'models' ? lastStatusTab.value : value;
+  },
+});
 const sensorById = computed(() => {
   const map = new Map<number, SensorItem>();
   for (const item of store.sensors) map.set(item.id, item);
@@ -123,10 +134,7 @@ const showDisabledDetails = computed(() =>
   isSensorStatus(mainTab.value, 'disabled'),
 );
 const statusFilter = computed({
-  get: () =>
-    ['sop-library', 'sop', '3d'].includes(mainTab.value)
-      ? '全部'
-      : mainTab.value,
+  get: () => (resourceTabs.includes(mainTab.value) ? '全部' : mainTab.value),
   set: (value: string | number | null) => {
     mainTab.value = String(value || '全部');
   },
@@ -201,7 +209,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'model3d', label: '关联 3D', minWidth: 140 },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 72, fixed: 'end' });
+    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
   }
   return cols;
 });
@@ -281,6 +289,9 @@ watch(
 );
 watch([query, sensorTypeFilters, mainTab, pageSize], () => {
   page.value = 1;
+});
+watch(mainTab, (tab) => {
+  if (!resourceTabs.includes(tab)) lastStatusTab.value = tab;
 });
 watch(
   () => [items.value.length, pageSize.value] as const,
@@ -608,7 +619,7 @@ function saveReplace() {
 <template>
   <section class="selection-page">
     <h1 class="visually-hidden">Sensor型号</h1>
-    <ASegmentedControl v-model="mainTab" :segments="tabs" />
+    <ASegmentedControl v-model="sectionTab" :segments="tabs" />
     <SensorSopFilePanel v-if="mainTab === 'sop-library'" />
     <SensorSopPanel
       v-else-if="mainTab === 'sop'"

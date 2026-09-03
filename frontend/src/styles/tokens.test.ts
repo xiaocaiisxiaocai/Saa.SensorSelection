@@ -115,6 +115,7 @@ const requiredTokens = [
   '--label-4',
   '--separator',
   '--separator-opaque',
+  '--control-stroke',
   '--fill-1',
   '--bg-window',
   '--bg-content',
@@ -125,6 +126,7 @@ const requiredTokens = [
   '--text-display',
   '--text-control',
   '--text-field',
+  '--text-field-em',
   '--text-toolbar',
   '--text-toolbar-em',
   '--text-caption',
@@ -209,7 +211,9 @@ describe('tokens.css', () => {
   });
 
   it('keeps the machine directory beside its content on medium desktop widths', () => {
-    expect(machinePage).toContain("'selection-split--machine': activeMachineView === 'browse'");
+    expect(machinePage).toContain(
+      "'selection-split--machine': activeMachineView === 'browse'",
+    );
     expect(machinePage).toMatch(
       /@media \(48rem < width <= 60rem\)[\s\S]*\.selection-split--machine\s*\{[\s\S]*grid-template-columns:[\s\S]*clamp\(200px, var\(--machine-source-width, 220px\), 220px\)[\s\S]*minmax\(0, 1fr\);/,
     );
@@ -219,9 +223,7 @@ describe('tokens.css', () => {
     expect(table).toMatch(
       /\.a-table\s*\{[^}]*border:\s*1px solid var\(--separator\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
     );
-    expect(table).toMatch(
-      /th\s*\{[^}]*background:\s*var\(--bg-grouped\);/s,
-    );
+    expect(table).toMatch(/th\s*\{[^}]*background:\s*var\(--bg-grouped\);/s);
     expect(table).toMatch(
       /tbody tr:last-child td\s*\{[^}]*box-shadow:\s*none;/s,
     );
@@ -257,9 +259,8 @@ describe('tokens.css', () => {
   });
 
   it('keeps dark green status badges readable on striped table rows', () => {
-    const dark = tokens.match(
-      /:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/,
-    )?.[1] ?? '';
+    const dark =
+      tokens.match(/:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(dark).toMatch(/--sys-green-fill:\s*rgb\(48 209 88 \/ 16%\)/);
   });
 
@@ -316,7 +317,9 @@ describe('tokens.css', () => {
     expect(tokens).toMatch(/--text-control:\s*400 15px\/22px/);
     expect(tokens).toMatch(/--text-body:\s*400 15px\/22px/);
     expect(tokens).toMatch(/--text-headline:\s*600 15px\/22px/);
-    expect(tokens).not.toMatch(/--text-(?:display|title-1|title-2|headline|body):[^;]*clamp\(/);
+    expect(tokens).not.toMatch(
+      /--text-(?:display|title-1|title-2|headline|body):[^;]*clamp\(/,
+    );
     expect(tokens).toMatch(/--text-field:\s*400 13px\/18px/);
     expect(reset).toMatch(/html\s*\{[^}]*font:\s*var\(--text-control\);/s);
     expect(controls).toMatch(

@@ -171,7 +171,7 @@ function openPicker() {
 .a-file-drop__hint {
   margin: 0;
   font: var(--text-caption);
-  color: var(--label-3);
+  color: var(--label-2);
   letter-spacing: var(--tracking-caption);
 }
 </style>

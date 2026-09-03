@@ -33,6 +33,7 @@ withDefaults(
 .a-badge--neutral {
   color: var(--label-2);
   background: var(--fill-2);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
 .a-badge--blue {

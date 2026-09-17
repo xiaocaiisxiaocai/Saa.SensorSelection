@@ -51,6 +51,11 @@ export const useSelectionStore = defineStore('selection', () => {
   let storageSyncBound = false;
   let repository: Repository = createLocalRepository();
   let initPromise: null | Promise<void> = null;
+  let initInFlight = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelayMs = 0;
+  const RECONNECT_BASE_DELAY_MS = 3000;
+  const RECONNECT_MAX_DELAY_MS = 30_000;
   const revision = ref(0);
   const lastFailure = ref<null | SaveFailure>(null);
   const backendStatus = ref<BackendSyncStatus>('connecting');
@@ -234,8 +239,31 @@ export const useSelectionStore = defineStore('selection', () => {
     );
   }
 
-  function initBackend(): Promise<void> {
-    if (initPromise) return initPromise;
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  }
+
+  // 断线后自动退避重连：把"发现掉线"到"重新可写"之间的空档从"人工点按钮才会
+  // 恢复"缩短到几秒钟——bridge/repository 必须整体重建才能保证一致性（见
+  // runInit），所以这里只负责按节奏重新触发同一条已验证过的重建路径。
+  function scheduleReconnect() {
+    if (reconnectTimer !== null) return;
+    reconnectDelayMs =
+      reconnectDelayMs === 0
+        ? RECONNECT_BASE_DELAY_MS
+        : Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void reconnect();
+    }, reconnectDelayMs);
+  }
+
+  function runInit(): Promise<void> {
+    clearReconnectTimer();
+    initInFlight = true;
     const running = (async () => {
       backendStatus.value = 'connecting';
       backendMessage.value = '';
@@ -265,6 +293,18 @@ export const useSelectionStore = defineStore('selection', () => {
         migrateOnEmpty: false,
         onStatus: (status) => {
           backendStatus.value = status;
+          if (status === 'online') {
+            reconnectDelayMs = 0;
+            clearReconnectTimer();
+          } else if (status === 'offline') {
+            // 掉线可能来自初始连接失败，也可能来自后面某次写入失败（storage.ts
+            // 内部会把状态整体标记为 offline）；两种情况都要自动重连。
+            scheduleReconnect();
+          } else {
+            // 'unauthorized' 需要用户重新登录，自动重试没有意义；
+            // 'connecting' 是重建过程中的瞬时状态，不需要额外调度。
+            clearReconnectTimer();
+          }
         },
         onWriteFailure: (message) => {
           lastFailure.value = 'storage';
@@ -281,9 +321,18 @@ export const useSelectionStore = defineStore('selection', () => {
       });
       touch();
     })();
-    initPromise = running.catch(() => {
-      /* status is reported via callbacks */
-    });
+    return running
+      .catch(() => {
+        /* status is reported via callbacks */
+      })
+      .finally(() => {
+        initInFlight = false;
+      });
+  }
+
+  function initBackend(): Promise<void> {
+    if (initPromise) return initPromise;
+    initPromise = runInit();
     return initPromise;
   }
 
@@ -291,9 +340,12 @@ export const useSelectionStore = defineStore('selection', () => {
     return initBackend();
   }
 
-  function reconnect() {
-    initPromise = null;
-    return ensureBackendInit();
+  function reconnect(): Promise<void> {
+    // 已有一次重建在途（无论是初次连接、手动点击，还是自动重试触发的）时，
+    // 直接复用同一个 in-flight promise，避免并发重建出两套 bridge/repository。
+    if (initInFlight && initPromise) return initPromise;
+    initPromise = runInit();
+    return initPromise;
   }
 
   return {

@@ -7,6 +7,7 @@ import { useSelectionStore } from './selection';
 
 describe('selection store', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     setActivePinia(createPinia());
     window.localStorage.clear();
     vi.spyOn(api, 'putKey').mockResolvedValue([]);
@@ -15,8 +16,19 @@ describe('selection store', () => {
     vi.spyOn(api, 'deleteKey').mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // 有些只读路径（如 getDictionaryItems）会顺带触发一次 persist() 补写缺失的
+    // 字典项；写入走 BackendStorage 的串行队列，是纯 Promise 链，不受假计时器
+    // 影响。断言完就 return 时这条链可能还没跑完——如果先恢复 mock 再让它继续
+    // 跑，剩下的写入会打到真实的 api.putKey 上，产生真实网络请求，还可能把状态
+    // 波动带进下一个用例。这里先排空微任务队列，再清掉可能残留的自动重连计时器
+    // （比如故意不等待重连的用例），最后才恢复 mock/真实计时器。
+    for (let i = 0; i < 50; i += 1) {
+      await Promise.resolve();
+    }
+    vi.clearAllTimers();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('bumps revision after a successful write', () => {
@@ -129,5 +141,79 @@ describe('selection store', () => {
     await store.reconnect();
     expect(getStore).toHaveBeenCalledTimes(2);
     expect(store.backendStatus).toBe('online');
+  });
+
+  it('automatically retries and recovers from a connection failure without a manual reconnect', async () => {
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockRejectedValueOnce(new ApiError('offline', '无法连接后端服务'))
+      .mockResolvedValueOnce({ 'entity-groups:customer': [] });
+    const store = useSelectionStore();
+
+    await store.ensureBackendInit();
+    expect(store.backendStatus).toBe('offline');
+    expect(getStore).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(getStore).toHaveBeenCalledTimes(2);
+    expect(store.backendStatus).toBe('online');
+  });
+
+  it('backs off exponentially across repeated auto-retry failures', async () => {
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockRejectedValue(new ApiError('offline', '无法连接后端服务'));
+    const store = useSelectionStore();
+
+    await store.ensureBackendInit();
+    expect(getStore).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getStore).toHaveBeenCalledTimes(2);
+
+    // 第二次重试前的退避应翻倍到 6s，3s 时不该再次触发
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getStore).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getStore).toHaveBeenCalledTimes(3);
+
+    expect(store.backendStatus).toBe('offline');
+  });
+
+  it('auto-retries after a later write failure, not just an initial connection failure', async () => {
+    vi.spyOn(api, 'getStore')
+      .mockResolvedValueOnce({ 'entity-groups:customer': [] })
+      .mockResolvedValueOnce({ 'entity-groups:customer': [] });
+    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+      new ApiError('offline', '无法连接后端服务'),
+    );
+    const store = useSelectionStore();
+
+    await store.ensureBackendInit();
+    expect(store.backendStatus).toBe('online');
+
+    store.saveEntityGroup('customer', { name: '测试区' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.backendStatus).toBe('offline');
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(store.backendStatus).toBe('online');
+  });
+
+  it('does not auto-retry while the session is unauthorized', async () => {
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockRejectedValue(new ApiError('unauthorized', '登录已失效'));
+    const store = useSelectionStore();
+
+    await store.ensureBackendInit();
+    expect(store.backendStatus).toBe('unauthorized');
+    expect(getStore).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(getStore).toHaveBeenCalledTimes(1);
   });
 });

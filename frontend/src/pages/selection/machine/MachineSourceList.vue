@@ -1181,6 +1181,7 @@ onMounted(restoreWidth);
   flex: 1;
   min-height: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 2px;
   overflow: hidden auto;

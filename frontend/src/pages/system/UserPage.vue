@@ -12,7 +12,7 @@ import {
 import { formatLocalDateTime } from '@/domain';
 import { toTreeSelectNodes } from '@/pages/system/org-tree';
 import { confirmDelete } from '@/pages/shared/save-feedback';
-import { useAccess } from '@/stores/auth';
+import { useAccess, useAuthStore } from '@/stores/auth';
 import { toast } from '@/ui/toast';
 import {
   ABadge,
@@ -32,6 +32,7 @@ import {
 import '../shared/selection-page.css';
 
 const { canWrite } = useAccess();
+const auth = useAuthStore();
 const writable = computed(() => canWrite('rbac:user:write'));
 const loading = ref(false);
 const users = ref<RbacUser[]>([]);
@@ -190,7 +191,34 @@ async function savePassword() {
   }
 }
 
+function isSelf(user: RbacUser) {
+  return Boolean(auth.profile) && auth.profile?.username === user.username;
+}
+
+function isLastActiveAdmin(user: RbacUser) {
+  if (!user.isActive || !user.roles.some((role) => role.code === 'admin')) {
+    return false;
+  }
+  const activeAdmins = users.value.filter(
+    (candidate) =>
+      candidate.isActive &&
+      candidate.roles.some((role) => role.code === 'admin'),
+  );
+  return activeAdmins.length <= 1;
+}
+
+function deleteBlockedReason(user: RbacUser): string | undefined {
+  if (isSelf(user)) return '不能删除当前登录账号';
+  if (isLastActiveAdmin(user)) return '至少保留一个启用的系统管理员';
+  return undefined;
+}
+
 async function removeUser(user: RbacUser) {
+  const blockedReason = deleteBlockedReason(user);
+  if (blockedReason) {
+    toast.warning(blockedReason);
+    return;
+  }
   const ok = await confirmDelete(
     '删除用户',
     `确定删除用户“${user.displayName}（${user.username}）”？此操作不可恢复。`,
@@ -257,9 +285,10 @@ function orgPath(user: RbacUser) {
           />
           <AIconButton
             :icon="Trash2"
-            label="删除"
+            :label="deleteBlockedReason(row) ?? '删除'"
             size="small"
             variant="destructive"
+            :disabled="Boolean(deleteBlockedReason(row))"
             @click="removeUser(row)"
           />
         </div>

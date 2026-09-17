@@ -1227,6 +1227,27 @@ async function run() {
   assert.equal(bridge9.setItem('a', JSON.stringify([{ v: 3 }])), false) // 禁止写入
   assert.equal(bridge9.getItem(domain.STORAGE_KEY), null)
 
+  // 同一 key 连续两次排队写入都失败：回滚必须落到后端已确认的最后值，
+  // 不能落到第一次失败前从未真正落地的中间乐观值上
+  const localMemory9b = new Map()
+  const transport9b = createFakeTransport({ a: [{ v: 1 }], other: [0] })
+  transport9b.writeKey = async (key, value) => {
+    if (key === 'a') throw new Error('write blocked: a')
+    transport9b.remote.set(key, value)
+    transport9b.calls.writes.push(key)
+  }
+  const bridge9b = new BackendStorage({
+    transport: transport9b,
+    local: makeLocal(localMemory9b),
+  })
+  await bridge9b.init()
+  assert.equal(bridge9b.setItem('a', JSON.stringify([{ v: 2 }])), true)
+  assert.equal(bridge9b.setItem('a', JSON.stringify([{ v: 3 }])), true)
+  assert.equal(bridge9b.setItem('other', JSON.stringify([1])), true) // 触发队列排空后重新上线
+  await bridge9b.queue
+  assert.equal(bridge9b.status, 'online')
+  assert.equal(bridge9b.getItem('a'), '[{"v":1}]')
+
   // 种子版本化回填：远端版本落后时补种缺失默认 key，不覆盖用户已有数据
   const localMemory10 = new Map()
   const transport10 = createFakeTransport({

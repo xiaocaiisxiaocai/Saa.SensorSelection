@@ -250,6 +250,12 @@ public class StoreTests
             JsonSerializer.Deserialize<JsonElement>("{\"a\":1}"));
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
 
+        // 空字符串 key → 400（与 UpsertAsync 的校验保持一致）
+        bad = await client.PutAsJsonAsync(
+            "/api/store",
+            JsonSerializer.Deserialize<JsonElement>("{\"\":[1]}"));
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
         // 合法整体替换
         var ok = await client.PutAsJsonAsync(
             "/api/store",

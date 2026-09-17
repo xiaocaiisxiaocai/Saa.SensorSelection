@@ -247,6 +247,7 @@ public class UserService(AppDbContext db, ProfileService profiles)
     {
         return db.Users.CountAsync(
             user => user.Id != userId &&
+                    user.IsActive &&
                     user.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode),
             ct);
     }

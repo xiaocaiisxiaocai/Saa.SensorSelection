@@ -77,7 +77,6 @@ export class BackendStorage implements StorageLike {
   }
 
   private enqueueDelete(key: string) {
-    const prev = this.synced.get(key);
     if (!this.transport.deleteKey) {
       this.synced.delete(key);
       this.snapshotLocal();
@@ -91,12 +90,12 @@ export class BackendStorage implements StorageLike {
         this.status = 'online';
         this.snapshotLocal();
       } catch (error) {
-        this.handleFailure(key, undefined, prev, error);
+        this.handleFailure(key, undefined, error);
       }
     });
   }
 
-  private enqueueWrite(key: string, value: unknown[], prev: unknown[] | undefined) {
+  private enqueueWrite(key: string, value: unknown[]) {
     this.queue = this.queue.then(async () => {
       try {
         const returned = await this.transport.writeKey(key, value);
@@ -111,7 +110,7 @@ export class BackendStorage implements StorageLike {
         this.status = 'online';
         this.snapshotLocal();
       } catch (error) {
-        this.handleFailure(key, value, prev, error);
+        this.handleFailure(key, value, error);
       }
     });
   }
@@ -150,9 +149,12 @@ export class BackendStorage implements StorageLike {
   private handleFailure(
     key: string,
     attempted: unknown[] | undefined,
-    prev: unknown[] | undefined,
     error: unknown,
   ) {
+    // 回滚目标必须是失败处理时刻后端已确认的最新值（this.synced 此时已反映
+    // 队列中所有更早写入的结果），而不是入队时快照的值——入队之后、失败处理
+    // 之前，队列里更早的写入可能已经成功并推进了后端状态。
+    const prev = this.synced.get(key);
     // 只回滚仍然代表本次失败写入的乐观值；如果队列中已有更新编辑，
     // 必须保留更新值，避免后续成功写入后缓存停留在旧快照。
     const stillRepresentsAttempt =
@@ -300,10 +302,9 @@ export class BackendStorage implements StorageLike {
       return false;
     }
     if (!Array.isArray(parsed)) return false;
-    const prev = this.cache.get(key);
-    if (sameValue(prev, parsed)) return true;
+    if (sameValue(this.cache.get(key), parsed)) return true;
     this.cache.set(key, parsed);
-    this.enqueueWrite(key, parsed, prev);
+    this.enqueueWrite(key, parsed);
     return true;
   }
 
@@ -340,7 +341,7 @@ export class BackendStorage implements StorageLike {
 
     this.cache = new Map(Object.entries(nextStore));
     for (const key of changedKeys) {
-      this.enqueueWrite(key, nextStore[key] as unknown[], this.synced.get(key));
+      this.enqueueWrite(key, nextStore[key] as unknown[]);
     }
     for (const key of removedKeys) {
       this.enqueueDelete(key);

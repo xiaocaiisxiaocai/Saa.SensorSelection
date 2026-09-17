@@ -53,9 +53,9 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                 return StoreWriteResult.Validation($"key 的值必须是数组: {property.Name}");
             }
 
-            if (property.Name.Length > 200)
+            if (property.Name.Length == 0 || property.Name.Length > 200)
             {
-                return StoreWriteResult.Validation("key 过长");
+                return StoreWriteResult.Validation("key 长度不合法");
             }
 
             submittedKeys.Add(property.Name);

@@ -264,6 +264,30 @@ public class RbacTests
     }
 
     [Fact]
+    public async Task User_DeactivatingLastAdmin_IsRejected_EvenWhenAnotherAdminIsInactive()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        // 第二个管理员账号本身是停用状态，不应被算作"可用"的兜底管理员
+        var adminRoleId = await GetRoleIdAsync(admin, "admin");
+        await CreateUserAsync(
+            admin, "secondadmin", isActive: false, roleIds: [adminRoleId]);
+
+        var users = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/users");
+        var adminUser = users.EnumerateArray().First(item =>
+            item.GetProperty("username").GetString() == "admin");
+        var adminId = adminUser.GetProperty("id").GetInt32();
+
+        var update = await admin.PutAsJsonAsync(
+            $"/api/rbac/users/{adminId}",
+            new { displayName = "管理员", isActive = false });
+        Assert.Equal(HttpStatusCode.BadRequest, update.StatusCode);
+        var body = await update.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("至少保留一名系统管理员", body.GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task InactiveUser_CannotLogin()
     {
         await using var factory = new ApiFactory();

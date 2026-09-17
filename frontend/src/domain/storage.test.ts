@@ -222,6 +222,32 @@ describe('BackendStorage', () => {
     expect(transport.remote.get('a')).toEqual([{ v: 3 }]);
   });
 
+  it('rolls back to the last backend-confirmed value when two queued writes to the same key both fail', async () => {
+    const transport = createFakeTransport({ a: [{ v: 1 }], other: [0] });
+    transport.writeKey = async (key, value) => {
+      if (key === 'a') throw new Error('write blocked: a');
+      transport.remote.set(key, value);
+      transport.calls.writes.push(key);
+    };
+    const bridge = new BackendStorage({
+      transport,
+      local: makeLocal(new Map()),
+    });
+    await bridge.init();
+
+    bridge.setItem('a', JSON.stringify([{ v: 2 }]));
+    bridge.setItem('a', JSON.stringify([{ v: 3 }]));
+    // A third, unrelated write that succeeds flips status back to 'online' after
+    // both failed writes to 'a' have already been queued.
+    bridge.setItem('other', JSON.stringify([1]));
+    await bridge.queue;
+
+    expect(bridge.status).toBe('online');
+    // Must roll back to the value the backend actually has ([{v:1}]), not to
+    // [{v:2}] — the first write's optimistic value, which never persisted.
+    expect(bridge.getItem('a')).toBe('[{"v":1}]');
+  });
+
   it('does not read or write local data when fetch fails', async () => {
     const localMemory = new Map<string, string>();
     localMemory.set(STORAGE_KEY, JSON.stringify({ cached: [{ id: 1 }] }));

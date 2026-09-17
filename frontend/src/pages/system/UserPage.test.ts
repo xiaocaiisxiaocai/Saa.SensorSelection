@@ -111,6 +111,88 @@ describe('UserPage', () => {
     wrapper.unmount();
   });
 
+  it('disables deleting your own account', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().applyProfile({
+      displayName: '管理员',
+      orgUnit: null,
+      permissions: ['rbac:user:write'],
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      username: 'admin',
+    });
+    const adminSelf: RbacUser = {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      displayName: '管理员',
+      id: 1,
+      isActive: true,
+      orgUnit: null,
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      username: 'admin',
+    };
+    vi.spyOn(api, 'listUsers').mockResolvedValue([adminSelf, user]);
+    vi.spyOn(api, 'listRoles').mockResolvedValue(roles);
+    vi.spyOn(api, 'listOrgUnits').mockResolvedValue([]);
+
+    const wrapper = mount(UserPage, {
+      attachTo: document.body,
+      global: { plugins: [pinia] },
+    });
+    await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
+
+    const selfDeleteButton = document.querySelector(
+      '[aria-label="不能删除当前登录账号"]',
+    );
+    expect(selfDeleteButton).toBeTruthy();
+    expect(selfDeleteButton?.hasAttribute('disabled')).toBe(true);
+
+    const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
+    expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('blocks deleting the last active admin even when logged in as someone else', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().applyProfile({
+      displayName: '运营专员',
+      orgUnit: null,
+      permissions: ['rbac:user:write'],
+      roles: [{ code: 'editor', id: 2, name: '业务维护员' }],
+      username: 'operator',
+    });
+    const lastAdmin: RbacUser = {
+      createdAt: '2026-08-01T00:00:00.000Z',
+      displayName: '唯一管理员',
+      id: 9,
+      isActive: true,
+      orgUnit: null,
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      username: 'only-admin',
+    };
+    vi.spyOn(api, 'listUsers').mockResolvedValue([lastAdmin, user]);
+    vi.spyOn(api, 'listRoles').mockResolvedValue(roles);
+    vi.spyOn(api, 'listOrgUnits').mockResolvedValue([]);
+
+    const wrapper = mount(UserPage, {
+      attachTo: document.body,
+      global: { plugins: [pinia] },
+    });
+    await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
+
+    const blockedButton = document.querySelector(
+      '[aria-label="至少保留一个启用的系统管理员"]',
+    );
+    expect(blockedButton).toBeTruthy();
+    expect(blockedButton?.hasAttribute('disabled')).toBe(true);
+
+    const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
+    expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
+
+    wrapper.unmount();
+  });
+
   it('shows field-level errors when a new user is incomplete', async () => {
     const wrapper = await mountPage();
     await wrapper.get('button').trigger('click');

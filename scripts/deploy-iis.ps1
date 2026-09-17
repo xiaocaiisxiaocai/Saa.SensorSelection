@@ -164,6 +164,11 @@ else { $publishArgs += @('--self-contained', 'false') }
 Invoke-Checked 'dotnet' $publishArgs
 if (-not (Test-Path (Join-Path $OutputDir 'web.config'))) { throw '后端发布产物缺少 web.config' }
 
+$demoStorePath = Join-Path $OutputDir 'Data\demo-store.json'
+if (Test-Path $demoStorePath) {
+  throw "生产发布产物不应包含演示数据文件：$demoStorePath"
+}
+
 Write-Host '==> 将前端 dist 合并到后端 wwwroot'
 New-Item -ItemType Directory -Path $wwwroot -Force | Out-Null
 Get-ChildItem -LiteralPath $distDir -Force | ForEach-Object {
@@ -182,6 +187,7 @@ $productionSettings = [ordered]@{
   Seed = [ordered]@{
     AdminPassword = $AdminPassword
     AllowDefaultPassword = [bool]($AdminPassword -eq 'admin123')
+    LoadDemoStore = $false
   }
   Cors = [ordered]@{ AllowedOrigins = $CorsAllowedOrigins }
 }

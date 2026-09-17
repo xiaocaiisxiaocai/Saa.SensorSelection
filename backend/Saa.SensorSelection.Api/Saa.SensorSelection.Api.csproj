@@ -7,7 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="Data/demo-store.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 演示数据仅供本地运行读取，任何 dotnet publish 都不得带入发布包。 -->
+    <Content Update="Data/demo-store.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Never" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
     <!-- 设计时迁移工具用（dotnet-ef），运行时不需要 -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">

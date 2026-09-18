@@ -7,7 +7,7 @@ import {
   formatLocalDateTime,
   type SensorSopItem,
 } from '@/domain';
-import { formatFileSize, readDataUrl } from '@/pages/shared/files';
+import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -58,7 +58,8 @@ function openPreview(file: SensorSopItem) {
 
 async function onFiles(picked: File[]) {
   for (const file of picked) {
-    const dataUrl = await readDataUrl(file);
+    const dataUrl = await uploadFile(file);
+    if (!dataUrl) continue;
     const result = store.saveSensorSop({
       dataUrl,
       fileName: file.name,

@@ -9,6 +9,7 @@ import {
   PROCESS_INTRO_FILE_KINDS,
   detectControlledFileKind,
   formatLocalDate,
+  isStoredFileSource,
   nextAvailableId,
   normalizeControlledDocuments,
   normalizeCrudItems,
@@ -752,7 +753,7 @@ export function createSelectionRepository({
     const uploadedAt =
       storedText(payload.uploadedAt).trim() || formatLocalDate(new Date());
 
-    if (!title || !fileName || !dataUrl.startsWith('data:')) {
+    if (!title || !fileName || !isStoredFileSource(dataUrl)) {
       return { ok: false, reason: 'validation' };
     }
     if (detectControlledFileKind(fileName, mimeType) !== 'pdf') {
@@ -820,7 +821,7 @@ export function createSelectionRepository({
     const uploadedAt =
       storedText(payload.uploadedAt).trim() || formatLocalDate(new Date());
 
-    if (!title || !fileName || !dataUrl.startsWith('data:')) {
+    if (!title || !fileName || !isStoredFileSource(dataUrl)) {
       return { ok: false, reason: 'validation' };
     }
     const kind = detectControlledFileKind(fileName, mimeType);
@@ -890,7 +891,7 @@ export function createSelectionRepository({
     const uploadedAt =
       storedText(payload.uploadedAt).trim() || formatLocalDate(new Date());
 
-    if (!title || !fileName || !dataUrl.startsWith('data:')) {
+    if (!title || !fileName || !isStoredFileSource(dataUrl)) {
       return { ok: false, reason: 'validation' };
     }
     const check = validateSensor3dUpload(fileName, mimeType, size);
@@ -1815,7 +1816,7 @@ export function createSelectionRepository({
     const uploadedAt = storedText(attachment.uploadedAt);
     if (
       !fileName ||
-      !dataUrl.startsWith('data:') ||
+      !isStoredFileSource(dataUrl) ||
       !Number.isFinite(size) ||
       size <= 0
     ) {

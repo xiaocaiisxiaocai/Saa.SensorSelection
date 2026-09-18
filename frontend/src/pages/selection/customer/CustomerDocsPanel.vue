@@ -8,6 +8,7 @@ import {
   detectControlledFileKind,
   formatLocalDateTime,
 } from '@/domain';
+import { uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -45,22 +46,14 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function readDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 async function onFiles(picked: File[]) {
   for (const file of picked) {
     const kind = detectControlledFileKind(file.name, file.type);
     if (!kind) {
       continue;
     }
-    const dataUrl = await readDataUrl(file);
+    const dataUrl = await uploadFile(file);
+    if (!dataUrl) continue;
     const result = store.saveControlledFile(props.entityName, {
       dataUrl,
       fileName: file.name,

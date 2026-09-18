@@ -159,6 +159,51 @@ async function run() {
   })
   assert.equal(saved3d.ok, true)
   assert.equal(repository.getSensor3dFiles()[0]?.fileName, 'robot.pdf')
+
+  // 附件改为先 multipart 上传、再只把后端返回的 /api/files 引用写进 Store。
+  const uploadedFileUrl = '/api/files/0ef1216b-484d-43ed-ad25-c5dd271295d8/content'
+  const uploadedSop = repository.saveSensorSopFile({
+    title: '已上传 SOP',
+    fileName: 'uploaded-sop.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: uploadedFileUrl,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  assert.equal(uploadedSop.ok, true)
+  assert.equal(uploadedSop.item.dataUrl, uploadedFileUrl)
+  assert.deepEqual(repository.deleteSensorSopFile(uploadedSop.item.id), { ok: true })
+  const uploadedCatalog = repository.saveSensorSop({
+    title: '已上传型录',
+    fileName: 'uploaded-catalog.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: uploadedFileUrl,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  assert.equal(uploadedCatalog.ok, true)
+  assert.deepEqual(repository.deleteSensorSop(uploadedCatalog.item.id), { ok: true })
+  const uploaded3d = repository.saveSensor3dFile({
+    title: '已上传模型',
+    fileName: 'uploaded-robot.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: uploadedFileUrl,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  assert.equal(uploaded3d.ok, true)
+  assert.deepEqual(repository.deleteSensor3dFile(uploaded3d.item.id), { ok: true })
+  assert.deepEqual(
+    repository.saveSensorSopFile({
+      title: '外部地址',
+      fileName: 'external.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'https://example.com/external.pdf',
+      size: 12,
+      uploadedAt: '2026-09-18',
+    }),
+    { ok: false, reason: 'validation' },
+  )
   const linked3d = repository.saveSensor(
     { ...sensorsBefore[0], model3dId: saved3d.item.id },
     sensorsBefore[0].id,
@@ -344,6 +389,24 @@ async function run() {
   const savedWord = repository.saveControlledFile(customer, wordPayload)
   assert.equal(savedWord.ok, true)
   assert.equal(repository.getControlledDocuments(customer).length, 2)
+
+  const uploadedDoc = repository.saveControlledFile(customer, {
+    ...pdfPayload,
+    dataUrl: '/api/files/28b32f82-4fa2-46d2-99f6-12fc26ff24a7/content',
+    fileName: 'uploaded.pdf',
+  })
+  assert.equal(uploadedDoc.ok, true)
+  assert.deepEqual(
+    repository.deleteControlledFile(customer, uploadedDoc.item.id),
+    { ok: true },
+  )
+  assert.deepEqual(
+    repository.saveControlledFile(customer, {
+      ...pdfPayload,
+      dataUrl: '/api/files/not-a-guid/content',
+    }),
+    { ok: false, reason: 'validation' },
+  )
 
   const invalidType = repository.saveControlledFile(customer, {
     ...pdfPayload,

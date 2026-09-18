@@ -69,6 +69,12 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             detached[property.Name] = result;
         }
 
+        var previousFileIds = new HashSet<Guid>();
+        foreach (var json in await db.StoreEntries.AsNoTracking().Select(e => e.Json).ToListAsync(ct))
+        {
+            previousFileIds.UnionWith(StoredFileService.ReferencedFileIds(json));
+        }
+
         var now = DateTime.UtcNow;
         var existing = await db.StoreEntries
             .Where(e => submittedKeys.Contains(e.Key))
@@ -101,7 +107,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             .ExecuteDeleteAsync(ct);
 
         await db.SaveChangesAsync(ct);
-        await storedFiles.DeleteOrphansAsync();
+        await storedFiles.ReleaseAsync(previousFileIds, ct);
         return StoreWriteResult.Ok();
     }
 
@@ -127,6 +133,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         var json = detached.Json!;
         db.StoredFiles.AddRange(detached.Files);
         var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
+        var droppedFileIds = StoredFileService.ReferencedFileIds(entry?.Json);
         if (entry == null)
         {
             var added = db.StoreEntries.Add(new StoreEntry
@@ -149,6 +156,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                     throw;
                 }
 
+                droppedFileIds = StoredFileService.ReferencedFileIds(existing.Json);
                 existing.Json = json;
                 existing.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
@@ -161,7 +169,8 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             await db.SaveChangesAsync(ct);
         }
 
-        await storedFiles.DeleteOrphansAsync();
+        droppedFileIds.ExceptWith(StoredFileService.ReferencedFileIds(json));
+        await storedFiles.ReleaseAsync(droppedFileIds, ct);
         return StoreWriteResult.Ok(json);
     }
 
@@ -336,9 +345,10 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return new StoreDeleteResult(false);
         }
 
+        var droppedFileIds = StoredFileService.ReferencedFileIds(entry.Json);
         db.StoreEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
-        await storedFiles.DeleteOrphansAsync();
+        await storedFiles.ReleaseAsync(droppedFileIds, ct);
         return new StoreDeleteResult(true);
     }
 }

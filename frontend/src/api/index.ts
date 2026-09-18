@@ -75,6 +75,17 @@ export interface OrgUnitNode {
   userCount: number;
 }
 
+export interface UploadedFile {
+  dataUrl: string;
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
+// 附件上传体积远大于普通 JSON 请求，单独放宽超时。
+const UPLOAD_TIMEOUT = 5 * 60_000;
+
 export interface AuditLogItem {
   id: number;
   timestamp: string;
@@ -155,7 +166,8 @@ async function readMessage(
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body != null) {
+  // FormData 必须由浏览器自带 multipart 边界设置 Content-Type。
+  if (init?.body != null && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   const token = getStoredToken();
@@ -278,6 +290,16 @@ export const api = {
     await request(`/store/entity-groups/${kind}`, {
       method: 'PUT',
       body: JSON.stringify(groups),
+    });
+  },
+
+  uploadFile(file: File): Promise<UploadedFile> {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    return request<UploadedFile>('/files', {
+      method: 'POST',
+      body,
+      signal: AbortSignal.timeout(UPLOAD_TIMEOUT),
     });
   },
 

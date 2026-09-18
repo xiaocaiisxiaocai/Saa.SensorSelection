@@ -75,6 +75,128 @@ public class StoredFileTests
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(contentUrl)).StatusCode);
     }
 
+    private static async Task<HttpResponseMessage> UploadAsync(
+        HttpClient client,
+        byte[] bytes,
+        string fileName = "上传测试.pdf",
+        string mimeType = "application/pdf")
+    {
+        using var form = new MultipartFormDataContent();
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue(mimeType);
+        form.Add(content, "file", fileName);
+        return await client.PostAsync("/api/files", form);
+    }
+
+    [Fact]
+    public async Task Upload_Multipart_IsStoredAndServedWithRangeSupport()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var bytes = Encoding.UTF8.GetBytes("%PDF-1.7\nmultipart-upload-regression");
+
+        var uploaded = await UploadAsync(client, bytes);
+        Assert.Equal(HttpStatusCode.OK, uploaded.StatusCode);
+        var body = await uploaded.Content.ReadFromJsonAsync<JsonElement>();
+        var contentUrl = body.GetProperty("dataUrl").GetString();
+        Assert.Matches("^/api/files/[0-9a-f-]{36}/content$", contentUrl);
+        Assert.Equal("上传测试.pdf", body.GetProperty("fileName").GetString());
+        Assert.Equal("application/pdf", body.GetProperty("mimeType").GetString());
+        Assert.Equal(bytes.Length, body.GetProperty("size").GetInt64());
+
+        using var anonymous = factory.CreateClient();
+        var content = await anonymous.GetAsync(contentUrl);
+        Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+        Assert.Equal(bytes, await content.Content.ReadAsByteArrayAsync());
+
+        using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, contentUrl);
+        rangeRequest.Headers.Range = new RangeHeaderValue(0, 7);
+        var partial = await anonymous.SendAsync(rangeRequest);
+        Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode);
+        Assert.Equal(bytes[..8], await partial.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Upload_RequiresWritePermissionAndNonEmptyFile()
+    {
+        await using var factory = new ApiFactory();
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await UploadAsync(anonymous, Encoding.UTF8.GetBytes("x"))).StatusCode);
+
+        using var client = await CreateLoggedInClientAsync(factory);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadAsync(client, [])).StatusCode);
+    }
+
+    [Fact]
+    public async Task Upload_PendingFileSurvivesUnrelatedWritesUntilReferencedAndReleased()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var bytes = Encoding.UTF8.GetBytes("%PDF-1.7\npending-upload");
+        var uploaded = await (await UploadAsync(client, bytes)).Content.ReadFromJsonAsync<JsonElement>();
+        var contentUrl = uploaded.GetProperty("dataUrl").GetString()!;
+        var fileId = uploaded.GetProperty("fileId").GetString()!;
+        using var anonymous = factory.CreateClient();
+
+        // 上传完成、尚未写入 Store 之前的其他写入，不能把这个文件当孤儿删掉。
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PutAsJsonAsync(StoreRoute("sensor-sop:unrelated"), Array.Empty<object>())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
+
+        var item = new
+        {
+            id = 1,
+            fileName = "共享.pdf",
+            mimeType = "application/pdf",
+            size = bytes.Length,
+            fileId,
+            dataUrl = contentUrl,
+        };
+        var first = StoreRoute("customer-sop:共享A");
+        var second = StoreRoute("customer-sop:共享B");
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(first, new[] { item })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(second, new[] { item })).StatusCode);
+
+        // 仍被另一个 key 引用时不能删除。
+        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync(first)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
+
+        // 最后一个引用移除后立即清理。
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(second, Array.Empty<object>())).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(contentUrl)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Upload_AbandonedFileIsSweptAfterGracePeriod()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"saa-stored-file-sweep-{Guid.NewGuid():N}.db");
+        await using var factory = new ApiFactory(dbPath);
+        using var client = await CreateLoggedInClientAsync(factory);
+        var abandoned = await (await UploadAsync(client, Encoding.UTF8.GetBytes("abandoned")))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var abandonedUrl = abandoned.GetProperty("dataUrl").GetString();
+
+        await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "UPDATE StoredFiles SET CreatedAt = $createdAt";
+            command.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.AddDays(-2));
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        var fresh = await (await UploadAsync(client, Encoding.UTF8.GetBytes("fresh")))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(abandonedUrl)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await anonymous.GetAsync(fresh.GetProperty("dataUrl").GetString())).StatusCode);
+    }
+
     [Fact]
     public async Task Startup_MigratesLegacyBase64FilesWithoutLosingContent()
     {

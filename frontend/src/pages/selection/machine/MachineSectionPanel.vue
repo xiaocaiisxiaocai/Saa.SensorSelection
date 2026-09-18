@@ -27,7 +27,7 @@ import {
   type SensorItem,
 } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
-import { readDataUrl } from '@/pages/shared/files';
+import { uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -533,13 +533,17 @@ async function addImages(files: File[]) {
   const next = [...images.value];
   for (const file of files) {
     if (next.length >= 2) break;
+    const dataUrl = await uploadFile(file);
+    if (!dataUrl) continue;
     next.push({
-      dataUrl: await readDataUrl(file),
+      dataUrl,
       fileName: file.name,
       mimeType: file.type,
       size: file.size,
     });
   }
+  // 全部上传失败时已逐个提示，不再提交一次没有变化的保存。
+  if (next.length === images.value.length) return;
   toastResult(
     store.saveMachineSectionImages(
       props.section.id,

@@ -3,6 +3,11 @@
  * 备份 SQLite 数据文件（Saa.SensorSelection.Api/App_Data/symtek.db）到仓库根 backups/，
  * 保留最近 KEEP 份（默认 10）。
  *
+ * 数据库启用了 WAL：最近提交的数据可能还在 symtek.db-wal 中，直接复制 symtek.db
+ * 会丢数据甚至得到不一致的库。因此优先用 SQLite 的 VACUUM INTO 生成一致快照
+ * （Node 22.13+ 内置 node:sqlite，后端运行中也可安全执行）；更旧的 Node 退回为
+ * 同时复制主库与 -wal 文件，打开备份时 SQLite 会自动回放 WAL。
+ *
  * 用法：
  *   pnpm run backup:db
  *   KEEP=30 pnpm run backup:db
@@ -36,8 +41,34 @@ const stamp =
   `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
   `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 const target = join(backupDir, `saa-sensor-selection-${stamp}.db`);
-copyFileSync(dbPath, target);
-console.log(`已备份到 ${target}`);
+
+async function loadSqlite() {
+  try {
+    return await import('node:sqlite');
+  } catch {
+    return null;
+  }
+}
+
+const sqlite = await loadSqlite();
+if (sqlite) {
+  const db = new sqlite.DatabaseSync(dbPath);
+  try {
+    db.exec('PRAGMA busy_timeout = 30000');
+    db.exec(`VACUUM INTO '${target.replaceAll("'", "''")}'`);
+  } finally {
+    db.close();
+  }
+  console.log(`已备份到 ${target}`);
+} else {
+  copyFileSync(dbPath, target);
+  if (existsSync(`${dbPath}-wal`)) copyFileSync(`${dbPath}-wal`, `${target}-wal`);
+  console.warn(
+    '当前 Node 不支持 node:sqlite，已同时复制主库与 WAL 文件；' +
+      '备份期间若有写入仍可能不一致，建议升级到 Node 22.13+ 或先停止后端。',
+  );
+  console.log(`已备份到 ${target}`);
+}
 
 const pattern = /^saa-sensor-selection-\d{8}-\d{6}\.db$/;
 const backups = readdirSync(backupDir)
@@ -47,6 +78,7 @@ const backups = readdirSync(backupDir)
 
 for (const stale of backups.slice(keep)) {
   rmSync(join(backupDir, stale));
+  rmSync(join(backupDir, `${stale}-wal`), { force: true });
 }
 if (backups.length > keep) {
   console.log(`已清理 ${backups.length - keep} 份旧备份（保留 ${keep} 份）`);

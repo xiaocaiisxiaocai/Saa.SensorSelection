@@ -9,7 +9,7 @@ import {
   detectControlledFileKind,
   formatLocalDateTime,
 } from '@/domain';
-import { formatFileSize, readDataUrl } from '@/pages/shared/files';
+import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -51,7 +51,8 @@ async function onFiles(picked: File[]) {
     if (!kind) {
       continue;
     }
-    const dataUrl = await readDataUrl(file);
+    const dataUrl = await uploadFile(file);
+    if (!dataUrl) continue;
     const result = store.saveProcessIntroFile({
       dataUrl,
       fileName: file.name,

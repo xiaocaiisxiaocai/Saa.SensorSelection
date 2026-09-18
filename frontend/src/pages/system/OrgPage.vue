@@ -11,6 +11,7 @@ import {
   flattenOrgTree,
   ORG_LEVEL_INVERTED_MESSAGE,
 } from '@/pages/system/org-tree';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { toast } from '@/ui/toast';
@@ -45,6 +46,7 @@ const form = reactive({
   name: '',
   sortOrder: 0,
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const tree = computed(() => buildOrgTree(nodes.value));
 const tableRows = computed(() =>
@@ -54,8 +56,9 @@ const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'name', label: '名称', minWidth: 220, align: 'start', fixed: 'start' },
     { key: 'level', label: '层级', width: 100 },
-    { key: 'childCount', label: '子节点', width: 88 },
-    { key: 'userCount', label: '人数', width: 72 },
+    // 计数列右对齐：表格已启用等宽数字，右对齐才能逐位比较大小。
+    { key: 'childCount', label: '子节点', width: 88, align: 'end' },
+    { key: 'userCount', label: '人数', width: 72, align: 'end' },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
@@ -110,6 +113,7 @@ function openCreate(parentId: null | number) {
   dialogParent.value = parentId;
   editingNode.value = null;
   Object.assign(form, { level: null, name: '', sortOrder: 0 });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -122,7 +126,14 @@ function openEdit(node: OrgUnitNode) {
     name: node.name,
     sortOrder: node.sortOrder,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 async function saveOrg() {
@@ -181,20 +192,21 @@ async function removeOrg(node: OrgUnitNode) {
 
 <template>
   <section class="selection-page">
-    <div class="selection-toolbar">
-      <h1 class="docs-heading">组织架构</h1>
+    <div class="selection-toolbar org-toolbar">
+      <h1 class="visually-hidden">组织架构</h1>
       <AButton v-if="writable" variant="filled" @click="openCreate(null)">
         新建组织
       </AButton>
     </div>
     <ATable
       v-model:selected-key="selectedId"
+      storage-key="system-org"
       :columns="columns"
       :rows="tableRows"
       row-key="id"
       empty-text="暂无组织"
       :loading="loading"
-      striped
+      @activate="writable && openEdit($event)"
     >
       <template #cell-name="{ row }">
         <span
@@ -236,6 +248,7 @@ async function removeOrg(node: OrgUnitNode) {
       v-model:open="dialogOpen"
       :title="editingNode ? '编辑组织' : '新建组织'"
       :width="480"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid :columns="1">
         <AFormRow
@@ -279,7 +292,7 @@ async function removeOrg(node: OrgUnitNode) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" :loading="saving" @click="saveOrg">
           保存
         </AButton>
@@ -287,3 +300,9 @@ async function removeOrg(node: OrgUnitNode) {
     </ASheet>
   </section>
 </template>
+
+<style scoped>
+.org-toolbar .a-button {
+  margin-left: auto;
+}
+</style>

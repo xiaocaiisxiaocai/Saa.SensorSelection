@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { api, ApiError, type PermissionInfo, type RbacRole } from '@/api';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { toast } from '@/ui/toast';
@@ -37,6 +38,7 @@ const form = reactive({
   name: '',
   permissionIds: [] as number[],
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const permissionGroups = computed(() => {
   const groups = new Map<string, PermissionInfo[]>();
@@ -50,8 +52,8 @@ const permissionGroups = computed(() => {
 });
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'code', label: '标识', minWidth: 120, fixed: 'start' },
-    { key: 'name', label: '名称', minWidth: 130 },
+    { key: 'code', label: '标识', width: 140, fixed: 'start', sortable: true },
+    { key: 'name', label: '名称', width: 160, sortable: true },
     { key: 'description', label: '描述', minWidth: 180 },
     { key: 'permissions', label: '权限', minWidth: 240 },
     { key: 'kind', label: '类型', width: 100 },
@@ -111,6 +113,7 @@ function openCreate() {
     name: '',
     permissionIds: [],
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -123,7 +126,14 @@ function openEdit(role: RbacRole) {
     name: role.name,
     permissionIds: role.permissions.map((item) => item.id),
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function togglePermission(id: number, checked: boolean) {
@@ -136,12 +146,12 @@ function togglePermission(id: number, checked: boolean) {
 
 async function saveRole() {
   validationAttempted.value = true;
+  // 字段级错误已经由角色标识/名称输入框下方的红字分别说明，不再用一条
+  // 合并的 Toast 复述——两处措辞不一致时，用户不知道该信哪个。
   if (!form.code.trim() || !form.name.trim()) {
-    toast.warning('请填写角色标识和名称');
     return;
   }
   if (editing.value === null && !/^[a-z][\w:-]*$/i.test(form.code.trim())) {
-    toast.warning('角色标识仅允许字母开头，可含字母、数字、: _ -');
     return;
   }
   saving.value = true;
@@ -189,19 +199,20 @@ async function removeRole(role: RbacRole) {
 
 <template>
   <section class="selection-page">
-    <div class="selection-toolbar">
-      <h1 class="docs-heading">角色管理</h1>
+    <div class="selection-toolbar role-toolbar">
+      <h1 class="visually-hidden">角色管理</h1>
       <AButton v-if="writable" variant="filled" @click="openCreate">
         新增角色
       </AButton>
     </div>
     <ATable
+      storage-key="system-roles"
       :columns="columns"
       :rows="roles"
       row-key="id"
       empty-text="暂无角色"
       :loading="loading"
-      striped
+      @activate="writable && !isProtected($event) && openEdit($event)"
     >
       <template #cell-description="{ value }">{{ value || '—' }}</template>
       <template #cell-permissions="{ row }">
@@ -217,7 +228,7 @@ async function removeRole(role: RbacRole) {
       <template #cell-kind="{ row }">
         <ABadge
           :label="row.isSystem ? '系统内置' : '自定义'"
-          :tone="row.isSystem ? 'orange' : 'neutral'"
+          :tone="row.isSystem ? 'indigo' : 'neutral'"
         />
       </template>
       <template #cell-actions="{ row }">
@@ -242,6 +253,7 @@ async function removeRole(role: RbacRole) {
       v-model:open="dialogOpen"
       :title="editing ? '编辑角色' : '新建角色'"
       :width="560"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid>
         <AFormRow
@@ -325,7 +337,7 @@ async function removeRole(role: RbacRole) {
         </div>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" :loading="saving" @click="saveRole">
           保存
         </AButton>
@@ -333,3 +345,9 @@ async function removeRole(role: RbacRole) {
     </ASheet>
   </section>
 </template>
+
+<style scoped>
+.role-toolbar .a-button {
+  margin-left: auto;
+}
+</style>

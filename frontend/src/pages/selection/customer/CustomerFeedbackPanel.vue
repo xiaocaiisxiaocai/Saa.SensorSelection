@@ -3,6 +3,7 @@ import { History, Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { TimelineItem } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -47,6 +48,7 @@ const form = reactive({
   status: '',
   type: '',
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const typeOptions = computed<SelectOption[]>(() =>
   store
@@ -98,12 +100,14 @@ const historyRows = computed(() =>
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '问题分类', width: 100, fixed: 'start' },
+    // 168：最长字典值「02 两片检测品质异常」实测 143px + 左右内边距 16px。
+    { key: 'type', label: '问题分类', width: 168, fixed: 'start', sortable: true },
     { key: 'machine', label: '适用机型', width: 90 },
-    { key: 'problem', label: '问题点', minWidth: 205, ellipsis: true },
-    { key: 'measure', label: '改善对策', minWidth: 205, ellipsis: true },
-    { key: 'date', label: '反馈时间', width: 100 },
-    { key: 'status', label: '处理状态', width: 90 },
+    { key: 'problem', label: '问题点', minWidth: 205 },
+    { key: 'measure', label: '改善对策', minWidth: 205 },
+    // 120：完整日期「2026-08-25」按表格的等宽数字实测 98px + 左右内边距 16px。
+    { key: 'date', label: '反馈时间', width: 120, sortable: true },
+    { key: 'status', label: '处理状态', width: 90, sortable: true },
     { key: 'history', label: '历史', width: 60 },
   ];
   if (writable.value) {
@@ -153,6 +157,7 @@ function resetFilters() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -167,12 +172,21 @@ function editItem(item: TimelineItem) {
     status: item.status,
     type: item.type,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
 function showHistory(item: TimelineItem) {
   historyItem.value = item;
   historyOpen.value = true;
+}
+
+function activateRow(item: TimelineItem) {
+  if (writable.value) {
+    editItem(item);
+    return;
+  }
+  showHistory(item);
 }
 
 function saveItem() {
@@ -186,11 +200,13 @@ function saveItem() {
     },
     editId.value,
   );
-  if (
-    toastResult(result, editId.value ? '反馈已更新' : '反馈已新增', {
-      validation: '请填写问题点并选择分类与状态',
-    })
-  ) {
+  if (toastResult(result, editId.value ? '反馈已更新' : '反馈已新增')) {
+    dialogOpen.value = false;
+  }
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
     dialogOpen.value = false;
   }
 }
@@ -242,7 +258,7 @@ async function deleteItem(item: TimelineItem) {
           ? '没有匹配的反馈记录'
           : '暂无反馈记录'
       "
-      striped
+      @activate="activateRow"
     >
       <template #cell-status="{ row }">
         <ABadge :label="row.status" :tone="statusTone(row.status)" />
@@ -319,6 +335,7 @@ async function deleteItem(item: TimelineItem) {
       v-model:open="dialogOpen"
       :title="editId ? '编辑反馈' : '新增反馈'"
       :width="560"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid>
         <AFormRow
@@ -361,7 +378,7 @@ async function deleteItem(item: TimelineItem) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

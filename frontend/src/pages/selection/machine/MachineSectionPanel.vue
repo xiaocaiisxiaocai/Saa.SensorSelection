@@ -26,6 +26,7 @@ import {
   type MachineSectionRow,
   type SensorItem,
 } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { readDataUrl } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
@@ -49,7 +50,9 @@ import {
   ATextArea,
   ATokenField,
   type SelectOption,
+  sortRows,
   type TableColumn,
+  type TableSortState,
 } from '@/ui';
 
 const props = defineProps<{
@@ -83,6 +86,7 @@ const imageOpen = computed({
 });
 const page = ref(1);
 const pageSize = ref(20);
+const sort = ref<TableSortState | null>(null);
 const selectedTableRow = ref<string | number | null>(null);
 const tableHost = ref<HTMLElement | null>(null);
 let compactImagesMedia: MediaQueryList | null = null;
@@ -97,6 +101,7 @@ const form = reactive({
   role: '',
   sensorIds: [] as Array<string | number>,
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const isStructure = computed(() => props.section.kind === 'structure');
 
@@ -238,10 +243,13 @@ const filtered = computed(() => {
     );
   });
 });
+// 排序必须发生在分页切片之前，否则只会把当前这一页重排。结构视图带合并
+// 单元格（rowSpan），重排会打乱分组，ATable 会整表忽略排序，这里也排不到。
+const sortedItems = computed(() => sortRows(filtered.value, sort.value));
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return buildMachineTableRows(
-    filtered.value.slice(start, start + pageSize.value),
+    sortedItems.value.slice(start, start + pageSize.value),
     store.sensors,
     isStructure.value,
     store.processSteps,
@@ -276,21 +284,26 @@ const columns = computed<TableColumn<MachineTableRow>[]>(() => {
           rowSpan,
         },
         { key: 'sensorType', label: '传感器类型', minWidth: 100 },
-        { key: 'spec', label: '规格', minWidth: 220, ellipsis: true },
+        { key: 'spec', label: '规格', minWidth: 220 },
         {
           key: 'purpose',
           label: '作用',
           minWidth: 120,
-          ellipsis: true,
           rowSpan,
         },
-        { key: 'note', label: '备注', minWidth: 96, ellipsis: true, rowSpan },
+        { key: 'note', label: '备注', minWidth: 96, rowSpan },
       ]
     : [
-        { key: 'role', label: '注意分类', width: 120, fixed: 'start' },
-        { key: 'name', label: '事项名称', minWidth: 140 },
-        { key: 'desc', label: '说明', minWidth: 180, ellipsis: true },
-        { key: 'note', label: '备注', minWidth: 120, ellipsis: true },
+        {
+          key: 'role',
+          label: '注意分类',
+          width: 120,
+          fixed: 'start',
+          sortable: true,
+        },
+        { key: 'name', label: '事项名称', minWidth: 140, sortable: true },
+        { key: 'desc', label: '说明', minWidth: 180 },
+        { key: 'note', label: '备注', minWidth: 120 },
       ];
   if (writable.value) {
     cols.push({
@@ -325,6 +338,7 @@ watch(
     processStepFilter,
     boardCharacteristicFilter,
     pageSize,
+    sort,
   ],
   () => {
     page.value = 1;
@@ -446,6 +460,7 @@ function resetForm() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -463,7 +478,14 @@ function editItem(item: MachineSectionRow) {
     role: item.role,
     sensorIds: [...item.sensorIds],
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function saveItem() {
@@ -487,13 +509,7 @@ function saveItem() {
     editId.value,
     props.processId,
   );
-  if (
-    toastResult(result, editId.value ? '记录已更新' : '记录已新增', {
-      validation: isStructure.value
-        ? '请填写功能作用并选择关联传感器'
-        : '请填写注意分类和事项名称',
-    })
-  ) {
+  if (toastResult(result, editId.value ? '记录已更新' : '记录已新增')) {
     dialogOpen.value = false;
   }
 }
@@ -635,6 +651,7 @@ async function removeImage(index: number) {
       </div>
       <ATable
         v-model:selected-key="selectedTableRow"
+        v-model:sort="sort"
         :columns="columns"
         :rows="tableData"
         row-key="displayId"
@@ -647,7 +664,7 @@ async function removeImage(index: number) {
             ? '没有匹配的记录'
             : '暂无记录'
         "
-        striped
+        @activate="writable && editItem($event.source)"
       >
         <template v-if="isStructure" #cell-sensorType="{ row }">
           <div
@@ -801,6 +818,7 @@ async function removeImage(index: number) {
     v-model:open="dialogOpen"
     :title="editId ? '编辑记录' : '新增记录'"
     :width="isStructure ? 640 : 480"
+    :confirm-close="dirtyGuard.confirmClose"
   >
     <AFormGrid v-if="isStructure" :columns="1">
       <AFormRow
@@ -897,7 +915,7 @@ async function removeImage(index: number) {
       </AFormRow>
     </AFormGrid>
     <template #footer>
-      <AButton @click="dialogOpen = false">取消</AButton>
+      <AButton @click="cancelDialog">取消</AButton>
       <AButton variant="filled" @click="saveItem">保存</AButton>
     </template>
   </ASheet>

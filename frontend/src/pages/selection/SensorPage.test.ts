@@ -78,6 +78,68 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
+  it('sorts the whole result set, not just the rows on the current page', async () => {
+    const wrapper = await mountPage({ tab: '全部' }, writer);
+    const store = useSelectionStore();
+    // 排在最后一页的型号：只排当前页的话，它永远不会浮到第一行。
+    expect(
+      store.saveSensor({
+        brand: 'AAA排序测试品牌',
+        model: '排序测试型号',
+        sensorType: '漫反射',
+        status: '现用',
+      }),
+    ).toMatchObject({ ok: true });
+    await nextTick();
+
+    const brandHeader = wrapper
+      .findAll('th')
+      .find((header) => header.text().includes('品牌'));
+    expect(brandHeader).toBeDefined();
+    await brandHeader!.get('button').trigger('click');
+    await nextTick();
+
+    expect(wrapper.get('tbody tr').text()).toContain('AAA排序测试品牌');
+    expect(brandHeader!.attributes('aria-sort')).toBe('ascending');
+
+    wrapper.unmount();
+  });
+
+  it('hides and restores optional columns via the column menu, persisting the choice', async () => {
+    const wrapper = await mountPage({ tab: '全部' }, writer);
+    const headerLabels = () =>
+      wrapper.findAll('th').map((item) => item.text());
+
+    expect(headerLabels()).toContain('规格参数');
+
+    await wrapper.get('[aria-label="显示的列"]').trigger('click');
+    await nextTick();
+    const specCheckbox = [
+      ...document.body.querySelectorAll('.sensor-column-menu__item'),
+    ]
+      .find((item) => item.textContent?.includes('规格参数'))
+      ?.querySelector<HTMLElement>('[role="checkbox"]');
+    expect(specCheckbox).toBeDefined();
+    specCheckbox!.click();
+    await nextTick();
+
+    expect(headerLabels()).not.toContain('规格参数');
+    expect(
+      JSON.parse(
+        localStorage.getItem('selection:sensor-table:hidden-columns:v1') ??
+          '[]',
+      ),
+    ).toEqual(['spec']);
+
+    wrapper.unmount();
+
+    const reopened = await mountPage({ tab: '全部' }, writer);
+    expect(reopened.findAll('th').map((item) => item.text())).not.toContain(
+      '规格参数',
+    );
+    reopened.unmount();
+  });
+
   it('keeps prose-heavy columns wide enough for compact readable rows', async () => {
     const wrapper = await mountPage({}, writer);
     const table = wrapper.getComponent({ name: 'ATable' });
@@ -100,9 +162,12 @@ describe('SensorPage', () => {
 
   it('renders the SOP PDF workspace from its tab', async () => {
     const wrapper = await mountPage({ tab: 'sop-library' }, writer);
-    expect(wrapper.text()).toContain('暂无 SOP 文件');
+    // 可写用户在空列表下看到的就是上传区本身，不再额外挂一句「暂无 SOP 文件」
+    // 把同一件事说两遍；一个文件都没有时也不显示搜索框。
+    expect(wrapper.text()).toContain('将文件拖到此处，或点击选择');
     expect(wrapper.text()).toContain('仅支持 PDF，不超过 8 MB');
-    expect(wrapper.find('[aria-label="搜索 SOP 文件"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('暂无 SOP 文件');
+    expect(wrapper.find('[aria-label="搜索 SOP 文件"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -134,7 +199,8 @@ describe('SensorPage', () => {
 
   it('previews PDF files from the document workspace', async () => {
     const wrapper = await mountPage({ tab: 'sop' }, writer);
-    expect(wrapper.find('[aria-label="搜索型录文件"]').exists()).toBe(true);
+    // 空列表时不显示搜索框（没什么可搜）
+    expect(wrapper.find('[aria-label="搜索型录文件"]').exists()).toBe(false);
     const store = useSelectionStore();
     expect(
       store.saveSensorSop({
@@ -402,7 +468,8 @@ describe('SensorPage', () => {
 
   it('renders the 3D file workspace from its tab', async () => {
     const wrapper = await mountPage({ tab: '3d' }, writer);
-    expect(wrapper.text()).toContain('暂无 3D 文件');
+    expect(wrapper.text()).toContain('将文件拖到此处，或点击选择');
+    expect(wrapper.text()).not.toContain('暂无 3D 文件');
     expect(wrapper.text()).toContain('仅支持 PDF，不超过 8 MB');
     wrapper.unmount();
   });

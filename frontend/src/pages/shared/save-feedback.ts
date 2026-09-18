@@ -5,6 +5,9 @@ import { toast } from '@/ui/toast';
 const DEFAULT_FAILURE: Partial<Record<SaveFailure, string>> = {
   storage: '数据保存失败，本次修改未保存',
   stale: '该记录已被其他页面删除',
+  // 具体缺了哪个字段已经由表单内联的红字说明；这里只需要一句通用提示，
+  // 不再各页面各写一遍、和内联文案对不上。
+  validation: '请检查标红的必填项',
 };
 
 export function failureMessage(

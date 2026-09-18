@@ -52,16 +52,39 @@ describe('AToast', () => {
     host.unmount();
   });
 
-  it('dismisses a success toast after 2.4 seconds', async () => {
+  it('dismisses a success toast after 3.2 seconds', async () => {
     vi.useFakeTimers();
     const host = mount(AToastHost, { attachTo: document.body });
     toast.success('已保存');
     await nextTick();
     expect(document.body.textContent).toContain('已保存');
 
-    await vi.advanceTimersByTimeAsync(2400);
+    await vi.advanceTimersByTimeAsync(3200);
     await nextTick();
     expect(document.body.textContent).not.toContain('已保存');
+
+    host.unmount();
+  });
+
+  it('keeps an error toast visible until the user dismisses it', async () => {
+    vi.useFakeTimers();
+    const host = mount(AToastHost, { attachTo: document.body });
+    toast.error('写入失败');
+    await nextTick();
+    expect(document.body.textContent).toContain('写入失败');
+
+    // 错误不设自动消失时限，给足够长的时间也应该还在。
+    await vi.advanceTimersByTimeAsync(60_000);
+    await nextTick();
+    expect(document.body.textContent).toContain('写入失败');
+
+    const closeButton = document.querySelector<HTMLButtonElement>(
+      '[aria-label="关闭提示"]',
+    );
+    expect(closeButton).not.toBeNull();
+    closeButton?.click();
+    await nextTick();
+    expect(document.body.textContent).not.toContain('写入失败');
 
     host.unmount();
   });

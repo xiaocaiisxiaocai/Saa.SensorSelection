@@ -6,6 +6,7 @@ import {
   type EntityKind,
   type MachineCatalogKind,
 } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -93,6 +94,9 @@ const itemForm = reactive({
   name: '',
   sort: 1,
 });
+const groupDirtyGuard = useDirtyGuard(groupForm);
+const configurationDirtyGuard = useDirtyGuard(configurationForm);
+const itemDirtyGuard = useDirtyGuard(itemForm);
 const listMinWidth = computed(() =>
   props.kind === 'machine'
     ? MACHINE_SOURCE_LIST_MIN_WIDTH
@@ -155,6 +159,7 @@ function openCreateGroup() {
   editingGroup.value = undefined;
   groupForm.name = '';
   groupForm.sort = store.entityGroups(props.kind).length + 1;
+  groupDirtyGuard.markClean();
   groupOpen.value = true;
 }
 
@@ -165,7 +170,14 @@ function openEditGroup(name: string) {
   groupForm.sort =
     store.entityGroups(props.kind).findIndex((group) => group.name === name) +
     1;
+  groupDirtyGuard.markClean();
   groupOpen.value = true;
+}
+
+async function cancelGroupDialog() {
+  if (await groupDirtyGuard.confirmClose()) {
+    groupOpen.value = false;
+  }
 }
 
 function openCreateConfiguration(category?: string) {
@@ -177,6 +189,7 @@ function openCreateConfiguration(category?: string) {
   configurationForm.sort =
     (machineGroups.value.find((group) => group.name === target)?.configurations
       ?.length ?? 0) + 1;
+  configurationDirtyGuard.markClean();
   configurationOpen.value = true;
 }
 
@@ -194,7 +207,14 @@ function openEditConfiguration(payload: {
       ?.configurations?.findIndex(
         (configuration) => configuration.name === payload.configuration,
       ) ?? 0) + 1;
+  configurationDirtyGuard.markClean();
   configurationOpen.value = true;
+}
+
+async function cancelConfigurationDialog() {
+  if (await configurationDirtyGuard.confirmClose()) {
+    configurationOpen.value = false;
+  }
 }
 
 function openCreateItem(
@@ -222,6 +242,7 @@ function openCreateItem(
       )?.items
     : group?.items;
   itemForm.sort = (items?.length ?? 0) + 1;
+  itemDirtyGuard.markClean();
   itemOpen.value = true;
 }
 
@@ -247,7 +268,14 @@ function openEditItem(payload: {
       )?.items
     : group?.items;
   itemForm.sort = Math.max(1, (items?.indexOf(payload.item) ?? 0) + 1);
+  itemDirtyGuard.markClean();
   itemOpen.value = true;
+}
+
+async function cancelItemDialog() {
+  if (await itemDirtyGuard.confirmClose()) {
+    itemOpen.value = false;
+  }
 }
 
 function saveGroup() {
@@ -271,7 +299,6 @@ function saveGroup() {
         : `${groupLabel.value}已新增`,
       {
         duplicate: `该${groupLabel.value}已存在`,
-        validation: `请填写${groupLabel.value}名称`,
         'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
       },
     )
@@ -291,10 +318,7 @@ function saveConfiguration() {
     toastResult(
       result,
       editingConfiguration.value ? '配置已更新' : '配置已新增',
-      {
-        duplicate: '该配置已存在',
-        validation: '请填写配置名称并选择分类',
-      },
+      { duplicate: '该配置已存在' },
     )
   ) {
     configurationOpen.value = false;
@@ -356,7 +380,6 @@ function saveItem() {
       previous ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`,
       {
         duplicate: `该${itemLabel.value}已存在`,
-        validation: `请填写${itemLabel.value}名称并选择${groupLabel.value}`,
         'in-use': `请先清空该${itemLabel.value}下的业务数据`,
       },
     )
@@ -538,6 +561,7 @@ function onReorderMachineItems(payload: {
       v-model:open="groupOpen"
       :title="editingGroup ? `编辑${groupLabel}` : `新建${groupLabel}`"
       :width="420"
+      :confirm-close="groupDirtyGuard.confirmClose"
     >
       <AFormRow
         :label="`${groupLabel}名称`"
@@ -563,7 +587,7 @@ function onReorderMachineItems(payload: {
         />
       </AFormRow>
       <template #footer>
-        <AButton @click="groupOpen = false">取消</AButton>
+        <AButton @click="cancelGroupDialog">取消</AButton>
         <AButton variant="filled" @click="saveGroup">保存</AButton>
       </template>
     </ASheet>
@@ -573,6 +597,7 @@ function onReorderMachineItems(payload: {
       v-model:open="configurationOpen"
       :title="editingConfiguration ? '编辑配置' : '新建配置'"
       :width="420"
+      :confirm-close="configurationDirtyGuard.confirmClose"
     >
       <AFormRow
         label="分类"
@@ -603,7 +628,7 @@ function onReorderMachineItems(payload: {
         <AStepper v-model="configurationForm.sort" :min="1" />
       </AFormRow>
       <template #footer>
-        <AButton @click="configurationOpen = false">取消</AButton>
+        <AButton @click="cancelConfigurationDialog">取消</AButton>
         <AButton variant="filled" @click="saveConfiguration">保存</AButton>
       </template>
     </ASheet>
@@ -612,6 +637,7 @@ function onReorderMachineItems(payload: {
       v-model:open="itemOpen"
       :title="editingItem ? `编辑${itemLabel}` : `新建${itemLabel}`"
       :width="420"
+      :confirm-close="itemDirtyGuard.confirmClose"
     >
       <AFormRow
         :label="groupLabel"
@@ -648,7 +674,7 @@ function onReorderMachineItems(payload: {
         <AStepper v-model="itemForm.sort" :min="1" />
       </AFormRow>
       <template #footer>
-        <AButton @click="itemOpen = false">取消</AButton>
+        <AButton @click="cancelItemDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

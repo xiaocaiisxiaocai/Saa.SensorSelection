@@ -18,6 +18,12 @@ const props = withDefaults(
     width?: number | string;
     closeOnOverlay?: boolean;
     viewport?: boolean;
+    /**
+     * 关闭前的守卫：表单有未保存改动时返回 false（或 resolve false）可以
+     * 拦下这次关闭。遮罩点击、Esc、右上角关闭按钮都会经过它；
+     * 页脚“取消”按钮走页面自己的 `@click`，不受这里控制。
+     */
+    confirmClose?: () => boolean | Promise<boolean>;
   }>(),
   {
     closeOnOverlay: true,
@@ -26,6 +32,18 @@ const props = withDefaults(
 );
 
 const open = defineModel<boolean>('open', { default: false });
+
+async function guardedClose(event?: Event) {
+  if (!props.confirmClose) {
+    open.value = false;
+    return;
+  }
+
+  event?.preventDefault();
+  if (await props.confirmClose()) {
+    open.value = false;
+  }
+}
 
 const panelWidth = computed(() => {
   if (props.viewport) {
@@ -45,6 +63,18 @@ const FOCUSABLE =
 function onDismissOutside(event: Event) {
   if (!props.closeOnOverlay) {
     event.preventDefault();
+    return;
+  }
+  if (props.confirmClose) {
+    event.preventDefault();
+    void guardedClose();
+  }
+}
+
+function onEscapeKeyDown(event: Event) {
+  if (props.confirmClose) {
+    event.preventDefault();
+    void guardedClose();
   }
 }
 
@@ -77,11 +107,12 @@ function onOpenAutoFocus(event: Event) {
         @open-auto-focus="onOpenAutoFocus"
         @pointer-down-outside="onDismissOutside"
         @interact-outside="onDismissOutside"
+        @escape-key-down="onEscapeKeyDown"
       >
         <header class="a-sheet__header">
           <DialogTitle class="a-sheet__title">{{ title }}</DialogTitle>
           <span class="a-sheet__close">
-            <AIconButton :icon="X" label="关闭" @click="open = false" />
+            <AIconButton :icon="X" label="关闭" @click="guardedClose()" />
           </span>
         </header>
         <div class="a-sheet__body">

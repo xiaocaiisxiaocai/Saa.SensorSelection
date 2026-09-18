@@ -76,6 +76,10 @@ const sheet = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ASheet.vue'),
   'utf8',
 );
+const alertHost = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'AAlertHost.vue'),
+  'utf8',
+);
 const sourceList = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'ASourceList.vue'),
   'utf8',
@@ -225,7 +229,15 @@ describe('tokens.css', () => {
     expect(table).toMatch(
       /\.a-table\s*\{[^}]*border:\s*1px solid var\(--separator\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
     );
-    expect(table).toMatch(/th\s*\{[^}]*background:\s*var\(--bg-grouped\);/s);
+    // 表头底色要和表体分得开：--bg-grouped 和内容底色只差 1.5%（浅色下
+    // 实测亮度比 1.034），所以改成在不透明底色上叠一层 --fill-4。
+    expect(table).toMatch(
+      /th\s*\{[^}]*background-color:\s*var\(--bg-content\);[^}]*background-image:\s*linear-gradient\(var\(--fill-4\), var\(--fill-4\)\);/s,
+    );
+    // 固定列的表头格必须同样处理，否则表头第一格会是表体色，整条表头断开
+    expect(table).toMatch(
+      /th\.a-table__cell--fixed\s*\{[^}]*background-image:\s*linear-gradient\(var\(--fill-4\), var\(--fill-4\)\);/s,
+    );
     expect(table).toMatch(
       /tbody tr:last-child td\s*\{[^}]*box-shadow:\s*none;/s,
     );
@@ -360,7 +372,7 @@ describe('tokens.css', () => {
       /\.machine-images h3\s*\{[^}]*font:\s*var\(--text-control-em\);/s,
     );
     expect(tabBar).toMatch(
-      /\.a-tab-bar__tab\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+      /\.a-tab-bar__tab\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
     expect(tabBar).toMatch(
       /\.a-tab-bar__tab--selected\s*\{[^}]*font-weight:\s*600;/s,
@@ -435,5 +447,16 @@ describe('tokens.css', () => {
     expect(
       contrast(getHex(dark, '--label-placeholder'), '#2c2c2e'),
     ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the global confirm alert above any already-open sheet', () => {
+    // AAlertHost 常驻挂载在应用根部，DOM 位置天然早于后打开的 ASheet；
+    // 必须用独立、更高的 z-index，否则 ASheet 的 confirmClose 场景下
+    // 确认框会被已打开的表单弹窗盖住（回归自一次真实的 UI 缺陷）。
+    const zAlertMatch = tokens.match(/--z-alert:\s*(\d+)/);
+    const zOverlayMatch = tokens.match(/--z-overlay:\s*(\d+)/);
+    expect(zAlertMatch).not.toBeNull();
+    expect(Number(zAlertMatch?.[1])).toBeGreaterThan(Number(zOverlayMatch?.[1]));
+    expect(alertHost).toMatch(/z-index:\s*var\(--z-alert\)/);
   });
 });

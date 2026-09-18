@@ -3,7 +3,10 @@ export const SOURCE_LIST_MAX_WIDTH = 320;
 export const SOURCE_LIST_DEFAULT_WIDTH = 220;
 export const MACHINE_SOURCE_LIST_MIN_WIDTH = 220;
 export const MACHINE_SOURCE_LIST_MAX_WIDTH = 320;
-export const MACHINE_SOURCE_LIST_DEFAULT_WIDTH = 240;
+// 机型结构树的条目名称普遍偏长（中文+括注的英文缩写组合），240px 在默认
+// 宽度下经常只剩编号能看清，其余全被省略号吃掉。280px 仍在 320 的上限
+// 内，同时留出更多可读文字。
+export const MACHINE_SOURCE_LIST_DEFAULT_WIDTH = 280;
 
 export interface SourceGroup {
   name: string;

@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { CustomerProcItem } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -40,6 +41,7 @@ const form = reactive({
   sensorNote: '',
   type: '',
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const typeOptions = computed<SelectOption[]>(() =>
   store
@@ -68,16 +70,17 @@ const hasActiveFilters = computed(
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '制程分类', width: 90, fixed: 'start' },
-    { key: 'role', label: '制程作用', minWidth: 150, ellipsis: true },
-    { key: 'feature', label: '制程特性', minWidth: 150, ellipsis: true },
+    // 104：最长字典值只要 80px，但表头「制程分类」加排序图标要 86px，
+    // 同时和另外两个 Tab 的首列保持相近宽度。
+    { key: 'type', label: '制程分类', width: 104, fixed: 'start', sortable: true },
+    { key: 'role', label: '制程作用', minWidth: 150 },
+    { key: 'feature', label: '制程特性', minWidth: 150 },
     {
       key: 'sensorNote',
       label: 'sensor使用注意事项',
       minWidth: 190,
-      ellipsis: true,
     },
-    { key: 'note', label: '备注', minWidth: 130, ellipsis: true },
+    { key: 'note', label: '备注', minWidth: 130 },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
@@ -112,6 +115,7 @@ function resetFilters() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -125,6 +129,7 @@ function editItem(item: CustomerProcItem) {
     sensorNote: item.sensorNote,
     type: item.type,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -136,11 +141,13 @@ function saveItem() {
     { ...form },
     editId.value,
   );
-  if (
-    toastResult(result, editId.value ? '注意事项已更新' : '注意事项已新增', {
-      validation: '请填写制程作用、制程特性并选择分类',
-    })
-  ) {
+  if (toastResult(result, editId.value ? '注意事项已更新' : '注意事项已新增')) {
+    dialogOpen.value = false;
+  }
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
     dialogOpen.value = false;
   }
 }
@@ -184,7 +191,7 @@ async function deleteItem(item: CustomerProcItem) {
           ? '没有匹配的注意事项'
           : '暂无注意事项'
       "
-      striped
+      @activate="writable && editItem($event)"
     >
       <template #cell-actions="{ row }">
         <div class="table-actions">
@@ -208,6 +215,7 @@ async function deleteItem(item: CustomerProcItem) {
       v-model:open="dialogOpen"
       :title="editId ? '编辑注意事项' : '新增注意事项'"
       :width="560"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid>
         <AFormRow
@@ -249,7 +257,7 @@ async function deleteItem(item: CustomerProcItem) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

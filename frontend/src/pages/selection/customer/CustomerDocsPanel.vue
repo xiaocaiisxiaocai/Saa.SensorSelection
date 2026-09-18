@@ -11,7 +11,14 @@ import {
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AFileDrop, AIconButton, APdfViewer, ASearchField, ASheet } from '@/ui';
+import {
+  AEmptyState,
+  AFileDrop,
+  AIconButton,
+  APdfViewer,
+  ASearchField,
+  ASheet,
+} from '@/ui';
 
 const props = defineProps<{ entityName: string }>();
 const store = useSelectionStore();
@@ -134,6 +141,13 @@ async function remove(item: ControlledFileItem) {
         </div>
       </li>
     </ul>
+    <AEmptyState
+      v-else
+      title="暂无感应器选用标准文件"
+      :description="
+        query.trim() ? '没有匹配的文件' : writable ? '拖入文件或点击上方区域上传' : undefined
+      "
+    />
     <ASheet
       :open="Boolean(preview)"
       title="预览 PDF"

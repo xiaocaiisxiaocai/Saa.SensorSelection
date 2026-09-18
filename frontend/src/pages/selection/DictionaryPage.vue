@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -12,12 +13,12 @@ import {
   AFormGrid,
   AFormRow,
   AIconButton,
+  ASegmentedControl,
   ASheet,
   AStepper,
-  ATabBar,
   ATable,
+  type SegmentOption,
   type TableColumn,
-  type TabItem,
 } from '@/ui';
 
 import '../shared/selection-page.css';
@@ -34,8 +35,9 @@ const form = reactive({
   name: '',
   sort: 1,
 });
+const dirtyGuard = useDirtyGuard(form);
 
-const tabs = computed<TabItem[]>(() =>
+const tabs = computed<SegmentOption[]>(() =>
   DICTIONARY_DEFINITIONS.map((item) => ({
     label: item.title,
     value: item.code,
@@ -46,8 +48,16 @@ const items = computed(() =>
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'sort', label: '排序', width: 72, fixed: 'start' },
-    { key: 'name', label: '字典项名称', minWidth: 200 },
+    // 排序号是数字，右对齐（表格已启用等宽数字）
+    {
+      key: 'sort',
+      label: '排序',
+      width: 72,
+      fixed: 'start',
+      sortable: true,
+      align: 'end',
+    },
+    { key: 'name', label: '字典项名称', minWidth: 200, sortable: true },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
@@ -73,6 +83,7 @@ function resetForm() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -83,7 +94,14 @@ function editItem(item: DictionaryItem) {
     name: item.name,
     sort: item.sort,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function saveItem() {
@@ -97,7 +115,6 @@ function saveItem() {
   if (
     toastResult(result, editId.value ? '字典项已更新' : '字典项已新增', {
       duplicate: '该字典项名称已存在',
-      validation: '请填写有效的字典项名称',
     })
   ) {
     dialogOpen.value = false;
@@ -130,16 +147,27 @@ async function deleteItem(item: DictionaryItem) {
   <section class="selection-page">
     <h1 class="visually-hidden">数据字典</h1>
     <div class="dictionary-header">
-      <ATabBar v-model="activeCode" :tabs="tabs" />
+      <ASegmentedControl
+        id="dictionary-tabs"
+        v-model="activeCode"
+        aria-label="字典类型"
+        :segments="tabs"
+      />
       <AButton v-if="writable" variant="filled" @click="addItem">新增</AButton>
     </div>
-    <div class="selection-panel">
+    <div
+      :id="`dictionary-tabs-panel-${activeCode}`"
+      role="tabpanel"
+      :aria-labelledby="`dictionary-tabs-tab-${activeCode}`"
+      tabindex="0"
+      class="selection-panel"
+    >
       <ATable
         :columns="columns"
         :rows="rows"
         row-key="id"
         empty-text="暂无字典项"
-        striped
+        @activate="writable && editItem($event)"
       >
         <template #cell-actions="{ row }">
           <div class="table-actions">
@@ -161,7 +189,12 @@ async function deleteItem(item: DictionaryItem) {
       </ATable>
     </div>
 
-    <ASheet v-model:open="dialogOpen" :title="sheetTitle" :width="480">
+    <ASheet
+      v-model:open="dialogOpen"
+      :title="sheetTitle"
+      :width="480"
+      :confirm-close="dirtyGuard.confirmClose"
+    >
       <AFormGrid :columns="1">
         <AFormRow
           label="字典项名称"
@@ -179,7 +212,7 @@ async function deleteItem(item: DictionaryItem) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

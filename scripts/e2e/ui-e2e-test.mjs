@@ -201,6 +201,21 @@ async function confirmDelete() {
   await alertBox().waitFor({ state: 'hidden', timeout: 5000 })
 }
 
+/**
+ * Cancels the open sheet. Editing sheets guard unsaved input, so a dirty form
+ * raises a "放弃未保存的修改？" confirm that has to be answered before the
+ * sheet actually closes; a pristine form closes straight away.
+ */
+async function cancelSheet() {
+  await sheet().getByRole('button', { name: '取消', exact: true }).click()
+  const discard = alertBox().getByRole('button', { name: '放弃修改', exact: true })
+  if (await discard.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await discard.click()
+    await alertBox().waitFor({ state: 'hidden', timeout: 5000 })
+  }
+  await sheet().waitFor({ state: 'hidden', timeout: 10000 })
+}
+
 /** Row locator for a table row containing the given text. */
 function tableRow(text) {
   return page.locator('.a-table tbody tr', { hasText: text })
@@ -291,17 +306,23 @@ async function runLogin() {
 
   await check('The login page renders and rejects bad credentials', async () => {
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' })
-    await page.getByRole('button', { name: '登 录' }).waitFor({ state: 'visible', timeout: 15000 })
+    await page.getByRole('button', { name: '登录', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
     await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
     await page.locator('input[autocomplete="current-password"]').fill('wrong-password')
-    await page.getByRole('button', { name: '登 录' }).click()
-    await expectToast('用户名或密码错误')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    // 登录失败的原因是常驻内联错误，不是一闪而过的 Toast——用户回头看还在。
+    const loginError = page.locator('.login__error')
+    await loginError.waitFor({ state: 'visible', timeout: 8000 })
+    assert(
+      (await loginError.innerText()).includes('用户名或密码错误'),
+      `unexpected login error text: ${await loginError.innerText()}`,
+    )
     assert(page.url().includes('/login'), 'should stay on the login page')
   })
 
   await check('Signing in as admin lands on the customer page', async () => {
     await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
-    await page.getByRole('button', { name: '登 录' }).click()
+    await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL('**/selection/customer**', { timeout: 20000 })
     await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
     await page.getByRole('navigation', { name: '主导航' }).waitFor({ state: 'visible' })
@@ -374,17 +395,15 @@ async function runCustomerCrud() {
     await fillField(sheet(), '区域名称', NAMES.region)
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
     await expectToast('该区域已存在')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await cancelSheet()
   })
 
   await check('An empty region name is rejected', async () => {
     await page.getByRole('button', { name: '新建区域', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('请填写区域名称')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await expectToast('请检查标红的必填项')
+    await cancelSheet()
   })
 
   await check('Creating a customer inside the region works', async () => {
@@ -424,9 +443,8 @@ async function runCustomerCrud() {
     await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('请填写要求内容并选择有效分类与来源')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await expectToast('请检查标红的必填项')
+    await cancelSheet()
   })
 
   await check('客户通用要求: edit the requirement', async () => {
@@ -637,17 +655,15 @@ async function runSensorCrud() {
     await fillField(sheet(), '型号', NAMES.sensorModel)
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
     await expectToast('该型号已存在，请使用不同的型号名称')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await cancelSheet()
   })
 
   await check('Sensor: a model without a name is rejected', async () => {
     await page.getByRole('button', { name: '新增型号', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('请填写型号并选择感应器类型')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await expectToast('请检查标红的必填项')
+    await cancelSheet()
   })
 
   await check('Sensor: edit the model', async () => {
@@ -670,11 +686,21 @@ async function runSensorCrud() {
     await settle()
   })
 
-  await check('Sensor: status tabs switch the visible set', async () => {
-    await page.getByRole('tab', { name: '03 停用', exact: true }).click()
+  await check('Sensor: the status filter switches the visible set', async () => {
+    // 状态是工具栏上的下拉筛选，不是分段控件的 tab。
+    const statusFilter = page.locator('[aria-label="状态筛选"]')
+    await statusFilter.click()
+    const panel = page.locator('.a-select__panel:visible')
+    await panel.waitFor({ state: 'visible', timeout: 5000 })
+    await panel.locator('.a-menu-item__label', { hasText: '停用' }).first().click()
+    await panel.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     assertEqual(await tableRow(NAMES.sensorModel).count(), 0, 'a 现用 model must not show under 停用')
-    await page.getByRole('tab', { name: '全部', exact: true }).click()
+
+    await statusFilter.click()
+    await panel.waitFor({ state: 'visible', timeout: 5000 })
+    await panel.locator('.a-menu-item__label', { hasText: '全部' }).first().click()
+    await panel.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
   })
@@ -695,35 +721,34 @@ async function runDictionaryCrud() {
   await check('Dictionary: create an entry', async () => {
     await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '分类名称', NAMES.dictItem)
+    await fillField(sheet(), '字典项名称', NAMES.dictItem)
     await saveSheet()
-    await expectToast('分类已新增')
+    await expectToast('字典项已新增')
     await tableRow(NAMES.dictItem).first().waitFor({ state: 'visible' })
   })
 
   await check('Dictionary: a duplicate entry is rejected', async () => {
     await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '分类名称', NAMES.dictItem)
+    await fillField(sheet(), '字典项名称', NAMES.dictItem)
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('该分类名称已存在')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await expectToast('该字典项名称已存在')
+    await cancelSheet()
   })
 
   await check('Dictionary: edit the entry', async () => {
-    await rowAction(NAMES.dictItem, '编辑分类')
+    await rowAction(NAMES.dictItem, '编辑字典项')
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '分类名称', `${NAMES.dictItem}改`)
+    await fillField(sheet(), '字典项名称', `${NAMES.dictItem}改`)
     await saveSheet()
-    await expectToast('分类已更新')
+    await expectToast('字典项已更新')
     await tableRow(`${NAMES.dictItem}改`).first().waitFor({ state: 'visible' })
   })
 
   await check('Dictionary: delete the entry', async () => {
-    await rowAction(`${NAMES.dictItem}改`, '删除分类')
+    await rowAction(`${NAMES.dictItem}改`, '删除字典项')
     await confirmDelete()
-    await expectToast('分类已删除')
+    await expectToast('字典项已删除')
   })
 }
 
@@ -758,7 +783,7 @@ async function runMachineCrud() {
     await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), 'Tab 名称', `${TAG}机构`)
-    await pickSelect(sheet(), 'Tab 类型', '机构/结构')
+    await pickSelect(sheet(), 'Tab 类型', '结构')
     await saveSheet()
     await expectToast('Tab 已新增')
 
@@ -778,7 +803,7 @@ async function runMachineCrud() {
   await check('Machine: create, edit and delete a 注意事项 row', async () => {
     await page.getByRole('tab', { name: `${TAG}注意事项` }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).first().click()
+    await page.getByRole('button', { name: '新增事项', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
     assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新增记录', 'sheet title')
     await fillField(sheet(), '注意分类', `${TAG}分类`)
@@ -809,13 +834,12 @@ async function runMachineCrud() {
   await check('Machine: a structure row requires an associated sensor', async () => {
     await page.getByRole('tab', { name: `${TAG}机构` }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).first().click()
+    await page.getByRole('button', { name: '新增选型', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
     await fillField(sheet(), '功能作用', `${TAG}作用`)
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('请填写功能作用并选择关联传感器')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await expectToast('请检查标红的必填项')
+    await cancelSheet()
   })
 
   await check('Machine: the report toolbar exposes selection and export actions', async () => {
@@ -879,8 +903,7 @@ async function runSystemCrud() {
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
     await page.locator('.a-toast').first().waitFor({ state: 'visible', timeout: 8000 })
     assert(await sheet().isVisible(), 'the sheet should stay open after a rejected save')
-    await sheet().getByRole('button', { name: '取消', exact: true }).click()
-    await sheet().waitFor({ state: 'hidden' })
+    await cancelSheet()
   })
 
   await check('User: edit the display name', async () => {
@@ -1084,7 +1107,7 @@ async function runUiAudit() {
   await goto('/login')
   await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
   await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
-  await page.getByRole('button', { name: '登 录' }).click()
+  await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL('**/selection/customer**', { timeout: 20000 })
   await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
   await settle()
@@ -1205,6 +1228,69 @@ async function runUiAudit() {
       overflow.scroll <= overflow.client + 1,
       `horizontal overflow: scrollWidth ${overflow.scroll} > clientWidth ${overflow.client}`,
     )
+  })
+
+  await check('The shell fills the viewport without a page-level scrollbar', async () => {
+    // 外壳是固定高度布局，滚动条应该只出现在内容区里。哪怕多出 1px（曾经就是
+    // visually-hidden 的 aria-live 区域把文档撑高 1px）也会冒出一条整页滚动条。
+    const offenders = await page.evaluate(() => {
+      const de = document.documentElement
+      if (de.scrollHeight <= de.clientHeight) return []
+      const vh = de.clientHeight
+      return Array.from(document.querySelectorAll('*'))
+        .map((el) => ({ el, box: el.getBoundingClientRect() }))
+        .filter((entry) => entry.box.bottom > vh && entry.box.height > 0)
+        .filter((entry) => {
+          // 真正可滚动的容器里溢出是正常的；overflow:hidden 不算，因为 body
+          // 本身就是 hidden，按它过滤会把所有元素都排除掉。
+          let parent = entry.el.parentElement
+          while (parent) {
+            const overflowY = getComputedStyle(parent).overflowY
+            if (overflowY === 'auto' || overflowY === 'scroll') return false
+            parent = parent.parentElement
+          }
+          return true
+        })
+        .slice(0, 6)
+        .map((entry) => {
+          const cls =
+            typeof entry.el.className === 'string'
+              ? entry.el.className.trim().split(/\s+/).slice(0, 2).join('.')
+              : ''
+          return `${entry.el.tagName.toLowerCase()}${cls ? '.' + cls : ''} bottom=${Math.round(entry.box.bottom)}`
+        })
+    })
+    const metrics = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollHeight,
+      client: document.documentElement.clientHeight,
+    }))
+    // 不留 1px 容差：这条 bug 本身就正好是 1px。
+    assert(
+      metrics.scroll <= metrics.client,
+      `vertical page overflow: scrollHeight ${metrics.scroll} > clientHeight ${metrics.client} | ${offenders.join(' | ')}`,
+    )
+  })
+
+  await check('The page body does not grow its own scrollbar', async () => {
+    // .selection-page 是固定高度的列布局：表格自己滚，页面本身不该滚。
+    // 上一条只看文档级溢出，还把可滚动祖先的后代排除了，所以漏掉了分页条上
+    // 图标按钮的外扩热区把这一层顶出滚动条的情况。
+    const pages = ['/system/audit-log', '/selection/sensor', '/selection/customer', '/system/user']
+    const bad = []
+    for (const path of pages) {
+      await goto(path)
+      await settle()
+      const m = await page.evaluate(() => {
+        const sp = document.querySelector('.selection-page')
+        if (!sp) return null
+        return {
+          h: sp.scrollWidth - sp.clientWidth,
+          v: sp.scrollHeight - sp.clientHeight,
+        }
+      })
+      if (m && (m.h > 0 || m.v > 0)) bad.push(`${path} 横${m.h}px 纵${m.v}px`)
+    }
+    assertEqual(bad.length, 0, `.selection-page 出现了自己的滚动条: ${bad.join(' | ')}`)
   })
 
   await check('No text node overflows its container horizontally', async () => {

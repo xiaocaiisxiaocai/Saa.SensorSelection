@@ -6,7 +6,15 @@ import {
   Plus,
   Trash2,
 } from 'lucide-vue-next';
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+} from 'vue';
 
 import AIconButton from './AIconButton.vue';
 import type { TabItem } from './types';
@@ -16,11 +24,17 @@ const props = withDefaults(
     tabs: TabItem[];
     addable?: boolean;
     addLabel?: string;
+    ariaLabel?: string;
+    /** 见 ASegmentedControl 的同名 prop：与内容区做 tab/tabpanel ARIA 关联的基准。 */
+    id?: string;
   }>(),
   {
     addLabel: '新增 Tab',
   },
 );
+
+const fallbackId = useId();
+const baseId = computed(() => props.id ?? fallbackId);
 
 const emit = defineEmits<{
   rename: [value: string];
@@ -139,13 +153,20 @@ onBeforeUnmount(() => {
         ref="scroller"
         class="a-tab-bar__scroller"
         role="tablist"
+        :aria-label="ariaLabel"
         @scroll="updateMetrics"
         @keydown="onKeydown"
       >
+        <!--
+          role="presentation" 必须保留：tablist 的直接子元素只能是 tab，
+          这层 div 是为了给重命名/删除按钮排版才存在的，标成 presentation
+          才不会切断 tablist → tab 的 ARIA 所有权关系。
+        -->
         <div
           v-for="tab in tabs"
           :key="tab.value"
           class="a-tab-bar__item"
+          role="presentation"
           :class="{
             'a-tab-bar__item--selected': tab.value === model,
             'a-tab-bar__item--actions': tab.renamable || tab.closable,
@@ -153,6 +174,7 @@ onBeforeUnmount(() => {
           :data-selected="tab.value === model ? '' : undefined"
         >
           <button
+            :id="id ? `${baseId}-tab-${tab.value}` : undefined"
             class="a-tab-bar__tab"
             :class="{
               'a-tab-bar__tab--selected': tab.value === model,
@@ -161,6 +183,7 @@ onBeforeUnmount(() => {
             type="button"
             role="tab"
             :aria-selected="tab.value === model"
+            :aria-controls="id ? `${baseId}-panel-${tab.value}` : undefined"
             :tabindex="tab.value === model ? 0 : -1"
             @click="select(tab.value)"
           >
@@ -186,6 +209,7 @@ onBeforeUnmount(() => {
         </div>
         <span
           class="a-tab-bar__indicator"
+          aria-hidden="true"
           :style="{
             width: `${indicatorWidth}px`,
             transform: `translateX(${indicatorX}px)`,
@@ -258,7 +282,7 @@ onBeforeUnmount(() => {
   align-items: center;
   align-self: stretch;
   padding: 0 var(--space-3);
-  font: var(--text-caption);
+  font: var(--text-field);
   color: var(--label-2);
   background: transparent;
   border: 0;
@@ -289,7 +313,8 @@ onBeforeUnmount(() => {
   opacity: 0.35;
 }
 
-.a-tab-bar__item .a-tab-bar__actions:hover {
+.a-tab-bar__item .a-tab-bar__actions:hover,
+.a-tab-bar__item:focus-within .a-tab-bar__actions {
   opacity: 1;
 }
 
@@ -299,7 +324,7 @@ onBeforeUnmount(() => {
   left: 0;
   height: var(--space-1);
   pointer-events: none;
-  background: var(--sys-blue-solid);
+  background: var(--sys-blue);
   transition:
     transform var(--dur-2) var(--ease-in-out),
     width var(--dur-2) var(--ease-in-out);

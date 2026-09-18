@@ -94,10 +94,13 @@ export interface AuditLogPage {
 
 export interface AuditLogQuery {
   action?: string;
+  direction?: 'asc' | 'desc';
   from?: string;
   page?: number;
   pageSize?: number;
   result?: boolean;
+  /** 仅支持 timestamp / username / action / result，其他值后端回落到时间倒序 */
+  sort?: string;
   target?: string;
   to?: string;
   username?: string;
@@ -427,6 +430,8 @@ export const api = {
     if (params.result !== undefined) query.set('result', String(params.result));
     if (params.from) query.set('from', params.from);
     if (params.to) query.set('to', params.to);
+    if (params.sort) query.set('sort', params.sort);
+    if (params.direction) query.set('direction', params.direction);
     const qs = query.toString();
     return request<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
   },

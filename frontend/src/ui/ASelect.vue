@@ -68,7 +68,18 @@ watch(open, async (isOpen) => {
   }
 
   await nextTick();
-  filterEl.value?.focus();
+  if (props.filterable) {
+    filterEl.value?.focus();
+    return;
+  }
+
+  // 非可筛选模式没有输入框可以接手焦点，必须手动把焦点送进列表，
+  // 否则键盘用户打开的下拉永远停在触发按钮上，方向键/首字母跳转全部失效。
+  const list = document.getElementById(listId);
+  const target =
+    list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+    list?.querySelector<HTMLElement>('[role="option"]:not([aria-disabled="true"])');
+  target?.focus();
 });
 </script>
 
@@ -210,8 +221,8 @@ watch(open, async (isOpen) => {
   transition: transform var(--dur-1) var(--ease-out);
 }
 
-.a-select__trigger[aria-expanded='true'] {
-  box-shadow: none;
+.a-select__trigger:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .a-select__trigger[aria-expanded='true'] .a-select__chevron {

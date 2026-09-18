@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 
 import type { ProcessStepItem } from '@/domain';
 import ProcessIntroPanel from '@/pages/selection/process/ProcessIntroPanel.vue';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import { useAccess } from '@/stores/auth';
@@ -25,7 +26,9 @@ import {
   ATextArea,
   type SegmentOption,
   type SelectOption,
+  sortRows,
   type TableColumn,
+  type TableSortState,
 } from '@/ui';
 
 import '../shared/selection-page.css';
@@ -50,6 +53,7 @@ const editId = ref<number>();
 const validationAttempted = ref(false);
 const page = ref(1);
 const pageSize = ref(20);
+const sort = ref<TableSortState | null>(null);
 const form = reactive({
   feature: '',
   layer: '',
@@ -57,6 +61,7 @@ const form = reactive({
   note: '',
   role: '',
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const layerNames = computed(() => store.dictionaryNames('process-layer'));
 const layerOptions = computed<SelectOption[]>(() =>
@@ -80,18 +85,23 @@ const filteredItems = computed(() => {
   );
 });
 
+// 排序必须发生在分页切片之前，否则只会把当前这一页重排。
+const sortedItems = computed(() => sortRows(filteredItems.value, sort.value));
+
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
-  return filteredItems.value.slice(start, start + pageSize.value);
+  return sortedItems.value.slice(start, start + pageSize.value);
 });
 
 const stepColumns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'layer', label: '制程', width: 64, fixed: 'start' },
-    { key: 'name', label: '工艺制程', minWidth: 140 },
-    { key: 'role', label: '作用', minWidth: 160, ellipsis: true },
-    { key: 'feature', label: '制程特性', minWidth: 160, ellipsis: true },
-    { key: 'note', label: '备注', minWidth: 120, ellipsis: true },
+    { key: 'layer', label: '制程', width: 64, fixed: 'start', sortable: true },
+    // 固定宽度：工艺制程名很短（实测最长 107px），设成弹性列会按比例吃掉
+    // 大量多余空间（实测占到 375px），把宽度从真正需要的「作用」列抢走。
+    { key: 'name', label: '工艺制程', width: 160, sortable: true },
+    { key: 'role', label: '作用', minWidth: 160 },
+    { key: 'feature', label: '制程特性', minWidth: 160 },
+    { key: 'note', label: '备注', minWidth: 120 },
   ];
   if (writable.value) {
     cols.push({
@@ -113,7 +123,7 @@ watch(activeTab, (tab) => {
   if (tab !== 'steps') layerFilter.value = null;
 });
 
-watch([query, layerFilter, pageSize], () => {
+watch([query, layerFilter, pageSize, sort], () => {
   page.value = 1;
 });
 
@@ -148,6 +158,7 @@ function resetFilters() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -161,7 +172,14 @@ function editItem(item: ProcessStepItem) {
     note: item.note,
     role: item.role,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function saveItem() {
@@ -179,7 +197,6 @@ function saveItem() {
   if (
     toastResult(result, editId.value ? '工艺制程已更新' : '工艺制程已新增', {
       duplicate: '该工艺制程已存在',
-      validation: '请填写工艺制程并选择制程分层',
     })
   ) {
     dialogOpen.value = false;
@@ -196,11 +213,29 @@ async function deleteItem(item: ProcessStepItem) {
 <template>
   <section class="selection-page">
     <h1 class="visually-hidden">制程管理</h1>
-    <ASegmentedControl v-model="activeTab" :segments="tabs" />
+    <ASegmentedControl
+      id="process-tabs"
+      v-model="activeTab"
+      aria-label="制程资料分类"
+      :segments="tabs"
+    />
 
-    <ProcessIntroPanel v-if="activeTab === 'intro'" />
+    <ProcessIntroPanel
+      v-if="activeTab === 'intro'"
+      id="process-tabs-panel-intro"
+      role="tabpanel"
+      aria-labelledby="process-tabs-tab-intro"
+      tabindex="0"
+    />
 
-    <div v-else class="selection-panel">
+    <div
+      v-else
+      id="process-tabs-panel-steps"
+      role="tabpanel"
+      aria-labelledby="process-tabs-tab-steps"
+      tabindex="0"
+      class="selection-panel"
+    >
       <div class="selection-toolbar">
         <ASelect
           v-model="layerFilter"
@@ -222,13 +257,15 @@ async function deleteItem(item: ProcessStepItem) {
         </AButton>
       </div>
       <ATable
+        v-model:sort="sort"
+        storage-key="process-steps"
         :columns="stepColumns"
         :rows="tableData"
         row-key="id"
         :empty-text="
           query.trim() || layerFilter ? '没有匹配的工艺制程' : '暂无工艺制程'
         "
-        striped
+        @activate="writable && editItem($event)"
       >
         <template #cell-actions="{ row }">
           <div class="table-actions">
@@ -259,6 +296,7 @@ async function deleteItem(item: ProcessStepItem) {
       v-model:open="dialogOpen"
       :title="editId ? '编辑工艺制程' : '新增工艺制程'"
       :width="640"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid :columns="1">
         <AFormRow
@@ -294,7 +332,7 @@ async function deleteItem(item: ProcessStepItem) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

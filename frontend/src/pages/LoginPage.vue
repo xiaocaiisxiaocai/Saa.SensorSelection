@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Lock, Monitor, Moon, Sun, User } from 'lucide-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getStoredToken } from '@/api';
@@ -29,6 +29,14 @@ const usernameError = computed(() =>
 const passwordError = computed(() =>
   validationAttempted.value && !form.password ? '请输入密码' : undefined,
 );
+// 登录失败的原因（用户名或密码错误等）单独用一条常驻提示展示，不跟“必填”
+// 校验共用同一行——否则清空密码后 usernameError/passwordError 会立刻把
+// 真正的失败原因顶替掉，用户看到的会是一句误导性的“请输入密码”。
+// 只在下一次提交时清掉它（submit 开头），不用输入监听器清——那样会跟
+// “登录失败后自动清空密码框”这个动作打架，把刚设好的错误立刻冲掉。
+const loginError = ref<string | null>(null);
+const usernameField = ref<InstanceType<typeof AField> | null>(null);
+const passwordField = ref<InstanceType<typeof AField> | null>(null);
 let backendReady: null | Promise<void> = null;
 
 const themeOptions: {
@@ -63,20 +71,15 @@ async function enterAsGuest() {
 
 async function submit() {
   if (loading.value) return;
+  loginError.value = null;
   validationAttempted.value = true;
   const username = form.username.trim();
   const password = form.password;
 
-  if (!username && !password) {
-    toast.warning('请输入用户名和密码');
-    return;
-  }
-  if (!username) {
-    toast.warning('请输入用户名');
-    return;
-  }
-  if (!password) {
-    toast.warning('请输入密码');
+  // 字段级错误已经由用户名/密码输入框下方的红字说明，不再额外弹一条说法
+  // 不完全一样的 Toast；哪个字段没填、聚焦哪个字段，交给下面的
+  // AFormRow 统一处理。
+  if (!username || !password) {
     return;
   }
 
@@ -84,8 +87,15 @@ async function submit() {
   try {
     const result = await auth.login(username, password);
     if (!result.ok) {
-      toast.error(result.message);
+      // 用失败原因常驻展示，不用“必填”提示顶替；密码清空后重新聚焦，
+      // 方便直接重试。字段在 loading 期间是 disabled 的，disabled 的
+      // 输入框接不到焦点，所以要先解除 loading 再 focus。
+      loginError.value = result.message;
+      validationAttempted.value = false;
       form.password = '';
+      loading.value = false;
+      await nextTick();
+      passwordField.value?.focus();
       return;
     }
     await prepareBackend();
@@ -98,35 +108,31 @@ async function submit() {
 
 onMounted(async () => {
   const ready = prepareBackend();
-  if (!getStoredToken()) return;
+  if (!getStoredToken()) {
+    loginError.value = null;
+    // macOS/HIG 的登录窗口会直接把光标放进第一个字段；这里没有已登录态
+    // 需要静默跳转时，才把焦点交给用户名框，避免抢在跳转前抖一下。
+    usernameField.value?.focus();
+    return;
+  }
   await auth.ensureProfile();
   if (auth.profile) {
     await ready;
     await enter();
+    return;
   }
+  // 带着 token 来到登录页却换不回身份，说明这次是「做着做着被踢出来」——
+  // 账号被停用/删除、或 token 过期。不说明原因的话，用户只会看到自己突然
+  // 回到了登录页，完全不知道发生了什么。
+  if (auth.sessionExpired) {
+    loginError.value = '登录已失效，请重新登录（账号可能已被停用或长时间未操作）';
+  }
+  usernameField.value?.focus();
 });
 </script>
 
 <template>
   <div class="login-layout">
-    <header class="login-layout__header">
-      <div class="theme-switch" role="radiogroup" aria-label="外观主题">
-        <button
-          v-for="option in themeOptions"
-          :key="option.value"
-          class="theme-switch__btn"
-          type="button"
-          role="radio"
-          :aria-checked="theme.preference === option.value"
-          :aria-label="option.label"
-          :title="option.label"
-          @click="theme.setPreference(option.value)"
-        >
-          <component :is="option.icon" :size="16" :stroke-width="1.5" />
-        </button>
-      </div>
-    </header>
-
     <main class="login-layout__main">
       <section class="login__card">
         <div class="login__brand">
@@ -137,9 +143,14 @@ onMounted(async () => {
           </div>
         </div>
 
+        <p v-if="loginError" class="login__error" role="alert">
+          {{ loginError }}
+        </p>
+
         <form class="login__form" @submit.prevent="submit">
           <AFormRow label="用户名" required :error="usernameError">
             <AField
+              ref="usernameField"
               v-model="form.username"
               :prefix-icon="User"
               autocomplete="username"
@@ -151,6 +162,7 @@ onMounted(async () => {
           </AFormRow>
           <AFormRow label="密码" required :error="passwordError">
             <AField
+              ref="passwordField"
               v-model="form.password"
               :prefix-icon="Lock"
               type="password"
@@ -162,13 +174,14 @@ onMounted(async () => {
           </AFormRow>
 
           <AButton
+            class="login__submit"
             variant="filled"
             size="xlarge"
             block
             type="submit"
             :loading="loading"
           >
-            登 录
+            登录
           </AButton>
         </form>
 
@@ -189,6 +202,29 @@ onMounted(async () => {
     <footer class="login-layout__footer">
       <p>© 2026 Symtek Automation China. 保留所有权利。</p>
     </footer>
+
+    <!--
+      主题切换放在 DOM 最后，让 Tab 顺序落在表单和游客链接之后——
+      HIG 的键盘顺序要跟视觉主任务顺序一致，一个外观偏好开关不该抢在
+      用户名输入框前面。视觉位置仍用绝对定位钉在右上角。
+    -->
+    <header class="login-layout__header">
+      <div class="theme-switch" role="radiogroup" aria-label="外观主题">
+        <button
+          v-for="option in themeOptions"
+          :key="option.value"
+          class="theme-switch__btn"
+          type="button"
+          role="radio"
+          :aria-checked="theme.preference === option.value"
+          :aria-label="option.label"
+          :title="option.label"
+          @click="theme.setPreference(option.value)"
+        >
+          <component :is="option.icon" :size="16" :stroke-width="1.5" />
+        </button>
+      </div>
+    </header>
   </div>
 </template>
 
@@ -215,10 +251,11 @@ onMounted(async () => {
 }
 
 .login-layout__header {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  height: var(--control-height-lg);
 }
 
 .theme-switch {
@@ -308,6 +345,21 @@ onMounted(async () => {
 .login__form {
   display: grid;
   gap: var(--space-3);
+}
+
+/* 视觉上给“登录”两个字留出呼吸感，用字距而不是中间塞一个空格——
+   空格会被屏幕阅读器读成两个词。 */
+.login__submit {
+  letter-spacing: 4px;
+}
+
+.login__error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font: var(--text-control);
+  color: var(--sys-red);
+  background: var(--sys-red-fill);
+  border-radius: var(--radius-md);
 }
 
 .login__guest {

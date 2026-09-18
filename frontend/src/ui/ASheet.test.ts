@@ -77,6 +77,27 @@ describe('ASheet', () => {
     wrapper.unmount();
   });
 
+  it('asks confirmClose before closing from the header button, and respects its answer', async () => {
+    let allow = false;
+    const confirmClose = () => allow;
+    const wrapper = mount(ASheet, {
+      attachTo: document.body,
+      props: { open: true, title: '编辑客户', confirmClose },
+    });
+
+    await nextTick();
+    document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
+    await nextTick();
+    expect(wrapper.emitted('update:open')).toBeUndefined();
+
+    allow = true;
+    document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
+    await nextTick();
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false]);
+
+    wrapper.unmount();
+  });
+
   it('supports a viewport-sized layout for document previews', async () => {
     const wrapper = mount(ASheet, {
       attachTo: document.body,

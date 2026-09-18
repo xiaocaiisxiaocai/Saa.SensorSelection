@@ -11,6 +11,7 @@ import {
 } from '@/api';
 import { formatLocalDateTime } from '@/domain';
 import { toTreeSelectNodes } from '@/pages/system/org-tree';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import { useAccess, useAuthStore } from '@/stores/auth';
 import { toast } from '@/ui/toast';
@@ -53,6 +54,7 @@ const form = reactive({
   roleId: null as number | null,
   username: '',
 });
+const dirtyGuard = useDirtyGuard(form);
 const newPassword = ref('');
 
 const roleOptions = computed(() =>
@@ -64,12 +66,12 @@ const roleOptions = computed(() =>
 const orgNodes = computed(() => toTreeSelectNodes(orgUnits.value));
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'username', label: '用户名', minWidth: 120, fixed: 'start' },
-    { key: 'displayName', label: '显示名', minWidth: 120 },
+    { key: 'username', label: '用户名', width: 160, fixed: 'start', sortable: true },
+    { key: 'displayName', label: '显示名', width: 140, sortable: true },
     { key: 'roles', label: '角色', minWidth: 160 },
     { key: 'org', label: '所属组织', minWidth: 180 },
     { key: 'status', label: '状态', width: 88 },
-    { key: 'createdAt', label: '创建时间', width: 180 },
+    { key: 'createdAt', label: '创建时间', width: 180, sortable: true },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
@@ -108,6 +110,7 @@ function openCreate() {
     roleId: null,
     username: '',
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -122,20 +125,27 @@ function openEdit(user: RbacUser) {
     roleId: user.roles.length === 1 ? user.roles[0]!.id : null,
     username: user.username,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
   if (user.roles.length > 1) {
     toast.warning('该用户当前绑定多个角色，请重新选择一个角色');
   }
 }
 
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
+}
+
 async function saveUser() {
   userValidationAttempted.value = true;
+  // 字段级错误已经由用户名/显示名/密码输入框下方的红字分别说明——用一条
+  // 合并成一句的 Toast 复述会跟哪个字段实际出错对不上。
   if (!form.username.trim() || !form.displayName.trim()) {
-    toast.warning('请填写用户名和显示名');
     return;
   }
   if (editingId.value === undefined && form.password.length < 4) {
-    toast.warning('密码至少 4 位');
     return;
   }
   saving.value = true;
@@ -240,19 +250,20 @@ function orgPath(user: RbacUser) {
 
 <template>
   <section class="selection-page">
-    <div class="selection-toolbar">
-      <h1 class="docs-heading">用户管理</h1>
+    <div class="selection-toolbar user-toolbar">
+      <h1 class="visually-hidden">用户管理</h1>
       <AButton v-if="writable" variant="filled" @click="openCreate">
         新增用户
       </AButton>
     </div>
     <ATable
+      storage-key="system-users"
       :columns="columns"
       :rows="users"
       row-key="id"
       empty-text="暂无用户"
       :loading="loading"
-      striped
+      @activate="writable && openEdit($event)"
     >
       <template #cell-roles="{ row }">
         <div class="badge-wrap">
@@ -298,6 +309,7 @@ function orgPath(user: RbacUser) {
       v-model:open="dialogOpen"
       :title="editingId ? '编辑用户' : '新建用户'"
       :width="520"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid>
         <AFormRow
@@ -368,7 +380,7 @@ function orgPath(user: RbacUser) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" :loading="saving" @click="saveUser">
           保存
         </AButton>
@@ -398,3 +410,9 @@ function orgPath(user: RbacUser) {
     </ASheet>
   </section>
 </template>
+
+<style scoped>
+.user-toolbar .a-button {
+  margin-left: auto;
+}
+</style>

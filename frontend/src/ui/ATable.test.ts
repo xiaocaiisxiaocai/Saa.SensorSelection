@@ -23,7 +23,7 @@ interface SensorRow {
 
 const columns: TableColumn[] = [
   { key: 'model', label: '型号', mono: true },
-  { key: 'note', label: '说明', ellipsis: true },
+  { key: 'note', label: '说明' },
   { key: 'actions', label: '操作', fixed: 'end' },
 ];
 
@@ -162,7 +162,7 @@ describe('ATable', () => {
       'OMRON E3Z-D61 · 检测距离 0~300mm；12~24V DC；PNP/NPN；IP67';
     const wrapper = mount(ATable, {
       props: {
-        columns: [{ key: 'spec', label: '规格', ellipsis: true }],
+        columns: [{ key: 'spec', label: '规格' }],
         rows: [{ id: '1', spec: fullSpec }],
         rowKey: 'id',
       },
@@ -319,6 +319,95 @@ describe('ATable', () => {
     // 底部占位行应存在（总行数 - 渲染行数 > 0）
     expect(wrapper.find('.a-table__spacer').exists()).toBe(true);
 
+    wrapper.unmount();
+  });
+
+  it('resolves every column to a concrete px width, honouring minWidth as a floor', () => {
+    // table-layout:fixed 规范忽略单元格的 min-width。历史上给 minWidth 列写
+    // CSS min-width，结果它们等于没有宽度、被平均分配：机型表 9 列全变成
+    // 120px，声明 220px 的列被压到 120px，拉丁品牌名被从词中间断开。
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'icon', label: '状态', width: 60 },
+          { key: 'name', label: '名称', minWidth: 200 },
+          { key: 'note', label: '备注', minWidth: 100 },
+          { key: 'actions', label: '操作', width: 72 },
+        ],
+        rows: [{ icon: 'a', name: 'b', note: 'c', actions: 'd' }],
+        rowKey: 'name',
+      },
+    });
+
+    const style = (label: string) =>
+      wrapper
+        .findAll('th')
+        .find((th) => th.text() === label)
+        ?.attributes('style');
+
+    // 每一列都必须落成具体的 width，不能只有 min-width
+    expect(style('状态')).toBe('width: 60px;');
+    expect(style('操作')).toBe('width: 72px;');
+    // jsdom 没有布局（容器宽度 0），弹性列正好停在各自声明的下限上
+    expect(style('名称')).toBe('width: 200px;');
+    expect(style('备注')).toBe('width: 100px;');
+    expect(wrapper.find('th[style*="min-width"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('lets the user resize a column, remembers it, and can reset it', async () => {
+    const wrapper = mount(ATable, {
+      props: {
+        storageKey: 'resize-spec',
+        columns: [
+          { key: 'name', label: '名称', minWidth: 200 },
+          { key: 'note', label: '备注', minWidth: 100 },
+        ],
+        rows: [{ name: 'a', note: 'b' }],
+        rowKey: 'name',
+      },
+    });
+
+    const width = (label: string) =>
+      wrapper
+        .findAll('th')
+        .find((th) => th.text() === label)
+        ?.attributes('style');
+    expect(width('名称')).toBe('width: 200px;');
+
+    // 键盘调宽：右方向键一次 16px
+    const handle = wrapper.get('[aria-label="调整名称列宽"]');
+    await handle.trigger('keydown', { key: 'ArrowRight' });
+    expect(width('名称')).toBe('width: 216px;');
+
+    // 拖出来的宽度要记到本地，换个实例还在
+    expect(
+      JSON.parse(localStorage.getItem('a-table:widths:resize-spec') ?? '{}'),
+    ).toEqual({ name: 216 });
+
+    // Home 还原成自动宽度
+    await handle.trigger('keydown', { key: 'Home' });
+    expect(width('名称')).toBe('width: 200px;');
+
+    wrapper.unmount();
+  });
+
+  it('does not put a resize handle after the last column', () => {
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'name', label: '名称', minWidth: 200 },
+          { key: 'actions', label: '操作', width: 96 },
+        ],
+        rows: [{ name: 'a', actions: '' }],
+        rowKey: 'name',
+      },
+    });
+
+    // 最后一列右边没有可拖的边界，挂手柄只会让人误以为能拖
+    expect(wrapper.find('[aria-label="调整名称列宽"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="调整操作列宽"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

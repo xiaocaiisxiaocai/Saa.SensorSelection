@@ -52,4 +52,47 @@ describe('ATabBar', () => {
     expect(viewport.element.querySelector('.a-tab-bar__scroller')).not.toBeNull();
     expect(wrapper.find('.a-tab-bar__nudge--start').exists()).toBe(false);
   });
+
+  it('wires tab/tabpanel ids from the id prop so callers can associate their content', () => {
+    const wrapper = mount(ATabBar, {
+      props: { id: 'demo-tabs', modelValue: 'station', tabs },
+    });
+
+    const items = wrapper.findAll('[role="tab"]');
+    expect(items[1]?.attributes('id')).toBe('demo-tabs-tab-station');
+    expect(items[1]?.attributes('aria-controls')).toBe('demo-tabs-panel-station');
+  });
+
+  it('omits id/aria-controls entirely when no id prop is given', () => {
+    const wrapper = mount(ATabBar, {
+      props: { modelValue: 'station', tabs },
+    });
+
+    const items = wrapper.findAll('[role="tab"]');
+    expect(items[1]?.attributes('id')).toBeUndefined();
+    expect(items[1]?.attributes('aria-controls')).toBeUndefined();
+  });
+
+  it('keeps every tablist child owned by the tablist or hidden from it', () => {
+    const wrapper = mount(ATabBar, {
+      props: {
+        ariaLabel: '机型内容分区',
+        modelValue: 'station',
+        tabs: [{ ...tabs[0]!, renamable: true, closable: true }, tabs[1]!],
+      },
+    });
+
+    const tablist = wrapper.get('[role="tablist"]');
+    expect(tablist.attributes('aria-label')).toBe('机型内容分区');
+
+    // tablist 的直接子元素只能是 tab 本身、presentation 包装层，或对无障碍
+    // 树隐藏的装饰元素；混入普通 div 会切断 tablist → tab 的所有权关系。
+    const strays = [...tablist.element.children].filter(
+      (child) =>
+        child.getAttribute('role') !== 'tab' &&
+        child.getAttribute('role') !== 'presentation' &&
+        child.getAttribute('aria-hidden') !== 'true',
+    );
+    expect(strays).toHaveLength(0);
+  });
 });

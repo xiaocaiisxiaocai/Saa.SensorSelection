@@ -18,9 +18,9 @@ const groups = [
 ];
 
 describe('source-list helpers', () => {
-  it('uses a compact width range for the machine hierarchy', () => {
+  it('uses a compact width range for the machine hierarchy, with enough default width for its long labels', () => {
     expect(MACHINE_SOURCE_LIST_MIN_WIDTH).toBe(220);
-    expect(MACHINE_SOURCE_LIST_DEFAULT_WIDTH).toBe(240);
+    expect(MACHINE_SOURCE_LIST_DEFAULT_WIDTH).toBe(280);
     expect(MACHINE_SOURCE_LIST_MAX_WIDTH).toBe(320);
   });
 

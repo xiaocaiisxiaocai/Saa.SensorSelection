@@ -8,7 +8,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import AButton from './AButton.vue';
 import ACheckbox from './ACheckbox.vue';
@@ -116,6 +116,35 @@ function toggleAllGroups() {
 
 function groupCount(group: SourceGroup) {
   return group.count ?? group.items.length;
+}
+
+// 只有真正被省略号截断的名称才需要 tooltip；未截断时每次 hover 都弹一个
+// 复述可见文字的气泡纯属噪音。key 用文本本身，条目内文本天然唯一。
+const overflowingGroups = reactive(new Set<string>());
+const overflowingItems = reactive(new Set<string>());
+
+function itemKey(group: string, item: string) {
+  return `${group}, ${item}`;
+}
+
+function onGroupNameEnter(event: MouseEvent, name: string) {
+  const el = event.currentTarget as HTMLElement | null;
+  if (!el) return;
+  if (el.scrollWidth > el.clientWidth + 1) {
+    overflowingGroups.add(name);
+  } else {
+    overflowingGroups.delete(name);
+  }
+}
+
+function onItemNameEnter(event: MouseEvent, group: string, item: string) {
+  const el = event.currentTarget as HTMLElement | null;
+  if (!el) return;
+  if (el.scrollWidth > el.clientWidth + 1) {
+    overflowingItems.add(itemKey(group, item));
+  } else {
+    overflowingItems.delete(itemKey(group, item));
+  }
 }
 
 function isChecked(item: string) {
@@ -378,9 +407,15 @@ onMounted(restoreWidth);
               aria-hidden="true"
             />
             <span class="a-source-list__label">
-              <ATooltip :content="group.name">
+              <ATooltip
+                :content="group.name"
+                :disabled="!overflowingGroups.has(group.name)"
+              >
                 <template #trigger>
-                  <span class="a-source-list__name">{{ group.name }}</span>
+                  <span
+                    class="a-source-list__name"
+                    @mouseenter="onGroupNameEnter($event, group.name)"
+                  >{{ group.name }}</span>
                 </template>
               </ATooltip>
             </span>
@@ -448,13 +483,17 @@ onMounted(restoreWidth);
               <GripVertical :size="14" :stroke-width="1.5" />
             </button>
             <span class="a-source-list__label">
-              <ATooltip :content="item">
+              <ATooltip
+                :content="item"
+                :disabled="!overflowingItems.has(itemKey(group.name, item))"
+              >
                 <template #trigger>
                   <button
                     class="a-source-list__item"
                     type="button"
                     :aria-current="selected === item ? 'page' : undefined"
                     @click="emit('select', { group: group.name, item })"
+                    @mouseenter="onItemNameEnter($event, group.name, item)"
                   >
                     {{ item }}
                   </button>
@@ -615,7 +654,7 @@ onMounted(restoreWidth);
   align-items: center;
   min-width: 0;
   height: var(--row-height);
-  font: var(--text-caption);
+  font: var(--text-control);
   text-align: start;
 }
 
@@ -666,7 +705,9 @@ onMounted(restoreWidth);
   flex-shrink: 0;
   padding-right: var(--space-2);
   font: var(--text-caption);
-  color: var(--label-3);
+
+  /* 计数承载信息（分组下有多少条），--label-3 对比度不够，必须用 --label-2 */
+  color: var(--label-2);
 }
 
 .a-source-list__check {

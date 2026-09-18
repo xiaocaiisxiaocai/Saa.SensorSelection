@@ -1118,7 +1118,7 @@ onMounted(restoreWidth);
   border-radius: var(--radius-md);
   background: var(--fill-3);
   color: var(--label-2);
-  font: var(--text-caption);
+  font: var(--text-control);
   transition: background-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
 }
 
@@ -1195,7 +1195,7 @@ onMounted(restoreWidth);
   gap: 6px;
   border-radius: var(--radius-sm);
   color: var(--label);
-  font: var(--text-caption);
+  font: var(--text-control);
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 

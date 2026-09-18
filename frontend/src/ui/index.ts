@@ -33,6 +33,7 @@ export { default as ATooltip } from './ATooltip.vue';
 export { default as AToastHost } from './AToastHost.vue';
 export { default as ATreeSelect } from './ATreeSelect.vue';
 export { alert } from './alert';
+export { sortRows } from './table-sort';
 export { toast } from './toast';
 export type { FileDropRule } from './file-drop';
 export type { SourceGroup } from './source-list';

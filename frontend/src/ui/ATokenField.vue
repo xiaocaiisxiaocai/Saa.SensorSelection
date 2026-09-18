@@ -214,6 +214,29 @@ function remove(value: string | number, event: Event) {
   event.stopPropagation();
   model.value = model.value.filter((item) => item !== value);
 }
+
+const filterEl = ref<HTMLInputElement | null>(null);
+
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    query.value = '';
+    return;
+  }
+
+  await nextTick();
+  if (props.filterable) {
+    filterEl.value?.focus();
+    return;
+  }
+
+  // 与 ASelect 一致：非可筛选模式下必须手动把焦点送进列表，
+  // 否则键盘用户打开的下拉永远停在触发器上，方向键/勾选全部失效。
+  const list = document.getElementById(listId);
+  const target =
+    list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+    list?.querySelector<HTMLElement>('[role="option"]:not([aria-disabled="true"])');
+  target?.focus();
+});
 </script>
 
 <template>
@@ -276,6 +299,7 @@ function remove(value: string | number, event: Event) {
       <div class="a-select__panel">
         <input
           v-if="filterable"
+          ref="filterEl"
           v-model="query"
           class="a-select__filter"
           type="search"
@@ -350,6 +374,10 @@ function remove(value: string | number, event: Event) {
 
 .a-token-field__trigger.a-control--disabled {
   pointer-events: none;
+}
+
+.a-token-field__trigger:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .a-token-field__chip,

@@ -5,6 +5,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useId,
   watch,
 } from 'vue';
 
@@ -14,11 +15,28 @@ const props = withDefaults(
   defineProps<{
     segments: SegmentOption[];
     size?: SegmentedSize;
+    ariaLabel?: string;
+    /**
+     * 分段控件与它切换的内容区之间的 ARIA 关联基准。传入后每个标签会得到
+     * `${id}-tab-${value}` / `${id}-panel-${value}` 一对 id，调用方把后者
+     * 用在对应内容容器上（`role="tabpanel"` + `aria-labelledby` 指回标签
+     * id）即可组成完整的 tab/tabpanel 关系。不传时仅组件内部保持 id 唯一，
+     * 不与外部内容关联。
+     */
+    id?: string;
   }>(),
   {
     size: 'medium',
   },
 );
+
+const fallbackId = useId();
+const baseId = computed(() => props.id ?? fallbackId);
+
+defineExpose({
+  tabId: (value: string) => `${baseId.value}-tab-${value}`,
+  panelId: (value: string) => `${baseId.value}-panel-${value}`,
+});
 
 const model = defineModel<string>({ required: true });
 const root = ref<HTMLElement | null>(null);
@@ -51,13 +69,26 @@ function select(value: string) {
   }
 }
 
+function focusTab(value: string) {
+  void nextTick(() => {
+    root.value
+      ?.querySelector<HTMLElement>(`[data-segment-value="${CSS.escape(value)}"]`)
+      ?.focus();
+  });
+}
+
+function selectAndFocus(value: string) {
+  select(value);
+  focusTab(value);
+}
+
 function onKeydown(event: KeyboardEvent) {
   const index = selectedIndex.value;
   if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
     event.preventDefault();
     const next = props.segments[index + 1];
     if (next) {
-      select(next.value);
+      selectAndFocus(next.value);
     }
     return;
   }
@@ -65,7 +96,23 @@ function onKeydown(event: KeyboardEvent) {
     event.preventDefault();
     const prev = props.segments[index - 1];
     if (prev) {
-      select(prev.value);
+      selectAndFocus(prev.value);
+    }
+    return;
+  }
+  if (event.key === 'Home') {
+    event.preventDefault();
+    const first = props.segments[0];
+    if (first) {
+      selectAndFocus(first.value);
+    }
+    return;
+  }
+  if (event.key === 'End') {
+    event.preventDefault();
+    const last = props.segments[props.segments.length - 1];
+    if (last) {
+      selectAndFocus(last.value);
     }
   }
 }
@@ -97,10 +144,12 @@ watch(
     class="a-segmented"
     :class="`a-segmented--${size}`"
     role="tablist"
+    :aria-label="ariaLabel"
     @keydown="onKeydown"
   >
     <div
       class="a-segmented__thumb"
+      aria-hidden="true"
       :style="{
         width: `${thumbWidth}px`,
         transform: `translateX(${thumbX}px)`,
@@ -108,19 +157,23 @@ watch(
     />
     <button
       v-for="(segment, index) in segments"
+      :id="id ? `${baseId}-tab-${segment.value}` : undefined"
       :key="segment.value"
       class="a-segmented__tab"
       :class="{ 'a-segmented__tab--selected': segment.value === model }"
       type="button"
       role="tab"
+      :data-segment-value="segment.value"
       :aria-selected="segment.value === model"
+      :aria-controls="id ? `${baseId}-panel-${segment.value}` : undefined"
       :tabindex="segment.value === model ? 0 : -1"
       @click="select(segment.value)"
     >
       <span>{{ segment.label }}</span>
       <span
-        v-if="segment.badge != null && segment.badge > 0"
+        v-if="segment.badge != null"
         class="a-segmented__badge"
+        :class="{ 'a-segmented__badge--empty': segment.badge === 0 }"
       >
         {{ segment.badge }}
       </span>
@@ -208,8 +261,15 @@ watch(
 
 .a-segmented__badge {
   font: var(--text-caption);
-  color: var(--label-3);
+
+  /* 计数是信息，不能用只允许给占位符/禁用态的 --label-3（实测 1.73:1）。 */
+  color: var(--label-2);
   letter-spacing: var(--tracking-caption);
+}
+
+/* 0 本身就是「这里什么都没有」的状态，这时才轮到 --label-3 */
+.a-segmented__badge--empty {
+  color: var(--label-3);
 }
 
 .a-segmented__tab--selected .a-segmented__badge {

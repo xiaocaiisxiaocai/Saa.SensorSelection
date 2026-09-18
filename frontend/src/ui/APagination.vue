@@ -70,7 +70,7 @@ function onPageSizeChange(value: string | number | null) {
     <div class="a-pagination__pages">
       <AIconButton
         :icon="ChevronLeft"
-        label="上一页"
+        :label="page <= 1 ? '已经是第一页' : '上一页'"
         size="small"
         :disabled="page <= 1"
         @click="go(page - 1)"
@@ -80,7 +80,7 @@ function onPageSizeChange(value: string | number | null) {
         <AButton
           v-else
           size="small"
-          :variant="item === page ? 'filled' : 'borderless'"
+          :variant="item === page ? 'tinted' : 'borderless'"
           :aria-current="item === page ? 'page' : undefined"
           @click="go(item)"
         >
@@ -89,7 +89,7 @@ function onPageSizeChange(value: string | number | null) {
       </template>
       <AIconButton
         :icon="ChevronRight"
-        label="下一页"
+        :label="page >= pageCount ? '已经是最后一页' : '下一页'"
         size="small"
         :disabled="page >= pageCount"
         @click="go(page + 1)"

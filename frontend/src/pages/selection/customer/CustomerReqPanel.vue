@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { CustomerReqItem } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -42,6 +43,7 @@ const form = reactive({
   source: '',
   type: '',
 });
+const dirtyGuard = useDirtyGuard(form);
 
 const typeOptions = computed<SelectOption[]>(() =>
   store
@@ -87,12 +89,14 @@ const hasActiveFilters = computed(
 );
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'type', label: '要求分类', width: 90, fixed: 'start' },
+    // 136/108：最长字典值「02 两片检测标准」实测 113px、「04 产品迭代」84px，
+    // 加上单元格左右各 8px 内边距才不会折成两行把行高撑乱。
+    { key: 'type', label: '要求分类', width: 136, fixed: 'start', sortable: true },
     { key: 'machine', label: '适用机型', width: 90 },
     { key: 'process', label: '适用制程', width: 130 },
-    { key: 'content', label: '要求内容', minWidth: 230, ellipsis: true },
-    { key: 'source', label: '来源', width: 90 },
-    { key: 'note', label: '备注', minWidth: 140, ellipsis: true },
+    { key: 'content', label: '要求内容', minWidth: 230 },
+    { key: 'source', label: '来源', width: 108, sortable: true },
+    { key: 'note', label: '备注', minWidth: 140 },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
@@ -130,6 +134,7 @@ function resetFilters() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -144,6 +149,7 @@ function editItem(item: CustomerReqItem) {
     source: item.source,
     type: item.type,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -157,10 +163,15 @@ function saveItem() {
   );
   if (
     toastResult(result, editId.value ? '要求已更新' : '要求已新增', {
-      validation: '请填写要求内容并选择有效分类与来源',
       stale: '该要求已被其他页面删除',
     })
   ) {
+    dialogOpen.value = false;
+  }
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
     dialogOpen.value = false;
   }
 }
@@ -215,7 +226,7 @@ async function deleteItem(item: CustomerReqItem) {
           ? '没有匹配的要求记录'
           : '暂无要求记录'
       "
-      striped
+      @activate="writable && editItem($event)"
     >
       <template #cell-actions="{ row }">
         <div class="table-actions">
@@ -239,6 +250,7 @@ async function deleteItem(item: CustomerReqItem) {
       v-model:open="dialogOpen"
       :title="editId ? '编辑要求' : '新增要求'"
       :width="560"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid>
         <AFormRow
@@ -267,11 +279,12 @@ async function deleteItem(item: CustomerReqItem) {
           />
         </AFormRow>
         <AFormRow label="适用制程">
-          <AField v-model="form.process" :maxlength="100" />
+          <AField v-model="form.process" :maxlength="100" placeholder="如 ALL" />
         </AFormRow>
         <AFormRow
           label="要求内容"
           required
+          wide
           :error="
             validationAttempted && !form.content.trim()
               ? '请输入要求内容'
@@ -285,7 +298,7 @@ async function deleteItem(item: CustomerReqItem) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>

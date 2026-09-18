@@ -1,3 +1,9 @@
+/*
+ * 这 2px 内缩是留给焦点环的（--focus-ring 是 2px 外扩，overflow:hidden 会把
+ * 贴边控件的环裁掉）。它必须挂在 .selection-page 上，因为选型页和系统管理页
+ * 都用这一层：以前挂在 .selection-panel 上，只有带面板的选型页被内缩，导致
+ * 两类页面的内容左边界差 2px（170 vs 168），来回切换时内容会轻微跳动。
+ */
 .selection-page {
   display: flex;
   flex-direction: column;
@@ -5,6 +11,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  padding: var(--space-1);
   overflow: hidden;
 }
 
@@ -14,8 +21,27 @@
   gap: var(--space-3);
   min-width: 0;
   min-height: 0;
-  padding: var(--space-1);
   overflow: hidden;
+}
+
+/*
+ * 分段控件/Tab 切换出的内容区包装层：只在需要挂 role="tabpanel" 时才
+ * 插入这层 div，透明转发原本直接由 flex 父级给子面板的尺寸约束
+ * （flex:1 + min-height:0），不然子面板内部依赖“撑满剩余高度”的表格
+ * 会失去这个约束而溢出。
+ */
+.selection-tabpanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.selection-tabpanel:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .machine-body {
@@ -25,12 +51,6 @@
   gap: var(--space-4);
   min-width: 0;
   min-height: 0;
-}
-
-.docs-heading {
-  margin: 0;
-  font: var(--text-headline);
-  letter-spacing: var(--tracking-headline);
 }
 
 .selection-page > .selection-panel,
@@ -46,12 +66,14 @@
   align-items: center;
   min-width: 0;
   width: 100%;
-  box-shadow: inset 0 -0.5px 0 var(--separator);
 }
 
-.dictionary-header .a-tab-bar {
-  flex: 1;
+.dictionary-header .a-segmented {
   min-width: 0;
+}
+
+.dictionary-header .a-button {
+  margin-left: auto;
 }
 
 .selection-split {
@@ -129,10 +151,6 @@
   flex: 1 1 16rem;
   width: auto;
   min-width: 12rem;
-}
-
-.selection-toolbar .docs-heading {
-  margin-right: auto;
 }
 
 .table-actions {
@@ -236,6 +254,58 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sensor-type-chip {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.sensor-type-chip__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+}
+
+.sensor-column-menu__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 var(--space-1);
+  font: var(--text-caption);
+  font-weight: 600;
+  color: var(--label-on-color);
+  background: var(--sys-blue-solid);
+  border-radius: var(--radius-pill);
+}
+
+.sensor-column-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 200px;
+  padding: var(--space-2);
+}
+
+.sensor-column-menu__item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-2);
+  color: var(--label);
+  font: var(--text-control);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+
+.sensor-column-menu__item:hover {
+  background: var(--fill-4);
 }
 
 .machine-report {
@@ -441,8 +511,7 @@
   box-shadow: inset 0 0 0 1px var(--sys-blue);
 }
 
-.docs-list p,
-.docs-empty {
+.docs-list p {
   margin: 0;
   font: var(--text-caption);
   color: var(--label-2);

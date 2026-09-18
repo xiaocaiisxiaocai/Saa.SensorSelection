@@ -22,6 +22,7 @@
   --sys-teal-fill: rgb(48 176 199 / 14%);
   --sys-indigo-fill: rgb(88 86 214 / 14%);
   --focus-ring: 0 0 0 2px var(--sys-blue);
+  --focus-ring-offset: 0 0 0 2px var(--bg-content), 0 0 0 4px var(--sys-blue);
 
   --gray-1: #8e8e93;
   --gray-2: #aeaeb2;
@@ -43,10 +44,10 @@
   --scrollbar-thumb: rgb(60 60 67 / 22%);
   --scrollbar-thumb-hover: rgb(60 60 67 / 34%);
 
-  --fill-1: rgb(120 120 128 / 16%);
-  --fill-2: rgb(120 120 128 / 10%);
-  --fill-3: rgb(118 118 128 / 6%);
-  --fill-4: rgb(116 116 128 / 3%);
+  --fill-1: rgb(120 120 128 / 20%);
+  --fill-2: rgb(120 120 128 / 16%);
+  --fill-3: rgb(118 118 128 / 12%);
+  --fill-4: rgb(116 116 128 / 8%);
 
   --bg-window: #f5f5f7;
   --bg-content: #fff;
@@ -83,7 +84,7 @@
   --text-field-em: 600 13px/18px var(--font-ui);
   --text-toolbar: 400 12px/18px var(--font-ui);
   --text-toolbar-em: 600 12px/18px var(--font-ui);
-  --text-caption: 400 12px/18px var(--font-ui);
+  --text-caption: 400 13px/18px var(--font-ui);
   --tracking-display: -0.5px;
   --tracking-title-1: -0.4px;
   --tracking-title-2: -0.3px;
@@ -148,6 +149,11 @@
   --z-popover: 60;
   --z-overlay: 50;
   --z-toast: 70;
+
+  /* AAlertHost 常驻挂载在应用根部，DOM 位置天然早于任何后打开的 ASheet；
+     和 ASheet 共用 --z-overlay 会导致后开的 ASheet 按 DOM 序盖住确认框
+     （ASheet 的 confirmClose 场景下尤其明显）。独立给它最高一档。 */
+  --z-alert: 90;
   --overlay: rgb(0 0 0 / 24%);
   --overlay-blur: blur(2px);
   --switch-track-md-width: 38px;
@@ -181,6 +187,7 @@
   --sys-teal-fill: rgb(64 200 224 / 22%);
   --sys-indigo-fill: rgb(94 92 230 / 22%);
   --focus-ring: 0 0 0 2px var(--sys-blue);
+  --focus-ring-offset: 0 0 0 2px var(--bg-content), 0 0 0 4px var(--sys-blue);
 
   --gray-1: #8e8e93;
   --gray-2: #636366;

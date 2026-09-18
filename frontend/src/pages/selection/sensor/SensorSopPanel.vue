@@ -11,7 +11,14 @@ import { formatFileSize, readDataUrl } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AFileDrop, AIconButton, APdfViewer, ASearchField, ASheet } from '@/ui';
+import {
+  AEmptyState,
+  AFileDrop,
+  AIconButton,
+  APdfViewer,
+  ASearchField,
+  ASheet,
+} from '@/ui';
 
 const props = defineProps<{ focusSopId?: null | number }>();
 const emit = defineEmits<{ previewed: [id: number] }>();
@@ -81,7 +88,8 @@ async function remove(item: SensorSopItem) {
 
 <template>
   <div class="selection-panel">
-    <div class="selection-toolbar">
+    <!-- 一个文件都没有时没什么可搜的，搜索框只会占位 -->
+    <div v-if="files.length > 0" class="selection-toolbar">
       <ASearchField
         v-model="query"
         class="selection-toolbar__filter"
@@ -131,7 +139,16 @@ async function remove(item: SensorSopItem) {
         </div>
       </li>
     </ul>
-    <p v-else class="docs-empty">暂无型录文件</p>
+    <!--
+      可写用户看到的上传区本身就是空状态，再挂一句「拖入…上传」只是把同一
+      句话说两遍。空状态只留给：搜不到匹配，或只读用户（没有上传区）。
+    -->
+    <AEmptyState
+      v-else-if="query.trim()"
+      title="没有匹配的型录文件"
+      description="换个关键词，或清空搜索框查看全部文件"
+    />
+    <AEmptyState v-else-if="!writable" title="暂无型录文件" />
     <ASheet
       :open="Boolean(preview)"
       :title="preview?.title || '预览 PDF'"

@@ -190,7 +190,34 @@ public class AuditLogService(
         }
     }
 
-    /// <summary>分页查询操作日志（按时间倒序），支持按用户/操作/结果/时间范围筛选。</summary>
+    /// <summary>
+    /// 日志排序只能落在服务端：一页只有几十条，前端排序排不动整个结果集。
+    /// 白名单之外的列一律回落到时间倒序，Id 兼作稳定的次级排序键。
+    /// </summary>
+    private static IQueryable<AuditLog> ApplyOrder(
+        IQueryable<AuditLog> query,
+        string? sort,
+        string? direction)
+    {
+        var ascending = string.Equals(direction, "asc", StringComparison.OrdinalIgnoreCase);
+        return sort?.Trim().ToLowerInvariant() switch
+        {
+            "username" => ascending
+                ? query.OrderBy(log => log.Username).ThenBy(log => log.Id)
+                : query.OrderByDescending(log => log.Username).ThenByDescending(log => log.Id),
+            "action" => ascending
+                ? query.OrderBy(log => log.Action).ThenBy(log => log.Id)
+                : query.OrderByDescending(log => log.Action).ThenByDescending(log => log.Id),
+            "result" => ascending
+                ? query.OrderBy(log => log.Result).ThenBy(log => log.Id)
+                : query.OrderByDescending(log => log.Result).ThenByDescending(log => log.Id),
+            _ => ascending
+                ? query.OrderBy(log => log.Id)
+                : query.OrderByDescending(log => log.Id),
+        };
+    }
+
+    /// <summary>分页查询操作日志（默认时间倒序），支持按用户/操作/结果/时间范围筛选与排序。</summary>
     public async Task<AuditLogPage> QueryAsync(
         int page = 1,
         int pageSize = 20,
@@ -200,6 +227,8 @@ public class AuditLogService(
         bool? result = null,
         DateTimeOffset? from = null,
         DateTimeOffset? to = null,
+        string? sort = null,
+        string? direction = null,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -232,8 +261,7 @@ public class AuditLogService(
         }
 
         var total = await query.CountAsync(ct);
-        var items = await query
-            .OrderByDescending(log => log.Id)
+        var items = await ApplyOrder(query, sort, direction)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(log => new AuditLogItem(

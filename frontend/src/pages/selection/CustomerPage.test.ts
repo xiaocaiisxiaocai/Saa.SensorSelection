@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { ATokenField } from '@/ui';
+import { ASheet, ATokenField } from '@/ui';
 import CustomerPage from './CustomerPage.vue';
 
 async function mountPage(authenticated = false) {
@@ -41,6 +41,48 @@ describe('CustomerPage', () => {
     wrapper.unmount();
   });
 
+  it('wires a confirm-close guard on the sidebar create/edit region dialog', async () => {
+    const wrapper = await mountPage(true);
+    // EntitySource 的“新建/编辑区域”弹窗必须带 confirmClose，否则 Esc/点
+    // 遮罩会静默丢弃未保存的输入（回归自一次真实缺口：这个共享侧栏组件
+    // 之前完全没接未保存确认）。
+    const regionSheet = wrapper
+      .findAllComponents(ASheet)
+      .find((sheet) => /区域/.test(String(sheet.props('title'))));
+    expect(regionSheet).toBeDefined();
+    expect(typeof regionSheet!.props('confirmClose')).toBe('function');
+    wrapper.unmount();
+  });
+
+  it('associates each segmented tab with its tabpanel via matching ids', async () => {
+    const wrapper = await mountPage(true);
+    const clickTab = async (label: string) => {
+      const tab = wrapper
+        .findAll('[role="tab"]')
+        .find((button) => button.text().trim() === label);
+      expect(tab).toBeDefined();
+      await tab!.trigger('click');
+      await flushPromises();
+    };
+
+    for (const [label, value] of [
+      ['客户通用要求', 'req'],
+      ['制程注意事项', 'proc'],
+      ['感应器选用标准', 'sop'],
+      ['厂外反馈问题项', 'feedback'],
+    ] as const) {
+      await clickTab(label);
+      const tab = wrapper.get(`#customer-tabs-tab-${value}`);
+      expect(tab.attributes('aria-selected')).toBe('true');
+      const panel = wrapper.get(`#customer-tabs-panel-${value}`);
+      expect(panel.attributes('role')).toBe('tabpanel');
+      expect(panel.attributes('aria-labelledby')).toBe(
+        `customer-tabs-tab-${value}`,
+      );
+    }
+    wrapper.unmount();
+  });
+
   it('gives short fields less width and descriptive fields more width', async () => {
     const wrapper = await mountPage(true);
     const widths = Object.fromEntries(
@@ -49,12 +91,16 @@ describe('CustomerPage', () => {
         .map((header) => [header.text(), header.attributes('style')]),
     );
 
+    // 列宽由 ATable 在 JS 里算成具体像素后写成 width：table-layout:fixed
+    // 规范忽略单元格的 min-width，靠 CSS 写 min-width 的话这些列等于没有
+    // 宽度，会被平均分配。jsdom 没有布局，容器宽度为 0，所以弹性列正好
+    // 落在各自声明的下限上。
     expect(widths).toMatchObject({
       备注: 'width: 140px;',
-      来源: 'width: 90px;',
+      来源: 'width: 108px;',
       操作: 'width: 96px;',
       要求内容: 'width: 230px;',
-      要求分类: 'width: 90px;',
+      要求分类: 'width: 136px;',
       适用制程: 'width: 130px;',
       适用机型: 'width: 90px;',
     });
@@ -264,19 +310,19 @@ describe('CustomerPage', () => {
       备注: 'width: 130px;',
       操作: 'width: 96px;',
       制程作用: 'width: 150px;',
-      制程分类: 'width: 90px;',
+      制程分类: 'width: 104px;',
       制程特性: 'width: 150px;',
       sensor使用注意事项: 'width: 190px;',
     });
 
     await clickTab('厂外反馈问题项');
     expect(readWidths()).toMatchObject({
-      反馈时间: 'width: 100px;',
+      反馈时间: 'width: 120px;',
       处理状态: 'width: 90px;',
       操作: 'width: 96px;',
       改善对策: 'width: 205px;',
       适用机型: 'width: 90px;',
-      问题分类: 'width: 100px;',
+      问题分类: 'width: 168px;',
       问题点: 'width: 205px;',
     });
     wrapper.unmount();

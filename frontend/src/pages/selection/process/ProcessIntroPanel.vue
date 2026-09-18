@@ -13,7 +13,14 @@ import { formatFileSize, readDataUrl } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AFileDrop, AIconButton, APdfViewer, ASearchField, ASheet } from '@/ui';
+import {
+  AEmptyState,
+  AFileDrop,
+  AIconButton,
+  APdfViewer,
+  ASearchField,
+  ASheet,
+} from '@/ui';
 
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -69,7 +76,8 @@ async function remove(item: ControlledFileItem) {
 
 <template>
   <div class="selection-panel">
-    <div class="selection-toolbar">
+    <!-- 一个文件都没有时没什么可搜的，搜索框只会占位 -->
+    <div v-if="files.length > 0" class="selection-toolbar">
       <ASearchField
         v-model="query"
         class="selection-toolbar__filter"
@@ -125,6 +133,17 @@ async function remove(item: ControlledFileItem) {
         </div>
       </li>
     </ul>
+    <!--
+      可写用户看到的上传区本身就是空状态，再挂一个「拖入文件或点击上方区域
+      上传」只是把同一句话说两遍。所以空状态只留给两种情况：搜不到匹配，
+      或只读用户（没有上传区可看）。
+    -->
+    <AEmptyState
+      v-else-if="query.trim()"
+      title="没有匹配的文件"
+      description="换个关键词，或清空搜索框查看全部文件"
+    />
+    <AEmptyState v-else-if="!writable" title="暂无制程介绍文件" />
     <ASheet
       :open="Boolean(preview)"
       title="预览 PDF"

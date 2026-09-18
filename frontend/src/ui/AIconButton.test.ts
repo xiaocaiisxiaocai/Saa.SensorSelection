@@ -38,12 +38,18 @@ describe('AIconButton', () => {
     ).toThrow(/label/);
   });
 
-  it('expands the hit area for the small table size without enlarging the icon', () => {
+  it('keeps the small hit area inside the button box so it cannot grow scrollbars', () => {
     const wrapper = mount(AIconButton, {
       props: { icon: IconStub, label: '删除', size: 'small' },
     });
 
     expect(wrapper.get('button').classes()).toContain('a-icon-button--small');
-    expect(source).toMatch(/\.a-icon-button--small::before\s*\{/);
+    // 热区就是按钮本体（--control-height-sm = 26px ≥ 24px 下限）。
+    expect(source).toMatch(
+      /\.a-icon-button--small\s*\{[^}]*height:\s*var\(--control-height-sm\)/,
+    );
+    // 不允许再出现比按钮更大的绝对定位热区伪元素：它会计入祖先的可滚动溢出，
+    // 让 overflow:auto 的容器（如 .selection-page）凭空长出滚动条。
+    expect(source).not.toMatch(/\.a-icon-button[^{]*::before\s*\{/);
   });
 });

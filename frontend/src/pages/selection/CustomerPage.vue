@@ -65,27 +65,64 @@ function selectEntity(payload: { category: string; item: string }) {
         @select="selectEntity"
       />
       <div v-if="selection.item" class="selection-panel">
-        <ASegmentedControl v-model="customerTab" :segments="tabs" />
-        <CustomerReqPanel
+        <ASegmentedControl
+          id="customer-tabs"
+          v-model="customerTab"
+          aria-label="客户资料分类"
+          :segments="tabs"
+        />
+        <div
           v-if="customerTab === 'req'"
-          :key="`req:${selection.item}`"
-          :entity-name="selection.item"
-        />
-        <CustomerProcPanel
+          id="customer-tabs-panel-req"
+          role="tabpanel"
+          aria-labelledby="customer-tabs-tab-req"
+          tabindex="0"
+          class="selection-tabpanel"
+        >
+          <CustomerReqPanel
+            :key="`req:${selection.item}`"
+            :entity-name="selection.item"
+          />
+        </div>
+        <div
           v-else-if="customerTab === 'proc'"
-          :key="`proc:${selection.item}`"
-          :entity-name="selection.item"
-        />
-        <CustomerDocsPanel
+          id="customer-tabs-panel-proc"
+          role="tabpanel"
+          aria-labelledby="customer-tabs-tab-proc"
+          tabindex="0"
+          class="selection-tabpanel"
+        >
+          <CustomerProcPanel
+            :key="`proc:${selection.item}`"
+            :entity-name="selection.item"
+          />
+        </div>
+        <div
           v-else-if="customerTab === 'sop'"
-          :key="`sop:${selection.item}`"
-          :entity-name="selection.item"
-        />
-        <CustomerFeedbackPanel
-          v-else
-          :key="`feedback:${selection.item}`"
-          :entity-name="selection.item"
-        />
+          id="customer-tabs-panel-sop"
+          role="tabpanel"
+          aria-labelledby="customer-tabs-tab-sop"
+          tabindex="0"
+          class="selection-tabpanel"
+        >
+          <CustomerDocsPanel
+            :key="`sop:${selection.item}`"
+            :entity-name="selection.item"
+          />
+        </div>
+        <div
+          v-else-if="customerTab === 'feedback'"
+          id="customer-tabs-panel-feedback"
+          role="tabpanel"
+          aria-labelledby="customer-tabs-tab-feedback"
+          tabindex="0"
+          class="selection-tabpanel"
+        >
+          <CustomerFeedbackPanel
+            :key="`feedback:${selection.item}`"
+            :entity-name="selection.item"
+          />
+        </div>
       </div>
       <AEmptyState v-else title="暂无客户，请在左侧新建区域和客户" />
     </div>

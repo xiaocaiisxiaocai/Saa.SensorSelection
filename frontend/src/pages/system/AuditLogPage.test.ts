@@ -41,7 +41,12 @@ describe('AuditLogPage', () => {
       expect(wrapper.find('.a-table').text()).toContain('查看');
     });
 
-    await wrapper.get('.a-table button').trigger('click');
+    // 表头现在也有排序按钮，必须精确点到行内的「查看」，不能取第一个 button。
+    const detailButton = wrapper
+      .findAll('.a-table tbody button')
+      .find((button) => button.text() === '查看');
+    expect(detailButton).toBeDefined();
+    await detailButton!.trigger('click');
     expect(document.body.textContent).toContain('操作详情');
     expect(document.body.textContent).toContain('日志编号');
     expect(document.body.textContent).toContain('操作编码');
@@ -96,5 +101,32 @@ describe('AuditLogPage', () => {
     expect(auditSource).toMatch(
       /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
     );
+  });
+
+  it('has a Chinese label for every audit action the backend can write', () => {
+    // 少一条就会在表格里直接显示原始操作码（如 store.entity-groups.reorder），
+    // 又长又要折行。后端新增操作码时这里必须同步。
+    const backendActions = [
+      'auth.change-password',
+      'auth.login',
+      'org.create',
+      'org.delete',
+      'org.update',
+      'role.create',
+      'role.delete',
+      'role.update',
+      'store.delete',
+      'store.entity-groups.reorder',
+      'store.replace-all',
+      'store.upsert',
+      'user.create',
+      'user.delete',
+      'user.reset-password',
+      'user.update',
+    ];
+    const missing = backendActions.filter(
+      (action) => !auditSource.includes(`'${action}': '`),
+    );
+    expect(missing).toEqual([]);
   });
 });

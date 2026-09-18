@@ -227,7 +227,7 @@ describe('MachinePage', () => {
     expect(wrapper.text()).toContain('目录浏览');
     expect(wrapper.text()).toContain('条件查找');
     expect(wrapper.get('.selection-split').attributes('style')).toContain(
-      '--machine-source-width: 240px',
+      '--machine-source-width: 280px',
     );
 
     wrapper.getComponent(EntitySource).vm.$emit('resize', 300);
@@ -861,24 +861,24 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('uses the compact caption scale for source controls and trees', () => {
+  it('uses the default control scale for sidebar entity text, keeping counts and small action buttons compact', () => {
     expect(machinePageSource).toMatch(
       /\.machine-source-stack\s*\{[^}]*gap:\s*var\(--space-2\);/s,
     );
     expect(machinePageSource).toMatch(
-      /\.machine-catalog-tabs :deep\(\.a-tab-bar__tab\)\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-caption\);/s,
+      /\.machine-catalog-tabs :deep\(\.a-tab-bar__tab\)\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-control\);/s,
     );
     expect(machineSourceListSource).toMatch(
-      /\.machine-tree-row\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+      /\.machine-tree-row\s*\{[^}]*font:\s*var\(--text-control\);/s,
     );
     expect(machineSourceListSource).toMatch(
-      /\.machine-source__search\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-caption\);/s,
+      /\.machine-source__search\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-control\);/s,
     );
     expect(machineSourceListSource).toMatch(
       /\.machine-source__action\s*\{[^}]*height:\s*var\(--control-height-sm\);[^}]*font:\s*var\(--text-caption\);/s,
     );
     expect(sharedSourceListSource).toMatch(
-      /\.a-source-list__toggle,\s*\.a-source-list__item\s*\{[^}]*font:\s*var\(--text-caption\);/s,
+      /\.a-source-list__toggle,\s*\.a-source-list__item\s*\{[^}]*font:\s*var\(--text-control\);/s,
     );
     expect(sharedSourceListSource).toMatch(
       /\.a-source-list__count\s*\{[^}]*font:\s*var\(--text-caption\);/s,

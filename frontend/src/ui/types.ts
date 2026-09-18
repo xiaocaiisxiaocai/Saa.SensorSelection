@@ -57,10 +57,18 @@ export interface TableColumn<T = unknown> {
   width?: number;
   minWidth?: number;
   align?: TableAlign;
-  ellipsis?: boolean;
   mono?: boolean;
   fixed?: 'start' | 'end';
   rowSpan?: (row: T, rowIndex: number) => number;
+  /** 允许点击表头排序；与 rowSpan（合并单元格）互斥，存在合并列时会被忽略 */
+  sortable?: boolean;
+}
+
+export type TableSortDirection = 'ascending' | 'descending';
+
+export interface TableSortState {
+  key: string;
+  direction: TableSortDirection;
 }
 
 export type SegmentedSize = 'medium' | 'large';

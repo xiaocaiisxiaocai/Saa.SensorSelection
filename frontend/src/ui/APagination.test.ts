@@ -31,13 +31,24 @@ describe('APagination', () => {
     expect(wrapper.emitted('update:page')?.[0]).toEqual([2]);
   });
 
-  it('does not go past the last page', async () => {
+  it('does not go past the last page, and says why it is disabled', () => {
     const wrapper = mount(APagination, {
       props: { page: 4, pageSize: 20, total: 80 },
     });
 
+    // 禁用态要把原因说清楚，不能只留一个通用的「下一页」标签。
+    const next = wrapper.get('[aria-label="已经是最后一页"]');
+    expect(next.attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[aria-label="下一页"]').exists()).toBe(false);
+  });
+
+  it('explains the disabled previous button on the first page', () => {
+    const wrapper = mount(APagination, {
+      props: { page: 1, pageSize: 20, total: 80 },
+    });
+
     expect(
-      wrapper.get('[aria-label="下一页"]').attributes('disabled'),
+      wrapper.get('[aria-label="已经是第一页"]').attributes('disabled'),
     ).toBeDefined();
   });
 });

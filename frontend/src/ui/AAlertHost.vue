@@ -24,7 +24,7 @@ function onOpenChange(open: boolean) {
 <template>
   <AlertDialogRoot :open="Boolean(request)" @update:open="onOpenChange">
     <AlertDialogPortal>
-      <AlertDialogOverlay class="a-sheet__overlay" />
+      <AlertDialogOverlay class="a-sheet__overlay a-alert__overlay" />
       <AlertDialogContent v-if="request" class="a-alert">
         <AlertDialogTitle class="a-alert__title">
           {{ request.title }}
@@ -52,11 +52,19 @@ function onOpenChange(open: boolean) {
 </template>
 
 <style>
+/* 复合选择器保证特异度高于 overlay.css 里共用的 .a-sheet__overlay，
+   不依赖两处样式表的导入顺序。 */
+.a-sheet__overlay.a-alert__overlay {
+  /* AAlertHost 常驻挂载在应用根部，DOM 位置比后打开的 ASheet 靠前，
+     必须用独立、更高的层级盖过它，否则确认框会被已打开的表单弹窗压住。 */
+  z-index: var(--z-alert);
+}
+
 .a-alert {
   position: fixed;
   top: 50%;
   left: 50%;
-  z-index: var(--z-overlay);
+  z-index: var(--z-alert);
   display: grid;
   gap: var(--space-4);
   width: calc(var(--space-8) * 10);

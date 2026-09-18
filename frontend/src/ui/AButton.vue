@@ -107,15 +107,25 @@ function onClick(event: MouseEvent) {
 .a-button--filled {
   color: var(--label-on-color);
   background: var(--sys-blue-solid);
+  box-shadow: var(--shadow-1);
+}
+
+.a-button--filled:focus-visible {
+  box-shadow: var(--focus-ring-offset), var(--shadow-1);
 }
 
 .a-button--filled:hover:not(:disabled) {
   filter: brightness(1.08);
+  box-shadow: var(--shadow-2);
 }
 
 .a-button--tinted {
   color: var(--sys-blue);
   background: var(--sys-blue-fill);
+}
+
+.a-button--tinted:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .a-button--tinted:hover:not(:disabled) {
@@ -128,6 +138,10 @@ function onClick(event: MouseEvent) {
   box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
+.a-button--plain:focus-visible {
+  box-shadow: var(--focus-ring), inset 0 0 0 0.5px var(--separator);
+}
+
 .a-button--plain:hover:not(:disabled) {
   background: var(--fill-4);
 }
@@ -137,6 +151,10 @@ function onClick(event: MouseEvent) {
   background: transparent;
 }
 
+.a-button--borderless:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
 .a-button--borderless:hover:not(:disabled) {
   background: var(--fill-4);
 }
@@ -144,6 +162,16 @@ function onClick(event: MouseEvent) {
 .a-button--destructive {
   color: var(--sys-red);
   background: var(--sys-red-fill);
+}
+
+.a-button--destructive:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+/* 破坏性按钮禁用时转中性灰，不保留红色警示（Apple 惯例：禁用态不借用强调色） */
+.a-button--destructive:disabled {
+  color: var(--label-3);
+  background: var(--fill-2);
 }
 
 .a-button--destructive:hover:not(:disabled) {

@@ -314,4 +314,68 @@ public class AuditTests
         Assert.Equal("customer-req:客户1",
             filtered.GetProperty("items")[0].GetProperty("target").GetString());
     }
+
+    [Fact]
+    public async Task Query_SortsAcrossThePagedResultSet_NotJustOnePage()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        for (var i = 1; i <= 5; i++)
+        {
+            var write = await admin.PutAsJsonAsync(
+                StoreRoute($"customer-req:排序{i}"),
+                JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
+            Assert.Equal(HttpStatusCode.OK, write.StatusCode);
+        }
+
+        // 默认时间倒序：第一页第一条是最后写入的那次。
+        var newestFirst = await QueryAuditLogsAsync(
+            admin,
+            "?action=store.upsert&page=1&pageSize=1");
+        Assert.Equal(
+            "customer-req:排序5",
+            newestFirst.GetProperty("items")[0].GetProperty("target").GetString());
+
+        // 升序：第一页第一条必须是整个结果集里最旧的那条，而不是
+        // 「把倒序的第一页那一条就地翻转」得到的结果。
+        var oldestFirst = await QueryAuditLogsAsync(
+            admin,
+            "?action=store.upsert&page=1&pageSize=1&sort=timestamp&direction=asc");
+        Assert.Equal(
+            "customer-req:排序1",
+            oldestFirst.GetProperty("items")[0].GetProperty("target").GetString());
+
+        // 未知列回落到默认时间倒序，不报错也不返回乱序。
+        var unknownColumn = await QueryAuditLogsAsync(
+            admin,
+            "?action=store.upsert&page=1&pageSize=1&sort=drop%20table&direction=asc");
+        Assert.Equal(
+            "customer-req:排序1",
+            unknownColumn.GetProperty("items")[0].GetProperty("target").GetString());
+    }
+
+    [Fact]
+    public async Task Query_SortsByUsernameAcrossPages()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        using var anon = factory.CreateClient();
+
+        // 匿名登录失败会写入一条 username 为 zzz_last 的日志。
+        var failed = await anon.PostAsJsonAsync(
+            "/api/auth/login",
+            new { username = "zzz_last", password = "wrong-password" });
+        Assert.Equal(HttpStatusCode.Unauthorized, failed.StatusCode);
+
+        var ascending = await QueryAuditLogsAsync(
+            admin,
+            "?action=auth.login&pageSize=50&sort=username&direction=asc");
+        var names = ascending.GetProperty("items")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("username").GetString())
+            .ToArray();
+
+        Assert.Equal(names.OrderBy(name => name, StringComparer.Ordinal), names);
+    }
 }

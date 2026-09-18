@@ -36,7 +36,12 @@ function push(tone: ToastTone, message: string) {
   }
   items.value = next.slice(-3);
 
-  const duration = tone === 'error' ? 4000 : 2400;
+  // 错误需要用户读完并可以手动关闭，不再限时自动消失；
+  // 其余提示保持短暂自动消失，但比原来的 2.4s 留出更从容的阅读时间。
+  if (tone === 'error') {
+    return;
+  }
+  const duration = 3200;
   timers.set(
     id,
     setTimeout(() => {

@@ -4,13 +4,15 @@ import {
   CircleCheck,
   Info,
   TriangleAlert,
+  X,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 
+import AIconButton from './AIconButton.vue';
 import type { ToastTone } from './toast';
 import { useToastState } from './toast';
 
-const { items } = useToastState();
+const { items, dismiss } = useToastState();
 
 const livePolite = computed(() =>
   items.value.filter((item) => item.tone !== 'error'),
@@ -28,7 +30,7 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
 </script>
 
 <template>
-  <div class="a-toast-host" aria-hidden="true">
+  <div class="a-toast-host">
     <div
       v-for="item in items"
       :key="item.id"
@@ -40,8 +42,16 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
         class="a-toast__icon"
         :size="16"
         :stroke-width="1.5"
+        aria-hidden="true"
       />
       <p class="a-toast__message">{{ item.message }}</p>
+      <AIconButton
+        class="a-toast__close"
+        :icon="X"
+        label="关闭提示"
+        size="small"
+        @click="dismiss(item.id)"
+      />
     </div>
   </div>
   <div class="visually-hidden" aria-live="polite" aria-atomic="true">
@@ -54,8 +64,13 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
 
 <style>
 .a-toast-host {
+  /*
+   * 底部居中：顶部居中会盖住全局搜索框，右上角会盖住每个页面的主操作按钮
+   * （新增要求/新增型号…）。错误提示现在不会自动消失，盖住可点区域就等于
+   * 把主操作永久锁死。底部中间左右两侧分别是分页的条数和页码，正中是空的。
+   */
   position: fixed;
-  top: var(--space-3);
+  bottom: var(--space-5);
   left: 50%;
   z-index: var(--z-toast);
   display: flex;
@@ -71,10 +86,11 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
   gap: var(--space-2);
   align-items: center;
   max-width: min(24rem, calc(100vw - var(--space-8)));
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   color: var(--label);
+  pointer-events: auto;
   background: var(--material-menu-bg);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3), inset 0 0 0 0.5px var(--separator);
   backdrop-filter: var(--material-blur);
   -webkit-backdrop-filter: var(--material-blur);
@@ -102,9 +118,15 @@ const icons: Record<ToastTone, typeof CircleCheck> = {
 }
 
 .a-toast__message {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font: var(--text-control);
   color: var(--label);
+}
+
+.a-toast__close {
+  flex-shrink: 0;
 }
 
 @keyframes a-toast-in {

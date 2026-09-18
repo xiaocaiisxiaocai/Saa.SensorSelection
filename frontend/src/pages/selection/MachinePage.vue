@@ -24,6 +24,7 @@ import type {
   MachineStructureSearchDocument,
   MachineStructureSearchResult,
 } from '@/pages/selection/machine/machine-structure-search';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useAccess, useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -73,6 +74,8 @@ const processForm = reactive({
   name: '',
   sort: 1,
 });
+const dirtyGuard = useDirtyGuard(form);
+const processDirtyGuard = useDirtyGuard(processForm);
 const activeSection = ref('');
 const checkedMachineKeys = ref<string[]>([]);
 const reportGenerating = ref(false);
@@ -643,6 +646,7 @@ function resetProcessForm() {
 
 function openProcessManager() {
   resetProcessForm();
+  processDirtyGuard.markClean();
   processDialogOpen.value = true;
 }
 
@@ -650,6 +654,13 @@ function editProcess(item: MachineProcessItem) {
   processValidationAttempted.value = false;
   processEditId.value = item.id;
   Object.assign(processForm, { name: item.name, sort: item.sort });
+  processDirtyGuard.markClean();
+}
+
+async function closeProcessManager() {
+  if (await processDirtyGuard.confirmClose()) {
+    processDialogOpen.value = false;
+  }
 }
 
 function saveProcess() {
@@ -661,11 +672,11 @@ function saveProcess() {
   if (
     toastResult(result, processEditId.value ? '制程已更新' : '制程已新增', {
       duplicate: '该制程名称已存在',
-      validation: '请填写制程名称',
       stale: '该制程已被删除，请刷新后重试',
     })
   ) {
     resetProcessForm();
+    processDirtyGuard.markClean();
   }
 }
 
@@ -778,6 +789,7 @@ function openAddTab() {
     name: '',
     sort: displaySections.value.length + 1,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -793,7 +805,14 @@ function openRenameTab(value: string) {
     name: section.name,
     sort: section.sort,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelTabDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function saveTab() {
@@ -809,7 +828,6 @@ function saveTab() {
   if (
     toastResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
       duplicate: '该 Tab 名称已存在',
-      validation: '请填写 Tab 名称',
       'not-empty': '请先清空该 Tab 的数据和示意图后再修改类型',
       stale: '该 Tab 已被删除，请刷新后重试',
     })
@@ -876,6 +894,7 @@ async function closeTab(value: string) {
         </div>
         <ATabBar
           class="machine-catalog-tabs"
+          aria-label="机型目录"
           :model-value="activeMachineType"
           :tabs="machineCatalogTabs"
           @update:model-value="selectMachineCatalog"
@@ -886,6 +905,7 @@ async function closeTab(value: string) {
         >
           <ATabBar
             class="machine-view-tabs"
+            aria-label="机型浏览方式"
             :model-value="activeMachineView"
             :tabs="machineViewTabs"
             @update:model-value="selectMachineView"
@@ -916,7 +936,9 @@ async function closeTab(value: string) {
       <div v-else-if="selection.item" class="selection-panel">
         <div class="machine-panel-header">
           <ATabBar
+            id="machine-section-tabs"
             class="machine-section-tabs"
+            aria-label="机型内容分区"
             :model-value="activeSection"
             :tabs="tabs"
             :addable="writable"
@@ -991,26 +1013,39 @@ async function closeTab(value: string) {
             </ATooltip>
           </div>
         </div>
-        <MachineSectionPanel
-          v-if="activeSectionItem"
-          :machine-name="selection.item"
-          :process-id="activeProcessId"
-          :section="activeSectionItem"
-          :focus-row-id="Number(route.query.focusRow) || undefined"
-        />
-        <AEmptyState
-          v-else
-          title="暂无 Tab"
-          description="请新增“结构”或“机型注意事项”Tab"
+        <div
+          :id="`machine-section-tabs-panel-${activeSection}`"
+          role="tabpanel"
+          :aria-labelledby="`machine-section-tabs-tab-${activeSection}`"
+          tabindex="0"
+          class="selection-tabpanel"
         >
-          <template v-if="writable" #action>
-            <AButton variant="filled" @click="openAddTab">新增 Tab</AButton>
-          </template>
-        </AEmptyState>
+          <MachineSectionPanel
+            v-if="activeSectionItem"
+            :machine-name="selection.item"
+            :process-id="activeProcessId"
+            :section="activeSectionItem"
+            :focus-row-id="Number(route.query.focusRow) || undefined"
+          />
+          <AEmptyState
+            v-else
+            title="暂无 Tab"
+            description="请新增“结构”或“机型注意事项”Tab"
+          >
+            <template v-if="writable" #action>
+              <AButton variant="filled" @click="openAddTab">新增 Tab</AButton>
+            </template>
+          </AEmptyState>
+        </div>
       </div>
       <AEmptyState v-else title="暂无机型，请在左侧新建分类和机型" />
     </div>
-    <ASheet v-model:open="processDialogOpen" title="管理制程" :width="520">
+    <ASheet
+      v-model:open="processDialogOpen"
+      title="管理制程"
+      :width="520"
+      :confirm-close="processDirtyGuard.confirmClose"
+    >
       <div class="machine-process-list">
         <div
           v-for="item in processes"
@@ -1033,7 +1068,7 @@ async function closeTab(value: string) {
               :icon="Trash2"
               label="删除制程"
               size="small"
-              tone="danger"
+              variant="destructive"
               @click="removeProcess(item)"
             />
           </div>
@@ -1071,13 +1106,14 @@ async function closeTab(value: string) {
         </div>
       </div>
       <template #footer>
-        <AButton @click="processDialogOpen = false">完成</AButton>
+        <AButton @click="closeProcessManager">完成</AButton>
       </template>
     </ASheet>
     <ASheet
       v-model:open="dialogOpen"
       :title="editId ? '编辑 Tab' : '新增 Tab'"
       :width="420"
+      :confirm-close="dirtyGuard.confirmClose"
     >
       <AFormGrid :columns="1">
         <AFormRow
@@ -1105,7 +1141,7 @@ async function closeTab(value: string) {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelTabDialog">取消</AButton>
         <AButton variant="filled" @click="saveTab">保存</AButton>
       </template>
     </ASheet>
@@ -1175,7 +1211,7 @@ async function closeTab(value: string) {
   flex: 1;
   justify-content: center;
   height: var(--control-height-md);
-  font: var(--text-caption);
+  font: var(--text-control);
 }
 
 .machine-catalog-tabs :deep(.a-tab-bar__item),
@@ -1209,9 +1245,9 @@ async function closeTab(value: string) {
 .machine-view-tabs :deep(.a-tab-bar__tab) {
   flex: 1;
   justify-content: center;
-  min-height: var(--control-height-sm);
+  min-height: var(--control-height-md);
   border-radius: var(--radius-sm);
-  font: var(--text-caption);
+  font: var(--text-control);
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 

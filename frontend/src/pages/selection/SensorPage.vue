@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { Download, Eye, Pencil, Replace, Trash2 } from 'lucide-vue-next';
+import {
+  Columns3,
+  Download,
+  Eye,
+  Pencil,
+  Replace,
+  Trash2,
+} from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -10,6 +17,7 @@ import {
   type SensorFileItem,
   type SensorItem,
 } from '@/domain';
+import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import SensorSopPanel from '@/pages/selection/sensor/SensorSopPanel.vue';
@@ -21,6 +29,7 @@ import { useSelectionStore } from '@/stores/selection';
 import { toast } from '@/ui/toast';
 import {
   ABadge,
+  ACheckbox,
   AButton,
   AField,
   AFilterResetButton,
@@ -29,6 +38,7 @@ import {
   AIconButton,
   APagination,
   APdfViewer,
+  APopover,
   ASearchField,
   ASegmentedControl,
   ASelect,
@@ -36,10 +46,12 @@ import {
   ATable,
   ATextArea,
   ATokenField,
+  sortRows,
   type BadgeTone,
   type SegmentOption,
   type SelectOption,
   type TableColumn,
+  type TableSortState,
 } from '@/ui';
 
 import '../shared/selection-page.css';
@@ -66,10 +78,63 @@ const linkedPreview = ref<{
   kind: '3D' | '型录';
 } | null>(null);
 const replaceSource = ref<SensorItem | null>(null);
-const replaceTargetId = ref<number | null>(null);
-const replaceNote = ref('');
 const page = ref(1);
 const pageSize = ref(20);
+const sort = ref<TableSortState | null>(null);
+
+// ── 列可见性 ──────────────────────────────────────────────────────
+// 型号表格列数多、内容长，1440px 下仍要横向滚动才能看到「关联型录/3D」。
+// 状态/料号/类型/品牌/型号/操作是识别与操作的必需列，不提供隐藏；
+// 其余描述性列允许按需隐藏，选择记忆在本地。
+const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
+  { key: 'relation', label: '替换关系' },
+  { key: 'spec', label: '规格参数' },
+  { key: 'feature', label: '特性与注意' },
+  { key: 'scene', label: '适用场景' },
+  { key: 'sop', label: '关联型录' },
+  { key: 'model3d', label: '关联 3D' },
+];
+const COLUMN_VISIBILITY_STORAGE_KEY = 'selection:sensor-table:hidden-columns:v1';
+const hiddenColumnKeys = ref<Set<string>>(restoreHiddenColumns());
+const columnMenuOpen = ref(false);
+
+function restoreHiddenColumns(): Set<string> {
+  try {
+    const stored = localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY);
+    if (!stored) return new Set();
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return new Set();
+    const allowed = new Set(HIDEABLE_COLUMNS.map((column) => column.key));
+    return new Set(
+      parsed.filter(
+        (key): key is string => typeof key === 'string' && allowed.has(key),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistHiddenColumns() {
+  try {
+    localStorage.setItem(
+      COLUMN_VISIBILITY_STORAGE_KEY,
+      JSON.stringify([...hiddenColumnKeys.value]),
+    );
+  } catch {
+    // 本地存储不可用时，本次会话内的选择仍然有效，静默忽略即可。
+  }
+}
+
+function toggleColumnVisible(key: string, visible: boolean) {
+  const next = new Set(hiddenColumnKeys.value);
+  if (visible) next.delete(key);
+  else next.add(key);
+  hiddenColumnKeys.value = next;
+  persistHiddenColumns();
+}
+
+const hiddenColumnCount = computed(() => hiddenColumnKeys.value.size);
 const form = reactive({
   brand: '',
   feature: '',
@@ -82,6 +147,12 @@ const form = reactive({
   spec: '',
   status: '',
 });
+const dirtyGuard = useDirtyGuard(form);
+const replaceForm = reactive({
+  note: '',
+  targetId: null as number | null,
+});
+const replaceDirtyGuard = useDirtyGuard(replaceForm);
 
 const statusNames = computed(() => {
   const names = store.dictionaryNames('sensor-status');
@@ -94,6 +165,21 @@ const typeOptions = computed<SelectOption[]>(() =>
     .dictionaryNames('sensor-type')
     .map((name) => ({ label: name, value: name })),
 );
+const TYPE_ACCENT_VARS = [
+  '--sys-teal',
+  '--sys-indigo',
+  '--sys-purple',
+  '--sys-pink',
+  '--sys-yellow',
+] as const;
+function typeAccent(label: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < label.length; index += 1) {
+    hash ^= label.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `var(${TYPE_ACCENT_VARS[(hash >>> 0) % TYPE_ACCENT_VARS.length]})`;
+}
 const statusOptions = computed<SelectOption[]>(() =>
   statusNames.value.map((name) => ({ label: name, value: name })),
 );
@@ -179,35 +265,52 @@ const items = computed(() => {
     return !value || haystack.includes(value);
   });
 });
+// 排序必须发生在分页切片之前，否则只会把当前这一页重排。
+const sortedItems = computed(() => sortRows(items.value, sort.value));
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
-  return items.value.slice(start, start + pageSize.value);
+  return sortedItems.value.slice(start, start + pageSize.value);
 });
 const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [
-    { key: 'status', label: '状态', width: 88, fixed: 'start' },
-    { key: 'partNumber', label: '料号', width: 120, mono: true },
-    { key: 'sensorType', label: '感应器类型', width: 120 },
-    { key: 'brand', label: '品牌', width: 88 },
-    { key: 'model', label: '型号', width: 140, mono: true },
+  const baseColumns: TableColumn[] = [
+    { key: 'status', label: '状态', width: 88, fixed: 'start', sortable: true },
+    {
+      key: 'partNumber',
+      label: '料号',
+      width: 120,
+      mono: true,
+      sortable: true,
+    },
+    { key: 'sensorType', label: '感应器类型', width: 120, sortable: true },
+    { key: 'brand', label: '品牌', width: 88, sortable: true },
+    { key: 'model', label: '型号', width: 140, mono: true, sortable: true },
     ...(showDisabledDetails.value
       ? [
-          { key: 'replacedAt', label: '停用时间', width: 112 },
+          {
+            key: 'replacedAt',
+            label: '停用时间',
+            width: 112,
+            sortable: true,
+          },
           {
             key: 'problemNote',
             label: '停用原因',
             minWidth: 180,
-            ellipsis: true,
           },
         ]
       : []),
-    { key: 'relation', label: '替换关系', minWidth: 180 },
-    { key: 'spec', label: '规格参数', minWidth: 180, ellipsis: true },
-    { key: 'feature', label: '特性与注意', minWidth: 200, ellipsis: true },
-    { key: 'scene', label: '适用场景', minWidth: 160, ellipsis: true },
-    { key: 'sop', label: '关联型录', minWidth: 140 },
-    { key: 'model3d', label: '关联 3D', minWidth: 140 },
+    // 以下三列内容都很短（多数是「—」或一个文件名），固定宽度，别让它们
+    // 按比例分走多余空间——那些空间应该留给规格参数/特性与注意。
+    { key: 'relation', label: '替换关系', width: 180 },
+    { key: 'spec', label: '规格参数', minWidth: 180 },
+    { key: 'feature', label: '特性与注意', minWidth: 200 },
+    { key: 'scene', label: '适用场景', minWidth: 160 },
+    { key: 'sop', label: '关联型录', width: 140 },
+    { key: 'model3d', label: '关联 3D', width: 140 },
   ];
+  const cols = baseColumns.filter(
+    (column) => !hiddenColumnKeys.value.has(column.key),
+  );
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
   }
@@ -287,7 +390,7 @@ watch(
     }
   },
 );
-watch([query, sensorTypeFilters, mainTab, pageSize], () => {
+watch([query, sensorTypeFilters, mainTab, pageSize, sort], () => {
   page.value = 1;
 });
 watch(mainTab, (tab) => {
@@ -460,6 +563,7 @@ function exportExcel() {
 
 function addItem() {
   resetForm();
+  dirtyGuard.markClean();
   dialogOpen.value = true;
 }
 
@@ -478,7 +582,14 @@ function editItem(item: SensorItem) {
     spec: item.spec,
     status: item.status,
   });
+  dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+async function cancelDialog() {
+  if (await dirtyGuard.confirmClose()) {
+    dialogOpen.value = false;
+  }
 }
 
 function saveItem() {
@@ -500,7 +611,6 @@ function saveItem() {
   if (
     toastResult(result, editId.value ? '型号已更新' : '型号已新增', {
       duplicate: '该型号已存在，请使用不同的型号名称',
-      validation: '请填写型号并选择感应器类型',
       stale: '该型号已被其他页面删除',
     })
   ) {
@@ -582,33 +692,30 @@ function openRelatedSensor(item: SensorItem) {
 function openReplace(item: SensorItem) {
   replaceValidationAttempted.value = false;
   replaceSource.value = item;
-  replaceTargetId.value = null;
-  replaceNote.value = '';
+  Object.assign(replaceForm, { note: '', targetId: null });
+  replaceDirtyGuard.markClean();
   replaceOpen.value = true;
+}
+
+async function cancelReplaceDialog() {
+  if (await replaceDirtyGuard.confirmClose()) {
+    replaceOpen.value = false;
+  }
 }
 
 function saveReplace() {
   const source = replaceSource.value;
   if (!source) return;
   replaceValidationAttempted.value = true;
-  if (!replaceTargetId.value) {
-    toast.error('请选择要替换的现用型号');
-    return;
-  }
-  if (!replaceNote.value.trim()) {
-    toast.error('请填写问题点');
+  if (!replaceForm.targetId || !replaceForm.note.trim()) {
     return;
   }
   const result = store.replaceSensorCurrent(
     source.id,
-    replaceTargetId.value,
-    replaceNote.value,
+    replaceForm.targetId,
+    replaceForm.note,
   );
-  if (
-    toastResult(result, '已替换现用型号，原型号已停用', {
-      validation: '仅备选可替换现用，且必须填写问题点',
-    })
-  ) {
+  if (toastResult(result, '已替换现用型号，原型号已停用')) {
     replaceOpen.value = false;
     mainTab.value =
       findSensorStatusName(statusNames.value, 'current') || '全部';
@@ -619,19 +726,45 @@ function saveReplace() {
 <template>
   <section class="selection-page">
     <h1 class="visually-hidden">Sensor型号</h1>
-    <ASegmentedControl v-model="sectionTab" :segments="tabs" />
-    <SensorSopFilePanel v-if="mainTab === 'sop-library'" />
+    <ASegmentedControl
+      id="sensor-tabs"
+      v-model="sectionTab"
+      aria-label="Sensor 资料分类"
+      :segments="tabs"
+    />
+    <SensorSopFilePanel
+      v-if="mainTab === 'sop-library'"
+      id="sensor-tabs-panel-sop-library"
+      role="tabpanel"
+      aria-labelledby="sensor-tabs-tab-sop-library"
+      tabindex="0"
+    />
     <SensorSopPanel
       v-else-if="mainTab === 'sop'"
+      id="sensor-tabs-panel-sop"
+      role="tabpanel"
+      aria-labelledby="sensor-tabs-tab-sop"
+      tabindex="0"
       :focus-sop-id="focusSopId"
       @previewed="focusSopId = $event"
     />
     <Sensor3dPanel
       v-else-if="mainTab === '3d'"
+      id="sensor-tabs-panel-3d"
+      role="tabpanel"
+      aria-labelledby="sensor-tabs-tab-3d"
+      tabindex="0"
       :focus-model3d-id="focusModel3dId"
       @previewed="focusModel3dId = $event"
     />
-    <div v-else class="selection-panel">
+    <div
+      v-else
+      id="sensor-tabs-panel-models"
+      role="tabpanel"
+      aria-labelledby="sensor-tabs-tab-models"
+      tabindex="0"
+      class="selection-panel"
+    >
       <div class="selection-toolbar">
         <ASelect
           v-model="statusFilter"
@@ -654,8 +787,40 @@ function saveReplace() {
           aria-label="搜索 Sensor 型号"
         />
         <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
+        <APopover v-model:open="columnMenuOpen" align="end">
+          <template #trigger>
+            <AButton
+              :aria-label="
+                hiddenColumnCount > 0
+                  ? `显示的列（已隐藏 ${hiddenColumnCount} 列）`
+                  : '显示的列'
+              "
+            >
+              <Columns3 :size="14" :stroke-width="1.5" aria-hidden="true" />
+              列
+              <span v-if="hiddenColumnCount > 0" class="sensor-column-menu__badge">
+                {{ hiddenColumnCount }}
+              </span>
+            </AButton>
+          </template>
+          <div class="sensor-column-menu" role="group" aria-label="显示的列">
+            <label
+              v-for="column in HIDEABLE_COLUMNS"
+              :key="column.key"
+              class="sensor-column-menu__item"
+            >
+              <ACheckbox
+                :model-value="!hiddenColumnKeys.has(column.key)"
+                @update:model-value="
+                  toggleColumnVisible(column.key, $event === true)
+                "
+              />
+              {{ column.label }}
+            </label>
+          </div>
+        </APopover>
         <AButton aria-label="导出 Excel" @click="exportExcel">
-          <Download :size="14" :stroke-width="1.75" aria-hidden="true" />
+          <Download :size="14" :stroke-width="1.5" aria-hidden="true" />
           导出 Excel
         </AButton>
         <AButton v-if="writable" variant="filled" @click="addItem">
@@ -663,14 +828,27 @@ function saveReplace() {
         </AButton>
       </div>
       <ATable
+        v-model:sort="sort"
+        storage-key="sensor-models"
         :columns="columns"
         :rows="tableData"
         row-key="id"
         empty-text="没有符合当前条件的型号"
-        striped
+        @activate="writable && editItem($event)"
       >
         <template #cell-status="{ row }">
           <ABadge :label="row.status" :tone="statusTone(row.status)" />
+        </template>
+        <template #cell-sensorType="{ row }">
+          <span v-if="row.sensorType" class="sensor-type-chip">
+            <span
+              class="sensor-type-chip__dot"
+              :style="{ background: typeAccent(row.sensorType) }"
+              aria-hidden="true"
+            />
+            {{ row.sensorType }}
+          </span>
+          <span v-else>—</span>
         </template>
         <template #cell-partNumber="{ value }">
           <span
@@ -696,7 +874,7 @@ function saveReplace() {
             :title="`预览型录：${sopTitle(row.sopId)}`"
             @click="openLinkedSop(row.sopId)"
           >
-            <Eye :size="14" :stroke-width="1.75" aria-hidden="true" />
+            <Eye :size="14" :stroke-width="1.5" aria-hidden="true" />
             <span class="sensor-file-link__text">{{
               sopTitle(row.sopId)
             }}</span>
@@ -712,7 +890,7 @@ function saveReplace() {
             :title="`预览 3D：${model3dTitle(row.model3dId)}`"
             @click="openLinkedModel3d(row.model3dId)"
           >
-            <Eye :size="14" :stroke-width="1.75" aria-hidden="true" />
+            <Eye :size="14" :stroke-width="1.5" aria-hidden="true" />
             <span class="sensor-file-link__text">
               {{ model3dTitle(row.model3dId) }}
             </span>
@@ -787,8 +965,14 @@ function saveReplace() {
       v-model:open="dialogOpen"
       :title="editId ? '编辑 Sensor 型号' : '新增 Sensor 型号'"
       :width="680"
+      :confirm-close="dirtyGuard.confirmClose"
     >
-      <AFormGrid :columns="3">
+      <!--
+        这几个栅格必须保持同样的列数：列数不同的栅格各自均分弹窗宽度，
+        字段左边界就会落在 4 个不同位置（实测 468/688/798/908），整张表单
+        看不出栅格。统一成 2 列后，所有字段只落在 2 条对齐线上。
+      -->
+      <AFormGrid>
         <AFormRow
           label="状态"
           required
@@ -797,13 +981,6 @@ function saveReplace() {
           "
         >
           <ASelect v-model="form.status" :options="statusOptions" />
-        </AFormRow>
-        <AFormRow label="料号">
-          <AField
-            v-model="form.partNumber"
-            :maxlength="80"
-            placeholder="可选"
-          />
         </AFormRow>
         <AFormRow
           label="感应器类型"
@@ -829,6 +1006,13 @@ function saveReplace() {
           "
         >
           <AField v-model="form.model" :maxlength="100" />
+        </AFormRow>
+        <AFormRow label="料号">
+          <AField
+            v-model="form.partNumber"
+            :maxlength="80"
+            placeholder="可选"
+          />
         </AFormRow>
       </AFormGrid>
       <AFormGrid>
@@ -856,16 +1040,22 @@ function saveReplace() {
         <AFormRow label="特性与注意">
           <ATextArea v-model="form.feature" :rows="2" :maxlength="500" />
         </AFormRow>
+        <!-- 和上面两个描述性字段同为多行：同类内容给成一行输入会显得轻重不一 -->
         <AFormRow label="适用场景">
-          <AField v-model="form.scene" :maxlength="300" />
+          <ATextArea v-model="form.scene" :rows="2" :maxlength="300" />
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="dialogOpen = false">取消</AButton>
+        <AButton @click="cancelDialog">取消</AButton>
         <AButton variant="filled" @click="saveItem">保存</AButton>
       </template>
     </ASheet>
-    <ASheet v-model:open="replaceOpen" title="用备选替换现用型号" :width="560">
+    <ASheet
+      v-model:open="replaceOpen"
+      title="用备选替换现用型号"
+      :width="560"
+      :confirm-close="replaceDirtyGuard.confirmClose"
+    >
       <p>
         备选：{{ replaceSource?.sensorType }} · {{ replaceSource?.brand }} ·
         {{ replaceSource?.model }}
@@ -875,13 +1065,13 @@ function saveReplace() {
           label="要替换的现用型号"
           required
           :error="
-            replaceValidationAttempted && !replaceTargetId
+            replaceValidationAttempted && !replaceForm.targetId
               ? '请选择要替换的现用型号'
               : undefined
           "
         >
           <ASelect
-            v-model="replaceTargetId"
+            v-model="replaceForm.targetId"
             :options="replaceCandidates"
             placeholder="请选择现用型号"
           />
@@ -890,13 +1080,13 @@ function saveReplace() {
           label="问题点"
           required
           :error="
-            replaceValidationAttempted && !replaceNote.trim()
+            replaceValidationAttempted && !replaceForm.note.trim()
               ? '请填写问题点'
               : undefined
           "
         >
           <ATextArea
-            v-model="replaceNote"
+            v-model="replaceForm.note"
             :rows="3"
             :maxlength="500"
             placeholder="说明因什么问题被替换"
@@ -904,7 +1094,7 @@ function saveReplace() {
         </AFormRow>
       </AFormGrid>
       <template #footer>
-        <AButton @click="replaceOpen = false">取消</AButton>
+        <AButton @click="cancelReplaceDialog">取消</AButton>
         <AButton variant="filled" @click="saveReplace">替换</AButton>
       </template>
     </ASheet>

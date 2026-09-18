@@ -16,7 +16,8 @@ const emit = defineEmits<{
   <AButton
     variant="plain"
     :disabled="!active"
-    aria-label="重置筛选"
+    :aria-label="active ? '重置筛选' : '当前没有已应用的筛选条件'"
+    :title="active ? undefined : '当前没有已应用的筛选条件'"
     @click="emit('reset')"
   >
     <RotateCcw :size="14" :stroke-width="1.5" aria-hidden="true" />

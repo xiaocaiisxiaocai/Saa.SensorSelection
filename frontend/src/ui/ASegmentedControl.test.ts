@@ -52,4 +52,40 @@ describe('ASegmentedControl', () => {
   it('keeps long tab sets horizontally scrollable instead of clipping them', () => {
     expect(source).toMatch(/\.a-segmented\s*\{[^}]*overflow:\s*auto hidden;/s);
   });
+
+  it('wires tab/tabpanel ids from the id prop so callers can associate their content', () => {
+    const wrapper = mount(ASegmentedControl, {
+      props: { id: 'demo-tabs', modelValue: 'proc', segments },
+    });
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs[1]?.attributes('id')).toBe('demo-tabs-tab-proc');
+    expect(tabs[1]?.attributes('aria-controls')).toBe('demo-tabs-panel-proc');
+  });
+
+  it('omits id/aria-controls entirely when no id prop is given', () => {
+    const wrapper = mount(ASegmentedControl, {
+      props: { modelValue: 'proc', segments },
+    });
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs[1]?.attributes('id')).toBeUndefined();
+    expect(tabs[1]?.attributes('aria-controls')).toBeUndefined();
+  });
+
+  it('labels the tablist and hides the decorative thumb from the a11y tree', () => {
+    const wrapper = mount(ASegmentedControl, {
+      props: { ariaLabel: '客户资料分类', modelValue: 'proc', segments },
+    });
+
+    const tablist = wrapper.get('[role="tablist"]');
+    expect(tablist.attributes('aria-label')).toBe('客户资料分类');
+
+    const strays = [...tablist.element.children].filter(
+      (child) =>
+        child.getAttribute('role') !== 'tab' &&
+        child.getAttribute('aria-hidden') !== 'true',
+    );
+    expect(strays).toHaveLength(0);
+  });
 });

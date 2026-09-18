@@ -61,6 +61,12 @@ const showCount = computed(() => {
 function clear() {
   model.value = '';
 }
+
+const inputEl = ref<HTMLInputElement | null>(null);
+
+defineExpose({
+  focus: () => inputEl.value?.focus(),
+});
 </script>
 
 <template>
@@ -82,6 +88,7 @@ function clear() {
     />
     <input
       :id="id"
+      ref="inputEl"
       class="a-control__input"
       :type="inputType"
       :value="model"

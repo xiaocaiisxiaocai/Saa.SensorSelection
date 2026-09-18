@@ -92,31 +92,43 @@ function openResult(item: SearchItem) {
       <h1>搜索“{{ query }}”</h1>
       <p>{{ results.length }} 条结果</p>
     </header>
-    <ASegmentedControl v-model="activeType" :segments="tabs" />
-    <AEmptyState
-      v-if="results.length === 0"
-      title="没有匹配的结果"
-      description="换个关键词试试，可搜索客户、制程、机型和 Sensor 型号"
+    <ASegmentedControl
+      id="search-tabs"
+      v-model="activeType"
+      aria-label="按类型筛选搜索结果"
+      :segments="tabs"
     />
-    <ul v-else class="search-list">
-      <li
-        v-for="(item, index) in results"
-        :key="`${item.path}-${item.title}-${index}`"
-      >
-        <button type="button" @click="openResult(item)">
-          <span class="search-list__title">
-            <AHighlightText :text="item.title" :query="query" />
-          </span>
-          <ABadge :label="typeLabel[item.type]" :tone="typeTone[item.type]" />
-          <span class="search-list__meta">
-            <AHighlightText :text="item.category" :query="query" />
-          </span>
-          <span class="search-list__sub">
-            <AHighlightText :text="item.sub" :query="query" />
-          </span>
-        </button>
-      </li>
-    </ul>
+    <div
+      :id="`search-tabs-panel-${activeType}`"
+      role="tabpanel"
+      :aria-labelledby="`search-tabs-tab-${activeType}`"
+      tabindex="0"
+    >
+      <AEmptyState
+        v-if="results.length === 0"
+        title="没有匹配的结果"
+        description="换个关键词试试，可搜索客户、制程、机型和 Sensor 型号"
+      />
+      <ul v-else class="search-list">
+        <li
+          v-for="(item, index) in results"
+          :key="`${item.path}-${item.title}-${index}`"
+        >
+          <button type="button" @click="openResult(item)">
+            <span class="search-list__title">
+              <AHighlightText :text="item.title" :query="query" />
+            </span>
+            <ABadge :label="typeLabel[item.type]" :tone="typeTone[item.type]" />
+            <span class="search-list__meta">
+              <AHighlightText :text="item.category" :query="query" />
+            </span>
+            <span class="search-list__sub" :title="item.sub">
+              <AHighlightText :text="item.sub" :query="query" />
+            </span>
+          </button>
+        </li>
+      </ul>
+    </div>
   </section>
 </template>
 
@@ -180,6 +192,15 @@ function openResult(item: SearchItem) {
 }
 
 .search-list__sub {
+  display: -webkit-box;
   grid-column: 1 / -1;
+
+  /* 正文行长控制在 ~70 字符：跑满 1240px 的一行读起来会丢行。 */
+  max-width: 70ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 </style>

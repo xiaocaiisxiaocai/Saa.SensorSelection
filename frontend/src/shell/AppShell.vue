@@ -267,9 +267,15 @@ watch(
         :inert="compactViewport && !mobileSidebarOpen ? true : undefined"
       >
         <section v-for="group in groups" :key="group.id" class="nav-group">
-          <h2 v-if="sidebarExpanded" class="nav-group__label">
+          <!--
+            侧栏分组是 <nav aria-label="主导航"> 内的装饰性分组标签，不是
+            正文的一部分；之前用 <h2> 会在文档大纲里排在页面自己的 <h1>
+            前面，把标题层级弄反。侧栏本身的 aria-label 已经足够让读屏
+            用户识别这是导航区，这里改回普通文本即可。
+          -->
+          <p v-if="sidebarExpanded" class="nav-group__label">
             {{ group.label }}
-          </h2>
+          </p>
           <ATooltip
             v-for="item in group.items"
             :key="item.to"
@@ -557,7 +563,10 @@ watch(
   padding: var(--space-1) var(--space-3);
   margin: 0;
   font: var(--text-caption);
-  color: var(--label-2);
+
+  /* --label-2 在侧栏底色上实测只有 4.43:1，13px 不算大字号，仍要 4.5:1。
+     层级靠字号（13 vs 15）、大写和字距区分，不靠降低对比度。 */
+  color: var(--label);
   letter-spacing: var(--tracking-caption);
   text-transform: uppercase;
 }

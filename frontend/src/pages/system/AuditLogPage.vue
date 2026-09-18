@@ -16,6 +16,7 @@ import {
   ATable,
   type SelectOption,
   type TableColumn,
+  type TableSortState,
 } from '@/ui';
 
 import '../shared/selection-page.css';
@@ -30,6 +31,9 @@ const ACTION_LABELS: Record<string, string> = {
   'role.delete': '删除角色',
   'role.update': '更新角色',
   'store.delete': '删除数据',
+  // 缺了这条时表格会直接显示原始操作码 store.entity-groups.reorder，
+  // 又长又要折行，和其他行的中文标签也对不齐。
+  'store.entity-groups.reorder': '调整分类顺序',
   'store.replace-all': '整体导入',
   'store.upsert': '写入数据',
   'user.create': '创建用户',
@@ -55,6 +59,8 @@ const page = ref(1);
 const pageSize = ref(20);
 const detailOpen = ref(false);
 const selectedLog = ref<AuditLogItem | null>(null);
+// 日志是服务端分页的，排序必须下推给后端，否则只排到当前这 20 条。
+const sort = ref<TableSortState | null>(null);
 const filters = reactive({
   action: '' as string | null,
   dateRange: null as [string | null, string | null] | null,
@@ -70,29 +76,36 @@ const hasActiveFilters = computed(
 );
 
 const columns: TableColumn[] = [
-  { key: 'timestamp', label: '时间', width: 180, fixed: 'start' },
-  { key: 'username', label: '用户', width: 120 },
+  // 192 而非 180：完整时间戳实测要 168px 文字宽 + 16px 内边距，180 会被截成
+  // 「2026-08-17 20:00:…」，而审计日志里精确到秒是有意义的。
+  { key: 'timestamp', label: '时间', width: 192, fixed: 'start', sortable: true },
+  { key: 'username', label: '用户', width: 120, sortable: true },
+  // 「操作」列显示的是中文标签、排序依据却是底层操作码，排出来看着像乱序，
+  // 且已有专门的操作类型筛选，这里不提供排序。
   { key: 'action', label: '操作', width: 120 },
   {
     key: 'target',
     label: '目标',
     minWidth: 180,
-    ellipsis: true,
     align: 'start',
   },
   { key: 'detail', label: '详情', width: 96 },
-  { key: 'result', label: '结果', width: 88 },
+  { key: 'result', label: '结果', width: 88, sortable: true },
   {
     key: 'error',
     label: '说明',
     minWidth: 180,
-    ellipsis: true,
     align: 'start',
   },
   { key: 'ip', label: 'IP', width: 120 },
 ];
 
 watch([page, pageSize], loadData);
+watch(sort, () => {
+  // 换了排序，原来的页码没有意义了，回到第一页重新取。
+  if (page.value === 1) void loadData();
+  else page.value = 1;
+});
 
 onMounted(loadData);
 
@@ -129,10 +142,16 @@ async function loadData() {
     const [from, to] = filters.dateRange ?? [null, null];
     const pageData = await api.listAuditLogs({
       action: filters.action || undefined,
+      direction: sort.value
+        ? sort.value.direction === 'ascending'
+          ? 'asc'
+          : 'desc'
+        : undefined,
       from: toIsoStart(from),
       page: page.value,
       pageSize: pageSize.value,
       result: resultFilter(),
+      sort: sort.value?.key,
       to: toIsoEnd(to),
       username: filters.username.trim() || undefined,
     });
@@ -164,7 +183,7 @@ function resetFilters() {
 <template>
   <section class="selection-page">
     <div class="selection-toolbar audit-toolbar">
-      <h1 class="docs-heading">操作日志</h1>
+      <h1 class="visually-hidden">操作日志</h1>
       <AField
         v-model="filters.username"
         class="selection-toolbar__filter audit-toolbar__user"
@@ -197,13 +216,14 @@ function resetFilters() {
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
     </div>
     <ATable
+      v-model:sort="sort"
+      storage-key="audit-log"
       :columns="columns"
       :rows="items"
       row-key="id"
       empty-text="暂无日志"
       :loading="loading"
-      striped
-      virtual
+      @activate="openDetail"
     >
       <template #cell-timestamp="{ row }">
         {{ formatLocalDateTime(new Date(row.timestamp)) }}
@@ -292,14 +312,13 @@ function resetFilters() {
 <style scoped>
 .audit-toolbar {
   display: grid;
+
+  /* h1 现在是 visually-hidden（绝对定位，不参与网格布局），
+     所以这里少了一列——直接从筛选字段开始。 */
   grid-template-columns:
-    auto minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
+    minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
     minmax(17rem, 1.5fr) auto auto;
   gap: var(--space-2);
-}
-
-.audit-toolbar .docs-heading {
-  margin-right: 0;
 }
 
 .audit-toolbar .selection-toolbar__filter,
@@ -313,7 +332,6 @@ function resetFilters() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .audit-toolbar .docs-heading,
   .audit-toolbar__user,
   .audit-toolbar__date {
     grid-column: 1 / -1;

@@ -98,23 +98,19 @@ function onClick(event: MouseEvent) {
   border-radius: var(--radius-md);
 }
 
-.a-icon-button:not(.a-icon-button--small)::before {
-  position: absolute;
-  inset: 50%;
-  width: var(--touch-target);
-  height: var(--touch-target);
-  content: '';
-  transform: translate(-50%, -50%);
-}
-
-.a-icon-button--small::before {
-  position: absolute;
-  inset: 50%;
-  width: 36px;
-  height: 36px;
-  content: '';
-  transform: translate(-50%, -50%);
-}
+/*
+ * 这里曾经用一个比按钮更大的绝对定位 ::before 来外扩点击热区（small 36px、
+ * 其余 --touch-target 44px）。那样做有两个问题：
+ *
+ * 1. 绝对定位子元素会计入祖先的「可滚动溢出」。按钮贴着滚动容器右/下边缘时，
+ *    探出去的 5~7px 会让 overflow:auto 的容器凭空长出滚动条——分页条上的
+ *    上/下一页按钮就把 .selection-page 顶出了一条纵向滚动条。
+ * 2. 恰恰在制造溢出的右/下两个方向，热区是点不到的：那块区域落在滚动容器的
+ *    可视区之外，elementFromPoint 命中的是容器本身而不是按钮。
+ *
+ * 按钮自身尺寸（small 26px、其余 ≥30px）已经满足设计规范和 test:ui 强制的
+ * 24px 下限，所以直接以按钮本体作为热区，不再外扩。
+ */
 
 .a-icon-button--borderless {
   color: var(--label-2);
@@ -137,6 +133,12 @@ function onClick(event: MouseEvent) {
 
 .a-icon-button--destructive {
   color: var(--sys-red);
+  background: transparent;
+}
+
+/* 破坏性图标按钮禁用时转中性灰，不保留红色警示 */
+.a-icon-button--destructive:disabled {
+  color: var(--label-3);
   background: transparent;
 }
 

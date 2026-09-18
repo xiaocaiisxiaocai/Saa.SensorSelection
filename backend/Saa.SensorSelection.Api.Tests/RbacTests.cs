@@ -441,4 +441,66 @@ public class RbacTests
         var finalDelete = await admin.DeleteAsync($"/api/rbac/org-units/{divisionId}");
         Assert.Equal(HttpStatusCode.OK, finalDelete.StatusCode);
     }
+
+    [Fact]
+    public async Task DisablingAUser_ImmediatelyRejectsTheirExistingToken()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var editorRoleId = await GetRoleIdAsync(admin, "editor");
+        var userId = await CreateUserAsync(
+            admin, "revoke_target", roleIds: [editorRoleId]);
+
+        // 先拿到一张正常可用的 token
+        using var login = factory.CreateClient();
+        var token = await LoginTokenAsync(login, "revoke_target", "pass123456");
+        using var victim = CreateAuthorizedClient(factory, token);
+        var before = await victim.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+
+        // 管理员停用该账号
+        var disable = await admin.PutAsJsonAsync(
+            $"/api/rbac/users/{userId}",
+            new { displayName = "用户-revoke_target", isActive = false, roleIds = new[] { editorRoleId } });
+        Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
+
+        // 权限签在 token 里、token 有 12 小时有效期：如果只在登录时查 IsActive，
+        // 这张已签发的 token 还能继续用到过期，「停用」就形同虚设。
+        var afterMe = await victim.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, afterMe.StatusCode);
+        var afterWrite = await victim.PutAsJsonAsync(
+            StoreRoute("customer-req:停用后写入"),
+            JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
+        Assert.Equal(HttpStatusCode.Unauthorized, afterWrite.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeletingAUser_ImmediatelyRejectsTheirExistingToken()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var editorRoleId = await GetRoleIdAsync(admin, "editor");
+        var userId = await CreateUserAsync(
+            admin, "delete_target", roleIds: [editorRoleId]);
+
+        using var login = factory.CreateClient();
+        var token = await LoginTokenAsync(login, "delete_target", "pass123456");
+        using var victim = CreateAuthorizedClient(factory, token);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await victim.GetAsync("/api/auth/me")).StatusCode);
+
+        var delete = await admin.DeleteAsync($"/api/rbac/users/{userId}");
+        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await victim.GetAsync("/api/auth/me")).StatusCode);
+        // /api/auth/me 本来就会回查用户，所以只断言它证明不了什么：真正的
+        // 缺口在业务接口——它们只认 token 里的 perm 声明，不回查账号。
+        var afterWrite = await victim.PutAsJsonAsync(
+            StoreRoute("customer-req:删除后写入"),
+            JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
+        Assert.Equal(HttpStatusCode.Unauthorized, afterWrite.StatusCode);
+    }
 }

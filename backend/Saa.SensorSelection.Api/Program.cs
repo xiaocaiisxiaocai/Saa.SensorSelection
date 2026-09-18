@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Text;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -60,6 +61,34 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
+        };
+        // 每个请求都回查账号是否还存在、还启用。
+        //
+        // 权限是签进 token 的，而 token 有 12 小时有效期：只在登录时查 IsActive
+        // 的话，管理员「停用」或「删除」一个账号后，那张已签发的 token 仍然能
+        // 继续操作到过期为止——停用等于没停。所以这里必须逐请求校验。
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var username = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(username))
+                {
+                    context.Fail("token 缺少身份声明");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices
+                    .GetRequiredService<AppDbContext>();
+                var active = await db.Users
+                    .AsNoTracking()
+                    .AnyAsync(user => user.Username == username && user.IsActive,
+                        context.HttpContext.RequestAborted);
+                if (!active)
+                {
+                    context.Fail("账号已停用或已删除");
+                }
+            },
         };
     });
 // 授权策略：按 JWT 中的 perm 声明（权限码）校验，权限码由角色 → 用户派生并随 token 签发

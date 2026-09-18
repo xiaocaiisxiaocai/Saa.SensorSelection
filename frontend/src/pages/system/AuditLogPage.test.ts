@@ -180,4 +180,73 @@ describe('AuditLogPage', () => {
 
     wrapper.unmount();
   });
+
+  it('filters as soon as a filter changes, without a separate apply button', async () => {
+    const listAuditLogs = vi
+      .spyOn(api, 'listAuditLogs')
+      .mockResolvedValue({ items: [log], total: 1 });
+    const wrapper = mount(AuditLogPage);
+    await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(1));
+
+    expect(
+      wrapper.findAll('button').some((button) => button.text() === '筛选'),
+    ).toBe(false);
+
+    await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
+    wrapper.findAllComponents(ASelect)[0]?.vm.$emit('update:modelValue', 'auth.login');
+
+    await vi.waitFor(() => {
+      expect(listAuditLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ action: 'auth.login', page: 1, username: 'admin' }),
+      );
+    });
+    // 防抖合并成一次请求，不是每个改动各发一次
+    expect(listAuditLogs).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it('does not offer a clear button on filters whose default is already "all"', () => {
+    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({ items: [], total: 0 });
+    const wrapper = mount(AuditLogPage);
+    for (const select of wrapper.findAllComponents(ASelect)) {
+      expect(select.props('clearable')).toBeFalsy();
+    }
+    wrapper.unmount();
+  });
+
+  it('shows a readable target and the failure reason instead of an empty column', async () => {
+    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({
+      items: [
+        {
+          ...log,
+          action: 'store.delete',
+          error: 'key 不存在',
+          result: false,
+          target: 'machine-section-rows:1002:E2E机型',
+        },
+      ],
+      total: 1,
+    });
+    const wrapper = mount(AuditLogPage, { attachTo: document.body });
+    await vi.waitFor(() => {
+      expect(wrapper.find('.audit-target').exists()).toBe(true);
+    });
+
+    expect(wrapper.get('.audit-target').text()).toBe('机型选型 · E2E机型');
+    expect(wrapper.get('.audit-target').attributes('title')).toBe(
+      'machine-section-rows:1002:E2E机型',
+    );
+    expect(wrapper.get('.audit-target__error').text()).toBe('key 不存在');
+    const headers = wrapper.findAll('th').map((th) => th.text());
+    expect(headers).not.toContain('说明');
+
+    const detailButton = wrapper
+      .findAll('.a-table tbody button')
+      .find((button) => button.text() === '查看');
+    await detailButton!.trigger('click');
+    // 详情里仍保留原始 key 供排查
+    expect(document.body.textContent).toContain('目标键');
+    expect(document.body.textContent).toContain('machine-section-rows:1002:E2E机型');
+    wrapper.unmount();
+  });
 });

@@ -235,8 +235,12 @@ describe('tokens.css', () => {
       /th\s*\{[^}]*background-color:\s*var\(--bg-content\);[^}]*background-image:\s*linear-gradient\(var\(--fill-4\), var\(--fill-4\)\);/s,
     );
     // 固定列的表头格必须同样处理，否则表头第一格会是表体色，整条表头断开
+    // （固定列用不透明底 + --a-table-row-tint 叠色，表头格把叠色设为 --fill-4）
     expect(table).toMatch(
-      /th\.a-table__cell--fixed\s*\{[^}]*background-image:\s*linear-gradient\(var\(--fill-4\), var\(--fill-4\)\);/s,
+      /th\.a-table__cell--fixed\s*\{[^}]*--a-table-row-tint:\s*var\(--fill-4\);/s,
+    );
+    expect(table).toMatch(
+      /\.a-table__cell--fixed\s*\{[^}]*background-color:\s*var\(--bg-content\);[^}]*background-image:\s*linear-gradient\(\s*var\(--a-table-row-tint\),\s*var\(--a-table-row-tint\)\s*\);/s,
     );
     expect(table).toMatch(
       /tbody tr:last-child td\s*\{[^}]*box-shadow:\s*none;/s,

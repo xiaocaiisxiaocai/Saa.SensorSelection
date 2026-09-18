@@ -966,14 +966,16 @@ async function runSystemCrud() {
     )
   })
 
-  await check('Role: the built-in admin role has no delete action', async () => {
+  await check('Role: the built-in admin role explains why it cannot be deleted', async () => {
     const adminRow = page.locator('.a-table tbody tr', { hasText: '系统内置' }).first()
     await adminRow.waitFor({ state: 'visible' })
     assertEqual(
       await adminRow.getByRole('button', { name: '删除', exact: true }).count(),
       0,
-      'the system role must not expose a delete button',
+      'the system role must not expose an enabled delete button',
     )
+    const blocked = adminRow.getByRole('button', { name: /^删除（/ })
+    assertEqual(await blocked.getAttribute('aria-disabled'), 'true', 'system role delete must be aria-disabled')
   })
 
   await check('Role: delete', async () => {

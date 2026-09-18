@@ -377,6 +377,39 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
+  it('fills the identity row with brand, model and part number in three columns', async () => {
+    const wrapper = await mountPage({}, writer);
+    const addButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '新增型号');
+    await addButton!.trigger('click');
+    await nextTick();
+
+    const grids = [...document.body.querySelectorAll('[role="dialog"] .a-form-grid')];
+    const identityRow = grids.find((grid) => grid.textContent?.includes('料号'));
+    expect(identityRow?.classList.contains('a-form-grid--3')).toBe(true);
+    expect(
+      [...(identityRow?.children ?? [])].map((row) =>
+        row
+          .querySelector('label, .a-form-row__label')
+          ?.textContent?.replace(/[*\s]|必填/g, ''),
+      ),
+    ).toEqual(['品牌', '型号', '料号']);
+    // 其余多列栅格都是满行，不留半行空格
+    for (const grid of grids) {
+      const columns = grid.classList.contains('a-form-grid--3')
+        ? 3
+        : grid.classList.contains('a-form-grid--2')
+          ? 2
+          : 1;
+      expect(grid.children.length % columns).toBe(0);
+    }
+
+    wrapper.unmount();
+    // 弹窗传送到 body，卸载组件不会带走它，清掉以免影响后续用例
+    document.body.innerHTML = '';
+  });
+
   it('filters by any of multiple sensor types and restores them from the URL', async () => {
     const wrapper = await mountPage({
       tab: '全部',

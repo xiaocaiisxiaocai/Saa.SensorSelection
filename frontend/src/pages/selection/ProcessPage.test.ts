@@ -59,6 +59,23 @@ describe('ProcessPage', () => {
     wrapper.unmount();
   });
 
+  it('explains what the intro tab is for before anything is uploaded', async () => {
+    const wrapper = await mountPage(true);
+    expect(wrapper.find('.process-intro-hint').exists()).toBe(true);
+    expect(wrapper.text()).toContain('还没有制程介绍资料');
+
+    useSelectionStore().saveProcessIntroFile({
+      fileName: '工艺规范.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'data:application/pdf;base64,YQ==',
+      size: 2048,
+      uploadedAt: '2024-01-01T00:00:00.000Z',
+    });
+    await nextTick();
+    expect(wrapper.find('.process-intro-hint').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('offers PPT and PPTX uploads in the process intro tab', async () => {
     const wrapper = await mountPage(true);
     const accept = wrapper.get('input[type="file"]').attributes('accept');

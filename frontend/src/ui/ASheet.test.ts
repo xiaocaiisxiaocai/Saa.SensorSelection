@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ASheet from './ASheet.vue';
+
+const sheetSource = readFileSync(
+  fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'),
+  'utf8',
+);
 
 describe('ASheet', () => {
   afterEach(() => {
@@ -111,5 +119,13 @@ describe('ASheet', () => {
     expect(dialog?.classList.contains('a-sheet--viewport')).toBe(true);
 
     wrapper.unmount();
+  });
+
+  it('leaves room below the dialog for bottom-centred toasts', () => {
+    // toast 距底 16px、高约 34px；弹窗底边必须在它上方，否则校验提示压在弹窗底边上
+    expect(sheetSource).toMatch(/--sheet-edge-gap:\s*56px;/);
+    expect(sheetSource).toMatch(
+      /\.a-sheet\s*\{[^}]*max-height:\s*calc\(100dvh - var\(--sheet-edge-gap\) \* 2\);/,
+    );
   });
 });

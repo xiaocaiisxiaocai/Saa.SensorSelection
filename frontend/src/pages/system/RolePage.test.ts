@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { api } from '@/api';
+import { api, type RbacRole } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import RolePage from './RolePage.vue';
 
@@ -13,7 +13,7 @@ const permissions = [
   { id: 3, code: 'rbac:view', name: '查看系统管理', module: '系统' },
 ];
 
-async function mountPage() {
+async function mountPage(roles: RbacRole[] = []) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().applyProfile({
@@ -23,7 +23,7 @@ async function mountPage() {
     roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
     username: 'admin',
   });
-  vi.spyOn(api, 'listRoles').mockResolvedValue([]);
+  vi.spyOn(api, 'listRoles').mockResolvedValue(roles);
   vi.spyOn(api, 'listPermissions').mockResolvedValue(permissions);
   const wrapper = mount(RolePage, {
     attachTo: document.body,
@@ -81,6 +81,29 @@ describe('RolePage', () => {
         item.textContent?.trim(),
       ),
     ).toEqual(['请输入角色标识', '请输入角色名称']);
+    wrapper.unmount();
+  });
+
+  it('keeps built-in role actions visible but explains why they are disabled', async () => {
+    const wrapper = await mountPage([
+      {
+        code: 'admin',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        description: '内置',
+        id: 1,
+        isSystem: true,
+        name: '系统管理员',
+        permissions: [],
+      },
+    ]);
+    await vi.waitFor(() => expect(wrapper.text()).toContain('系统管理员'));
+
+    const reason = '系统内置角色，不可修改或删除';
+    for (const label of ['编辑', '删除']) {
+      const button = document.querySelector(`[aria-label="${label}（${reason}）"]`);
+      expect(button).toBeTruthy();
+      expect(button?.getAttribute('aria-disabled')).toBe('true');
+    }
     wrapper.unmount();
   });
 });

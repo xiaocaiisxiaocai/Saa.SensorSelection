@@ -71,7 +71,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'roles', label: '角色', minWidth: 160 },
     { key: 'org', label: '所属组织', minWidth: 180 },
     { key: 'status', label: '状态', width: 88 },
-    { key: 'createdAt', label: '创建时间', width: 180, sortable: true },
+    { key: 'createdAt', label: '创建时间', width: 192, sortable: true },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
@@ -278,7 +278,9 @@ function orgPath(user: RbacUser) {
         />
       </template>
       <template #cell-createdAt="{ row }">
-        {{ formatLocalDateTime(new Date(row.createdAt)) }}
+        <span class="user-created-at">{{
+          formatLocalDateTime(new Date(row.createdAt))
+        }}</span>
       </template>
       <template #cell-actions="{ row }">
         <div class="table-actions">
@@ -296,10 +298,11 @@ function orgPath(user: RbacUser) {
           />
           <AIconButton
             :icon="Trash2"
-            :label="deleteBlockedReason(row) ?? '删除'"
+            label="删除"
             size="small"
             variant="destructive"
             :disabled="Boolean(deleteBlockedReason(row))"
+            :disabled-reason="deleteBlockedReason(row)"
             @click="removeUser(row)"
           />
         </div>
@@ -412,6 +415,11 @@ function orgPath(user: RbacUser) {
 </template>
 
 <style scoped>
+/* 日期和时间拆成两行很难扫读，与操作日志保持一行 */
+.user-created-at {
+  white-space: nowrap;
+}
+
 .user-toolbar .a-button {
   margin-left: auto;
 }

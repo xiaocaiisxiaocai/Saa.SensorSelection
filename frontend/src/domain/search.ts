@@ -78,3 +78,20 @@ export function buildSearchIndex({
   }));
   return [...sensorItems, ...processes, ...machines, ...machineRows, ...customers];
 }
+
+/**
+ * 结果卡片第三行的说明文字。索引里的 sub 为了便于检索，开头往往重复了
+ * category（「输送机构 · 客户特殊配置 · …」、「华东区域 · PCB 制造客户」），
+ * 而卡片第二行已经显示了 category，这里把重复的首段去掉；只剩重复内容时返回空串。
+ */
+export function searchItemDetail(item: Pick<SearchItem, 'category' | 'sub'>): string {
+  const category = item.category?.trim() ?? '';
+  const segments = (item.sub ?? '')
+    .split(' · ')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (category && (segments[0] === category || segments[0] === `${category}区域`)) {
+    segments.shift();
+  }
+  return segments.join(' · ');
+}

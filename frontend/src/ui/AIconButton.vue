@@ -13,6 +13,11 @@ const props = withDefaults(
     size?: IconButtonSize;
     side?: PopoverSide;
     disabled?: boolean;
+    /**
+     * 禁用原因。给出时改用 aria-disabled：按钮仍可聚焦、可悬停，tooltip 显示
+     * 原因；原生 disabled 按钮不响应指针也拿不到焦点，用户看不到为什么不能点。
+     */
+    disabledReason?: string;
   }>(),
   {
     variant: 'borderless',
@@ -29,6 +34,13 @@ if (import.meta.env.DEV && props.label.trim() === '') {
   throw new Error('AIconButton: label is required');
 }
 
+const explainDisabled = computed(
+  () => Boolean(props.disabled && props.disabledReason?.trim()),
+);
+const tooltip = computed(() =>
+  explainDisabled.value ? (props.disabledReason as string) : props.label,
+);
+
 const iconSize = computed(() => (props.size === 'small' ? 16 : 18));
 const resolvedIcon = computed(() => markRaw(props.icon));
 
@@ -44,14 +56,15 @@ function onClick(event: MouseEvent) {
 
 <template>
   <span class="a-icon-button-host">
-    <ATooltip :content="label" :side="side">
+    <ATooltip :content="tooltip" :side="side">
       <template #trigger>
         <button
           class="a-icon-button"
           :class="[`a-icon-button--${variant}`, `a-icon-button--${size}`]"
           type="button"
-          :aria-label="label"
-          :disabled="disabled"
+          :aria-label="explainDisabled ? `${label}（${tooltip}）` : label"
+          :aria-disabled="explainDisabled ? 'true' : undefined"
+          :disabled="disabled && !explainDisabled"
           @click="onClick"
         >
           <component :is="resolvedIcon" :size="iconSize" :stroke-width="1.5" />
@@ -117,7 +130,7 @@ function onClick(event: MouseEvent) {
   background: transparent;
 }
 
-.a-icon-button--borderless:hover:not(:disabled) {
+.a-icon-button--borderless:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--fill-4);
 }
 
@@ -127,7 +140,7 @@ function onClick(event: MouseEvent) {
   box-shadow: inset 0 0 0 0.5px var(--separator);
 }
 
-.a-icon-button--plain:hover:not(:disabled) {
+.a-icon-button--plain:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--fill-4);
 }
 
@@ -136,22 +149,26 @@ function onClick(event: MouseEvent) {
   background: transparent;
 }
 
-/* 破坏性图标按钮禁用时转中性灰，不保留红色警示 */
-.a-icon-button--destructive:disabled {
-  color: var(--label-3);
+/* 破坏性图标按钮禁用时转中性灰，不保留红色警示。用 --label-2 而不是
+   --label-3：再叠 0.4 的禁用透明度后 --label-3 只剩约 12%，几乎看不见，
+   和同一行其它禁用图标也不一致。 */
+.a-icon-button--destructive:disabled,
+.a-icon-button--destructive[aria-disabled='true'] {
+  color: var(--label-2);
   background: transparent;
 }
 
-.a-icon-button--destructive:hover:not(:disabled) {
+.a-icon-button--destructive:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--sys-red-fill);
 }
 
-.a-icon-button:disabled {
+.a-icon-button:disabled,
+.a-icon-button[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.4;
 }
 
-.a-icon-button:active:not(:disabled) {
+.a-icon-button:active:not(:disabled, [aria-disabled='true']) {
   opacity: 0.7;
 }
 </style>

@@ -141,6 +141,85 @@ describe('ATable', () => {
     );
   });
 
+  it('flags which sides carry a sticky column so edge shadows can skip them', () => {
+    const withEnd = mount(ATable, { props: { columns, rows, rowKey: 'id' } });
+    expect(withEnd.get('.a-table').classes()).toContain('a-table--fixed-end');
+    expect(withEnd.get('.a-table').classes()).not.toContain('a-table--fixed-start');
+
+    const plain = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'model', label: '型号' },
+          { key: 'note', label: '说明', fixed: 'start' },
+        ],
+        rows,
+        rowKey: 'id',
+      },
+    });
+    expect(plain.get('.a-table').classes()).not.toContain('a-table--fixed-start');
+    expect(plain.get('.a-table').classes()).not.toContain('a-table--fixed-end');
+  });
+
+  it('never paints the container scroll shadow behind a sticky column', () => {
+    // 固定列只铺到最后一行，容器内阴影会在行下方空白处露成竖带
+    expect(tableSource).toMatch(
+      /\.a-table--overflow-end:not\(\.a-table--fixed-end\)\s*\{[^}]*--a-table-edge-end:/,
+    );
+    expect(tableSource).toMatch(
+      /\.a-table--overflow-start:not\(\.a-table--fixed-start\)\s*\{[^}]*--a-table-edge-start:/,
+    );
+    expect(tableSource).not.toMatch(/box-shadow:\s*inset -20px/);
+  });
+
+  it('fades content sliding under a sticky column instead of hard-cutting it', () => {
+    // overflow:hidden 会把探出单元格的渐变一起裁掉；border-collapse 下 Chrome
+    // 又不画 td 的外阴影。只能用 clip-path 在渐变一侧放宽裁剪。
+    const fixedRule = tableSource.match(/^\.a-table__cell--fixed \{([^}]*)\}/m)?.[1] ?? '';
+    expect(fixedRule).toContain('position: sticky');
+    expect(fixedRule).toMatch(/overflow:\s*visible;/);
+    expect(tableSource).toMatch(
+      /\.a-table__cell--fixed-end\s*\{[^}]*clip-path:\s*inset\(0 0 0 calc\(var\(--a-table-fade\) \* -1\)\);/,
+    );
+    expect(tableSource).toMatch(
+      /\.a-table--overflow-end \.a-table__cell--fixed-end::before,\s*\.a-table--overflow-start \.a-table__cell--fixed-start::before\s*\{[^}]*opacity:\s*1;/,
+    );
+  });
+
+  it('keeps sticky cells opaque on hovered and selected rows', () => {
+    // 直接继承行的半透明底色会让滚到下面的内容透出来
+    expect(tableSource).not.toMatch(/\.a-table__cell--fixed[^{]*\{\s*background:\s*inherit;/);
+    expect(tableSource).toMatch(
+      /\.a-table tbody tr\.a-table__row--selected \.a-table__cell--fixed\s*\{[^}]*--a-table-row-tint:\s*var\(--sys-blue-fill\);/,
+    );
+  });
+
+  it('uses a theme-safe shadow colour instead of a text colour for scroll edges', () => {
+    // --label-2 在暗色主题是浅色，拿它画阴影会变成一条白带
+    expect(tableSource).not.toMatch(/box-shadow:[^;]*var\(--label-2\)/);
+    expect(tableSource).toMatch(/var\(--shadow-scroll-edge\)/);
+  });
+
+  it('renders empty cells with a UI-font em dash even in mono columns', () => {
+    const wrapper = mount(ATable, {
+      props: {
+        columns: [
+          { key: 'model', label: '型号', mono: true },
+          { key: 'note', label: '说明' },
+        ],
+        rows: [{ id: '1', model: '', note: '  ' }],
+        rowKey: 'id',
+      },
+    });
+
+    const placeholders = wrapper.findAll('td .a-table__placeholder');
+    expect(placeholders).toHaveLength(2);
+    expect(placeholders.every((node) => node.text() === '—')).toBe(true);
+    // 等宽字体会把长横画成短横，占位符必须回到界面字体
+    expect(tableSource).toMatch(
+      /\.a-table :deep\(\.a-table__placeholder\)\s*\{[^}]*font-family:\s*var\(--font-ui\);/,
+    );
+  });
+
   it('uses tabular figures for consistent numeric comparison', () => {
     expect(tableSource).toMatch(/font-variant-numeric:\s*tabular-nums;/);
   });

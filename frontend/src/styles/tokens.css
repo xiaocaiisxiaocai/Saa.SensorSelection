@@ -124,6 +124,7 @@
   --shadow-2: 0 4px 12px rgb(0 0 0 / 8%);
   --shadow-3: 0 8px 24px rgb(0 0 0 / 12%);
   --shadow-4: 0 24px 64px rgb(0 0 0 / 20%);
+  --shadow-scroll-edge: rgb(0 0 0 / 16%);
   --hairline: inset 0 -0.5px 0 var(--separator);
 
   --dur-0: 0ms;
@@ -233,6 +234,7 @@
   --shadow-2: 0 4px 12px rgb(0 0 0 / 45%);
   --shadow-3: 0 8px 24px rgb(0 0 0 / 50%);
   --shadow-4: 0 24px 64px rgb(0 0 0 / 60%);
+  --shadow-scroll-edge: rgb(0 0 0 / 55%);
   --overlay: rgb(0 0 0 / 40%);
 }
 

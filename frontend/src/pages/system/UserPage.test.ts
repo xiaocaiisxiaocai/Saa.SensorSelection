@@ -141,10 +141,12 @@ describe('UserPage', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
 
     const selfDeleteButton = document.querySelector(
-      '[aria-label="不能删除当前登录账号"]',
+      '[aria-label="删除（不能删除当前登录账号）"]',
     );
     expect(selfDeleteButton).toBeTruthy();
-    expect(selfDeleteButton?.hasAttribute('disabled')).toBe(true);
+    // 保持可聚焦、可悬停，tooltip 才能说明原因；点击由组件拦截
+    expect(selfDeleteButton?.getAttribute('aria-disabled')).toBe('true');
+    expect(selfDeleteButton?.hasAttribute('disabled')).toBe(false);
 
     const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
     expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
@@ -182,10 +184,12 @@ describe('UserPage', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
 
     const blockedButton = document.querySelector(
-      '[aria-label="至少保留一个启用的系统管理员"]',
+      '[aria-label="删除（至少保留一个启用的系统管理员）"]',
     );
     expect(blockedButton).toBeTruthy();
-    expect(blockedButton?.hasAttribute('disabled')).toBe(true);
+    // 保持可聚焦、可悬停，tooltip 才能说明原因；点击由组件拦截
+    expect(blockedButton?.getAttribute('aria-disabled')).toBe('true');
+    expect(blockedButton?.hasAttribute('disabled')).toBe(false);
 
     const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
     expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
@@ -209,6 +213,15 @@ describe('UserPage', () => {
         item.textContent?.trim(),
       ),
     ).toEqual(['请输入用户名', '密码至少 4 位', '请输入显示名']);
+    wrapper.unmount();
+  });
+
+  it('keeps the creation time on one line like the audit log', async () => {
+    const wrapper = await mountPage();
+    await vi.waitFor(() => expect(wrapper.find('.user-created-at').exists()).toBe(true));
+
+    const header = [...wrapper.findAll('th')].find((th) => th.text().includes('创建时间'));
+    expect(header?.attributes('style')).toMatch(/width:\s*192px/);
     wrapper.unmount();
   });
 });

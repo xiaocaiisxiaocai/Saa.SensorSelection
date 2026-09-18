@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { SearchItem } from '@/domain';
+import { searchItemDetail, type SearchItem } from '@/domain';
 import { useSelectionStore } from '@/stores/selection';
 import {
   ABadge,
@@ -122,8 +122,12 @@ function openResult(item: SearchItem) {
             <span class="search-list__meta">
               <AHighlightText :text="item.category" :query="query" />
             </span>
-            <span class="search-list__sub" :title="item.sub">
-              <AHighlightText :text="item.sub" :query="query" />
+            <span
+              v-if="searchItemDetail(item)"
+              class="search-list__sub"
+              :title="searchItemDetail(item)"
+            >
+              <AHighlightText :text="searchItemDetail(item)" :query="query" />
             </span>
           </button>
         </li>

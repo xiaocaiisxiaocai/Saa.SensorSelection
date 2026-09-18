@@ -81,9 +81,11 @@
   flex-shrink: 1;
 }
 
+/* 主操作按钮与其它页面工具栏（.selection-toolbar）同一字号 */
 .dictionary-header .a-button {
   flex-shrink: 0;
   margin-left: auto;
+  font: var(--text-toolbar-em);
 }
 
 .selection-split {
@@ -613,8 +615,16 @@
     grid-template-rows: minmax(12rem, 42vh) minmax(0, 1fr);
   }
 
+  /* 示意图叠到表格下方：表格行给保底高度，整个页签改为纵向滚动，
+     否则隐式行高把表格压成几像素，示意图反过来盖在筛选栏上。 */
   .machine-body--with-images {
+    flex: 1 0 auto;
+    grid-template-rows: minmax(24rem, 1fr) auto;
     grid-template-columns: 1fr;
+  }
+
+  .selection-tabpanel {
+    overflow: hidden auto;
   }
 
   .entity-source {

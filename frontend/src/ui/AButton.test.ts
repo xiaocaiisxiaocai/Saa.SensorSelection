@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import AButton from './AButton.vue';
+
+const source = readFileSync(
+  fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'),
+  'utf8',
+);
 
 describe('AButton', () => {
   it('renders a button with the plain medium defaults', () => {
@@ -42,5 +50,12 @@ describe('AButton', () => {
     expect(loading.find('.a-spinner').exists()).toBe(true);
     await loading.trigger('click');
     expect(loading.emitted('click')).toBeUndefined();
+  });
+
+  it('keeps a disabled filled button legible instead of fading white text on pale blue', () => {
+    expect(source).toMatch(
+      /\.a-button--filled:disabled\s*\{[^}]*color:\s*var\(--label\);[^}]*background:\s*var\(--fill-2\);/,
+    );
+    expect(source).toMatch(/\.a-button:disabled\s*\{[^}]*opacity:\s*0\.5;/);
   });
 });

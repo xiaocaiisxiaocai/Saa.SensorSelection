@@ -848,7 +848,7 @@ function saveReplace() {
             />
             {{ row.sensorType }}
           </span>
-          <span v-else>—</span>
+          <span v-else class="a-table__placeholder">—</span>
         </template>
         <template #cell-partNumber="{ value }">
           <span
@@ -863,7 +863,7 @@ function saveReplace() {
           >
             {{ value }}
           </span>
-          <span v-else>—</span>
+          <span v-else class="a-table__placeholder">—</span>
         </template>
         <template #cell-sop="{ row }">
           <button
@@ -908,7 +908,7 @@ function saveReplace() {
           >
             {{ relationText(row) }}
           </button>
-          <span v-else>—</span>
+          <span v-else class="a-table__placeholder">—</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="table-actions">
@@ -968,9 +968,9 @@ function saveReplace() {
       :confirm-close="dirtyGuard.confirmClose"
     >
       <!--
-        这几个栅格必须保持同样的列数：列数不同的栅格各自均分弹窗宽度，
-        字段左边界就会落在 4 个不同位置（实测 468/688/798/908），整张表单
-        看不出栅格。统一成 2 列后，所有字段只落在 2 条对齐线上。
+        状态/类型、关联型录/3D 用 2 列；品牌/型号/料号这组识别字段用 3 列，
+        让 7 个短字段排满、不留半行空格。列数只允许 2 和 3 两种：再多一种，
+        字段左边界会落到更多位置（曾实测 468/688/798/908 四条），看不出栅格。
       -->
       <AFormGrid>
         <AFormRow
@@ -994,7 +994,7 @@ function saveReplace() {
           <ASelect v-model="form.sensorType" :options="typeOptions" />
         </AFormRow>
       </AFormGrid>
-      <AFormGrid>
+      <AFormGrid :columns="3">
         <AFormRow label="品牌">
           <AField v-model="form.brand" :maxlength="60" />
         </AFormRow>

@@ -114,6 +114,26 @@ describe('ASourceList', () => {
     wrapper.unmount();
   });
 
+  it('reveals drag handles only on hover or focus, but always on touch screens', () => {
+    expect(sourceListSource).toMatch(
+      /\.a-source-list__handle\s*\{[^}]*opacity:\s*0;/,
+    );
+    expect(sourceListSource).toMatch(
+      /\.a-source-list__row:hover \.a-source-list__handle,\s*\.a-source-list__row:focus-within \.a-source-list__handle\s*\{[^}]*opacity:\s*1;/,
+    );
+    expect(sourceListSource).toMatch(
+      /@media \(pointer: coarse\)\s*\{\s*\.a-source-list__handle\s*\{[^}]*opacity:\s*1;/,
+    );
+  });
+
+  it('uses a typographic ellipsis in the search placeholder', () => {
+    const wrapper = mountList();
+    const placeholder = wrapper.get('input').attributes('placeholder') ?? '';
+    expect(placeholder.endsWith('…')).toBe(true);
+    expect(placeholder).not.toContain('...');
+    wrapper.unmount();
+  });
+
   it('filters items and emits select', async () => {
     const wrapper = mountList();
     await wrapper.get('input[type="search"]').setValue('胜宏');

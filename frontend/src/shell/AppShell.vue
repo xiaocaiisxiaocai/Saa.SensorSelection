@@ -16,6 +16,9 @@ import { toast } from '@/ui/toast';
 
 const SIDEBAR_STORAGE_KEY = 'apple-frontend:sidebar-collapsed';
 const COMPACT_MEDIA_QUERY = '(width <= 960px)';
+// 960–1200px 的笔记本/小屏：展开的侧栏会挤掉双栏页面里一半的表格列，
+// 默认收成图标栏；用户在该宽度下手动展开只在本次会话有效，不改写宽屏偏好。
+const MEDIUM_MEDIA_QUERY = '(width <= 1200px)';
 
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +28,8 @@ const selection = useSelectionStore();
 
 const collapsed = ref(readCollapsed());
 const compactViewport = ref(false);
+const mediumViewport = ref(false);
+const mediumOverride = ref<boolean | null>(null);
 const mobileSidebarOpen = ref(false);
 const contentScrolled = ref(false);
 const searchQuery = ref('');
@@ -40,10 +45,14 @@ const connecting = computed(() => selection.backendStatus === 'connecting');
 const backendUnavailable = computed(
   () => selection.backendStatus === 'offline',
 );
+const railCollapsed = computed(() =>
+  mediumViewport.value ? (mediumOverride.value ?? true) : collapsed.value,
+);
 const sidebarExpanded = computed(() =>
-  compactViewport.value ? mobileSidebarOpen.value : !collapsed.value,
+  compactViewport.value ? mobileSidebarOpen.value : !railCollapsed.value,
 );
 let compactMedia: MediaQueryList | null = null;
+let mediumMedia: MediaQueryList | null = null;
 
 const themeOptions: {
   icon: typeof Sun;
@@ -68,6 +77,10 @@ function toggleSidebar() {
     mobileSidebarOpen.value = !mobileSidebarOpen.value;
     return;
   }
+  if (mediumViewport.value) {
+    mediumOverride.value = !railCollapsed.value;
+    return;
+  }
   collapsed.value = !collapsed.value;
 
   try {
@@ -84,6 +97,11 @@ function updateCompactViewport(matches: boolean) {
 
 function onCompactMediaChange(event: MediaQueryListEvent) {
   updateCompactViewport(event.matches);
+}
+
+function onMediumMediaChange(event: MediaQueryListEvent) {
+  mediumViewport.value = event.matches;
+  mediumOverride.value = null;
 }
 
 function onContentScroll(event: Event) {
@@ -135,11 +153,17 @@ onMounted(() => {
     updateCompactViewport(compactMedia.matches);
     compactMedia.addEventListener('change', onCompactMediaChange);
   }
+  mediumMedia = window.matchMedia?.(MEDIUM_MEDIA_QUERY) ?? null;
+  if (mediumMedia) {
+    mediumViewport.value = mediumMedia.matches;
+    mediumMedia.addEventListener('change', onMediumMediaChange);
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onSearchHotkey);
   compactMedia?.removeEventListener('change', onCompactMediaChange);
+  mediumMedia?.removeEventListener('change', onMediumMediaChange);
 });
 
 watch(
@@ -171,7 +195,7 @@ watch(
   <div
     class="app-shell"
     :class="{
-      'app-shell--collapsed': !compactViewport && collapsed,
+      'app-shell--collapsed': !compactViewport && railCollapsed,
       'app-shell--compact': compactViewport,
       'app-shell--drawer-open': compactViewport && mobileSidebarOpen,
     }"

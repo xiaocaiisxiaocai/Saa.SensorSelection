@@ -99,6 +99,17 @@ describe('AppShell', () => {
   });
 
   it('updates the desktop sidebar toggle label and expanded state', async () => {
+    // 宽屏桌面：两个断点都不命中（happy-dom 默认视口 1024px 会命中中等断点）
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: () => true,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
     const { wrapper } = await mountShell();
     const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
 
@@ -109,7 +120,9 @@ describe('AppShell', () => {
 
     expect(toggle().attributes('aria-expanded')).toBe('false');
     expect(toggle().attributes('aria-label')).toBe('展开侧栏');
+    expect(localStorage.getItem('apple-frontend:sidebar-collapsed')).toBe('1');
     wrapper.unmount();
+    vi.unstubAllGlobals();
   });
 
   it('uses an off-canvas navigation drawer on compact viewports', async () => {
@@ -150,6 +163,37 @@ describe('AppShell', () => {
     await wrapper.get('.sidebar-backdrop').trigger('click');
     expect(toggle().attributes('aria-expanded')).toBe('false');
     wrapper.unmount();
+  });
+
+  it('collapses to an icon rail on medium viewports without overwriting the wide-screen preference', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('1200px'),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: () => true,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+
+    const { wrapper } = await mountShell();
+    const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
+
+    expect(wrapper.classes()).toContain('app-shell--collapsed');
+    expect(wrapper.classes()).not.toContain('app-shell--compact');
+    expect(toggle().attributes('aria-expanded')).toBe('false');
+
+    await toggle().trigger('click');
+    expect(wrapper.classes()).not.toContain('app-shell--collapsed');
+    expect(toggle().attributes('aria-expanded')).toBe('true');
+    // 中等宽度下的临时展开不写回宽屏偏好
+    expect(localStorage.getItem('apple-frontend:sidebar-collapsed')).toBeNull();
+
+    await toggle().trigger('click');
+    expect(wrapper.classes()).toContain('app-shell--collapsed');
+    wrapper.unmount();
+    vi.unstubAllGlobals();
   });
 
   it('clearly reports backend unavailability instead of showing local demo data', async () => {

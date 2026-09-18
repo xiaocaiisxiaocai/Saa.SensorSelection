@@ -85,6 +85,13 @@ async function remove(item: ControlledFileItem) {
         aria-label="搜索制程文件"
       />
     </div>
+    <!-- 还没有任何文件时，整页只剩一个上传框，看不出这里是放什么的 -->
+    <div v-if="writable && files.length === 0" class="process-intro-hint">
+      <p class="process-intro-hint__title">还没有制程介绍资料</p>
+      <p class="process-intro-hint__text">
+        上传工艺说明、制程培训或规范文件，团队成员可在此查阅；PDF 支持在线预览。
+      </p>
+    </div>
     <AFileDrop
       v-if="writable"
       :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept},${CONTROLLED_FILE_RULES.ppt.accept}`"
@@ -162,3 +169,22 @@ async function remove(item: ControlledFileItem) {
     </ASheet>
   </div>
 </template>
+
+<style scoped>
+.process-intro-hint {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.process-intro-hint__title {
+  margin: 0;
+  font: var(--text-headline);
+  color: var(--label);
+}
+
+.process-intro-hint__text {
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--label-2);
+}
+</style>

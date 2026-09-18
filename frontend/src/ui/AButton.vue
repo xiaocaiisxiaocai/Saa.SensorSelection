@@ -114,6 +114,15 @@ function onClick(event: MouseEvent) {
   box-shadow: var(--focus-ring-offset), var(--shadow-1);
 }
 
+/* 实心按钮禁用时不再把蓝底整体压淡：0.4 透明度下白字落在浅蓝底上几乎读不出。
+   改为中性填充 + 正文色（Apple 惯例：禁用态不借用强调色），叠加下方通用的
+   0.5 禁用透明度后呈中灰，一眼可辨是禁用、文字仍读得清。 */
+.a-button--filled:disabled {
+  color: var(--label);
+  background: var(--fill-2);
+  box-shadow: none;
+}
+
 .a-button--filled:hover:not(:disabled) {
   filter: brightness(1.08);
   box-shadow: var(--shadow-2);
@@ -180,7 +189,7 @@ function onClick(event: MouseEvent) {
 
 .a-button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.5;
 }
 
 .a-button:active:not(:disabled) {

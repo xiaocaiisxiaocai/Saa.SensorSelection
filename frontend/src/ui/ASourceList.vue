@@ -340,7 +340,7 @@ onMounted(restoreWidth);
       <ASearchField
         v-model="query"
         size="small"
-        :placeholder="`搜索${itemLabel}...`"
+        :placeholder="`搜索${itemLabel}…`"
         :aria-label="`搜索${itemLabel}`"
       />
       <AIconButton
@@ -644,6 +644,22 @@ onMounted(restoreWidth);
   height: var(--control-height-sm);
   color: var(--label-3);
   cursor: grab;
+
+  /* 每行常驻的拖拽手柄在列表里连成一条点阵，很吵；只在指向或聚焦该行时出现 */
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.a-source-list__row:hover .a-source-list__handle,
+.a-source-list__row:focus-within .a-source-list__handle {
+  opacity: 1;
+}
+
+/* 触屏没有悬停，手柄必须常驻才能被发现 */
+@media (pointer: coarse) {
+  .a-source-list__handle {
+    opacity: 1;
+  }
 }
 
 .a-source-list__toggle,

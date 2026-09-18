@@ -86,6 +86,10 @@ function isProtected(role: RbacRole) {
   return role.isSystem || role.code === 'admin';
 }
 
+function protectedReason(role: RbacRole) {
+  return isProtected(role) ? '系统内置角色，不可修改或删除' : undefined;
+}
+
 function groupState(items: PermissionInfo[]) {
   const selected = items.filter((item) =>
     form.permissionIds.includes(item.id),
@@ -232,11 +236,13 @@ async function removeRole(role: RbacRole) {
         />
       </template>
       <template #cell-actions="{ row }">
-        <div v-if="!isProtected(row)" class="table-actions">
+        <div class="table-actions">
           <AIconButton
             :icon="Pencil"
             label="编辑"
             size="small"
+            :disabled="isProtected(row)"
+            :disabled-reason="protectedReason(row)"
             @click="openEdit(row)"
           />
           <AIconButton
@@ -244,6 +250,8 @@ async function removeRole(role: RbacRole) {
             label="删除"
             size="small"
             variant="destructive"
+            :disabled="isProtected(row)"
+            :disabled-reason="protectedReason(row)"
             @click="removeRole(row)"
           />
         </div>

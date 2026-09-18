@@ -1081,6 +1081,16 @@ describe('MachinePage', () => {
     );
   });
 
+  it('keeps the structure table usable when the schematic stacks below it', () => {
+    // 单列时若不给行高，隐式行把表格压成几像素，示意图反盖在筛选栏上
+    expect(selectionPageCss).toMatch(
+      /@media \(width <= 60rem\)[\s\S]*\.machine-body--with-images\s*\{[^}]*flex:\s*1 0 auto;[^}]*grid-template-rows:\s*minmax\(24rem,\s*1fr\) auto;/s,
+    );
+    expect(selectionPageCss).toMatch(
+      /@media \(width <= 60rem\)[\s\S]*\.selection-tabpanel\s*\{[^}]*overflow:\s*hidden auto;/s,
+    );
+  });
+
   it('combines the active section and report actions into one desktop context bar', async () => {
     const wrapper = await mountPage(true, true);
     const header = wrapper.get('.machine-panel-header');

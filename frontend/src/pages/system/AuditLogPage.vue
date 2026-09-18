@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import { api, ApiError, type AuditLogItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
 import { toast } from '@/ui/toast';
+import { formatAuditTarget } from './audit-target';
 import {
   ABadge,
   AButton,
@@ -83,20 +92,15 @@ const columns: TableColumn[] = [
   // 「操作」列显示的是中文标签、排序依据却是底层操作码，排出来看着像乱序，
   // 且已有专门的操作类型筛选，这里不提供排序。
   { key: 'action', label: '操作', width: 120 },
+  // 失败原因不再单独占一列（绝大多数行是空的），失败时显示在目标下方
   {
     key: 'target',
     label: '目标',
-    minWidth: 180,
+    minWidth: 240,
     align: 'start',
   },
   { key: 'detail', label: '详情', width: 96 },
   { key: 'result', label: '结果', width: 88, sortable: true },
-  {
-    key: 'error',
-    label: '说明',
-    minWidth: 180,
-    align: 'start',
-  },
   { key: 'ip', label: 'IP', width: 120 },
 ];
 
@@ -108,6 +112,24 @@ watch(sort, () => {
 });
 
 onMounted(loadData);
+
+// 和其它页面一样即改即筛；输入框防抖，避免每敲一个字就请求一次后端。
+const FILTER_DEBOUNCE_MS = 300;
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => [
+    filters.username.trim(),
+    filters.action,
+    filters.result,
+    filters.dateRange?.[0] ?? null,
+    filters.dateRange?.[1] ?? null,
+  ],
+  () => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(applyFilters, FILTER_DEBOUNCE_MS);
+  },
+);
+onBeforeUnmount(() => clearTimeout(filterTimer));
 
 function actionLabel(action: string) {
   return ACTION_LABELS[action] ?? action;
@@ -202,19 +224,21 @@ async function loadData() {
   }
 }
 
-function search() {
-  page.value = 1;
-  void loadData();
+function applyFilters() {
+  // 不在第一页时改页码即可，由页码的 watch 触发加载，避免重复请求
+  if (page.value === 1) void loadData();
+  else page.value = 1;
 }
 
-function resetFilters() {
-  const reloadOnCurrentPage = page.value === 1;
+async function resetFilters() {
   filters.username = '';
   filters.action = '';
   filters.result = '';
   filters.dateRange = null;
-  page.value = 1;
-  if (reloadOnCurrentPage) void loadData();
+  // 重置是明确的一次性操作，不必等防抖
+  await nextTick();
+  clearTimeout(filterTimer);
+  applyFilters();
 }
 </script>
 
@@ -234,7 +258,6 @@ function resetFilters() {
         :options="actionOptions"
         placeholder="全部操作"
         aria-label="操作类型筛选"
-        clearable
       />
       <ASelect
         v-model="filters.result"
@@ -242,7 +265,6 @@ function resetFilters() {
         :options="resultOptions"
         placeholder="全部结果"
         aria-label="操作结果筛选"
-        clearable
       />
       <ADatePicker
         v-model="filters.dateRange"
@@ -250,7 +272,6 @@ function resetFilters() {
         range
         :placeholder="['开始时间', '结束时间']"
       />
-      <AButton variant="filled" @click="search">筛选</AButton>
       <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
     </div>
     <ATable
@@ -268,7 +289,14 @@ function resetFilters() {
       </template>
       <template #cell-username="{ value }">{{ value || '—' }}</template>
       <template #cell-action="{ row }">{{ actionLabel(row.action) }}</template>
-      <template #cell-target="{ value }">{{ value || '—' }}</template>
+      <template #cell-target="{ row }">
+        <span class="audit-target" :title="row.target || undefined">
+          {{ formatAuditTarget(row.target) || '—' }}
+        </span>
+        <span v-if="!row.result && row.error" class="audit-target__error">
+          {{ row.error }}
+        </span>
+      </template>
       <template #cell-detail="{ row }">
         <AButton
           size="small"
@@ -284,7 +312,6 @@ function resetFilters() {
           :tone="row.result ? 'green' : 'red'"
         />
       </template>
-      <template #cell-error="{ value }">{{ value || '—' }}</template>
       <template #cell-ip="{ value }">{{ value || '—' }}</template>
     </ATable>
     <APagination
@@ -316,7 +343,17 @@ function resetFilters() {
         </div>
         <div class="audit-detail__row">
           <dt>目标</dt>
-          <dd>{{ selectedLog.target || '—' }}</dd>
+          <dd>{{ formatAuditTarget(selectedLog.target) || '—' }}</dd>
+        </div>
+        <div
+          v-if="
+            selectedLog.target &&
+              formatAuditTarget(selectedLog.target) !== selectedLog.target
+          "
+          class="audit-detail__row"
+        >
+          <dt>目标键</dt>
+          <dd class="audit-detail__mono">{{ selectedLog.target }}</dd>
         </div>
         <div class="audit-detail__row">
           <dt>结果</dt>
@@ -385,7 +422,7 @@ function resetFilters() {
      所以这里少了一列——直接从筛选字段开始。 */
   grid-template-columns:
     minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
-    minmax(17rem, 1.5fr) auto auto;
+    minmax(17rem, 1.5fr) auto;
   gap: var(--space-2);
 }
 
@@ -404,6 +441,21 @@ function resetFilters() {
   .audit-toolbar__date {
     grid-column: 1 / -1;
   }
+}
+
+.audit-target,
+.audit-target__error {
+  display: block;
+}
+
+.audit-target__error {
+  margin-top: var(--space-1);
+  font: var(--text-caption);
+  color: var(--sys-red);
+}
+
+.audit-detail__mono {
+  font-family: var(--font-mono);
 }
 
 .audit-detail {

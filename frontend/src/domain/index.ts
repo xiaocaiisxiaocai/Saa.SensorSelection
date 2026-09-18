@@ -37,7 +37,7 @@ export {
   validateMachineRowImage,
 } from './normalize';
 export { buildDefaultStore, createSelectionRepository } from './repository';
-export { buildSearchIndex } from './search';
+export { buildSearchIndex, searchItemDetail } from './search';
 export {
   entityTreeItemKey,
   filterMachineGroups,

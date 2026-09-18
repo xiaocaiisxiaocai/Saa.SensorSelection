@@ -27,6 +27,11 @@ withDefaults(
   user-select: none;
 }
 
+/* 标志是单色深蓝 PNG，放在暗色背景上几乎看不见；暗色主题用反白标志 */
+:root[data-theme='dark'] .brand-mark {
+  filter: brightness(0) invert(1);
+}
+
 .brand-mark--toolbar {
   height: var(--space-7);
 }

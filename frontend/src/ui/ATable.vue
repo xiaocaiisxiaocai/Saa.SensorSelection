@@ -359,6 +359,13 @@ function fixedSide(column: TableColumn<T>, columnIndex: number) {
   return column.fixed;
 }
 
+const hasFixedStart = computed(() =>
+  props.columns.some((column, index) => fixedSide(column, index) === 'start'),
+);
+const hasFixedEnd = computed(() =>
+  props.columns.some((column, index) => fixedSide(column, index) === 'end'),
+);
+
 const hoverTip = ref('');
 
 function hasOverflowingContent(el: HTMLElement): boolean {
@@ -499,6 +506,8 @@ watch(
       'a-table--virtual': virtual,
       'a-table--overflow-start': canScrollStart,
       'a-table--overflow-end': canScrollEnd,
+      'a-table--fixed-start': hasFixedStart,
+      'a-table--fixed-end': hasFixedEnd,
     }"
     :aria-busy="loading ? true : undefined"
     :aria-label="
@@ -651,7 +660,11 @@ watch(
                       :column="column"
                       :value="cellValue(row, column)"
                     >
-                      {{ displayText(row, column) }}
+                      <span
+                        v-if="!cellText(row, column).trim()"
+                        class="a-table__placeholder"
+                      >—</span>
+                      <template v-else>{{ displayText(row, column) }}</template>
                     </slot>
                   </div>
                 </template>
@@ -681,6 +694,8 @@ watch(
 
 <style scoped>
 .a-table {
+  --a-table-fade: var(--space-6);
+
   position: relative;
   box-sizing: border-box;
   min-width: 0;
@@ -691,24 +706,26 @@ watch(
 }
 
 /* 有横向溢出内容时常驻一条淡滚动条，不再要求鼠标先悬停到表格上才现形，
-   否则用户不移到表格上根本不知道右侧还有内容可以横向滚动。 */
+   否则用户不移到表格上根本不知道右侧还有内容可以横向滚动。
+
+   横向滚动提示阴影只画在没有固定列的一侧：固定列的单元格背景只铺到最后一行，
+   容器内阴影会在行下方的空白区露成一条竖带（暗色下尤其刺眼）。固定列一侧的
+   提示改由固定列单元格自身的外阴影承担。阴影色用专门的 token，不能借文字色，
+   否则暗色主题下文字色是浅色，阴影会变成一条白带。 */
 .a-table--overflow-start,
 .a-table--overflow-end {
   scrollbar-color: var(--scrollbar-thumb) transparent;
-}
-
-.a-table--overflow-end {
-  box-shadow: inset -20px 0 16px -16px var(--label-2);
-}
-
-.a-table--overflow-start {
-  box-shadow: inset 20px 0 16px -16px var(--label-2);
-}
-
-.a-table--overflow-start.a-table--overflow-end {
   box-shadow:
-    inset 20px 0 16px -16px var(--label-2),
-    inset -20px 0 16px -16px var(--label-2);
+    var(--a-table-edge-start, 0 0 transparent),
+    var(--a-table-edge-end, 0 0 transparent);
+}
+
+.a-table--overflow-start:not(.a-table--fixed-start) {
+  --a-table-edge-start: inset 20px 0 16px -16px var(--shadow-scroll-edge);
+}
+
+.a-table--overflow-end:not(.a-table--fixed-end) {
+  --a-table-edge-end: inset -20px 0 16px -16px var(--shadow-scroll-edge);
 }
 
 .a-table:focus-visible {
@@ -842,55 +859,81 @@ tbody tr:hover {
   font-family: var(--font-mono);
 }
 
+/* 空值占位符在等宽列里会被等宽字体画成短横（–），和其它列的长横（—）
+   不一致。统一用界面字体；页面自定义单元格插槽也用这个类。 */
+.a-table :deep(.a-table__placeholder) {
+  font-family: var(--font-ui);
+}
+
 .a-table__cell--fixed {
+  /* 行状态（悬停/斑马纹/选中/表头）的半透明底色。固定列不能直接继承行的
+     半透明底色，否则滚到下面的内容会透出来；改为不透明底 + 叠一层行底色。 */
+  --a-table-row-tint: transparent;
+
   position: sticky;
   z-index: 1;
-  overflow: hidden;
+
+  /* 覆盖 th/td 的 overflow:hidden，裁剪改由下面的 clip-path 负责 */
+  overflow: visible;
   white-space: nowrap;
-  background: var(--bg-content);
+  background-color: var(--bg-content);
+  background-image: linear-gradient(
+    var(--a-table-row-tint),
+    var(--a-table-row-tint)
+  );
   box-shadow:
     inset 0.5px 0 0 var(--control-stroke),
     inset 0 -0.5px 0 var(--separator);
 }
 
+/*
+ * 固定列被横向滚动的内容压在下面时，内侧用一段渐变把被压住的文字淡出，
+ * 而不是在分界线上硬切成半个字。
+ *
+ * 两个坑：
+ * 1. 不能用 overflow:hidden 裁单元格内容——它会连同探出单元格的渐变一起裁掉。
+ *    改用 clip-path，只在渐变那一侧放宽 --a-table-fade 的距离。
+ * 2. 不能改用单元格外阴影：border-collapse:collapse 下 Chrome 根本不绘制
+ *    td 的外 box-shadow（实测红色阴影也不出现）。
+ */
 .a-table__cell--fixed-start {
   left: 0;
+  clip-path: inset(0 calc(var(--a-table-fade) * -1) 0 0);
 }
 
 .a-table__cell--fixed-end {
   right: 0;
+  clip-path: inset(0 0 0 calc(var(--a-table-fade) * -1));
 }
 
+.a-table__cell--fixed-start::before,
 .a-table__cell--fixed-end::before {
   position: absolute;
   top: 0;
   bottom: 0.5px;
-  left: calc(var(--space-5) * -1);
-  width: var(--space-5);
+  width: var(--a-table-fade);
   pointer-events: none;
   content: '';
-  background: linear-gradient(to right, transparent, var(--bg-content));
   opacity: 0;
   transition: opacity var(--dur-1) var(--ease-out);
 }
 
-.a-table--overflow-end .a-table__cell--fixed-end::before {
-  opacity: 1;
+/* 渐变终点 = 固定列自身的底色（不透明底 + 行底色），悬停/选中/表头都不出亮条 */
+.a-table__cell--fixed-end::before {
+  left: calc(var(--a-table-fade) * -1);
+  background:
+    linear-gradient(to right, transparent, var(--a-table-row-tint)),
+    linear-gradient(to right, transparent, var(--bg-content));
 }
 
 .a-table__cell--fixed-start::before {
-  position: absolute;
-  top: 0;
-  right: calc(var(--space-5) * -1);
-  bottom: 0.5px;
-  width: var(--space-5);
-  pointer-events: none;
-  content: '';
-  background: linear-gradient(to left, transparent, var(--bg-content));
-  opacity: 0;
-  transition: opacity var(--dur-1) var(--ease-out);
+  right: calc(var(--a-table-fade) * -1);
+  background:
+    linear-gradient(to left, transparent, var(--a-table-row-tint)),
+    linear-gradient(to left, transparent, var(--bg-content));
 }
 
+.a-table--overflow-end .a-table__cell--fixed-end::before,
 .a-table--overflow-start .a-table__cell--fixed-start::before {
   opacity: 1;
 }
@@ -898,15 +941,19 @@ tbody tr:hover {
 /* 固定列的表头格要跟着整行走：.a-table__cell--fixed 的 --bg-content 会盖过
    上面的 th 规则，让表头第一格变成表体色，整条表头出现断缝。 */
 th.a-table__cell--fixed {
+  --a-table-row-tint: var(--fill-4);
+
   z-index: 2;
-  background-color: var(--bg-content);
-  background-image: linear-gradient(var(--fill-4), var(--fill-4));
 }
 
-.a-table__row--selected .a-table__cell--fixed,
 tbody tr:hover .a-table__cell--fixed,
 .a-table--striped tbody tr:nth-child(even) .a-table__cell--fixed {
-  background: inherit;
+  --a-table-row-tint: var(--fill-4);
+}
+
+/* 选中行（含选中且悬停）优先：选择器特异度要高于上面的斑马纹规则 */
+.a-table tbody tr.a-table__row--selected .a-table__cell--fixed {
+  --a-table-row-tint: var(--sys-blue-fill);
 }
 
 .a-table__ellipsis {
@@ -1017,10 +1064,20 @@ tbody tr:hover .a-table__cell--fixed,
 @media (width <= 40rem) {
   .a-table__cell--fixed {
     position: static;
+    clip-path: none;
   }
 
   .a-table__cell--fixed::before {
     display: none;
+  }
+
+  /* 窄屏固定列取消吸附，滚动提示回到容器两侧 */
+  .a-table--overflow-start.a-table--fixed-start {
+    --a-table-edge-start: inset 20px 0 16px -16px var(--shadow-scroll-edge);
+  }
+
+  .a-table--overflow-end.a-table--fixed-end {
+    --a-table-edge-end: inset -20px 0 16px -16px var(--shadow-scroll-edge);
   }
 }
 

@@ -35,4 +35,18 @@ describe('SearchPage', () => {
     );
     wrapper.unmount();
   });
+
+  it('does not repeat the category line at the start of the detail line', async () => {
+    const { wrapper } = await mountSearch('客户');
+    const cards = wrapper.findAll('.search-list button');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const meta = card.find('.search-list__meta').text().trim();
+      const sub = card.find('.search-list__sub');
+      if (!sub.exists() || !meta) continue;
+      const first = sub.text().split(' · ')[0]?.trim();
+      expect(first === meta || first === `${meta}区域`).toBe(false);
+    }
+    wrapper.unmount();
+  });
 });

@@ -129,6 +129,8 @@ function onOpenAutoFocus(event: Event) {
 <style>
 /* Teleported to document.body — do not scope. */
 .a-sheet {
+  --sheet-edge-gap: 56px;
+
   position: fixed;
   top: 50%;
   left: 50%;
@@ -136,7 +138,10 @@ function onOpenAutoFocus(event: Event) {
   display: flex;
   flex-direction: column;
   max-width: calc(100vw - var(--space-8));
-  max-height: calc(100dvh - var(--space-9));
+
+  /* 上下各留 56px：底部居中的 toast（距底 16px、高约 34px）弹出时落在弹窗
+     下方的空白里，不再压在弹窗底边和底部按钮上。内容更长时弹窗内部滚动。 */
+  max-height: calc(100dvh - var(--sheet-edge-gap) * 2);
   overflow: hidden;
   color: var(--label);
   background: var(--bg-elevated);

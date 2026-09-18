@@ -567,8 +567,12 @@ watch(
               </template>
             </ATooltip>
             <!--
-              列宽拖动手柄。用 separator 而不是纯装饰元素，键盘用户也能
-              Tab 到它用左右键调宽、Home 还原，不是只有鼠标能用。
+              列宽拖动手柄，刻意不进 Tab 顺序（tabindex="-1"）。
+              每列一个手柄意味着每列多一个停留点：Sensor 表实测 36 个 Tab
+              停留点里有 11 个是手柄，键盘用户想走到表格行或分页得先穿过
+              它们，得不偿失。列宽只是显示偏好，调不了也不影响读到任何内容
+              （单元格会换行、表格能横向滚动），所以这里选择不占 Tab 顺序。
+              键盘处理保留着，手柄被聚焦时左右键/Home 仍然有效。
             -->
             <span
               v-if="columnIndex < columns.length - 1"
@@ -576,7 +580,7 @@ watch(
               :class="{ 'a-table__resizer--active': resizingKey === column.key }"
               role="separator"
               aria-orientation="vertical"
-              tabindex="0"
+              tabindex="-1"
               :aria-label="`调整${column.label}列宽`"
               @pointerdown="onResizeStart(column, $event)"
               @keydown="onResizeKeydown(column, $event)"

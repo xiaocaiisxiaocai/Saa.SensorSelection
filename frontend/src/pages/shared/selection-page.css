@@ -59,9 +59,17 @@
   min-height: 0;
 }
 
+/*
+ * flex-wrap 不能省：分段控件和按钮默认都是 flex-shrink:0，谁都不肯让位。
+ * 字典有 10 个 Tab、内在宽 770px，768px 视口下它吃满整行，把「新增」压成
+ * 20px 宽并推到页面右边界之外——而 .selection-page 的 overflow-x 是 hidden，
+ * 滚都滚不到。下面让分段控件先让位（它自己有横向滚动，Tab 仍然够得到），
+ * 主操作按钮则永不压缩；实在放不下时整行折行，按钮落到第二行。
+ */
 .dictionary-header {
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
   min-width: 0;
@@ -70,9 +78,11 @@
 
 .dictionary-header .a-segmented {
   min-width: 0;
+  flex-shrink: 1;
 }
 
 .dictionary-header .a-button {
+  flex-shrink: 0;
   margin-left: auto;
 }
 

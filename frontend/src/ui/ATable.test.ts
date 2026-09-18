@@ -376,8 +376,12 @@ describe('ATable', () => {
         ?.attributes('style');
     expect(width('名称')).toBe('width: 200px;');
 
-    // 键盘调宽：右方向键一次 16px
+    // 手柄刻意不进 Tab 顺序：每列一个停留点会把键盘导航淹掉（实测 36 个
+    // 停留点里 11 个是手柄），而列宽只是显示偏好，不影响读到任何内容。
     const handle = wrapper.get('[aria-label="调整名称列宽"]');
+    expect(handle.attributes('tabindex')).toBe('-1');
+
+    // 键盘调宽：右方向键一次 16px
     await handle.trigger('keydown', { key: 'ArrowRight' });
     expect(width('名称')).toBe('width: 216px;');
 

@@ -118,6 +118,44 @@ function openDetail(log: AuditLogItem) {
   detailOpen.value = true;
 }
 
+/*
+ * 业务详情是后端拼出来的「键：值；键：值」串，直接原样显示就是一大坨，
+ * 和上面那些整齐的标签-值行格格不入。这里把它还原成结构化的行。
+ *
+ * 格式不是登录独有的：用户增改、组织、角色、数据写入都用同一套拼法，
+ * 所以按通用规则解析；任何一条对不上格式的，整体退回纯文本显示，
+ * 避免把没见过的写法解析得七零八落。
+ */
+const parsedDetail = computed(() => {
+  const raw = selectedLog.value?.detail?.trim();
+  if (!raw) return null;
+
+  const summary: string[] = [];
+  const pairs: { label: string; value: string; items?: string[] }[] = [];
+  for (const segment of raw.split('；')) {
+    const text = segment.trim();
+    if (!text) continue;
+    const at = text.indexOf('：');
+    if (at <= 0) {
+      // 没有「：」的段是「登录成功」这类独立短语，留作开头一句话
+      if (pairs.length > 0) return null;
+      summary.push(text);
+      continue;
+    }
+    const label = text.slice(0, at).trim();
+    const value = text.slice(at + 1).trim();
+    if (!label) return null;
+    const items = value.includes('、')
+      ? value.split('、').map((item) => item.trim()).filter(Boolean)
+      : undefined;
+    pairs.push({ label, value: value || '—', items });
+  }
+
+  // 一个键值对都没有说明这就是一句普通话，按原文显示即可
+  if (pairs.length === 0) return null;
+  return { summary: summary.join('；'), pairs };
+});
+
 function resultFilter(): boolean | undefined {
   if (filters.result === 'true') return true;
   if (filters.result === 'false') return false;
@@ -295,7 +333,37 @@ function resetFilters() {
         </div>
         <div class="audit-detail__row audit-detail__row--wide">
           <dt>业务详情</dt>
-          <dd>{{ selectedLog.detail || '—' }}</dd>
+          <dd>
+            <template v-if="parsedDetail">
+              <p v-if="parsedDetail.summary" class="audit-detail__summary">
+                {{ parsedDetail.summary }}
+              </p>
+              <dl class="audit-detail__pairs">
+                <div
+                  v-for="pair in parsedDetail.pairs"
+                  :key="pair.label"
+                  class="audit-detail__pair"
+                >
+                  <dt>{{ pair.label }}</dt>
+                  <dd>
+                    <!-- 权限/角色这类是顿号分隔的长列表，排成标签块比挤成
+                         一行好读；单值仍然按普通文本显示。 -->
+                    <span v-if="pair.items" class="audit-detail__tags">
+                      <span
+                        v-for="item in pair.items"
+                        :key="item"
+                        class="audit-detail__tag"
+                      >
+                        {{ item }}
+                      </span>
+                    </span>
+                    <template v-else>{{ pair.value }}</template>
+                  </dd>
+                </div>
+              </dl>
+            </template>
+            <template v-else>{{ selectedLog.detail || '—' }}</template>
+          </dd>
         </div>
         <div class="audit-detail__row audit-detail__row--wide">
           <dt>说明</dt>
@@ -372,5 +440,48 @@ function resetFilters() {
   font: var(--text-control);
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* 业务详情里解析出来的键值对：沿用外层的标签列宽，视觉上连成一套 */
+.audit-detail__summary {
+  margin: 0 0 var(--space-3);
+}
+
+.audit-detail__pairs {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.audit-detail__pair {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.audit-detail__pair dt {
+  font: var(--text-caption);
+  color: var(--label-2);
+}
+
+.audit-detail__pair dd {
+  font: var(--text-caption);
+  white-space: normal;
+}
+
+.audit-detail__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.audit-detail__tag {
+  padding: 1px var(--space-2);
+  font: var(--text-caption);
+  color: var(--label-2);
+  background: var(--fill-3);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 </style>

@@ -50,6 +50,8 @@ export const useSelectionStore = defineStore('selection', () => {
   // 每个 Store 实例独立的标志位（避免 Vitest 测试间跨实例共享）
   let storageSyncBound = false;
   let repository: Repository = createLocalRepository();
+  // 当前生效的 bridge；重建时旧 bridge 的回调不能再改共享状态。
+  let activeBridge: BackendStorage | null = null;
   let initPromise: null | Promise<void> = null;
   let initInFlight = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +62,9 @@ export const useSelectionStore = defineStore('selection', () => {
   const lastFailure = ref<null | SaveFailure>(null);
   const backendStatus = ref<BackendSyncStatus>('connecting');
   const backendMessage = ref('');
+  // 是否曾经成功连上过后端。之后的重连期间页面保持挂载（继续显示已加载的数据），
+  // 只有首次连接才用加载态替换页面，避免重连把编辑到一半的表单和弹窗卸载掉。
+  const hasConnected = ref(false);
 
   const sensors = computed(() => {
     void revision.value;
@@ -267,7 +272,10 @@ export const useSelectionStore = defineStore('selection', () => {
     const running = (async () => {
       backendStatus.value = 'connecting';
       backendMessage.value = '';
-      const bridge = new BackendStorage({
+      // 先让旧 bridge 队列里已提交的写入落地，再拉取新快照；否则这些写入可能
+      // 晚于 fetchStore 到达后端，新仓库读到的是旧值，下一次编辑就会把它们覆盖掉。
+      if (activeBridge) await activeBridge.queue;
+      const bridge: BackendStorage = new BackendStorage({
         transport: {
           fetchStore: () => api.getStore(),
           writeKey: (key, value) => {
@@ -292,8 +300,10 @@ export const useSelectionStore = defineStore('selection', () => {
         },
         migrateOnEmpty: false,
         onStatus: (status) => {
+          if (bridge !== activeBridge) return;
           backendStatus.value = status;
           if (status === 'online') {
+            hasConnected.value = true;
             reconnectDelayMs = 0;
             clearReconnectTimer();
           } else if (status === 'offline') {
@@ -307,11 +317,17 @@ export const useSelectionStore = defineStore('selection', () => {
           }
         },
         onWriteFailure: (message) => {
+          if (bridge !== activeBridge) return;
+          // bridge 已把失败的 key 回滚到后端确认值；仓库持有自己的一份内存 store，
+          // 必须按回滚后的缓存重建，否则页面会继续显示这次并未保存成功的数据。
+          repository.replaceFromStorage(bridge.readStoreJson());
+          touch();
           lastFailure.value = 'storage';
           backendMessage.value = `写入后端失败：${message}`;
           toast.error(`写入后端失败：${message}`);
         },
       });
+      activeBridge = bridge;
       await bridge.init();
       repository = createSelectionRepository({
         crudDefaults: CRUD_DEFAULTS,
@@ -337,6 +353,16 @@ export const useSelectionStore = defineStore('selection', () => {
   }
 
   function ensureBackendInit(): Promise<void> {
+    // 重新登录或以访客身份进入后，旧 bridge 可能仍停在 unauthorized（401/403
+    // 不会自动重连）或 offline；它会拒绝所有写入，必须用新身份重建。
+    if (
+      initPromise &&
+      !initInFlight &&
+      (backendStatus.value === 'unauthorized' ||
+        backendStatus.value === 'offline')
+    ) {
+      return reconnect();
+    }
     return initBackend();
   }
 
@@ -415,6 +441,7 @@ export const useSelectionStore = defineStore('selection', () => {
     extraMachineSections,
     generalStructureLabelMap,
     globalMachineSections,
+    hasConnected,
     initBackend,
     lastFailure,
     machineSectionImages,

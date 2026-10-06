@@ -196,6 +196,18 @@ describe('AppShell', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps the page mounted while reconnecting after a successful first load', async () => {
+    const { wrapper } = await mountShell('connecting');
+    expect(wrapper.find('.content__loading').exists()).toBe(true);
+
+    const selection = useSelectionStore();
+    selection.hasConnected = true;
+    await nextTick();
+
+    expect(wrapper.find('.content__loading').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('clearly reports backend unavailability instead of showing local demo data', async () => {
     const { wrapper } = await mountShell('offline');
 

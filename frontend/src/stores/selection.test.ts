@@ -17,8 +17,7 @@ describe('selection store', () => {
   });
 
   afterEach(async () => {
-    // 有些只读路径（如 getDictionaryItems）会顺带触发一次 persist() 补写缺失的
-    // 字典项；写入走 BackendStorage 的串行队列，是纯 Promise 链，不受假计时器
+    // 写入走 BackendStorage 的串行队列，是纯 Promise 链，不受假计时器
     // 影响。断言完就 return 时这条链可能还没跑完——如果先恢复 mock 再让它继续
     // 跑，剩下的写入会打到真实的 api.putKey 上，产生真实网络请求，还可能把状态
     // 波动带进下一个用例。这里先排空微任务队列，再清掉可能残留的自动重连计时器
@@ -199,6 +198,83 @@ describe('selection store', () => {
 
     await vi.advanceTimersByTimeAsync(3000);
 
+    expect(store.backendStatus).toBe('online');
+  });
+
+  it('rolls the repository back when a queued write is rejected', async () => {
+    vi.spyOn(api, 'getStore').mockResolvedValue({ 'entity-groups:customer': [] });
+    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+      new ApiError('error', '数据格式无效', 400),
+    );
+    const store = useSelectionStore();
+    await store.ensureBackendInit();
+
+    expect(store.saveEntityGroup('customer', { name: '测试区' }).ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.entityGroups('customer').some((g) => g.name === '测试区')).toBe(
+      false,
+    );
+    expect(store.lastFailure).toBe('storage');
+    // 4xx 是确定性的拒绝，不应进入离线、触发重连
+    expect(store.backendStatus).toBe('online');
+  });
+
+  it('rebuilds the bridge after signing in again from an unauthorized session', async () => {
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockResolvedValue({ 'entity-groups:customer': [] });
+    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+      new ApiError('unauthorized', '登录已失效'),
+    );
+    const store = useSelectionStore();
+    await store.ensureBackendInit();
+
+    store.saveEntityGroup('customer', { name: '测试区' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.backendStatus).toBe('unauthorized');
+    expect(store.entityGroups('customer').some((g) => g.name === '测试区')).toBe(
+      false,
+    );
+
+    // 登录页在登录成功后调用 ensureBackendInit
+    await store.ensureBackendInit();
+    expect(getStore).toHaveBeenCalledTimes(2);
+    expect(store.backendStatus).toBe('online');
+    expect(store.saveEntityGroup('customer', { name: '测试区' }).ok).toBe(true);
+  });
+
+  it('lets queued writes land before reconnecting, and keeps the page mounted', async () => {
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockResolvedValue({ 'entity-groups:customer': [] });
+    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+      new ApiError('offline', '无法连接后端服务'),
+    );
+    let finishPut!: () => void;
+    vi.spyOn(api, 'putKey').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPut = () => resolve([]);
+        }),
+    );
+    const store = useSelectionStore();
+    await store.ensureBackendInit();
+    expect(store.hasConnected).toBe(true);
+
+    store.saveEntityGroup('customer', { name: '测试区' });
+    store.saveDictionaryItem('sensor-type', { name: '漫反射' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.backendStatus).toBe('offline');
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(store.backendStatus).toBe('connecting');
+    expect(getStore).toHaveBeenCalledTimes(1);
+    expect(store.hasConnected).toBe(true);
+
+    finishPut();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getStore).toHaveBeenCalledTimes(2);
     expect(store.backendStatus).toBe('online');
   });
 

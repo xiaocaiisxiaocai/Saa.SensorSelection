@@ -217,8 +217,10 @@ describe('BackendStorage', () => {
     releaseFirst();
     await bridge.queue;
 
-    expect(bridge.status).toBe('online');
-    expect(bridge.getItem('a')).toBe('[{"v":3}]');
+    // The later write still lands, but a failure is not silently undone: the
+    // page was told 'offline' and the rebuilt bridge restores 'online'.
+    expect(bridge.status).toBe('offline');
+    expect(JSON.parse(bridge.readStoreJson()).a).toEqual([{ v: 3 }]);
     expect(transport.remote.get('a')).toEqual([{ v: 3 }]);
   });
 
@@ -237,15 +239,16 @@ describe('BackendStorage', () => {
 
     bridge.setItem('a', JSON.stringify([{ v: 2 }]));
     bridge.setItem('a', JSON.stringify([{ v: 3 }]));
-    // A third, unrelated write that succeeds flips status back to 'online' after
-    // both failed writes to 'a' have already been queued.
+    // A third, unrelated write that succeeds after both failed writes to 'a'
+    // must not flip the status back to 'online'.
     bridge.setItem('other', JSON.stringify([1]));
     await bridge.queue;
 
-    expect(bridge.status).toBe('online');
+    expect(bridge.status).toBe('offline');
+    expect(transport.remote.get('other')).toEqual([1]);
     // Must roll back to the value the backend actually has ([{v:1}]), not to
     // [{v:2}] — the first write's optimistic value, which never persisted.
-    expect(bridge.getItem('a')).toBe('[{"v":1}]');
+    expect(JSON.parse(bridge.readStoreJson()).a).toEqual([{ v: 1 }]);
   });
 
   it('does not read or write local data when fetch fails', async () => {

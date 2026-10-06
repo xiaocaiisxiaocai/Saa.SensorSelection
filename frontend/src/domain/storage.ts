@@ -42,6 +42,17 @@ function isUnauthorized(error: unknown): boolean {
   );
 }
 
+// 写入失败是否意味着后端暂时不可用：网络错误、超时和 5xx 需要重连；
+// 4xx 是确定性的拒绝（如校验失败），重试结果不会变，只回滚该 key 即可。
+// 没有分类信息的异常按不可用处理，交给重连路径整体重新对齐。
+function isTransient(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return true;
+  const { kind, status } = error as { kind?: string; status?: number };
+  if (kind === 'offline') return true;
+  if (kind === 'error' && typeof status === 'number') return status >= 500;
+  return true;
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
@@ -86,9 +97,7 @@ export class BackendStorage implements StorageLike {
       try {
         await this.transport.deleteKey?.(key);
         this.synced.delete(key);
-        this.lastError = null;
-        this.status = 'online';
-        this.snapshotLocal();
+        this.markWriteSucceeded();
       } catch (error) {
         this.handleFailure(key, undefined, error);
       }
@@ -106,13 +115,20 @@ export class BackendStorage implements StorageLike {
         if (sameValue(this.cache.get(key), value)) {
           this.cache.set(key, persisted);
         }
-        this.lastError = null;
-        this.status = 'online';
-        this.snapshotLocal();
+        this.markWriteSucceeded();
       } catch (error) {
         this.handleFailure(key, value, error);
       }
     });
+  }
+
+  // 只有仍在线时才清掉错误。一次失败之后，排在它后面的写入照常落地（不丢更新），
+  // 但不能把状态静默改回 online：页面已据 offline 安排了重连，旧 bridge 一旦
+  // 重新接受写入，这些写入就会和重建出来的新 bridge 交错。
+  private markWriteSucceeded() {
+    if (this.status !== 'online') return;
+    this.lastError = null;
+    this.snapshotLocal();
   }
 
   private markUnavailable(error: unknown): BackendInitResult {
@@ -136,11 +152,7 @@ export class BackendStorage implements StorageLike {
 
   getItem(key: string): null | string {
     if (this.status !== 'online') return null;
-    if (key === STORAGE_KEY) {
-      const full: Record<string, unknown[]> = {};
-      for (const [k, value] of this.cache) full[k] = value;
-      return JSON.stringify(full);
-    }
+    if (key === STORAGE_KEY) return this.readStoreJson();
     const value = this.cache.get(key);
     if (value === undefined) return null;
     return JSON.stringify(value);
@@ -170,9 +182,22 @@ export class BackendStorage implements StorageLike {
     }
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;
+    // 先切换状态再回调：回调方会按回滚后的缓存重建仓库内存态，需要看到最终状态。
+    const previousStatus = this.status;
+    if (isUnauthorized(error)) {
+      this.status = 'unauthorized';
+    } else if (isTransient(error)) {
+      this.status = 'offline';
+    }
     this.onWriteFailure?.(message);
-    this.status = isUnauthorized(error) ? 'unauthorized' : 'offline';
-    this.emitStatus();
+    if (this.status !== previousStatus) this.emitStatus();
+  }
+
+  /** 当前缓存的完整快照（不论在线状态），写入失败回滚后供仓库重建内存态。 */
+  readStoreJson(): string {
+    const full: Record<string, unknown[]> = {};
+    for (const [key, value] of this.cache) full[key] = value;
+    return JSON.stringify(full);
   }
 
   async init(): Promise<BackendInitResult> {
@@ -302,6 +327,7 @@ export class BackendStorage implements StorageLike {
       return false;
     }
     if (!Array.isArray(parsed)) return false;
+    if (!this.cache.has(key) && parsed.length === 0) return true;
     if (sameValue(this.cache.get(key), parsed)) return true;
     this.cache.set(key, parsed);
     this.enqueueWrite(key, parsed);
@@ -326,20 +352,20 @@ export class BackendStorage implements StorageLike {
     const changedKeys = new Set<string>();
     const removedKeys: string[] = [];
 
-    for (const [key, value] of this.cache) {
-      if (!(key in nextStore)) {
-        removedKeys.push(key);
-      } else if (!sameValue(value, nextStore[key])) {
-        changedKeys.add(key);
-      }
+    for (const key of this.cache.keys()) {
+      if (!(key in nextStore)) removedKeys.push(key);
     }
+    const nextCache = new Map<string, unknown[]>();
     for (const [key, value] of Object.entries(nextStore)) {
-      if (!this.cache.has(key) || !sameValue(this.cache.get(key), value)) {
-        changedKeys.add(key);
-      }
+      // 仓库的读取路径会为没有数据的组合补出空数组（如遍历全部机型 × 分区）。
+      // 后端不存在与空数组等价，推送它们只会在下一次真实保存时排出成百上千个
+      // 空 PUT 和审计日志，所以这类 key 既不推送也不进缓存。
+      if (!this.cache.has(key) && value.length === 0) continue;
+      nextCache.set(key, value);
+      if (!sameValue(this.cache.get(key), value)) changedKeys.add(key);
     }
 
-    this.cache = new Map(Object.entries(nextStore));
+    this.cache = nextCache;
     for (const key of changedKeys) {
       this.enqueueWrite(key, nextStore[key] as unknown[]);
     }

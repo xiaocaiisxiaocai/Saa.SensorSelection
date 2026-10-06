@@ -41,7 +41,11 @@ const searchHotkey = /Mac|iPhone|iPad/i.test(navigator.platform)
 
 const groups = computed(() => navGroupsFor(auth.permissions));
 
-const connecting = computed(() => selection.backendStatus === 'connecting');
+// 只有首次连接用加载态替换页面；断线后的自动重连保持页面挂载，
+// 否则每次重试都会清掉用户编辑到一半的表单和弹窗。
+const connecting = computed(
+  () => selection.backendStatus === 'connecting' && !selection.hasConnected,
+);
 const backendUnavailable = computed(
   () => selection.backendStatus === 'offline',
 );

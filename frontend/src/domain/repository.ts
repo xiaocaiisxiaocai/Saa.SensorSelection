@@ -1082,20 +1082,17 @@ export function createSelectionRepository({
       2: '六轴机械手',
       3: '台车系统',
     };
-    let restored = false;
+    // 读取路径只在内存里修正，不写后端：访客/只读用户也会走到这里，写入会被
+    // 401/403 拒绝并把整个会话标成失效。修正结果随下一次真实保存一并同步。
     store[key] = (store[key] as MachineSectionItem[]).map((item) => {
       const seed = MACHINE_SECTION_SEED.find((entry) => entry.id === item.id);
       if (!seed || seed.kind !== 'structure') return item;
       if (item.name === mistakenNames[item.id] && item.name !== seed.name) {
-        restored = true;
         return { ...item, name: seed.name };
       }
       return item;
     });
     store[key] = normalizeMachineSections(store[key], { allowNotes: true });
-    if (restored) {
-      persist(cloneStore(store));
-    }
     return store[key] as MachineSectionItem[];
   }
 
@@ -1902,6 +1899,7 @@ export function createSelectionRepository({
       store[key] = createDictionaryDefaults(code);
     }
 
+    // 下面两处「停用」修正同样只改内存（原因见 getGlobalMachineSections）。
     if (code === 'sensor-status') {
       const statuses = store[key] as DictionaryItem[];
       const customDisabled = statuses.find(
@@ -1920,9 +1918,7 @@ export function createSelectionRepository({
             (item as Record<string, unknown>).status === '停用',
         );
       if (customDisabled && plainDisabledIndex >= 0 && !plainDisabledInUse) {
-        const snapshot = cloneStore(store);
         statuses.splice(plainDisabledIndex, 1);
-        persist(snapshot);
       }
     }
 
@@ -1932,7 +1928,6 @@ export function createSelectionRepository({
         isSensorStatus(item.name, 'disabled'),
       )
     ) {
-      const snapshot = cloneStore(store);
       store[key] = normalizeDictionaryItems([
         ...(store[key] as DictionaryItem[]),
         {
@@ -1947,7 +1942,6 @@ export function createSelectionRepository({
             ) + 1,
         },
       ]);
-      persist(snapshot);
     }
 
     return store[key] as DictionaryItem[];

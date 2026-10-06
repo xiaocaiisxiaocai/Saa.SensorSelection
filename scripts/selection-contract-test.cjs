@@ -1306,10 +1306,130 @@ async function run() {
   await bridge9b.init()
   assert.equal(bridge9b.setItem('a', JSON.stringify([{ v: 2 }])), true)
   assert.equal(bridge9b.setItem('a', JSON.stringify([{ v: 3 }])), true)
-  assert.equal(bridge9b.setItem('other', JSON.stringify([1])), true) // 触发队列排空后重新上线
+  assert.equal(bridge9b.setItem('other', JSON.stringify([1])), true)
   await bridge9b.queue
-  assert.equal(bridge9b.status, 'online')
-  assert.equal(bridge9b.getItem('a'), '[{"v":1}]')
+  // 队列里排在失败之后的写入照常落地，但不能把已掉线的状态静默改回 online：
+  // 页面已经收到 offline 并安排了重连，状态必须由重建后的新 bridge 恢复。
+  assert.equal(bridge9b.status, 'offline')
+  assert.deepEqual(transport9b.remote.get('other'), [1])
+  assert.deepEqual(JSON.parse(bridge9b.readStoreJson()).a, [{ v: 1 }])
+
+  // 后端 4xx 校验拒绝：只回滚该 key 并上报，不当作掉线（重连无意义，提示也不对）
+  const rejected = new Error('数据格式无效')
+  rejected.kind = 'error'
+  rejected.status = 400
+  const failures4xx = []
+  const transport4xx = createFakeTransport(
+    { a: [1] },
+    { failKeys: ['a'], failError: rejected },
+  )
+  const bridge4xx = new BackendStorage({
+    transport: transport4xx,
+    local: makeLocal(new Map()),
+    onWriteFailure: (message) => failures4xx.push(message),
+  })
+  await bridge4xx.init()
+  assert.equal(bridge4xx.setItem('a', JSON.stringify([2])), true)
+  await bridge4xx.queue
+  assert.equal(bridge4xx.status, 'online')
+  assert.equal(bridge4xx.getItem('a'), '[1]')
+  assert.deepEqual(failures4xx, ['数据格式无效'])
+
+  // 后端 5xx：视为服务不可用，进入 offline 等待重连
+  const serverDown = new Error('请求失败（502）')
+  serverDown.kind = 'error'
+  serverDown.status = 502
+  const transport5xx = createFakeTransport(
+    { a: [1] },
+    { failKeys: ['a'], failError: serverDown },
+  )
+  const bridge5xx = new BackendStorage({
+    transport: transport5xx,
+    local: makeLocal(new Map()),
+  })
+  await bridge5xx.init()
+  bridge5xx.setItem('a', JSON.stringify([2]))
+  await bridge5xx.queue
+  assert.equal(bridge5xx.status, 'offline')
+
+  // 写入失败回调触发时，缓存必须已经回滚，调用方据此重建仓库内存态
+  let cacheAtFailure = null
+  const transportRollback = createFakeTransport(
+    { a: [1], b: [1] },
+    { failKeys: ['a'] },
+  )
+  const bridgeRollback = new BackendStorage({
+    transport: transportRollback,
+    local: makeLocal(new Map()),
+    onWriteFailure: () => {
+      cacheAtFailure = JSON.parse(bridgeRollback.readStoreJson())
+    },
+  })
+  await bridgeRollback.init()
+  bridgeRollback.setItem(
+    domain.STORAGE_KEY,
+    JSON.stringify({ a: [2], b: [2] }),
+  )
+  await bridgeRollback.queue
+  assert.deepEqual(cacheAtFailure, { a: [1], b: [2] })
+
+  // 全量写回时，远端不存在且值为空数组的 key 不推送（不存在与空数组等价）；
+  // 已存在的 key 被清空时仍要推送
+  const transportEmpty = createFakeTransport({ a: [1], b: [1] })
+  const bridgeEmpty = new BackendStorage({
+    transport: transportEmpty,
+    local: makeLocal(new Map()),
+  })
+  await bridgeEmpty.init()
+  bridgeEmpty.setItem(
+    domain.STORAGE_KEY,
+    JSON.stringify({ a: [2], b: [], 'empty-1': [], 'empty-2': [] }),
+  )
+  await bridgeEmpty.queue
+  assert.deepEqual(transportEmpty.calls.writes.sort(), ['a', 'b'])
+  assert.deepEqual(transportEmpty.calls.deletes, [])
+  // 之后把空 key 再移除，也不应对后端从未有过的 key 发 DELETE
+  bridgeEmpty.setItem(domain.STORAGE_KEY, JSON.stringify({ a: [2], b: [] }))
+  await bridgeEmpty.queue
+  assert.deepEqual(transportEmpty.calls.deletes, [])
+
+  // 读取路径不能写后端：访客/只读用户打开页面时，字典回填和旧名修正只能停留在内存
+  for (const statuses of [
+    // 自定义停用项 + 未被引用的「停用」→ 内存里移除「停用」
+    [
+      { id: 1, name: '现用', sort: 1 },
+      { id: 2, name: '3-停用', sort: 2 },
+      { id: 3, name: '停用', sort: 3 },
+    ],
+    // 缺少任何停用项 → 内存里补「停用」
+    [{ id: 1, name: '现用', sort: 1 }],
+  ]) {
+    const readOnlyWrites = []
+    const readOnlyRepo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: {
+        getItem: () =>
+          JSON.stringify({
+            'dict:sensor-status': statuses,
+            'machine-global-sections:all': [
+              { id: 1, name: '标准输送段', kind: 'structure', sort: 1 },
+            ],
+          }),
+        setItem: (key) => {
+          readOnlyWrites.push(key)
+          return true
+        },
+      },
+    })
+    readOnlyRepo.getSensors()
+    const names = readOnlyRepo
+      .getDictionaryItems('sensor-status')
+      .map((item) => item.name)
+    assert.equal(names.filter((name) => name.endsWith('停用')).length, 1)
+    readOnlyRepo.getGlobalMachineSections()
+    assert.deepEqual(readOnlyWrites, [])
+  }
 
   // 种子版本化回填：远端版本落后时补种缺失默认 key，不覆盖用户已有数据
   const localMemory10 = new Map()

@@ -8,11 +8,14 @@ export type ApiErrorKind = 'error' | 'forbidden' | 'offline' | 'unauthorized';
 
 export class ApiError extends Error {
   kind: ApiErrorKind;
+  /** HTTP 状态码；网络错误/超时没有响应，为 undefined。 */
+  status?: number;
 
-  constructor(kind: ApiErrorKind, message: string) {
+  constructor(kind: ApiErrorKind, message: string, status?: number) {
     super(message);
     this.name = 'ApiError';
     this.kind = kind;
+    this.status = status;
   }
 }
 
@@ -205,6 +208,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(
       'error',
       await readMessage(response, `请求失败（${response.status}）`),
+      response.status,
     );
   }
   return response.json() as Promise<T>;
@@ -244,6 +248,7 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
     throw new ApiError(
       'error',
       await readMessage(response, `请求失败（${response.status}）`),
+      response.status,
     );
   }
   return response.blob();

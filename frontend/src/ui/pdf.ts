@@ -4,11 +4,13 @@ import {
 } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
+// 本模块有顶层副作用且会拉入整个 pdf.js，只允许 APdfViewer 在需要预览时
+// 动态 import('./pdf')；不要从 ui/index.ts 或其他组件静态引入，否则 vendor-pdf
+// 会被打进入口并在首屏 modulepreload。
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
-export type PdfDocument = Awaited<
-  ReturnType<typeof pdfGetDocument>['promise']
->;
+export type PdfLoadingTask = ReturnType<typeof pdfGetDocument>;
+export type PdfDocument = Awaited<PdfLoadingTask['promise']>;
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const separator = dataUrl.indexOf(',');
@@ -34,7 +36,7 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   return bytes;
 }
 
-export function getDocument(src: string) {
+export function getDocument(src: string): PdfLoadingTask {
   if (src.startsWith('data:')) {
     return pdfGetDocument({
       data: dataUrlToBytes(src),

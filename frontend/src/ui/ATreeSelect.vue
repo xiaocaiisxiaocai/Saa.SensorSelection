@@ -9,6 +9,7 @@ import ASearchField from './ASearchField.vue';
 import {
   collectExpandableIds,
   filterTree,
+  findTreeAncestorIds,
   findTreeLabel,
   flattenTree,
   type TreeNode,
@@ -40,6 +41,7 @@ const open = ref(false);
 const query = ref('');
 const expanded = ref(new Set<string>());
 const filterEl = ref<ComponentPublicInstance | null>(null);
+const listEl = ref<HTMLElement | null>(null);
 
 const filtered = computed(() => filterTree(props.nodes, query.value));
 const rows = computed(() => flattenTree(filtered.value, expanded.value));
@@ -85,7 +87,17 @@ watch(open, async (isOpen) => {
     return;
   }
 
+  // 已选的深层节点默认被折叠在祖先下面，打开时看不到当前值；
+  // 把它的祖先全部展开（保留用户已展开的其他节点），并滚到可见处
+  const ancestors = findTreeAncestorIds(props.nodes, model.value);
+  if (ancestors.some((key) => !expanded.value.has(key))) {
+    expanded.value = new Set([...expanded.value, ...ancestors]);
+  }
+
   await nextTick();
+  listEl.value
+    ?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+    ?.scrollIntoView?.({ block: 'nearest' });
   const root = filterEl.value?.$el as HTMLElement | undefined;
   root?.querySelector('input')?.focus();
 });
@@ -132,7 +144,12 @@ watch(open, async (isOpen) => {
         <div v-if="rows.length === 0" class="a-tree-select__empty">
           无匹配项
         </div>
-        <div v-else class="a-tree-select__list" role="listbox">
+        <div
+          v-else
+          ref="listEl"
+          class="a-tree-select__list"
+          role="listbox"
+        >
           <div
             v-for="row in rows"
             :key="String(row.id)"

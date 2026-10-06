@@ -196,6 +196,38 @@ describe('AppShell', () => {
     vi.unstubAllGlobals();
   });
 
+  it('focuses search only with the platform search shortcut', async () => {
+    const platform = vi.spyOn(navigator, 'platform', 'get');
+    platform.mockReturnValue('Win32');
+    const { wrapper } = await mountShell();
+    const input = document.getElementById('global-search-input');
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'k',
+        cancelable: true,
+        ...init,
+      });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press({ ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(press({ metaKey: true }).defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe(input);
+    expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+
+    // macOS 输入框里 Ctrl+K 是系统的「删除到行尾」，不能被抢走
+    (document.activeElement as HTMLElement).blur();
+    platform.mockReturnValue('MacIntel');
+    expect(press({ ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(press({ metaKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+
+    wrapper.unmount();
+    platform.mockRestore();
+  });
+
   it('keeps the page mounted while reconnecting after a successful first load', async () => {
     const { wrapper } = await mountShell('connecting');
     expect(wrapper.find('.content__loading').exists()).toBe(true);

@@ -3,7 +3,9 @@ import { Minus, Plus, RotateCcw } from 'lucide-vue-next';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
 import AIconButton from './AIconButton.vue';
-import { destroyPdf, getDocument, type PdfDocument } from './pdf';
+// 只引类型：pdf.js 体积大且 ./pdf 有设置 workerSrc 的顶层副作用，
+// 运行时在 load() 里按需 import('./pdf')，不让它经 ui/index.ts 进入口 chunk
+import type { PdfDocument, PdfLoadingTask } from './pdf';
 
 const props = defineProps<{
   src: string;
@@ -23,6 +25,8 @@ const fitScale = ref(1);
 const percent = computed(() => `${Math.round(zoom.value * 100)}%`);
 
 let activeDoc: PdfDocument | null = null;
+/** 当前 getDocument 的加载任务；切换 src 或卸载时 destroy，中断还在下载/解析的文档 */
+let activeTask: PdfLoadingTask | null = null;
 let token = 0;
 let renderToken = 0;
 const currentRenderTasks = new Set<{
@@ -48,9 +52,23 @@ function cancelRender() {
 async function release() {
   renderToken += 1;
   cancelRender();
+  const task = activeTask;
   const doc = activeDoc;
+  activeTask = null;
   activeDoc = null;
-  await destroyPdf(doc);
+  if (task) {
+    try {
+      // 加载中途被打断时文档还没交到 activeDoc 手里，只能靠 task 收尾；
+      // pdf.js 的 destroy 可重复调用，已加载的文档再走一次 destroyPdf 也无妨
+      await task.destroy();
+    } catch {
+      // ignore
+    }
+  }
+  if (doc) {
+    const { destroyPdf } = await import('./pdf');
+    await destroyPdf(doc);
+  }
 }
 
 async function renderPages(currentToken: number) {
@@ -140,7 +158,12 @@ async function load(src: string) {
   }
 
   try {
+    const { destroyPdf, getDocument } = await import('./pdf');
+    if (current !== token) {
+      return;
+    }
     const task = getDocument(src);
+    activeTask = task;
     const doc = await task.promise;
     if (current !== token) {
       await destroyPdf(doc);

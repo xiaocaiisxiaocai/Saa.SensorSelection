@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import AIconButton from './AIconButton.vue';
 import APopover from './APopover.vue';
@@ -42,7 +42,9 @@ const view = ref(new Date());
 const cursor = ref(toDateKey(new Date()));
 const rangeDraft = ref<[string | null, string | null]>([null, null]);
 
-const todayKey = toDateKey(new Date());
+/** 「今天」在每次打开面板时重算，页面跨过午夜后高亮不会停在昨天 */
+const todayKey = ref(toDateKey(new Date()));
+const grid = ref<HTMLElement | null>(null);
 const weeks = computed(() => buildCalendarWeeks(view.value));
 
 const startPlaceholder = computed(() =>
@@ -124,7 +126,23 @@ function clear() {
   rangeDraft.value = [null, null];
 }
 
+/** 把焦点移到 cursor 对应的日期格（方向键翻到别的月时要等重新渲染） */
+function focusCursor() {
+  void nextTick(() => {
+    grid.value
+      ?.querySelector<HTMLElement>(`[data-date-key="${cursor.value}"]`)
+      ?.focus();
+  });
+}
+
+/**
+ * 只挂在日期网格上：面板头部的翻月按钮要保留自己的 Enter/Space 语义，
+ * 不能被这里劫持成「选中日期」。
+ */
 function onGridKey(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
+  const targetKey = target?.dataset.dateKey;
+  if (!targetKey) return;
   const current = parseDateKey(cursor.value) ?? new Date();
   let next: Date | null = null;
   if (event.key === 'ArrowLeft') {
@@ -137,7 +155,7 @@ function onGridKey(event: KeyboardEvent) {
     next = addDays(current, 7);
   } else if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
-    pick(cursor.value);
+    pick(targetKey);
     return;
   }
 
@@ -148,6 +166,7 @@ function onGridKey(event: KeyboardEvent) {
   event.preventDefault();
   cursor.value = toDateKey(next);
   view.value = next;
+  focusCursor();
 }
 
 function isSelected(key: string) {
@@ -163,6 +182,7 @@ watch(open, (isOpen) => {
     return;
   }
 
+  todayKey.value = toDateKey(new Date());
   if (props.range) {
     rangeDraft.value = Array.isArray(model.value)
       ? [...model.value]
@@ -206,7 +226,6 @@ watch(open, (isOpen) => {
         class="a-date-picker__panel"
         role="application"
         :aria-label="monthTitle(view)"
-        @keydown="onGridKey"
       >
         <header class="a-date-picker__header">
           <button
@@ -230,7 +249,12 @@ watch(open, (isOpen) => {
         <div class="a-date-picker__weekdays" aria-hidden="true">
           <span v-for="label in WEEKDAY_LABELS" :key="label">{{ label }}</span>
         </div>
-        <div class="a-date-picker__grid" role="grid">
+        <div
+          ref="grid"
+          class="a-date-picker__grid"
+          role="grid"
+          @keydown="onGridKey"
+        >
           <div
             v-for="(week, weekIndex) in weeks"
             :key="weekIndex"
@@ -255,6 +279,7 @@ watch(open, (isOpen) => {
                 type="button"
                 role="gridcell"
                 :aria-selected="isSelected(day.key) ? 'true' : undefined"
+                :data-date-key="day.key"
                 :tabindex="day.key === cursor ? 0 : -1"
                 @click="pick(day.key)"
               >

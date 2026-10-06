@@ -8,7 +8,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-vue-next';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
 import AButton from './AButton.vue';
 import ACheckbox from './ACheckbox.vue';
@@ -66,6 +66,7 @@ const emit = defineEmits<{
   reorderItems: [payload: { group: string; items: string[] }];
 }>();
 
+const root = ref<HTMLElement | null>(null);
 const query = ref('');
 const width = ref(props.defaultWidth);
 const expanded = ref(new Set<string>());
@@ -208,15 +209,23 @@ function startResize(event: PointerEvent) {
   const onMove = (moveEvent: PointerEvent) => {
     width.value = clampWidth(startWidth + moveEvent.clientX - startX);
   };
+  // pointercancel（系统手势打断、触屏滚动接管）和 lostpointercapture 也要收尾，
+  // 否则监听器残留，之后鼠标划过分栏线还会继续改宽度
   const onUp = () => {
     persistWidth(width.value);
-    target.releasePointerCapture(event.pointerId);
+    if (target.hasPointerCapture?.(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
     target.removeEventListener('pointermove', onMove);
     target.removeEventListener('pointerup', onUp);
+    target.removeEventListener('pointercancel', onUp);
+    target.removeEventListener('lostpointercapture', onUp);
   };
 
   target.addEventListener('pointermove', onMove);
   target.addEventListener('pointerup', onUp);
+  target.addEventListener('pointercancel', onUp);
+  target.addEventListener('lostpointercapture', onUp);
 }
 
 function onGroupDragStart(event: DragEvent, name: string) {
@@ -287,6 +296,69 @@ function onItemDrop(event: DragEvent, group: string, item: string) {
   });
 }
 
+/** 排序后要把焦点还给哪个手柄：组手柄只有 group，条目手柄带 item */
+let pendingHandleFocus: { group: string; item?: string } | null = null;
+
+function focusHandle(target: { group: string; item?: string }) {
+  const handles =
+    root.value?.querySelectorAll<HTMLElement>('.a-source-list__handle') ?? [];
+  const match = [...handles].find(
+    (handle) =>
+      handle.dataset.group === target.group &&
+      handle.dataset.item === target.item,
+  );
+  match?.focus();
+}
+
+/**
+ * 键盘排序：拖拽手柄本身是按钮，没有别的方向键语义（列表没有方向键漫游），
+ * 所以 ↑/↓ 直接移动一位，Alt+↑/↓ 等价，兼容习惯用 Alt 的用户。
+ * 排序结果仍通过 reorderGroups / reorderItems 交给父组件写入；父组件更新
+ * groups 后 Vue 会搬动 DOM，焦点会丢，所以在 groups 变化后再聚焦回手柄。
+ */
+function keyboardMoveOffset(event: KeyboardEvent): number {
+  if (event.ctrlKey || event.metaKey || event.shiftKey) return 0;
+  if (event.key === 'ArrowUp') return -1;
+  if (event.key === 'ArrowDown') return 1;
+  return 0;
+}
+
+function onGroupHandleKeydown(event: KeyboardEvent, name: string) {
+  const offset = keyboardMoveOffset(event);
+  if (!offset || !canSort.value) return;
+  event.preventDefault();
+  const names = props.groups.map((group) => group.name);
+  const from = names.indexOf(name);
+  const to = from + offset;
+  if (from < 0 || to < 0 || to >= names.length) return;
+  pendingHandleFocus = { group: name };
+  emit('reorderGroups', moveIndex(names, from, to));
+}
+
+function onItemHandleKeydown(event: KeyboardEvent, group: string, item: string) {
+  const offset = keyboardMoveOffset(event);
+  if (!offset || !canSort.value) return;
+  event.preventDefault();
+  const current = props.groups.find((entry) => entry.name === group);
+  if (!current) return;
+  const from = current.items.indexOf(item);
+  const to = from + offset;
+  if (from < 0 || to < 0 || to >= current.items.length) return;
+  pendingHandleFocus = { group, item };
+  emit('reorderItems', { group, items: moveIndex(current.items, from, to) });
+}
+
+watch(
+  () => props.groups,
+  () => {
+    const target = pendingHandleFocus;
+    if (!target) return;
+    pendingHandleFocus = null;
+    void nextTick(() => focusHandle(target));
+  },
+  { flush: 'post' },
+);
+
 function allowDrop(event: DragEvent) {
   if (!dragging.value) {
     return;
@@ -320,6 +392,7 @@ onMounted(restoreWidth);
 
 <template>
   <aside
+    ref="root"
     class="a-source-list"
     :aria-label="`${itemLabel}列表`"
     :style="{ width: `${width}px`, maxWidth: `${width}px` }"
@@ -385,9 +458,11 @@ onMounted(restoreWidth);
             v-if="canSort"
             class="a-source-list__handle"
             type="button"
-            aria-label="拖拽排序"
+            :aria-label="`拖拽排序${groupLabel} ${group.name}，或按上下方向键移动`"
+            :data-group="group.name"
             draggable="true"
             @click.stop
+            @keydown="onGroupHandleKeydown($event, group.name)"
             @dragstart="onGroupDragStart($event, group.name)"
             @dragend="dragging = null"
           >
@@ -474,9 +549,12 @@ onMounted(restoreWidth);
               v-if="canSort"
               class="a-source-list__handle"
               type="button"
-              aria-label="拖拽排序"
+              :aria-label="`拖拽排序${itemLabel} ${item}，或按上下方向键移动`"
+              :data-group="group.name"
+              :data-item="item"
               draggable="true"
               @click.stop
+              @keydown="onItemHandleKeydown($event, group.name, item)"
               @dragstart="onItemDragStart($event, group.name, item)"
               @dragend="dragging = null"
             >

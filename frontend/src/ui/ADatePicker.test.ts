@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ADatePicker from './ADatePicker.vue';
 
@@ -90,5 +90,81 @@ describe('ADatePicker', () => {
     ];
     expect(emitted[0] < emitted[1]).toBe(true);
     wrapper.unmount();
+  });
+
+  it('keeps Enter on the month buttons for paging instead of picking a date', async () => {
+    const wrapper = mount(ADatePicker, {
+      attachTo: document.body,
+      props: { modelValue: '2026-08-20' },
+    });
+    await wrapper.get('button.a-date-picker__trigger').trigger('click');
+    await nextTick();
+
+    const prev = document.querySelector<HTMLButtonElement>('[aria-label="上个月"]');
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    prev?.dispatchEvent(enter);
+    await nextTick();
+
+    // 翻月按钮的 Enter 不能被网格劫持成选中日期，也不能被 preventDefault
+    expect(enter.defaultPrevented).toBe(false);
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('moves focus to the new day cell when navigating with arrow keys', async () => {
+    const wrapper = mount(ADatePicker, {
+      attachTo: document.body,
+      props: { modelValue: '2026-08-31' },
+    });
+    await wrapper.get('button.a-date-picker__trigger').trigger('click');
+    await nextTick();
+
+    const current = document.querySelector<HTMLElement>(
+      '[data-date-key="2026-08-31"]',
+    );
+    current?.focus();
+    current?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+    );
+    await nextTick();
+    await nextTick();
+
+    // 跨月后网格重新渲染，焦点要跟到新的日期格上
+    expect(document.body.textContent).toContain('2026年9月');
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-date-key="2026-09-01"]'),
+    );
+
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    await nextTick();
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-09-01']);
+    wrapper.unmount();
+  });
+
+  it('recomputes today each time the panel opens', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 7, 20, 23, 59));
+    const wrapper = mount(ADatePicker, {
+      attachTo: document.body,
+      props: { modelValue: '2026-08-20' },
+    });
+
+    vi.setSystemTime(new Date(2026, 7, 21, 0, 1));
+    await wrapper.get('button.a-date-picker__trigger').trigger('click');
+    await nextTick();
+
+    expect(
+      document.querySelector('.a-date-picker__day--today')?.getAttribute(
+        'data-date-key',
+      ),
+    ).toBe('2026-08-21');
+    wrapper.unmount();
+    vi.useRealTimers();
   });
 });

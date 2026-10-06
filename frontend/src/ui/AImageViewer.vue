@@ -79,11 +79,14 @@ function onPointerMove(event: PointerEvent) {
   };
 }
 
+// pointerup / pointercancel / lostpointercapture 都走这里收尾：系统手势或
+// 弹窗关闭打断拖动时，不收尾会让 dragging 卡在 true，之后光标悬停也会平移图片
 function onPointerUp() {
   dragging.value = false;
 }
 
 watch(open, (isOpen) => {
+  dragging.value = false;
   if (isOpen) {
     reset();
     maximized.value = false;
@@ -133,6 +136,8 @@ watch(open, (isOpen) => {
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+          @lostpointercapture="onPointerUp"
         >
           <img :src="src" :alt="alt ?? ''" :style="imageStyle" loading="lazy" decoding="async">
         </div>

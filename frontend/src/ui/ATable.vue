@@ -157,11 +157,16 @@ function persistColumnWidths() {
   }
 }
 
+/**
+ * 只改内存里的列宽；持久化交给调用方——拖动时每个 pointermove 都写
+ * localStorage 太频繁，改为松手（onEnd）时写一次。
+ */
 function setColumnWidth(column: TableColumn<T>, width: number) {
   const next = new Map(columnWidthOverrides.value);
   next.set(column.key, Math.max(MIN_RESIZED_COLUMN_WIDTH, Math.round(width)));
   columnWidthOverrides.value = next;
-  persistColumnWidths();
+  // 列宽变了，横向是否溢出也可能跟着变，渐隐提示要重新算
+  scheduleOverflowMetrics();
 }
 
 function onResizeStart(column: TableColumn<T>, event: PointerEvent) {
@@ -177,14 +182,19 @@ function onResizeStart(column: TableColumn<T>, event: PointerEvent) {
   };
   const onEnd = () => {
     resizingKey.value = null;
-    handle.releasePointerCapture(event.pointerId);
+    if (handle.hasPointerCapture?.(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
     handle.removeEventListener('pointermove', onMove);
     handle.removeEventListener('pointerup', onEnd);
     handle.removeEventListener('pointercancel', onEnd);
+    handle.removeEventListener('lostpointercapture', onEnd);
+    persistColumnWidths();
   };
   handle.addEventListener('pointermove', onMove);
   handle.addEventListener('pointerup', onEnd);
   handle.addEventListener('pointercancel', onEnd);
+  handle.addEventListener('lostpointercapture', onEnd);
   event.preventDefault();
 }
 
@@ -201,6 +211,7 @@ function onResizeKeydown(column: TableColumn<T>, event: KeyboardEvent) {
   } else {
     return;
   }
+  persistColumnWidths();
   event.preventDefault();
 }
 
@@ -211,6 +222,7 @@ function resetColumnWidth(column: TableColumn<T>) {
   next.delete(column.key);
   columnWidthOverrides.value = next;
   persistColumnWidths();
+  scheduleOverflowMetrics();
 }
 
 /*
@@ -290,6 +302,8 @@ const spacerBottomHeight = computed(() =>
 );
 
 let resizeObserver: ResizeObserver | null = null;
+/** 合并横向溢出刷新用的 rAF 句柄 */
+let overflowFrame: number | null = null;
 
 // 列宽依赖容器宽度，所以这个观察器要一直开着，不再只为虚拟滚动服务。
 function setupResizeObserver() {
@@ -299,6 +313,7 @@ function setupResizeObserver() {
     if (!entry) return;
     containerHeight.value = entry.contentRect.height;
     containerWidth.value = entry.contentRect.width;
+    scheduleOverflowMetrics();
   });
   resizeObserver.observe(scroller.value);
   containerHeight.value = scroller.value.clientHeight;
@@ -312,6 +327,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (overflowFrame != null) cancelAnimationFrame(overflowFrame);
+  overflowFrame = null;
   resizeObserver?.disconnect();
   resizeObserver = null;
   window.removeEventListener('resize', updateOverflowMetrics);
@@ -418,6 +435,9 @@ function onRowClick(row: T) {
 }
 
 function onRowKeydown(event: KeyboardEvent, row: T) {
+  // 行内按钮、链接等控件的按键会冒泡到 <tr>：只处理行本身获得焦点时的按键，
+  // 否则在「删除」按钮上按 Enter 会被当成激活整行（打开编辑弹窗）
+  if (event.target !== event.currentTarget) return;
   const index = ids.value.indexOf(rowId(row));
   if (event.key === 'ArrowDown') {
     event.preventDefault();
@@ -464,6 +484,15 @@ function onScroll() {
   if (props.virtual) {
     scrollTop.value = scroller.value?.scrollTop ?? 0;
   }
+}
+
+/** 列宽/容器尺寸变化时用 rAF 合并多次刷新，等布局落定后再量 scrollWidth */
+function scheduleOverflowMetrics() {
+  if (overflowFrame != null) return;
+  overflowFrame = requestAnimationFrame(() => {
+    overflowFrame = null;
+    updateOverflowMetrics();
+  });
 }
 
 function updateOverflowMetrics() {

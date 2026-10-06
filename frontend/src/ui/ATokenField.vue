@@ -217,6 +217,33 @@ function remove(value: string | number, event: Event) {
 
 const filterEl = ref<HTMLInputElement | null>(null);
 
+/**
+ * 交给 APopover 的 open：禁用时拒绝打开。触发器是 div 不是原生 button，
+ * PopoverTrigger 的点击不会因为 disabled 自动失效，只能在这里拦住。
+ */
+const popoverOpen = computed({
+  get: () => open.value,
+  set: (value: boolean) => {
+    if (value && props.disabled) return;
+    open.value = value;
+  },
+});
+
+/**
+ * 触发器是 role=combobox 的 div，PopoverTrigger 只绑了 click，原生 button
+ * 才有的 Enter/Space 激活这里没有。与 ASelect/ATreeSelect 的 button 触发器
+ * 保持一致：Enter/Space 打开，另外按 combobox 惯例 ↓ 也打开。
+ * 只认触发器自身的按键，chip 上「移除」按钮的 Enter/Space 不受影响。
+ */
+function onTriggerKeydown(event: KeyboardEvent) {
+  if (event.target !== event.currentTarget || props.disabled) return;
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown') {
+    return;
+  }
+  event.preventDefault();
+  open.value = true;
+}
+
 watch(open, async (isOpen) => {
   if (!isOpen) {
     query.value = '';
@@ -241,7 +268,7 @@ watch(open, async (isOpen) => {
 
 <template>
   <div class="a-token-field">
-    <APopover v-model:open="open" align="start" min-trigger-width>
+    <APopover v-model:open="popoverOpen" align="start" min-trigger-width>
       <template #trigger>
         <div
           :id="id"
@@ -253,7 +280,7 @@ watch(open, async (isOpen) => {
             'a-control--small': size === 'small',
           }"
           role="combobox"
-          tabindex="0"
+          :tabindex="disabled ? -1 : 0"
           :aria-expanded="open"
           :aria-controls="listId"
           :aria-invalid="invalid ? true : undefined"
@@ -262,6 +289,7 @@ watch(open, async (isOpen) => {
           :aria-labelledby="labelledBy"
           :aria-label="accessibleLabel"
           :aria-disabled="disabled ? true : undefined"
+          @keydown="onTriggerKeydown"
         >
           <span
             v-for="option in visible"

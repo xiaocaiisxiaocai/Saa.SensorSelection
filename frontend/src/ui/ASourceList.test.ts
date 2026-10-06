@@ -167,11 +167,11 @@ describe('ASourceList', () => {
 
   it('shows drag handles only when sortable and editable', () => {
     const hidden = mountList({ sortable: true, editable: false });
-    expect(hidden.find('[aria-label="拖拽排序"]').exists()).toBe(false);
+    expect(hidden.find('[aria-label^="拖拽排序"]').exists()).toBe(false);
     hidden.unmount();
 
     const shown = mountList({ sortable: true, editable: true });
-    expect(shown.findAll('[aria-label="拖拽排序"]').length).toBeGreaterThan(0);
+    expect(shown.findAll('[aria-label^="拖拽排序"]').length).toBeGreaterThan(0);
     shown.unmount();
   });
 
@@ -199,6 +199,70 @@ describe('ASourceList', () => {
     expect(sourceListSource).toMatch(
       /\.a-source-list__groups\s*\{[^}]*overflow:\s*hidden auto;/s,
     );
+    wrapper.unmount();
+  });
+
+  it('reorders items from the drag handle with the arrow keys and keeps focus on it', async () => {
+    const wrapper = mountList({ sortable: true, editable: true });
+    const handle = wrapper.get('[aria-label="拖拽排序客户 景旺，或按上下方向键移动"]');
+    (handle.element as HTMLElement).focus();
+
+    await handle.trigger('keydown', { key: 'ArrowDown' });
+    expect(wrapper.emitted('reorderItems')?.[0]).toEqual([
+      { group: '华东', items: ['深南', '景旺'] },
+    ]);
+
+    // 父组件写回新顺序后，Vue 搬动 DOM，焦点要回到被移动项的手柄上
+    await wrapper.setProps({
+      groups: [
+        { name: '华东', items: ['深南', '景旺'] },
+        { name: '华南', items: ['胜宏'] },
+      ],
+    });
+    await nextTick();
+    expect(document.activeElement).toBe(
+      wrapper.get('[aria-label="拖拽排序客户 景旺，或按上下方向键移动"]').element,
+    );
+
+    // 已在末位再往下移不发事件；Alt+↑ 等价于 ↑
+    await handle.trigger('keydown', { key: 'ArrowDown' });
+    expect(wrapper.emitted('reorderItems')).toHaveLength(1);
+    await handle.trigger('keydown', { key: 'ArrowUp', altKey: true });
+    expect(wrapper.emitted('reorderItems')?.[1]).toEqual([
+      { group: '华东', items: ['景旺', '深南'] },
+    ]);
+    wrapper.unmount();
+  });
+
+  it('reorders groups from the group handle with the arrow keys', async () => {
+    const wrapper = mountList({ sortable: true, editable: true });
+    await wrapper
+      .get('[aria-label="拖拽排序区域 华南，或按上下方向键移动"]')
+      .trigger('keydown', { key: 'ArrowUp' });
+
+    expect(wrapper.emitted('reorderGroups')?.[0]).toEqual([['华南', '华东']]);
+    wrapper.unmount();
+  });
+
+  it('stops resizing when the pointer is cancelled', async () => {
+    const wrapper = mountList({ defaultWidth: 240 });
+    const resizer = wrapper.get('.a-source-list__resizer');
+    const el = resizer.element as HTMLElement;
+    el.setPointerCapture = () => {};
+    el.releasePointerCapture = () => {};
+    const width = () => (wrapper.get('aside').element as HTMLElement).style.width;
+
+    await resizer.trigger('pointerdown', { button: 0, clientX: 100, pointerId: 1 });
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 120 }));
+    await nextTick();
+    const resized = width();
+    expect(resized).not.toBe('240px');
+
+    el.dispatchEvent(new PointerEvent('pointercancel'));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 200 }));
+    await nextTick();
+    // 被取消后残留的 pointermove 不能再改宽度
+    expect(width()).toBe(resized);
     wrapper.unmount();
   });
 });

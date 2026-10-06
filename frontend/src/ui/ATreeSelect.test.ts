@@ -94,4 +94,24 @@ describe('ATreeSelect', () => {
 
     wrapper.unmount();
   });
+
+  it('expands every ancestor of the selected node when opening', async () => {
+    const wrapper = mount(ATreeSelect, {
+      attachTo: document.body,
+      props: { nodes, modelValue: 3 },
+    });
+
+    await wrapper.get('[role="combobox"]').trigger('click');
+    await nextTick();
+
+    // 选中的「上海办」在 总部 → 华东 下面，打开时必须直接可见且标记为已选
+    const selected = document.querySelector('[role="option"][aria-selected="true"]');
+    expect(selected?.textContent).toContain('上海办');
+    expect(
+      [...document.querySelectorAll('[role="option"]')].map((node) =>
+        node.textContent?.trim(),
+      ),
+    ).toEqual(['总部', '华东', '上海办', '华南']);
+    wrapper.unmount();
+  });
 });

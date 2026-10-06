@@ -102,3 +102,33 @@ export function collectExpandableIds(nodes: TreeNode[]): string[] {
   walk(nodes);
   return ids;
 }
+
+/**
+ * 返回从根到目标节点之间的全部祖先 id（不含目标自身，按根 → 父排列）。
+ * 找不到目标时返回空数组。打开下拉时据此展开祖先，让已选的深层节点可见。
+ */
+export function findTreeAncestorIds(
+  nodes: TreeNode[],
+  id: string | number | null,
+): string[] {
+  if (id == null) {
+    return [];
+  }
+
+  const walk = (list: TreeNode[], parents: string[]): string[] | null => {
+    for (const node of list) {
+      if (node.id === id) {
+        return parents;
+      }
+
+      const found = walk(node.children ?? [], [...parents, String(node.id)]);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
+  };
+
+  return walk(nodes, []) ?? [];
+}

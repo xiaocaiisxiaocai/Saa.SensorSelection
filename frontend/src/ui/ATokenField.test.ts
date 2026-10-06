@@ -188,4 +188,57 @@ describe('ATokenField', () => {
 
     wrapper.unmount();
   });
+
+  it.each(['Enter', ' ', 'ArrowDown'])(
+    'opens the menu from the keyboard with %j',
+    async (key) => {
+      const wrapper = mount(ATokenField, {
+        attachTo: document.body,
+        props: { options, modelValue: [] },
+      });
+
+      const combobox = wrapper.get('[role="combobox"]');
+      expect(combobox.attributes('tabindex')).toBe('0');
+      await combobox.trigger('keydown', { key });
+      await nextTick();
+
+      expect(combobox.attributes('aria-expanded')).toBe('true');
+      expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+      wrapper.unmount();
+    },
+  );
+
+  it('does not open from Enter on a token remove button', async () => {
+    const wrapper = mount(ATokenField, {
+      attachTo: document.body,
+      props: { options, modelValue: ['e3z'] },
+    });
+
+    await wrapper
+      .get('[aria-label="移除 漫反射 · OMRON E3Z-D61"]')
+      .trigger('keydown', { key: 'Enter' });
+    await nextTick();
+
+    expect(wrapper.get('[role="combobox"]').attributes('aria-expanded')).toBe(
+      'false',
+    );
+    wrapper.unmount();
+  });
+
+  it('stays out of the tab order and closed while disabled', async () => {
+    const wrapper = mount(ATokenField, {
+      attachTo: document.body,
+      props: { options, modelValue: ['e3z'], disabled: true },
+    });
+
+    const combobox = wrapper.get('[role="combobox"]');
+    expect(combobox.attributes('tabindex')).toBe('-1');
+    await combobox.trigger('click');
+    await combobox.trigger('keydown', { key: 'Enter' });
+    await nextTick();
+
+    expect(combobox.attributes('aria-expanded')).toBe('false');
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    wrapper.unmount();
+  });
 });

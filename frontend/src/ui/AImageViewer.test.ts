@@ -47,4 +47,34 @@ describe('AImageViewer', () => {
     expect(document.querySelector('.a-image-viewer--max')).toBeNull();
     wrapper.unmount();
   });
+
+  it.each(['pointercancel', 'lostpointercapture'])(
+    'stops panning after %s',
+    async (type) => {
+      const wrapper = mount(AImageViewer, {
+        attachTo: document.body,
+        props: { open: true, src: pixel, alt: '示意图' },
+      });
+      await nextTick();
+      document.querySelector<HTMLButtonElement>('[aria-label="放大"]')?.click();
+      await nextTick();
+
+      const stage = document.querySelector<HTMLElement>('.a-image-viewer__stage');
+      const img = stage?.querySelector('img');
+      if (!stage || !img) throw new Error('missing stage');
+      stage.setPointerCapture = () => {};
+      stage.dispatchEvent(
+        new PointerEvent('pointerdown', { button: 0, clientX: 0, clientY: 0, bubbles: true }),
+      );
+      stage.dispatchEvent(new PointerEvent(type, { bubbles: true }));
+      stage.dispatchEvent(
+        new PointerEvent('pointermove', { clientX: 50, clientY: 50, bubbles: true }),
+      );
+      await nextTick();
+
+      // 拖动被打断后，再移动指针不能继续平移图片
+      expect(img.style.transform).toContain('translate(0px, 0px)');
+      wrapper.unmount();
+    },
+  );
 });

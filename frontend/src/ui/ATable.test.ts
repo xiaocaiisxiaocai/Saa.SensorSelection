@@ -493,4 +493,113 @@ describe('ATable', () => {
     expect(wrapper.find('[aria-label="调整操作列宽"]').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it('ignores keys pressed on controls inside a row instead of activating the row', async () => {
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: { columns, rows, rowKey: 'id' },
+      slots: {
+        'cell-actions': () => h('button', { type: 'button', class: 'row-delete' }, '删除'),
+      },
+    });
+
+    const button = wrapper.get('tbody tr .row-delete');
+    (button.element as HTMLElement).focus();
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    button.element.dispatchEvent(enter);
+    await button.trigger('keydown', { key: 'ArrowDown' });
+    await nextTick();
+
+    // 在行内「删除」按钮上按 Enter 不能变成激活整行（打开编辑）
+    expect(wrapper.emitted('activate')).toBeUndefined();
+    expect(enter.defaultPrevented).toBe(false);
+    // 方向键也不应把焦点从按钮上抢走
+    expect(document.activeElement).toBe(button.element);
+
+    // 行本身获得焦点时 Enter 仍然激活
+    await wrapper.get('tbody tr').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('activate')).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it('persists a dragged column width once on pointer release, not on every move', async () => {
+    localStorage.removeItem('a-table:widths:drag-spec');
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: {
+        storageKey: 'drag-spec',
+        columns: [
+          { key: 'name', label: '名称', minWidth: 200 },
+          { key: 'note', label: '备注', minWidth: 100 },
+        ],
+        rows: [{ name: 'a', note: 'b' }],
+        rowKey: 'name',
+      },
+    });
+    const handle = wrapper.get('[aria-label="调整名称列宽"]');
+    const el = handle.element as HTMLElement;
+    el.setPointerCapture = () => {};
+    el.releasePointerCapture = () => {};
+
+    await handle.trigger('pointerdown', { clientX: 100, pointerId: 1 });
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 140 }));
+    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150 }));
+    await nextTick();
+
+    expect(
+      wrapper.findAll('th').find((th) => th.text() === '名称')?.attributes('style'),
+    ).toBe('width: 250px;');
+    expect(localStorage.getItem('a-table:widths:drag-spec')).toBeNull();
+
+    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150 }));
+    expect(
+      JSON.parse(localStorage.getItem('a-table:widths:drag-spec') ?? '{}'),
+    ).toEqual({ name: 250 });
+
+    wrapper.unmount();
+  });
+
+  it('refreshes horizontal overflow hints after a column is resized', async () => {
+    const wrapper = mount(ATable, {
+      attachTo: document.body,
+      props: {
+        columns: [
+          { key: 'name', label: '名称', minWidth: 200 },
+          { key: 'note', label: '备注', minWidth: 100 },
+        ],
+        rows: [{ name: 'a', note: 'b' }],
+        rowKey: 'name',
+      },
+    });
+    const scroller = wrapper.get('.a-table');
+    Object.defineProperty(scroller.element, 'clientWidth', {
+      value: 320,
+      configurable: true,
+    });
+    Object.defineProperty(scroller.element, 'scrollWidth', {
+      value: 320,
+      configurable: true,
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(scroller.classes()).not.toContain('a-table--overflow-end');
+
+    // 列被拉宽后内容溢出，不经过 window resize/scroll 也要刷新渐隐提示
+    Object.defineProperty(scroller.element, 'scrollWidth', {
+      value: 720,
+      configurable: true,
+    });
+    await wrapper
+      .get('[aria-label="调整名称列宽"]')
+      .trigger('keydown', { key: 'ArrowRight' });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await nextTick();
+    expect(scroller.classes()).toContain('a-table--overflow-end');
+
+    wrapper.unmount();
+  });
 });

@@ -134,9 +134,14 @@ function onSearchKeydown(event: KeyboardEvent) {
 }
 
 function onSearchHotkey(event: KeyboardEvent) {
-  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') {
-    return;
-  }
+  // 与工具栏提示一致：mac 只认 ⌘K，其他平台只认 Ctrl+K；带 Shift/Alt 的组合
+  // 留给浏览器或其他快捷键。输入法组字中、或已被别处处理过的按键不抢。
+  if (event.isComposing || event.defaultPrevented) return;
+  if (event.key.toLowerCase() !== 'k' || event.shiftKey || event.altKey) return;
+  const isMac = /Mac|iPhone|iPad/i.test(navigator.platform);
+  const primary = isMac ? event.metaKey : event.ctrlKey;
+  const other = isMac ? event.ctrlKey : event.metaKey;
+  if (!primary || other) return;
   event.preventDefault();
   searchInput.value?.focus();
   searchInput.value?.select();

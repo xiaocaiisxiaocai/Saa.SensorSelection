@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectExpandableIds,
   filterTree,
+  findTreeAncestorIds,
   findTreeLabel,
   flattenTree,
   type TreeNode,
@@ -45,5 +46,12 @@ describe('tree-select helpers', () => {
     expect(filtered[0]?.children?.[0]?.children?.[0]?.label).toBe('上海办');
     expect(collectExpandableIds(filtered)).toEqual(['1', '2']);
     expect(findTreeLabel(nodes, 3)).toBe('上海办');
+  });
+
+  it('lists the ancestors of a node from root to parent', () => {
+    expect(findTreeAncestorIds(nodes, 3)).toEqual(['1', '2']);
+    expect(findTreeAncestorIds(nodes, 1)).toEqual([]);
+    expect(findTreeAncestorIds(nodes, 99)).toEqual([]);
+    expect(findTreeAncestorIds(nodes, null)).toEqual([]);
   });
 });

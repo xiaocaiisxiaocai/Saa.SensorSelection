@@ -163,32 +163,17 @@ const selection = computed(() => {
   const requested = String(route.query.item || '');
   const requestedCategory = String(route.query.category || '');
   const requestedConfiguration = String(route.query.configuration || '');
-  const found = catalogGroups.value
-    .flatMap((group) => [
-      ...group.items.map((name) => ({
-        category: group.name,
-        configuration: '',
-        name,
-      })),
-      ...(group.configurations ?? []).flatMap((configuration) =>
-        configuration.items.map((name) => ({
-          category: group.name,
-          configuration: configuration.name,
-          name,
-        })),
-      ),
-    ])
-    .find(
-      (item) =>
-        item.name === requested &&
-        (!requestedCategory || item.category === requestedCategory) &&
-        (!requestedConfiguration ||
-          item.configuration === requestedConfiguration),
-    );
+  const found = listEntityTreeItems(catalogGroups.value).find(
+    (item) =>
+      item.name === requested &&
+      (!requestedCategory || item.category === requestedCategory) &&
+      (!requestedConfiguration ||
+        (item.configuration ?? '') === requestedConfiguration),
+  );
   if (found) {
     return {
       category: found.category,
-      configuration: found.configuration,
+      configuration: found.configuration ?? '',
       item: found.name,
     };
   }
@@ -231,83 +216,90 @@ const boardCharacteristicOptions = computed(() =>
     value: item.id,
   })),
 );
-const globalSearchDocuments = computed<MachineStructureSearchDocument[]>(() => {
+const globalSearchDocuments = computed<MachineStructureSearchDocument[]>(() =>
+  // 遍历「制程 × 机型 × 分区」时，每次取行都会重新归一化 Sensor/工序/字典；
+  // batchRead 让这些归一化结果在本次构建里只算一次。
+  store.batchRead(buildGlobalSearchDocuments),
+);
+
+function buildGlobalSearchDocuments(): MachineStructureSearchDocument[] {
   const documents: MachineStructureSearchDocument[] = [];
-  const mechanismGroups = filterMachineGroups(groups.value, 'mechanism');
+  const machineModelById = new Map(
+    machineModelItems.value.map((item) => [item.id, item]),
+  );
+  const processStepById = new Map(
+    store.processSteps.map((item) => [item.id, item]),
+  );
+  const boardCharacteristicById = new Map(
+    boardCharacteristicItems.value.map((item) => [item.id, item]),
+  );
+  const sensorById = new Map(store.sensors.map((sensor) => [sensor.id, sensor]));
+  const treeItems = listEntityTreeItems(
+    filterMachineGroups(groups.value, 'mechanism'),
+  );
   for (const process of processes.value) {
-    for (const group of mechanismGroups) {
-      const treeItems = [
-        ...group.items.map((machineName) => ({
-          configuration: '',
-          machineName,
-        })),
-        ...(group.configurations ?? []).flatMap((configuration) =>
-          configuration.items.map((machineName) => ({
-            configuration: configuration.name,
-            machineName,
-          })),
-        ),
-      ];
-      for (const treeItem of treeItems) {
-        const sections = store
-          .resolvedMachineSections(treeItem.machineName, process.id)
-          .filter((section) => section.kind === 'structure');
-        for (const section of sections) {
-          for (const row of store.machineSectionRows(
-            section.id,
-            treeItem.machineName,
-            process.id,
-          )) {
-            const machineModel = machineModelItems.value.find(
-              (item) => item.id === row.machineModelId,
-            );
-            const processStep = store.processSteps.find(
-              (item) => item.id === row.processStepId,
-            );
-            const boardCharacteristic = boardCharacteristicItems.value.find(
-              (item) => item.id === row.boardCharacteristicId,
-            );
-            const sensors = row.sensorIds
-              .map((id) => store.sensors.find((sensor) => sensor.id === id))
-              .filter((sensor) => Boolean(sensor));
-            documents.push({
-              boardCharacteristicId: row.boardCharacteristicId,
-              boardCharacteristicName: boardCharacteristic?.name ?? '',
-              category: group.name,
-              configuration: treeItem.configuration,
-              machineModelId: row.machineModelId,
-              machineModelName: machineModel?.name ?? '',
-              machineName: treeItem.machineName,
-              processId: process.id,
-              processName: process.name,
-              processStepId: row.processStepId,
-              processStepName: processStep
-                ? `${processStep.layer} · ${processStep.name}`
-                : '',
-              rowId: row.id,
-              searchableText: [
-                row.role,
-                row.purpose,
-                row.note,
-                ...sensors.flatMap((sensor) => [
-                  sensor?.sensorType,
-                  sensor?.brand,
-                  sensor?.model,
-                  sensor?.spec,
-                ]),
-              ]
-                .filter(Boolean)
-                .join(' '),
-              sectionId: section.id,
-              sectionName: section.name,
-            });
-          }
+    for (const treeItem of treeItems) {
+      const sections = store
+        .resolvedMachineSections(treeItem.name, process.id)
+        .filter((section) => section.kind === 'structure');
+      for (const section of sections) {
+        for (const row of store.machineSectionRows(
+          section.id,
+          treeItem.name,
+          process.id,
+        )) {
+          const machineModel =
+            row.machineModelId == null
+              ? undefined
+              : machineModelById.get(row.machineModelId);
+          const processStep =
+            row.processStepId == null
+              ? undefined
+              : processStepById.get(row.processStepId);
+          const boardCharacteristic =
+            row.boardCharacteristicId == null
+              ? undefined
+              : boardCharacteristicById.get(row.boardCharacteristicId);
+          const sensors = row.sensorIds
+            .map((id) => sensorById.get(id))
+            .filter((sensor) => Boolean(sensor));
+          documents.push({
+            boardCharacteristicId: row.boardCharacteristicId,
+            boardCharacteristicName: boardCharacteristic?.name ?? '',
+            category: treeItem.category,
+            configuration: treeItem.configuration ?? '',
+            machineModelId: row.machineModelId,
+            machineModelName: machineModel?.name ?? '',
+            machineName: treeItem.name,
+            processId: process.id,
+            processName: process.name,
+            processStepId: row.processStepId,
+            processStepName: processStep
+              ? `${processStep.layer} · ${processStep.name}`
+              : '',
+            rowId: row.id,
+            searchableText: [
+              row.role,
+              row.purpose,
+              row.note,
+              ...sensors.flatMap((sensor) => [
+                sensor?.sensorType,
+                sensor?.brand,
+                sensor?.model,
+                sensor?.spec,
+              ]),
+            ]
+              .filter(Boolean)
+              .join(' '),
+            sectionId: section.id,
+            sectionName: section.name,
+          });
         }
       }
     }
   }
   return documents;
-});
+}
 const displaySections = computed(() => {
   if (!selection.value.item) return [];
   return store
@@ -406,6 +398,20 @@ const hasReportContent = computed(() =>
     ),
   ),
 );
+
+// 当前选中机型（分类 + 机型 + 可选机型配置）对应的查询参数。
+function currentSelectionQuery(
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    category: selection.value.category,
+    item: selection.value.item,
+    ...(selection.value.configuration
+      ? { configuration: selection.value.configuration }
+      : {}),
+    ...extra,
+  };
+}
 
 function addMachineContextQuery(
   query: Record<string, string>,
@@ -513,14 +519,7 @@ watch(
     }
     void router.replace({
       path: route.path,
-      query: addMachineContextQuery({
-        category: selection.value.category,
-        item: selection.value.item,
-        section: next,
-        ...(selection.value.configuration
-          ? { configuration: selection.value.configuration }
-          : {}),
-      }),
+      query: addMachineContextQuery(currentSelectionQuery({ section: next })),
     });
   },
   { immediate: true },
@@ -541,15 +540,10 @@ function selectEntity(payload: {
 
 function onTabChange(sectionId: string) {
   activeSection.value = sectionId;
-  const query: Record<string, string> = addMachineContextQuery({
-    category: selection.value.category,
-    item: selection.value.item,
-    section: sectionId,
+  void router.replace({
+    path: route.path,
+    query: addMachineContextQuery(currentSelectionQuery({ section: sectionId })),
   });
-  if (selection.value.configuration) {
-    query.configuration = selection.value.configuration;
-  }
-  void router.replace({ path: route.path, query });
 }
 
 function selectProcess(processId: number) {
@@ -560,17 +554,10 @@ function selectProcess(processId: number) {
   ) {
     return;
   }
-  const query: Record<string, string> = addMachineContextQuery(
-    {
-      category: selection.value.category,
-      item: selection.value.item,
-      ...(selection.value.configuration
-        ? { configuration: selection.value.configuration }
-        : {}),
-    },
-    processId,
-  );
-  void router.replace({ path: route.path, query });
+  void router.replace({
+    path: route.path,
+    query: addMachineContextQuery(currentSelectionQuery(), processId),
+  });
 }
 
 function selectMachineCatalog(value: string) {
@@ -595,14 +582,9 @@ function selectMachineView(value: string) {
     return;
   }
   const query: Record<string, string> = addMachineContextQuery(
-    {
-      category: selection.value.category,
-      item: selection.value.item,
-      ...(selection.value.configuration
-        ? { configuration: selection.value.configuration }
-        : {}),
-      ...(activeSection.value ? { section: activeSection.value } : {}),
-    },
+    currentSelectionQuery(
+      activeSection.value ? { section: activeSection.value } : {},
+    ),
     activeProcessId.value,
     activeMachineType.value,
     value,
@@ -709,13 +691,7 @@ async function removeProcess(item: MachineProcessItem) {
   if (deleted && wasActive) {
     void router.replace({
       path: route.path,
-      query: addMachineContextQuery({
-        category: selection.value.category,
-        item: selection.value.item,
-        ...(selection.value.configuration
-          ? { configuration: selection.value.configuration }
-          : {}),
-      }),
+      query: addMachineContextQuery(currentSelectionQuery()),
     });
   }
 }

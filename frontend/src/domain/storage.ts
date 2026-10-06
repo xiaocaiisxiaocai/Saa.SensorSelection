@@ -63,7 +63,7 @@ export class BackendStorage implements StorageLike {
   queue: Promise<void> = Promise.resolve();
 
   private readonly transport: BackendStoreTransport;
-  private readonly local: StorageLike;
+  private readonly local?: StorageLike;
   private readonly onStatus?: (status: BackendSyncStatus) => void;
   private readonly onWriteFailure?: (message: string) => void;
   private readonly migrateOnEmpty: boolean;
@@ -215,7 +215,7 @@ export class BackendStorage implements StorageLike {
     let migrated = false;
     let seeded = false;
     if (this.migrateOnEmpty && remoteKeys.length === 0) {
-      const localStore = parsePersistedStore(this.local.getItem(STORAGE_KEY));
+      const localStore = parsePersistedStore(this.local?.getItem(STORAGE_KEY) ?? null);
       const localKeys = Object.keys(localStore);
       if (localKeys.length > 0) {
         try {
@@ -335,11 +335,11 @@ export class BackendStorage implements StorageLike {
   }
 
   snapshotLocal() {
-    if (this.status !== 'online' || this.localSnapshotDisabled) return;
+    if (!this.local || this.status !== 'online' || this.localSnapshotDisabled) {
+      return;
+    }
     try {
-      const full: Record<string, unknown[]> = {};
-      for (const [key, value] of this.cache) full[key] = value;
-      this.local.setItem(STORAGE_KEY, JSON.stringify(full));
+      this.local.setItem(STORAGE_KEY, this.readStoreJson());
     } catch {
       // A backend snapshot can be much larger than localStorage's quota. Retrying
       // the same full serialization after every CRUD write blocks the UI again.

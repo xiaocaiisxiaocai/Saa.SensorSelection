@@ -39,6 +39,28 @@ describe('auth store', () => {
     expect(useAccess().canWrite('selection:write')).toBe(false);
   });
 
+  it('reuses a fresh profile across navigations but refetches for a new token or after the window', async () => {
+    vi.useFakeTimers();
+    try {
+      storeToken('tok');
+      const me = vi.spyOn(api, 'me').mockResolvedValue(viewer);
+      const auth = useAuthStore();
+      await auth.ensureProfile();
+      await auth.ensureProfile();
+      expect(me).toHaveBeenCalledTimes(1);
+
+      storeToken('tok-2');
+      await auth.ensureProfile();
+      expect(me).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(60_000);
+      await auth.ensureProfile();
+      expect(me).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('clears the profile on 401 without treating 403 as expiry', async () => {
     storeToken('tok');
     vi.spyOn(api, 'me').mockRejectedValue(

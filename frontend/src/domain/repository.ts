@@ -130,7 +130,32 @@ export function createSelectionRepository({
     ).store;
   }
 
+  // 只读批处理期间缓存被反复调用的归一化结果。构建搜索索引会对每个
+  // 「制程 × 机型 × 分区」调用 getMachineSectionRows，而它每次都会重新归一化
+  // 全部 Sensor、工序和字典；批处理内 store 不会被修改，结果可以安全复用。
+  let readCache: Map<string, unknown> | null = null;
+
+  function cachedRead<T>(key: string, read: () => T): T {
+    if (!readCache) return read();
+    if (!readCache.has(key)) readCache.set(key, read());
+    return readCache.get(key) as T;
+  }
+
+  function batchRead<T>(run: () => T): T {
+    if (readCache) return run();
+    readCache = new Map();
+    try {
+      return run();
+    } finally {
+      readCache = null;
+    }
+  }
+
+  // 事务内的 persist 只改内存，由最外层 transaction 统一提交一次。
+  let transactionDepth = 0;
+
   function persist(snapshot: PersistedStore): boolean {
+    if (transactionDepth > 0) return true;
     try {
       const result = storage?.setItem?.(STORAGE_KEY, JSON.stringify(store));
       if (result === false) {
@@ -142,6 +167,31 @@ export function createSelectionRepository({
       store = snapshot;
       return false;
     }
+  }
+
+  // 把几个各自会 persist 的步骤合成一次原子写入：任何一步失败都回滚到事务
+  // 开始前的状态，避免前一步已经提交、整体却向页面报告失败。
+  function transaction<T extends { ok: boolean; reason?: string }>(
+    run: () => T,
+  ): T {
+    if (transactionDepth > 0) return run();
+    const snapshot = cloneStore(store);
+    transactionDepth += 1;
+    let result: T;
+    try {
+      result = run();
+    } catch (error) {
+      store = snapshot;
+      throw error;
+    } finally {
+      transactionDepth -= 1;
+    }
+    if (!result.ok) {
+      store = snapshot;
+      return result;
+    }
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' } as T;
+    return result;
   }
 
   function getCrud(listId: string, entityName: string): CrudRecord[] {
@@ -291,6 +341,10 @@ export function createSelectionRepository({
   }
 
   function getSensors(): SensorItem[] {
+    return cachedRead('sensors', readSensors);
+  }
+
+  function readSensors(): SensorItem[] {
     const key = keyFor('sensor-catalog', 'all');
     const typeNames = getDictionaryItems('sensor-type').map(
       (item) => item.name,
@@ -938,6 +992,10 @@ export function createSelectionRepository({
   }
 
   function getProcessSteps(): ProcessStepItem[] {
+    return cachedRead('process-steps', readProcessSteps);
+  }
+
+  function readProcessSteps(): ProcessStepItem[] {
     const key = keyFor('process-steps', 'all');
     if (!Array.isArray(store[key])) {
       store[key] = demoData ? createProcessStepDefaults() : [];
@@ -1876,6 +1934,10 @@ export function createSelectionRepository({
   }
 
   function getDictionaryItems(code: string): DictionaryItem[] {
+    return cachedRead(`dict:${code}`, () => readDictionaryItems(code));
+  }
+
+  function readDictionaryItems(code: string): DictionaryItem[] {
     const definition = DICTIONARY_DEFINITIONS.find(
       (item) => item.code === code,
     );
@@ -2543,6 +2605,12 @@ export function createSelectionRepository({
   }
 
   function saveEntityItem(
+    ...args: Parameters<typeof saveEntityItemSteps>
+  ): SaveResult<EntityTreeItem> {
+    return transaction(() => saveEntityItemSteps(...args));
+  }
+
+  function saveEntityItemSteps(
     kind: EntityKind,
     payload: {
       category: string;
@@ -2616,6 +2684,12 @@ export function createSelectionRepository({
   }
 
   function deleteEntityItem(
+    ...args: Parameters<typeof deleteEntityItemSteps>
+  ): DeleteResult {
+    return transaction(() => deleteEntityItemSteps(...args));
+  }
+
+  function deleteEntityItemSteps(
     kind: EntityKind,
     name: string,
     category?: string,
@@ -2689,6 +2763,7 @@ export function createSelectionRepository({
   }
 
   return {
+    batchRead,
     deleteControlledFile,
     deleteCrud,
     deleteDictionaryItem,

@@ -248,7 +248,8 @@ export interface BackendStoreTransport {
 
 export interface BackendStorageOptions {
   transport: BackendStoreTransport;
-  local: StorageLike;
+  /** 后端成功后的本地快照；不传则不做快照（省掉每次写入后的全量序列化）。 */
+  local?: StorageLike;
   onStatus?: (status: BackendSyncStatus) => void;
   onWriteFailure?: (message: string) => void;
   migrateOnEmpty?: boolean;

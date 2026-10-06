@@ -9,7 +9,6 @@ import {
   CRUD_DEFAULTS,
   listEntityGroupItems,
   SENSOR_DATA,
-  STORAGE_KEY,
   type BackendSyncStatus,
   type CrudRecord,
   type CustomerProcItem,
@@ -47,8 +46,6 @@ function createLocalRepository() {
 }
 
 export const useSelectionStore = defineStore('selection', () => {
-  // 每个 Store 实例独立的标志位（避免 Vitest 测试间跨实例共享）
-  let storageSyncBound = false;
   let repository: Repository = createLocalRepository();
   // 当前生效的 bridge；重建时旧 bridge 的回调不能再改共享状态。
   let activeBridge: BackendStorage | null = null;
@@ -113,6 +110,10 @@ export const useSelectionStore = defineStore('selection', () => {
 
   const searchIndex = computed<SearchItem[]>(() => {
     void revision.value;
+    return repository.batchRead(buildFullSearchIndex);
+  });
+
+  function buildFullSearchIndex(): SearchItem[] {
     const machineGroups = repository.getEntityGroups('machine');
     const machineSectionHits: SearchItem[] = [];
     for (const process of repository.getMachineProcesses()) {
@@ -153,10 +154,10 @@ export const useSelectionStore = defineStore('selection', () => {
       machineDetails: {},
       machineGroups,
       machineSectionHits,
-      processSteps: processSteps.value,
-      sensors: sensors.value,
+      processSteps: repository.getProcessSteps(),
+      sensors: repository.getSensors(),
     });
-  });
+  }
 
   function touch() {
     revision.value += 1;
@@ -170,18 +171,6 @@ export const useSelectionStore = defineStore('selection', () => {
     if (result.ok) touch();
     return result;
   }
-
-  function bindStorageSync() {
-    if (storageSyncBound || typeof window === 'undefined') return;
-    storageSyncBound = true;
-    window.addEventListener('storage', (event) => {
-      if (event.key !== STORAGE_KEY) return;
-      repository.replaceFromStorage(event.newValue);
-      touch();
-    });
-  }
-
-  bindStorageSync();
 
   function entityGroups(kind: EntityKind) {
     void revision.value;
@@ -293,11 +282,7 @@ export const useSelectionStore = defineStore('selection', () => {
           deleteKey: (key) => api.deleteKey(key),
           writeAll: (store) => api.replaceAll(store),
         },
-        // localStorage 仅作为后端成功后的快照缓存，不能在后端为空时回灌或充当数据源。
-        local: {
-          getItem: () => null,
-          setItem: () => undefined,
-        },
+        // 不传 local：浏览器不缓存业务数据，后端为空时也不能用本地内容回灌。
         migrateOnEmpty: false,
         onStatus: (status) => {
           if (bridge !== activeBridge) return;
@@ -376,6 +361,7 @@ export const useSelectionStore = defineStore('selection', () => {
 
   return {
     backendMessage,
+    batchRead: <T>(run: () => T): T => repository.batchRead(run),
     backendStatus,
     controlledDocuments,
     crudItems,

@@ -17,10 +17,17 @@ export function hasAllPermissions(
   return required.every((code) => owned.includes(code));
 }
 
+// 路由守卫每次导航都会调用 ensureProfile。同一个 token 在这段时间内复用已加载的
+// 资料，避免每次切页都多一次 /auth/me 往返；过期后照常刷新，权限变更仍会在
+// 下一次导航时生效（后端对每个请求也会重新校验账号状态）。
+const PROFILE_REUSE_MS = 60_000;
+
 export const useAuthStore = defineStore('auth', () => {
   const profile = ref<null | UserProfile>(null);
   const sessionExpired = ref(false);
   let profilePromise: null | Promise<void> = null;
+  let profileToken: null | string = null;
+  let profileLoadedAt = 0;
 
   const permissions = computed(() => profile.value?.permissions ?? []);
   const roleCodes = computed(
@@ -36,6 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   function applyProfile(next: null | UserProfile) {
     profile.value = next;
+    profileToken = next ? getStoredToken() : null;
+    profileLoadedAt = next ? Date.now() : 0;
     if (next) sessionExpired.value = false;
   }
 
@@ -48,6 +57,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function ensureProfile(): Promise<void> {
     if (profilePromise) {
       await profilePromise;
+      return;
+    }
+    if (
+      profile.value &&
+      profileToken !== null &&
+      profileToken === getStoredToken() &&
+      Date.now() - profileLoadedAt < PROFILE_REUSE_MS
+    ) {
       return;
     }
     profilePromise = (async () => {

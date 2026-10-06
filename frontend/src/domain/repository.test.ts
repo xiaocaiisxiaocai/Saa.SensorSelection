@@ -1109,3 +1109,80 @@ describe('controlled documents', () => {
     ]);
   });
 });
+
+describe('createSelectionRepository multi-step writes', () => {
+  function countingStorage(failAfter = Infinity) {
+    let value: null | string = null;
+    let writes = 0;
+    const storage: StorageLike = {
+      getItem: () => value,
+      setItem: (_key, nextValue) => {
+        writes += 1;
+        if (writes > failAfter) return false;
+        value = nextValue;
+        return true;
+      },
+    };
+    return { storage, writes: () => writes };
+  }
+
+  it('saves a general-structure machine and its structure section in one write', () => {
+    const memory = countingStorage();
+    const repo = createRepo(memory.storage);
+    expect(repo.saveEntityGroup('machine', { name: '通用结构' }).ok).toBe(true);
+    const before = memory.writes();
+
+    const result = repo.saveEntityItem('machine', {
+      category: '通用结构',
+      name: '翻板机',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(memory.writes() - before).toBe(1);
+    expect(
+      repo.getGlobalMachineSections().some((item) => item.name === '翻板机'),
+    ).toBe(true);
+  });
+
+  it('rolls back every step when the combined write is rejected', () => {
+    const memory = countingStorage();
+    const repo = createRepo(memory.storage);
+    repo.saveEntityGroup('machine', { name: '通用结构' });
+    const failing = countingStorage(0);
+    const failingRepo = createRepo({
+      getItem: memory.storage.getItem,
+      setItem: failing.storage.setItem,
+    });
+
+    const result = failingRepo.saveEntityItem('machine', {
+      category: '通用结构',
+      name: '翻板机',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'storage' });
+    expect(
+      failingRepo
+        .getEntityGroups('machine')
+        .find((group) => group.name === '通用结构')?.items,
+    ).not.toContain('翻板机');
+    expect(
+      failingRepo
+        .getGlobalMachineSections()
+        .some((item) => item.name === '翻板机'),
+    ).toBe(false);
+  });
+});
+
+describe('createSelectionRepository batchRead', () => {
+  it('reuses normalized catalogs inside a read batch only', () => {
+    const repo = createRepo();
+    expect(repo.getSensors()).not.toBe(repo.getSensors());
+    repo.batchRead(() => {
+      expect(repo.getSensors()).toBe(repo.getSensors());
+      expect(repo.getDictionaryItems('sensor-type')).toBe(
+        repo.getDictionaryItems('sensor-type'),
+      );
+    });
+    expect(repo.getSensors()).not.toBe(repo.getSensors());
+  });
+});

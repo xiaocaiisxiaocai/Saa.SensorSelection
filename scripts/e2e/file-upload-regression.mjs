@@ -196,7 +196,7 @@ async function runSensorFiles() {
   await navTo('Sensor型号')
   const cases = [
     { tab: 'SOP', uploadToast: 'SOP 已上传', deleteToast: 'SOP 已删除' },
-    { tab: '资料', uploadToast: '资料已上传', deleteToast: '资料已删除' },
+    { tab: '型录', uploadToast: '型录已上传', deleteToast: '型录已删除' },
     { tab: '3D', uploadToast: '3D 文件已上传', deleteToast: '3D 文件已删除' },
   ]
 
@@ -235,7 +235,7 @@ async function runMachineImage() {
 
   await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
   await fillField(sheet(), 'Tab 名称', tab)
-  await pickSelect(sheet(), 'Tab 类型', '机构/结构')
+  await pickSelect(sheet(), 'Tab 类型', '结构')
   await saveSheet()
   await page.getByRole('tab', { name: tab }).click()
 
@@ -244,7 +244,7 @@ async function runMachineImage() {
     await page.getByText('请先新增内容后再添加图片', { exact: true }).waitFor({ state: 'visible' })
   })
 
-  await page.getByRole('button', { name: '新增', exact: true }).first().click()
+  await page.getByRole('button', { name: '新增选型', exact: true }).first().click()
   await fillField(sheet(), '功能作用', role)
   await pickFirstToken(sheet(), '关联传感器')
   await saveSheet()
@@ -263,7 +263,7 @@ async function runMachineImage() {
     await page.locator('.a-image-viewer').waitFor({ state: 'visible' })
     await page.keyboard.press('Escape')
     await page.locator('.a-image-viewer').waitFor({ state: 'detached' })
-    await card.getByRole('button', { name: '删除', exact: true }).click()
+    await card.getByRole('button', { name: `删除 ${IMAGE_NAME}`, exact: true }).click()
     await confirmDelete()
     await expectToast('示意图已删除')
     await card.waitFor({ state: 'detached' })
@@ -297,7 +297,7 @@ async function main() {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' })
   await page.locator('input[autocomplete="username"]').fill(ADMIN_USERNAME)
   await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
-  await page.getByRole('button', { name: '登 录' }).click()
+  await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL('**/selection/customer**', { timeout: 20000 })
 
   console.log(`Real file regression against ${BASE_URL}`)

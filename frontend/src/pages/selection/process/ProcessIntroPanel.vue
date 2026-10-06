@@ -11,6 +11,7 @@ import {
 } from '@/domain';
 import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
@@ -27,6 +28,7 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 const query = ref('');
 const preview = ref<ControlledFileItem | null>(null);
+const { uploading, runUpload } = useUploadLock();
 
 const files = computed(() => store.processIntroFiles);
 const visible = computed(() => {
@@ -41,7 +43,12 @@ const visible = computed(() => {
   );
 });
 
-async function onFiles(picked: File[]) {
+// 上传中锁：同一时间只处理一批文件，期间上传区禁用。
+function onFiles(picked: File[]) {
+  return runUpload(() => uploadPicked(picked));
+}
+
+async function uploadPicked(picked: File[]) {
   for (const file of picked) {
     const kind = detectControlledFileKind(
       file.name,
@@ -95,6 +102,8 @@ async function remove(item: ControlledFileItem) {
     </div>
     <AFileDrop
       v-if="writable"
+      :disabled="uploading"
+      :title="uploading ? UPLOADING_TITLE : undefined"
       :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept},${CONTROLLED_FILE_RULES.ppt.accept}`"
       :max-bytes="CONTROLLED_FILE_RULES.pdf.maxBytes"
       :extensions="[

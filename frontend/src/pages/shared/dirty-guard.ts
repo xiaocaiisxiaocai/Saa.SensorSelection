@@ -28,16 +28,26 @@ export function useDirtyGuard<T extends object>(form: T) {
     return JSON.stringify(form) !== snapshot;
   }
 
-  async function confirmClose(): Promise<boolean> {
+  /**
+   * 不关闭弹窗、但要用别的内容覆盖表单（例如同一弹窗里切换到编辑另一条
+   * 记录）之前调用；未改动时直接放行，有改动时提示是否放弃。
+   */
+  async function confirmDiscard(
+    message = '继续后本次输入的内容不会被保存。',
+  ): Promise<boolean> {
     if (!isDirty()) return true;
     return alert.confirm({
       title: '放弃未保存的修改？',
-      message: '关闭后本次输入的内容不会被保存。',
+      message,
       confirmText: '放弃修改',
       cancelText: '继续编辑',
       destructive: true,
     });
   }
 
-  return { markClean, isDirty, confirmClose };
+  function confirmClose(): Promise<boolean> {
+    return confirmDiscard('关闭后本次输入的内容不会被保存。');
+  }
+
+  return { markClean, isDirty, confirmClose, confirmDiscard };
 }

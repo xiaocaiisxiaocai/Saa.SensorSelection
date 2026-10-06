@@ -80,7 +80,8 @@ export function downloadSensorExcel(
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => revokeObjectUrl(url), 0);
+  // 与 MachinePage 一致：给浏览器留出启动下载的时间，再释放 blob URL。
+  window.setTimeout(() => revokeObjectUrl(url), 1000);
   return file;
 }
 
@@ -255,12 +256,23 @@ function displayWidth(value: string) {
   );
 }
 
+// XML 1.0 合法字符：#x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
+// [#x10000-#x10FFFF]。按码点遍历时孤立代理项会单独出现（落在 D800-DFFF），
+// U+FFFE / U+FFFF 也不合法，一并剔除，否则 Excel 会判定文件损坏。
+function isXmlChar(code: number) {
+  return (
+    code === 0x9 ||
+    code === 0xa ||
+    code === 0xd ||
+    (code >= 0x20 && code <= 0xd7ff) ||
+    (code >= 0xe000 && code <= 0xfffd) ||
+    (code >= 0x10000 && code <= 0x10ffff)
+  );
+}
+
 function escapeXml(value: string) {
   return [...String(value)]
-    .filter((character) => {
-      const code = character.charCodeAt(0);
-      return code === 9 || code === 10 || code === 13 || code >= 32;
-    })
+    .filter((character) => isXmlChar(character.codePointAt(0) ?? 0))
     .join('')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -269,8 +281,18 @@ function escapeXml(value: string) {
     .replace(/'/g, '&apos;');
 }
 
+// Excel 工作表名：不能含 \ / * ? : [ ]，不能以单引号开头或结尾，最长 31 个
+// 字符，且 History 是保留名。
+function trimSheetNameEdges(value: string) {
+  return value.trim().replace(/^'+|'+$/g, '').trim();
+}
+
 function safeSheetName(value: string) {
-  return value.replace(/[\\/*?:[\]]/g, ' ').trim().slice(0, 31) || '全部';
+  const name = trimSheetNameEdges(
+    trimSheetNameEdges(value.replace(/[\\/*?:[\]]/g, ' ')).slice(0, 31),
+  );
+  if (!name) return '全部';
+  return name.toLowerCase() === 'history' ? `${name} (1)` : name;
 }
 
 function safeFileName(value: string) {

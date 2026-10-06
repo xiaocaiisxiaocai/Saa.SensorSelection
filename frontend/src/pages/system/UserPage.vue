@@ -44,6 +44,10 @@ const passwordOpen = ref(false);
 const editingId = ref<number>();
 const passwordUserId = ref<number>();
 const saving = ref(false);
+const passwordSaving = ref(false);
+// 编辑前用户已绑定的角色。表单只支持选一个角色；多角色用户不重新选择时
+// 保存要原样保留这些角色，不能提交空数组把角色全部清掉。
+const originalRoles = ref<RbacUser['roles']>([]);
 const userValidationAttempted = ref(false);
 const passwordValidationAttempted = ref(false);
 const form = reactive({
@@ -62,6 +66,14 @@ const roleOptions = computed(() =>
     value: role.id,
     label: `${role.name}（${role.code}）`,
   })),
+);
+const hasMultipleOriginalRoles = computed(
+  () => editingId.value !== undefined && originalRoles.value.length > 1,
+);
+const roleHint = computed(() =>
+  hasMultipleOriginalRoles.value
+    ? `当前绑定多个角色（${originalRoles.value.map((role) => role.name).join('、')}）；不选择则保存时保留原角色，选择后改为该单一角色。`
+    : undefined,
 );
 const orgNodes = computed(() => toTreeSelectNodes(orgUnits.value));
 const columns = computed<TableColumn[]>(() => {
@@ -102,6 +114,7 @@ async function loadData() {
 function openCreate() {
   userValidationAttempted.value = false;
   editingId.value = undefined;
+  originalRoles.value = [];
   Object.assign(form, {
     displayName: '',
     isActive: true,
@@ -117,6 +130,7 @@ function openCreate() {
 function openEdit(user: RbacUser) {
   userValidationAttempted.value = false;
   editingId.value = user.id;
+  originalRoles.value = [...user.roles];
   Object.assign(form, {
     displayName: user.displayName,
     isActive: user.isActive,
@@ -127,9 +141,13 @@ function openEdit(user: RbacUser) {
   });
   dirtyGuard.markClean();
   dialogOpen.value = true;
-  if (user.roles.length > 1) {
-    toast.warning('该用户当前绑定多个角色，请重新选择一个角色');
-  }
+}
+
+function editedRoleIds(): number[] {
+  if (form.roleId !== null) return [Number(form.roleId)];
+  return hasMultipleOriginalRoles.value
+    ? originalRoles.value.map((role) => role.id)
+    : [];
 }
 
 async function cancelDialog() {
@@ -139,6 +157,7 @@ async function cancelDialog() {
 }
 
 async function saveUser() {
+  if (saving.value) return;
   userValidationAttempted.value = true;
   // 字段级错误已经由用户名/显示名/密码输入框下方的红字分别说明——用一条
   // 合并成一句的 Toast 复述会跟哪个字段实际出错对不上。
@@ -165,7 +184,7 @@ async function saveUser() {
         displayName: form.displayName.trim(),
         isActive: form.isActive,
         orgUnitId: form.orgUnitId,
-        roleIds: form.roleId === null ? [] : [Number(form.roleId)],
+        roleIds: editedRoleIds(),
       });
       toast.success('用户已更新');
     }
@@ -186,18 +205,21 @@ function openPassword(user: RbacUser) {
 }
 
 async function savePassword() {
-  if (!passwordUserId.value) return;
+  if (!passwordUserId.value || passwordSaving.value) return;
   passwordValidationAttempted.value = true;
   if (newPassword.value.length < 4) {
     toast.warning('新密码至少 4 位');
     return;
   }
+  passwordSaving.value = true;
   try {
     await api.resetUserPassword(passwordUserId.value, newPassword.value);
     toast.success('密码已重置');
     passwordOpen.value = false;
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '重置失败');
+  } finally {
+    passwordSaving.value = false;
   }
 }
 
@@ -363,11 +385,13 @@ function orgPath(user: RbacUser) {
             placeholder="姓名或称呼"
           />
         </AFormRow>
-        <AFormRow label="角色">
+        <AFormRow label="角色" :hint="roleHint">
           <ASelect
             v-model="form.roleId"
             :options="roleOptions"
-            placeholder="请选择一个角色"
+            :placeholder="
+              hasMultipleOriginalRoles ? '保留原有角色' : '请选择一个角色'
+            "
             clearable
           />
         </AFormRow>
@@ -408,7 +432,13 @@ function orgPath(user: RbacUser) {
       </AFormRow>
       <template #footer>
         <AButton @click="passwordOpen = false">取消</AButton>
-        <AButton variant="filled" @click="savePassword">保存</AButton>
+        <AButton
+          variant="filled"
+          :loading="passwordSaving"
+          @click="savePassword"
+        >
+          保存
+        </AButton>
       </template>
     </ASheet>
   </section>

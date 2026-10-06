@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import ASearchField from '@/ui/ASearchField.vue';
 import ASelect from '@/ui/ASelect.vue';
 import ATokenField from '@/ui/ATokenField.vue';
 import { toast } from '@/ui/toast';
@@ -640,4 +641,78 @@ describe('SensorPage', () => {
 
     wrapper.unmount();
   });
+
+  it('keeps the status tab when typing in the search box but honours external model deep links', async () => {
+    const wrapper = await mountPage({ tab: '备选' });
+    const router = wrapper.vm.$router;
+    const statusSelect = () => wrapper.getComponent(ASelect);
+    expect(statusSelect().props('modelValue')).toBe('备选');
+
+    wrapper.getComponent(ASearchField).vm.$emit('update:modelValue', 'E3Z');
+    await flushPromises();
+    expect(router.currentRoute.value.query.model).toBe('E3Z');
+    expect(statusSelect().props('modelValue')).toBe('备选');
+
+    await router.push({
+      path: '/selection/sensor',
+      query: { tab: '备选', model: 'WL12' },
+    });
+    await flushPromises();
+    expect(statusSelect().props('modelValue')).toBe('全部');
+    expect(wrapper.getComponent(ASearchField).props('modelValue')).toBe('WL12');
+
+    wrapper.unmount();
+  });
+
+  it('exports rows in the same order as the sorted table', async () => {
+    const wrapper = await mountPage({ tab: '全部', model: '导出排序' }, writer);
+    const store = useSelectionStore();
+    for (const brand of ['MMM导出排序', 'ZZZ导出排序', 'AAA导出排序']) {
+      expect(
+        store.saveSensor({
+          brand,
+          model: `${brand}型号`,
+          sensorType: '漫反射',
+          status: '现用',
+        }),
+      ).toMatchObject({ ok: true });
+    }
+    await nextTick();
+
+    const brandHeader = wrapper
+      .findAll('th')
+      .find((header) => header.text().includes('品牌'));
+    await brandHeader!.get('button').trigger('click');
+    await nextTick();
+    await brandHeader!.get('button').trigger('click');
+    await nextTick();
+    expect(brandHeader!.attributes('aria-sort')).toBe('descending');
+
+    let exportedBlob: Blob | undefined;
+    const NativeUrl = URL;
+    class ExportTestUrl extends NativeUrl {
+      static createObjectURL(blob: Blob) {
+        exportedBlob = blob;
+        return 'blob:sensor-export-sort-test';
+      }
+
+      static revokeObjectURL() {}
+    }
+    vi.stubGlobal('URL', ExportTestUrl);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    await wrapper.get('button[aria-label="导出 Excel"]').trigger('click');
+    await nextTick();
+
+    const text = new TextDecoder().decode(await exportedBlob!.arrayBuffer());
+    const zzz = text.indexOf('ZZZ导出排序型号');
+    const mmm = text.indexOf('MMM导出排序型号');
+    const aaa = text.indexOf('AAA导出排序型号');
+    expect(zzz).toBeGreaterThan(-1);
+    expect(zzz).toBeLessThan(mmm);
+    expect(mmm).toBeLessThan(aaa);
+
+    wrapper.unmount();
+  });
 });
+

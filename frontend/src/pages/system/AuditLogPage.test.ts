@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
@@ -247,6 +247,47 @@ describe('AuditLogPage', () => {
     // 详情里仍保留原始 key 供排查
     expect(document.body.textContent).toContain('目标键');
     expect(document.body.textContent).toContain('machine-section-rows:1002:E2E机型');
+    wrapper.unmount();
+  });
+
+  it('ignores a stale response that arrives after a newer request', async () => {
+    type Page = { items: AuditLogItem[]; total: number };
+    let resolveFirst!: (value: Page) => void;
+    let resolveSecond!: (value: Page) => void;
+    const listAuditLogs = vi
+      .spyOn(api, 'listAuditLogs')
+      .mockImplementationOnce(
+        () =>
+          new Promise<Page>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Page>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+    const wrapper = mount(AuditLogPage);
+    await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(1));
+
+    wrapper.findAllComponents(ASelect)[0]?.vm.$emit('update:modelValue', 'auth.login');
+    await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(2));
+    const table = () => wrapper.getComponent({ name: 'ATable' });
+
+    // 旧请求先回来：不能落到表格上，也不能提前关掉 loading。
+    resolveFirst({
+      items: [{ ...log, id: 90, username: 'stale-user' }],
+      total: 1,
+    });
+    await flushPromises();
+    expect(table().props('loading')).toBe(true);
+    expect(wrapper.text()).not.toContain('stale-user');
+
+    resolveSecond({ items: [{ ...log, id: 91, username: 'fresh-user' }], total: 1 });
+    await vi.waitFor(() => expect(wrapper.text()).toContain('fresh-user'));
+    expect(table().props('loading')).toBe(false);
+    expect(wrapper.text()).not.toContain('stale-user');
     wrapper.unmount();
   });
 });

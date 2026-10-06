@@ -650,7 +650,14 @@ function openProcessManager() {
   processDialogOpen.value = true;
 }
 
-function editProcess(item: MachineProcessItem) {
+async function editProcess(item: MachineProcessItem) {
+  if (processEditId.value === item.id) return;
+  // 表单里有未保存的输入（新增草稿或正在编辑的另一条）时，切换前先确认，
+  // 不静默覆盖。
+  const ok = await processDirtyGuard.confirmDiscard(
+    '切换到编辑其他制程后，本次输入的内容不会被保存。',
+  );
+  if (!ok) return;
   processValidationAttempted.value = false;
   processEditId.value = item.id;
   Object.assign(processForm, { name: item.name, sort: item.sort });
@@ -688,14 +695,18 @@ async function removeProcess(item: MachineProcessItem) {
   if (!ok) return;
   const wasActive = activeProcessId.value === item.id;
   const result = store.deleteMachineProcess(item.id);
-  if (
-    toastResult(result, '制程已删除', {
-      validation: '默认制程不能删除',
-      'not-empty': '请先清空该制程下全部机型的 Tab、内容和示意图',
-      stale: '该制程已被删除，请刷新后重试',
-    }) &&
-    wasActive
-  ) {
+  const deleted = toastResult(result, '制程已删除', {
+    validation: '默认制程不能删除',
+    'not-empty': '请先清空该制程下全部机型的 Tab、内容和示意图',
+    stale: '该制程已被删除，请刷新后重试',
+  });
+  // 删掉的正是表单里正在编辑的制程：表单退回“新增制程”，否则再保存会
+  // 指向一条已不存在的记录。
+  if (deleted && processEditId.value === item.id) {
+    resetProcessForm();
+    processDirtyGuard.markClean();
+  }
+  if (deleted && wasActive) {
     void router.replace({
       path: route.path,
       query: addMachineContextQuery({

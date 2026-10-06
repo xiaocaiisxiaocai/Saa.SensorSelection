@@ -8,8 +8,9 @@ import {
   detectControlledFileKind,
   formatLocalDateTime,
 } from '@/domain';
-import { uploadFile } from '@/pages/shared/files';
+import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
@@ -27,6 +28,7 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 const query = ref('');
 const preview = ref<ControlledFileItem | null>(null);
+const { uploading, runUpload } = useUploadLock();
 
 const files = computed(() => store.controlledDocuments(props.entityName));
 const visible = computed(() => {
@@ -40,13 +42,16 @@ const visible = computed(() => {
         .includes(value),
   );
 });
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+// 上传中锁：同一时间只处理一批文件，期间上传区禁用。
+function onFiles(picked: File[]) {
+  return runUpload(() => uploadPicked(picked));
 }
 
-async function onFiles(picked: File[]) {
+async function uploadPicked(picked: File[]) {
+  // 上传是异步的，途中可能切换到别的客户；先记下发起上传时的客户，
+  // 避免把文件挂到切换后的客户名下。
+  const entityName = props.entityName;
   for (const file of picked) {
     const kind = detectControlledFileKind(file.name, file.type);
     if (!kind) {
@@ -54,7 +59,7 @@ async function onFiles(picked: File[]) {
     }
     const dataUrl = await uploadFile(file);
     if (!dataUrl) continue;
-    const result = store.saveControlledFile(props.entityName, {
+    const result = store.saveControlledFile(entityName, {
       dataUrl,
       fileName: file.name,
       mimeType: file.type,
@@ -90,6 +95,8 @@ async function remove(item: ControlledFileItem) {
     </div>
     <AFileDrop
       v-if="writable"
+      :disabled="uploading"
+      :title="uploading ? UPLOADING_TITLE : undefined"
       :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept}`"
       :max-bytes="CONTROLLED_FILE_RULES.pdf.maxBytes"
       :extensions="[
@@ -111,7 +118,7 @@ async function remove(item: ControlledFileItem) {
         <div>
           <strong>{{ item.fileName }}</strong>
           <p>
-            {{ formatSize(item.size) }} ·
+            {{ formatFileSize(item.size) }} ·
             {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
           </p>
         </div>

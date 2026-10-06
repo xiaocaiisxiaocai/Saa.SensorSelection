@@ -196,7 +196,12 @@ function toIsoEnd(dateStr: string | null): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
+// 筛选/翻页可能连续触发多次加载，响应先后不定；只接受最新一次请求的结果，
+// 也只由它关闭 loading，避免旧响应覆盖新结果。
+let loadSeq = 0;
+
 async function loadData() {
+  const seq = ++loadSeq;
   loading.value = true;
   try {
     const [from, to] = filters.dateRange ?? [null, null];
@@ -215,12 +220,14 @@ async function loadData() {
       to: toIsoEnd(to),
       username: filters.username.trim() || undefined,
     });
+    if (seq !== loadSeq) return;
     items.value = pageData.items;
     total.value = pageData.total;
   } catch (error) {
+    if (seq !== loadSeq) return;
     toast.error(error instanceof ApiError ? error.message : '加载操作日志失败');
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

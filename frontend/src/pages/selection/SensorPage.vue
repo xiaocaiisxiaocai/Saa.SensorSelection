@@ -216,6 +216,17 @@ const sensorById = computed(() => {
   for (const item of store.sensors) map.set(item.id, item);
   return map;
 });
+// 搜索时每一行都要取型录 / 3D 标题，用 Map 查找，避免每行线性扫描。
+const sopTitleById = computed(() => {
+  const map = new Map<number, string>();
+  for (const item of store.sensorSops) map.set(item.id, item.title);
+  return map;
+});
+const model3dTitleById = computed(() => {
+  const map = new Map<number, string>();
+  for (const item of store.sensor3dFiles) map.set(item.id, item.title);
+  return map;
+});
 const showDisabledDetails = computed(() =>
   isSensorStatus(mainTab.value, 'disabled'),
 );
@@ -358,7 +369,9 @@ useSyncedQuery(() => {
 watch(
   () => String(route.query.model || ''),
   (model) => {
-    if (!model) return;
+    // 搜索框输入会经 useSyncedQuery 回写 ?model=，那次变化与当前搜索词相同，
+    // 不能当成外部深链接把状态页签重置为“全部”。
+    if (!model || model === query.value.trim()) return;
     mainTab.value = '全部';
     query.value = model;
   },
@@ -445,12 +458,12 @@ function initialModel3dId() {
 
 function sopTitle(sopId: null | number | undefined) {
   if (!sopId) return '';
-  return store.sensorSops.find((item) => item.id === sopId)?.title || '';
+  return sopTitleById.value.get(sopId) || '';
 }
 
 function model3dTitle(model3dId: null | number | undefined) {
   if (!model3dId) return '';
-  return store.sensor3dFiles.find((item) => item.id === model3dId)?.title || '';
+  return model3dTitleById.value.get(model3dId) || '';
 }
 
 function relatedSensor(item: SensorItem) {
@@ -544,7 +557,9 @@ function exportCell(item: SensorItem, key: string) {
 }
 
 function exportExcel() {
-  if (items.value.length === 0) {
+  // 导出当前筛选条件下的全部型号（不只当前页），顺序与表格排序一致。
+  const rows = sortedItems.value;
+  if (rows.length === 0) {
     toast.error('当前条件下没有可导出的型号');
     return;
   }
@@ -554,11 +569,11 @@ function exportExcel() {
   downloadSensorExcel({
     pageName: mainTab.value,
     headers: exportColumns.map((column) => column.label),
-    rows: items.value.map((item) =>
+    rows: rows.map((item) =>
       exportColumns.map((column) => exportCell(item, column.key)),
     ),
   });
-  toast.success(`已导出 ${items.value.length} 条 Sensor 型号`);
+  toast.success(`已导出 ${rows.length} 条 Sensor 型号`);
 }
 
 function addItem() {

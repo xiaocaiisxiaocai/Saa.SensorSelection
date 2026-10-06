@@ -29,6 +29,7 @@ import {
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { buildMachineTableRows, type MachineTableRow } from './table-rows';
@@ -102,6 +103,7 @@ const form = reactive({
   sensorIds: [] as Array<string | number>,
 });
 const dirtyGuard = useDirtyGuard(form);
+const { uploading, runUpload } = useUploadLock();
 
 const isStructure = computed(() => props.section.kind === 'structure');
 
@@ -154,6 +156,11 @@ const boardCharacteristicOptions = computed<SelectOption[]>(() =>
     value: item.id,
   })),
 );
+// 筛选/搜索会对每一行反复取关联传感器，用 Map 避免每个 id 都线性扫描。
+const sensorById = computed(
+  () => new Map(store.sensors.map((sensor) => [sensor.id, sensor])),
+);
+
 const sensorOptions = computed<SelectOption[]>(() =>
   [...store.sensors]
     .sort((left, right) => {
@@ -344,10 +351,22 @@ watch(
     page.value = 1;
   },
 );
+// 删掉最后一页唯一一行后总页数变少，APagination 会因只剩一页而隐藏，
+// 当前页却还停在越界页上，表格就成了空白；这里把页码收回到最大页。
+watch(
+  () => [filtered.value.length, pageSize.value] as const,
+  () => {
+    const maxPage = Math.max(
+      1,
+      Math.ceil(filtered.value.length / pageSize.value),
+    );
+    if (page.value > maxPage) page.value = maxPage;
+  },
+);
 
 function sensorRecords(item: MachineSectionRow): SensorItem[] {
   return (item.sensorIds ?? [])
-    .map((id) => store.sensors.find((sensor) => sensor.id === id))
+    .map((id) => sensorById.value.get(id))
     .filter((item): item is SensorItem => Boolean(item));
 }
 
@@ -360,6 +379,20 @@ function resetFilters() {
   page.value = 1;
 }
 
+// 已经定位过的目标（分区 + 机型 + 制程 + 行 id）。依赖 items.length 是为了
+// 数据晚到时还能补定位；但同一个目标只定位一次，否则用户在分区里增删行
+// 会反复清空筛选、把页码拉回目标行。
+let handledFocusKey: null | string = null;
+
+function focusKey(
+  focusRowId: number,
+  sectionId: number,
+  machineName: string,
+  processId: number,
+) {
+  return JSON.stringify([sectionId, machineName, processId, focusRowId]);
+}
+
 watch(
   () =>
     [
@@ -369,19 +402,31 @@ watch(
       props.processId,
       items.value.length,
     ] as const,
-  async ([focusRowId]) => {
+  async ([focusRowId, sectionId, machineName, processId]) => {
     if (!focusRowId) {
+      handledFocusKey = null;
       selectedTableRow.value = null;
       return;
     }
-    const rowIndex = items.value.findIndex((item) => item.id === focusRowId);
-    if (rowIndex < 0) {
+    const key = focusKey(focusRowId, sectionId, machineName, processId);
+    if (key === handledFocusKey) return;
+    if (!items.value.some((item) => item.id === focusRowId)) {
       selectedTableRow.value = null;
       return;
     }
+    handledFocusKey = key;
     resetFilters();
+    // 清空筛选会触发上面的筛选 watcher 把页码重置为 1；等它跑完再设页码，
+    // 否则目标行在第 2 页以后时会被拉回第 1 页而定位失败。
+    await nextTick();
+    if (handledFocusKey !== key) return;
+    const rowIndex = sortedItems.value.findIndex(
+      (item) => item.id === focusRowId,
+    );
+    if (rowIndex < 0) return;
     page.value = Math.floor(rowIndex / pageSize.value) + 1;
     await nextTick();
+    if (handledFocusKey !== key) return;
     const tableRow = tableData.value.find(
       (item) => item.source.id === focusRowId,
     );
@@ -529,8 +574,19 @@ async function deleteItem(item: MachineSectionRow) {
   );
 }
 
-async function addImages(files: File[]) {
-  const next = [...images.value];
+// 上传中锁：两次拖放并发时都会基于同一份旧图片列表，后完成的会覆盖先完成的。
+function addImages(files: File[]) {
+  return runUpload(() => uploadImages(files));
+}
+
+async function uploadImages(files: File[]) {
+  // 上传是异步的，途中可能切换到别的机型/分区；目标分区和基础图片列表必须在
+  // 第一次 await 之前记下，否则会把图片写进切换后的分区。
+  const sectionId = props.section.id;
+  const machineName = props.machineName;
+  const processId = props.processId;
+  const base = [...images.value];
+  const next = [...base];
   for (const file of files) {
     if (next.length >= 2) break;
     const dataUrl = await uploadFile(file);
@@ -543,14 +599,9 @@ async function addImages(files: File[]) {
     });
   }
   // 全部上传失败时已逐个提示，不再提交一次没有变化的保存。
-  if (next.length === images.value.length) return;
+  if (next.length === base.length) return;
   toastResult(
-    store.saveMachineSectionImages(
-      props.section.id,
-      props.machineName,
-      next,
-      props.processId,
-    ),
+    store.saveMachineSectionImages(sectionId, machineName, next, processId),
     '示意图已更新',
     {
       size: '图片大小不能超过 2 MB',
@@ -766,7 +817,8 @@ async function removeImage(index: number) {
         :max-bytes="MACHINE_ROW_IMAGE_RULES.maxBytes"
         :extensions="[...MACHINE_ROW_IMAGE_RULES.extensions]"
         :mime-types="[...MACHINE_ROW_IMAGE_RULES.mimeTypes]"
-        title="添加图片"
+        :disabled="uploading"
+        :title="uploading ? UPLOADING_TITLE : '添加图片'"
         hint=""
         size-message="图片大小不能超过 2 MB"
         type-message="仅支持 JPG、PNG 或 WebP 图片"

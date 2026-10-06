@@ -43,4 +43,21 @@ describe('useDirtyGuard', () => {
     form.name = 'C';
     expect(guard.isDirty()).toBe(true);
   });
+
+  it('confirmDiscard prompts with the given message only when dirty', async () => {
+    const confirmSpy = vi.spyOn(alert, 'confirm').mockResolvedValue(false);
+    const form = reactive({ name: 'A' });
+    const guard = useDirtyGuard(form);
+
+    await expect(guard.confirmDiscard('切换后丢失')).resolves.toBe(true);
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    form.name = 'B';
+    await expect(guard.confirmDiscard('切换后丢失')).resolves.toBe(false);
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '切换后丢失' }),
+    );
+
+    confirmSpy.mockRestore();
+  });
 });

@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { ASearchField, ASelect, ATokenField } from '@/ui';
+import { AField, ASearchField, ASelect, ATokenField } from '@/ui';
+import { alert } from '@/ui/alert';
 import { toast, useToastState } from '@/ui/toast';
 import EntitySource from './EntitySource.vue';
 import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
@@ -1192,6 +1193,62 @@ describe('MachinePage', () => {
     await flushPromises();
     expect(typeFilter.props('modelValue')).toEqual([]);
     expect(wrapper.text()).toContain('机型类型多选-3');
+    wrapper.unmount();
+  });
+
+  it('resets the process form when the process being edited is deleted, and confirms before switching away from unsaved input', async () => {
+    const wrapper = await mountPage(true, true);
+    const selectionStore = useSelectionStore();
+    const extra = selectionStore.saveMachineProcess({ name: '待删制程', sort: 9 });
+    if (!extra.ok) throw new Error('process fixture failed');
+    await flushPromises();
+
+    await wrapper.get('.machine-process-context__manage').trigger('click');
+    await flushPromises();
+
+    const processButton = (name: string, label: string) => {
+      const row = [
+        ...document.querySelectorAll<HTMLElement>('.machine-process-list__item'),
+      ].find((item) => item.textContent?.includes(name));
+      const button = row?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${label}"]`,
+      );
+      if (!button) throw new Error(`${name} ${label} button missing`);
+      return button;
+    };
+    const nameField = () =>
+      wrapper
+        .findAllComponents(AField)
+        .find((field) => field.props('placeholder') === '例如：制程2')!;
+
+    // 有未保存的新增草稿时切到编辑，用户选择“继续编辑”就保留草稿。
+    nameField().vm.$emit('update:modelValue', '未保存草稿');
+    await flushPromises();
+    const confirmSpy = vi.spyOn(alert, 'confirm').mockResolvedValueOnce(false);
+    processButton('待删制程', '编辑制程').click();
+    await flushPromises();
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(nameField().props('modelValue')).toBe('未保存草稿');
+
+    // 确认放弃后才切到编辑该制程。
+    confirmSpy.mockResolvedValueOnce(true);
+    processButton('待删制程', '编辑制程').click();
+    await flushPromises();
+    expect(nameField().props('modelValue')).toBe('待删制程');
+    expect(document.body.textContent).toContain('编辑制程');
+
+    // 删掉正在编辑的制程，表单退回新增状态。
+    confirmSpy.mockResolvedValueOnce(true);
+    processButton('待删制程', '删除制程').click();
+    await flushPromises();
+    expect(
+      selectionStore.machineProcesses.some((item) => item.id === extra.item.id),
+    ).toBe(false);
+    expect(nameField().props('modelValue')).toBe('');
+    expect(
+      document.querySelector('.machine-process-form h3')?.textContent,
+    ).toBe('新增制程');
+
     wrapper.unmount();
   });
 });

@@ -9,6 +9,7 @@ import {
 } from '@/domain';
 import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
@@ -29,6 +30,7 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 const query = ref('');
 const preview = ref<Sensor3dFileItem | null>(null);
+const { uploading, runUpload } = useUploadLock();
 
 const files = computed(() => store.sensor3dFiles);
 
@@ -58,7 +60,12 @@ function openPreview(file: Sensor3dFileItem) {
   emit('previewed', file.id);
 }
 
-async function onFiles(picked: File[]) {
+// 上传中锁：同一时间只处理一批文件，期间上传区禁用。
+function onFiles(picked: File[]) {
+  return runUpload(() => uploadPicked(picked));
+}
+
+async function uploadPicked(picked: File[]) {
   for (const file of picked) {
     const dataUrl = await uploadFile(file);
     if (!dataUrl) continue;
@@ -112,6 +119,8 @@ async function remove(item: Sensor3dFileItem) {
     </div>
     <AFileDrop
       v-if="writable"
+      :disabled="uploading"
+      :title="uploading ? UPLOADING_TITLE : undefined"
       :accept="SENSOR_3D_FILE_RULES.accept"
       :max-bytes="SENSOR_3D_FILE_RULES.maxBytes"
       :extensions="[...SENSOR_3D_FILE_RULES.extensions]"

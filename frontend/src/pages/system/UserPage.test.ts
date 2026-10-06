@@ -48,7 +48,7 @@ const user: RbacUser = {
   username: 'zhangsan',
 };
 
-async function mountPage() {
+async function mountPage(users: RbacUser[] = [user]) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().applyProfile({
@@ -58,7 +58,7 @@ async function mountPage() {
     roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
     username: 'admin',
   });
-  vi.spyOn(api, 'listUsers').mockResolvedValue([user]);
+  vi.spyOn(api, 'listUsers').mockResolvedValue(users);
   vi.spyOn(api, 'listRoles').mockResolvedValue(roles);
   vi.spyOn(api, 'listOrgUnits').mockResolvedValue([]);
   vi.spyOn(api, 'updateUser').mockResolvedValue({
@@ -222,6 +222,71 @@ describe('UserPage', () => {
 
     const header = [...wrapper.findAll('th')].find((th) => th.text().includes('创建时间'));
     expect(header?.attributes('style')).toMatch(/width:\s*192px/);
+    wrapper.unmount();
+  });
+
+  it('keeps every existing role when a multi-role user is saved without choosing a new one', async () => {
+    const multiRoleUser: RbacUser = {
+      ...user,
+      roles: [
+        { code: 'editor', id: 2, name: '业务维护员' },
+        { code: 'viewer', id: 3, name: '只读用户' },
+      ],
+    };
+    const page = await mountPage([multiRoleUser]);
+
+    await page.get('[aria-label="编辑"]').trigger('click');
+    await nextTick();
+    const roleSelect = page.findComponent(ASelect);
+    expect(roleSelect.props('modelValue')).toBeNull();
+    expect(roleSelect.props('placeholder')).toBe('保留原有角色');
+    expect(document.body.textContent).toContain('不选择则保存时保留原角色');
+
+    const saveButton = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '保存',
+    );
+    saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(api.updateUser).toHaveBeenCalled());
+    expect(api.updateUser).toHaveBeenCalledWith(
+      2,
+      expect.objectContaining({ roleIds: [2, 3] }),
+    );
+    page.unmount();
+  });
+
+  it('ignores repeated password-reset clicks while a reset is in flight', async () => {
+    const wrapper = await mountPage();
+    let finish!: () => void;
+    const resetSpy = vi.spyOn(api, 'resetUserPassword').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await wrapper.get('[aria-label="重置密码"]').trigger('click');
+    await nextTick();
+    const input = document.querySelector<HTMLInputElement>(
+      'input[type="password"]',
+    );
+    if (!input) throw new Error('password input missing');
+    input.value = 'new-pass';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick();
+
+    const saveButton = () =>
+      [...document.querySelectorAll('button')].find(
+        (button) => button.textContent?.trim() === '保存',
+      );
+    saveButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+    saveButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+
+    finish();
+    await vi.waitFor(() =>
+      expect(document.querySelector('input[type="password"]')).toBeNull(),
+    );
     wrapper.unmount();
   });
 });

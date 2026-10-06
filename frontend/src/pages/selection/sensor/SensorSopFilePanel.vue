@@ -9,6 +9,7 @@ import {
 } from '@/domain';
 import { formatFileSize, uploadFile } from '@/pages/shared/files';
 import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
@@ -25,6 +26,7 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 const query = ref('');
 const preview = ref<SensorSopFileItem | null>(null);
+const { uploading, runUpload } = useUploadLock();
 
 const files = computed(() => store.sensorSopFiles);
 const visible = computed(() => {
@@ -38,7 +40,12 @@ const visible = computed(() => {
   );
 });
 
-async function onFiles(picked: File[]) {
+// 上传中锁：同一时间只处理一批文件，期间上传区禁用。
+function onFiles(picked: File[]) {
+  return runUpload(() => uploadPicked(picked));
+}
+
+async function uploadPicked(picked: File[]) {
   for (const file of picked) {
     const dataUrl = await uploadFile(file);
     if (!dataUrl) continue;
@@ -80,6 +87,8 @@ async function remove(item: SensorSopFileItem) {
     </div>
     <AFileDrop
       v-if="writable"
+      :disabled="uploading"
+      :title="uploading ? UPLOADING_TITLE : undefined"
       :accept="CONTROLLED_FILE_RULES.pdf.accept"
       :max-bytes="CONTROLLED_FILE_RULES.pdf.maxBytes"
       :extensions="[...CONTROLLED_FILE_RULES.pdf.extensions]"

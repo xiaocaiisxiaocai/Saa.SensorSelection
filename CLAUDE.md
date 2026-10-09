@@ -21,6 +21,7 @@ pnpm run test:selection        # 领域合同回归（scripts/selection-contract
 pnpm run test:unit             # 等价于 pnpm run test，vitest run（frontend/src/**/*.test.ts，happy-dom，单 worker）
 pnpm run check:type            # vue-tsc --noEmit
 pnpm run lint                  # eslint src && stylelint "src/**/*.{css,vue}"
+pnpm --dir frontend format     # prettier --write .（未挂到根目录）
 pnpm run build                 # vue-tsc --noEmit && vite build
 pnpm run test:backend          # dotnet test backend/Saa.SensorSelection.slnx
 pnpm run backup:db             # node backend/scripts/backup-db.mjs（KEEP / BACKUP_DIR 环境变量可调）
@@ -29,7 +30,7 @@ pnpm run backup:db             # node backend/scripts/backup-db.mjs（KEEP / BAC
 单独跑一个前端测试文件：`pnpm --dir frontend exec vitest run src/domain/repository.test.ts`。
 单独跑一个后端测试：`dotnet test backend/Saa.SensorSelection.slnx --filter FullyQualifiedName~RbacTests`。
 
-后端 5080 被占用时：`VITE_API_TARGET=http://localhost:5081 pnpm --dir frontend dev`。
+后端 5080 被占用时：`VITE_API_TARGET=http://localhost:5081 pnpm --dir frontend dev`；前端端口可用 `VITE_PORT` 覆盖。
 
 `test:selection` 直接加载 `frontend/node_modules` 里的 Vite，并用 SSR 方式导入 `frontend/src/domain/index.ts`，所以需要先在 `frontend/` 装好依赖；被测的领域函数必须从 `domain/index.ts` 导出。它同时断言仓库结构（必须是 pnpm、不存在 `package-lock.json` / `public/index.html` / `app/page.tsx` 等旧入口）。
 
@@ -84,7 +85,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - `Controllers/`：`AuthController`（登录/JWT）、`StoreController`（选型数据仓库读写）、`UsersController` / `RolesController` / `OrgUnitsController`（RBAC）、`AuditLogsController`、`FilesController`、`ReportsController`、`HealthController`。
 - `Services/`：`JwtService`、`PasswordService`、`LoginRateLimiter`、`RoleService` / `OrgUnitService` / `UserService`（RBAC 判定见 `RbacResult.cs`，组织层级规则见 `OrgLevelRules.cs`）、`AuditLogService`、`StoreService`、`StoredFileService`、`MachineSchematicReportService`。
 - `Models/RbacDefaults.cs`：权限码与内置角色的唯一定义源，新增权限/角色在此补充，`DbSeeder` 重启后幂等补齐。当前权限码：`selection:read`、`selection:write`、`rbac:view`、`rbac:user:write`、`rbac:role:write`、`rbac:org:write`、`audit:view`。内置角色：`admin`（全部权限，系统角色不可改删）、`editor`（读写业务数据）、`viewer`（只读业务数据）。
-- `Configuration/ProductionConfigurationGuard.cs`：`Production` 环境下，若仍用默认 `Jwt:Key` / 默认管理员密码，或未配置 `Cors:AllowedOrigins`，直接拒绝启动。
+- `Configuration/ProductionConfigurationGuard.cs`：`Production` 环境下，若仍用默认 `Jwt:Key` / 默认管理员密码，或未配置 `Cors:AllowedOrigins`，直接拒绝启动（用环境变量 `Jwt__Key`、`Seed__AdminPassword`、`Cors__AllowedOrigins` 注入）。完整配置项表见 `backend/README.md`。
 - `Data/`：`AppDbContext`、`DbInitializer` / `DbSeeder`（种子与迁移）、SQLite pragma 拦截器（WAL + `busy_timeout=30000`）。数据库默认 `App_Data/symtek.db`（历史文件名，不要改）。
 - 集成测试在独立项目 `backend/Saa.SensorSelection.Api.Tests`（`ApiFactory.cs` 通过 `WebApplicationFactory` 启动含迁移与种子的完整应用，每个测试使用独立的临时 SQLite 文件）。
 

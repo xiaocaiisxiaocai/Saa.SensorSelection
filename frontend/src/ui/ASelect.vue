@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { Check, ChevronDown, X } from 'lucide-vue-next';
-import { computed, nextTick, ref, useId, watch } from 'vue';
-import { ListboxItem, ListboxItemIndicator, ListboxRoot } from 'reka-ui';
+import { Select as AntSelect } from 'ant-design-vue';
+import { computed } from 'vue';
 
-import AIconButton from './AIconButton.vue';
-import APopover from './APopover.vue';
-import { filterOptions, findOption } from './select-options';
 import type { ControlSize, SelectOption } from './types';
 import { useFormControl } from './use-form-control';
 
@@ -29,260 +25,46 @@ const props = withDefaults(
 );
 
 const model = defineModel<string | number | null>({ default: null });
-const { id, describedBy, hasFormLabel, invalid, required } =
-  useFormControl(props);
+const { id, describedBy, invalid, hasFormLabel } = useFormControl(props);
 
-const open = ref(false);
-const query = ref('');
-const listId = useId();
-const filterEl = ref<HTMLInputElement | null>(null);
-
-const selected = computed(() => findOption(props.options, model.value));
+const antdSize = computed(() => (props.size === 'small' ? 'small' : 'middle'));
 const accessibleLabel = computed(
   () => props.ariaLabel ?? (hasFormLabel.value ? undefined : props.placeholder),
 );
-const filtered = computed(() => filterOptions(props.options, query.value));
-const showClear = computed(
-  () => Boolean(props.clearable) && !props.disabled && model.value != null,
+const selectOptions = computed(() =>
+  props.options.map((option) => ({
+    label: option.hint ? `${option.label}（${option.hint}）` : option.label,
+    value: option.value,
+    disabled: option.disabled,
+  })),
+);
+const selectValue = computed(() =>
+  model.value == null ? undefined : model.value,
 );
 
-function onPick(value: unknown) {
-  // Re-picking the current option makes the listbox report `undefined`. A
-  // single select must keep that value, but the panel still has to close.
-  if (typeof value === 'string' || typeof value === 'number') {
-    model.value = value;
-  }
-
-  open.value = false;
-  query.value = '';
+function onSelectValue(value: unknown) {
+  model.value =
+    typeof value === 'string' || typeof value === 'number' ? value : null;
 }
-
-function clear() {
-  model.value = null;
-}
-
-watch(open, async (isOpen) => {
-  if (!isOpen) {
-    query.value = '';
-    return;
-  }
-
-  await nextTick();
-  if (props.filterable) {
-    filterEl.value?.focus();
-    return;
-  }
-
-  // 非可筛选模式没有输入框可以接手焦点，必须手动把焦点送进列表，
-  // 否则键盘用户打开的下拉永远停在触发按钮上，方向键/首字母跳转全部失效。
-  const list = document.getElementById(listId);
-  const target =
-    list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
-    list?.querySelector<HTMLElement>('[role="option"]:not([aria-disabled="true"])');
-  target?.focus();
-});
 </script>
 
 <template>
-  <div class="a-select" :class="{ 'a-select--clearable': showClear }">
-    <APopover v-model:open="open" align="start" min-trigger-width>
-      <template #trigger>
-        <button
-          :id="id"
-          class="a-control a-select__trigger"
-          :class="{
-            'a-control--disabled': disabled,
-            'a-control--invalid': invalid,
-            'a-control--small': size === 'small',
-            'a-select__trigger--large': size === 'large',
-          }"
-          type="button"
-          role="combobox"
-          :aria-expanded="open"
-          :aria-controls="listId"
-          :aria-invalid="invalid ? true : undefined"
-          :aria-required="required ? true : undefined"
-          :aria-describedby="describedBy"
-          :aria-label="accessibleLabel"
-          :disabled="disabled"
-        >
-          <span
-            class="a-select__value"
-            :data-placeholder="selected ? undefined : ''"
-            :title="selected?.label"
-          >
-            {{ selected?.label ?? placeholder }}
-          </span>
-          <ChevronDown
-            class="a-select__chevron"
-            :size="18"
-            :stroke-width="1.5"
-          />
-        </button>
-      </template>
-
-      <div class="a-select__panel">
-        <input
-          v-if="filterable"
-          ref="filterEl"
-          v-model="query"
-          class="a-select__filter"
-          type="search"
-          placeholder="筛选"
-          aria-label="筛选选项"
-        >
-        <ListboxRoot
-          :id="listId"
-          class="a-select__list"
-          role="listbox"
-          highlight-on-hover
-          :model-value="model ?? undefined"
-          :disabled="disabled"
-          @update:model-value="onPick"
-        >
-          <ListboxItem
-            v-for="option in filtered"
-            :key="String(option.value)"
-            class="a-menu-item"
-            :value="option.value"
-            :disabled="option.disabled"
-          >
-            <span class="a-menu-item__check">
-              <ListboxItemIndicator>
-                <Check :size="18" :stroke-width="1.5" />
-              </ListboxItemIndicator>
-            </span>
-            <span class="a-menu-item__text">
-              <span class="a-menu-item__label" :title="option.label">
-                {{ option.label }}
-              </span>
-              <span
-                v-if="option.hint"
-                class="a-menu-item__hint"
-                :title="option.hint"
-              >
-                {{ option.hint }}
-              </span>
-            </span>
-          </ListboxItem>
-        </ListboxRoot>
-        <p v-if="filtered.length === 0" class="a-select__empty">无匹配结果</p>
-      </div>
-    </APopover>
-
-    <span v-if="showClear" class="a-select__clear">
-      <AIconButton
-        :icon="X"
-        label="清除"
-        size="small"
-        @mousedown.prevent
-        @click.stop="clear"
-      />
-    </span>
-  </div>
+  <AntSelect
+    :id="id"
+    :value="selectValue"
+    class="a-select"
+    :allow-clear="clearable"
+    :aria-describedby="describedBy"
+    :aria-invalid="invalid ? true : undefined"
+    :aria-label="accessibleLabel"
+    :disabled="disabled"
+    :options="selectOptions"
+    :placeholder="placeholder"
+    :show-search="filterable"
+    :size="antdSize"
+    :status="invalid ? 'error' : ''"
+    option-filter-prop="label"
+    style="width: 100%"
+    @update:value="onSelectValue"
+  />
 </template>
-
-<style scoped>
-.a-select {
-  position: relative;
-  align-self: start;
-  width: 100%;
-}
-
-.a-select__trigger {
-  width: 100%;
-  cursor: pointer;
-}
-
-.a-select--clearable .a-select__trigger {
-  padding-inline-end: calc(var(--space-3) + var(--control-height-sm));
-}
-
-.a-select__trigger--large {
-  min-height: var(--control-height-xl);
-}
-
-.a-select__value {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.a-select__value[data-placeholder] {
-  color: var(--label-placeholder);
-}
-
-.a-select__chevron {
-  flex-shrink: 0;
-  color: var(--label-3);
-  transition: transform var(--dur-1) var(--ease-out);
-}
-
-.a-select__trigger:focus-visible {
-  box-shadow: var(--focus-ring);
-}
-
-.a-select__trigger[aria-expanded='true'] .a-select__chevron {
-  transform: rotate(180deg);
-}
-
-.a-select__clear {
-  position: absolute;
-  inset-block: 0;
-  right: var(--space-3);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  line-height: 0;
-}
-
-.a-select__panel {
-  display: grid;
-  min-width: 0;
-  gap: var(--space-2);
-}
-
-.a-select__filter {
-  width: 100%;
-  height: var(--control-height-md);
-  padding: 0 var(--space-3);
-  font: var(--text-field);
-  color: var(--label);
-  background: var(--fill-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-}
-
-.a-select__filter::placeholder {
-  color: var(--label-placeholder);
-}
-
-.a-select__filter:focus,
-.a-select__filter:focus-visible {
-  background: var(--bg-content);
-  box-shadow: inset 0 0 0 1px var(--sys-blue);
-}
-
-.a-select__list {
-  display: grid;
-  min-width: 0;
-  outline: none;
-}
-
-.a-select__empty {
-  margin: 0;
-  padding: var(--space-3);
-  font: var(--text-caption);
-  color: var(--label-3);
-  text-align: center;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .a-select__chevron {
-    transition: none;
-  }
-}
-</style>

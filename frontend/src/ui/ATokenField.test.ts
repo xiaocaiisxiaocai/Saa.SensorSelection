@@ -1,9 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import AFormRow from './AFormRow.vue';
@@ -14,47 +9,58 @@ const options: SelectOption[] = [
   { label: '漫反射 · OMRON E3Z-D61', value: 'e3z' },
   { label: '对射 · KEYENCE PZ-G51N', value: 'pzg' },
   { label: '光纤 · SUNX FX-501', value: 'fx' },
+  { label: '停用 · 旧型号', value: 'old', disabled: true },
 ];
-const tokenFieldSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'ATokenField.vue'),
-  'utf8',
-);
-const menuSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'menu.css'),
-  'utf8',
-);
+
+function visibleOptions(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')];
+}
+
+async function openField(wrapper: ReturnType<typeof mount>) {
+  await wrapper.get('.ant-select-selector').trigger('mousedown');
+  await flushPromises();
+}
 
 describe('ATokenField', () => {
   afterEach(() => {
     document.body.innerHTML = '';
   });
 
-  it('renders selected values as dismissible tokens', () => {
+  it('renders selected values as removable tokens in multiple mode', async () => {
     const wrapper = mount(ATokenField, {
       props: {
         options,
         modelValue: ['e3z', 'pzg'],
+        maxVisibleTokens: 5,
       },
     });
 
+    expect(wrapper.get('.a-token-field').classes()).toContain('ant-select-multiple');
     expect(wrapper.text()).toContain('漫反射 · OMRON E3Z-D61');
     expect(wrapper.text()).toContain('对射 · KEYENCE PZ-G51N');
-    expect(
-      wrapper.find('[aria-label="移除 漫反射 · OMRON E3Z-D61"]').exists(),
-    ).toBe(true);
+    expect(wrapper.findAll('.ant-select-selection-item-remove')).toHaveLength(2);
+
+    await wrapper.get('.ant-select-selection-item-remove').trigger('click');
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['pzg']]);
   });
 
-  it('exposes a meaningful accessible name for standalone multi-select filters', () => {
-    const wrapper = mount(ATokenField, {
+  it('names a standalone field from ariaLabel or the placeholder', () => {
+    const named = mount(ATokenField, {
       props: {
         ariaLabel: '传感器类型筛选',
         options,
         placeholder: '传感器类型',
       },
     });
-
-    expect(wrapper.get('[role="combobox"]').attributes('aria-label')).toBe(
+    expect(named.get('.a-token-field').attributes('aria-label')).toBe(
       '传感器类型筛选',
+    );
+
+    const fallback = mount(ATokenField, {
+      props: { options, placeholder: '传感器类型' },
+    });
+    expect(fallback.get('.a-token-field').attributes('aria-label')).toBe(
+      '传感器类型',
     );
   });
 
@@ -65,28 +71,13 @@ describe('ATokenField', () => {
       template:
         '<AFormRow label="板件特性"><ATokenField :options="options" placeholder="选择板件特性" /></AFormRow>',
     });
-
-    const label = wrapper.get('label');
     const combobox = wrapper.get('[role="combobox"]');
-    expect(combobox.attributes('aria-labelledby')).toBe(
-      label.attributes('id'),
-    );
-    expect(combobox.attributes('aria-label')).toBeUndefined();
+
+    expect(wrapper.get('.a-token-field').attributes('aria-label')).toBeUndefined();
+    expect(wrapper.get('label').attributes('for')).toBe(combobox.attributes('id'));
   });
 
-  it('shows every selected token unless a collapse limit is set', () => {
-    const wrapper = mount(ATokenField, {
-      props: {
-        options,
-        modelValue: ['e3z', 'pzg', 'fx'],
-      },
-    });
-
-    expect(wrapper.text()).toContain('光纤 · SUNX FX-501');
-    expect(wrapper.text()).not.toContain('+1');
-  });
-
-  it('collapses extra tokens behind a count chip', () => {
+  it('collapses extra tokens behind a count when maxVisibleTokens is set', () => {
     const wrapper = mount(ATokenField, {
       props: {
         options,
@@ -94,151 +85,67 @@ describe('ATokenField', () => {
         maxVisibleTokens: 2,
       },
     });
+    const contents = wrapper
+      .findAll('.ant-select-selection-item-content')
+      .map((node) => node.text());
 
-    expect(wrapper.text()).toContain('+1');
-    expect(wrapper.text()).not.toContain('光纤 · SUNX FX-501');
+    expect(wrapper.text()).toContain('+ 1 ...');
+    expect(contents.some((text) => text.includes('OMRON'))).toBe(true);
+    expect(contents.some((text) => text.includes('KEYENCE'))).toBe(true);
+    expect(contents.some((text) => text.includes('SUNX'))).toBe(false);
   });
 
-  it('keeps the visible token and overflow count on one line', () => {
-    const wrapper = mount(ATokenField, {
-      attachTo: document.body,
-      props: {
-        options,
-        modelValue: ['e3z', 'pzg', 'fx'],
-        maxVisibleTokens: 1,
-      },
-    });
-
-    expect(wrapper.find('.a-token-field__chip').exists()).toBe(true);
-    expect(wrapper.get('.a-token-field__more').text()).toBe('+2');
-    expect(tokenFieldSource).toMatch(
-      /\.a-token-field__trigger\s*\{[^}]*flex-wrap:\s*nowrap;/s,
-    );
-    expect(tokenFieldSource).toMatch(
-      /\.a-token-field__chip\s*\{[^}]*flex:\s*0 0 auto;/s,
-    );
-    expect(tokenFieldSource).toMatch(
-      /\.a-token-field__more\s*\{[^}]*flex:\s*0 0 auto;/s,
-    );
-
-    wrapper.unmount();
-  });
-
-  it('removes a token from the trigger without opening the menu', async () => {
-    const wrapper = mount(ATokenField, {
-      attachTo: document.body,
-      props: {
-        options,
-        modelValue: ['e3z', 'pzg'],
-      },
-    });
-
-    await wrapper
-      .get('[aria-label="移除 漫反射 · OMRON E3Z-D61"]')
-      .trigger('click');
-
-    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['pzg']]);
-    expect(document.querySelector('.a-popover')).toBeNull();
-
-    wrapper.unmount();
-  });
-
-  it('toggles an option from the menu', async () => {
+  it('adds an enabled option and ignores a disabled one', async () => {
     const wrapper = mount(ATokenField, {
       attachTo: document.body,
       props: {
         options,
         modelValue: ['e3z'],
+        maxVisibleTokens: 5,
       },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (node) => node.textContent?.includes('KEYENCE'),
-    );
-    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
-
+    await openField(wrapper);
+    visibleOptions()
+      .find((node) => node.textContent?.includes('KEYENCE'))
+      ?.click();
+    await flushPromises();
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['e3z', 'pzg']]);
 
+    visibleOptions()
+      .find((node) => node.textContent?.includes('停用'))
+      ?.click();
+    await flushPromises();
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1);
     wrapper.unmount();
   });
 
-  it('keeps dropdown options single-line while the panel can grow', async () => {
+  it('filters options from the search input', async () => {
     const wrapper = mount(ATokenField, {
       attachTo: document.body,
-      props: {
-        options,
-        modelValue: [],
-        filterable: true,
-      },
+      props: { options, modelValue: [], filterable: true },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
+    await openField(wrapper);
+    await wrapper.get('input[role="combobox"]').setValue('sunx');
+    await flushPromises();
 
-    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
-    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
-    expect(tokenFieldSource).toContain('min-trigger-width');
-    expect(menuSource).toMatch(
-      /\.a-menu-item__text \.a-menu-item__label,[\s\S]*?white-space:\s*nowrap;/,
-    );
-
+    const labels = visibleOptions().map((node) => node.textContent ?? '');
+    expect(labels.some((text) => text.includes('SUNX'))).toBe(true);
+    expect(labels.some((text) => text.includes('OMRON'))).toBe(false);
     wrapper.unmount();
   });
 
-  it.each(['Enter', ' ', 'ArrowDown'])(
-    'opens the menu from the keyboard with %j',
-    async (key) => {
-      const wrapper = mount(ATokenField, {
-        attachTo: document.body,
-        props: { options, modelValue: [] },
-      });
-
-      const combobox = wrapper.get('[role="combobox"]');
-      expect(combobox.attributes('tabindex')).toBe('0');
-      await combobox.trigger('keydown', { key });
-      await nextTick();
-
-      expect(combobox.attributes('aria-expanded')).toBe('true');
-      expect(document.querySelector('[role="listbox"]')).not.toBeNull();
-      wrapper.unmount();
-    },
-  );
-
-  it('does not open from Enter on a token remove button', async () => {
-    const wrapper = mount(ATokenField, {
-      attachTo: document.body,
-      props: { options, modelValue: ['e3z'] },
-    });
-
-    await wrapper
-      .get('[aria-label="移除 漫反射 · OMRON E3Z-D61"]')
-      .trigger('keydown', { key: 'Enter' });
-    await nextTick();
-
-    expect(wrapper.get('[role="combobox"]').attributes('aria-expanded')).toBe(
-      'false',
-    );
-    wrapper.unmount();
-  });
-
-  it('stays out of the tab order and closed while disabled', async () => {
+  it('stays closed while disabled', async () => {
     const wrapper = mount(ATokenField, {
       attachTo: document.body,
       props: { options, modelValue: ['e3z'], disabled: true },
     });
 
-    const combobox = wrapper.get('[role="combobox"]');
-    expect(combobox.attributes('tabindex')).toBe('-1');
-    await combobox.trigger('click');
-    await combobox.trigger('keydown', { key: 'Enter' });
-    await nextTick();
-
-    expect(combobox.attributes('aria-expanded')).toBe('false');
-    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(wrapper.get('.a-token-field').classes()).toContain('ant-select-disabled');
+    await openField(wrapper);
+    expect(visibleOptions()).toHaveLength(0);
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     wrapper.unmount();
   });
 });

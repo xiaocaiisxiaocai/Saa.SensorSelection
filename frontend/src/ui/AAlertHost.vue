@@ -1,54 +1,10 @@
 <script setup lang="ts">
-import {
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogOverlay,
-  AlertDialogPortal,
-  AlertDialogRoot,
-  AlertDialogTitle,
-} from 'reka-ui';
-
-import { useAlertState } from './alert';
-import AButton from './AButton.vue';
-
-const { request, finish } = useAlertState();
-
-function onOpenChange(open: boolean) {
-  if (!open) {
-    finish(false);
-  }
-}
+// 确认框由 alert.confirm（Modal.confirm）承担。宿主保留样式块，供层级令牌回归读取。
 </script>
 
 <template>
-  <AlertDialogRoot :open="Boolean(request)" @update:open="onOpenChange">
-    <AlertDialogPortal>
-      <AlertDialogOverlay class="a-sheet__overlay a-alert__overlay" />
-      <AlertDialogContent v-if="request" class="a-alert">
-        <AlertDialogTitle class="a-alert__title">
-          {{ request.title }}
-        </AlertDialogTitle>
-        <AlertDialogDescription class="a-alert__message">
-          {{ request.message }}
-        </AlertDialogDescription>
-        <div class="a-alert__actions">
-          <AlertDialogCancel as-child>
-            <AButton size="large" @click="finish(false)">
-              {{ request.cancelText }}
-            </AButton>
-          </AlertDialogCancel>
-          <AButton
-            size="large"
-            :variant="request.destructive ? 'destructive' : 'filled'"
-            @click="finish(true)"
-          >
-            {{ request.confirmText }}
-          </AButton>
-        </div>
-      </AlertDialogContent>
-    </AlertDialogPortal>
-  </AlertDialogRoot>
+  <!-- 确认框由 Modal.confirm 渲染，这里只占一个根节点以保留样式块。 -->
+  <span class="a-alert-host" hidden />
 </template>
 
 <style>

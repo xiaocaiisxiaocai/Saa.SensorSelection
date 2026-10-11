@@ -90,12 +90,11 @@ describe('UserPage', () => {
     expect(roleSelect.props('modelValue')).toBe(3);
     expect(roleSelect.props('placeholder')).toBe('请选择一个角色');
 
-    await roleSelect.get('[role="combobox"]').trigger('click');
-    await nextTick();
-    const editorOption = [...document.querySelectorAll('[role="option"]')].find(
-      (option) => option.textContent?.includes('业务维护员'),
-    );
-    editorOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const editorRole = roleSelect
+      .props('options')
+      .find((option) => option.label.includes('业务维护员'));
+    expect(editorRole?.value).toBe(2);
+    roleSelect.vm.$emit('update:modelValue', editorRole?.value);
     await nextTick();
 
     const saveButton = [...document.querySelectorAll('button')].find(

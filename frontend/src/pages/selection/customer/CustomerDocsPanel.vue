@@ -181,9 +181,17 @@ async function remove(item: ControlledFileItem) {
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
-  background: var(--fill-2);
+  padding: var(--space-3) var(--space-4);
+
+  /* 白底描边卡片：原来的 --fill-2 灰底在白色内容区上像整行被禁用 */
+  background: var(--bg-content);
+  border: 1px solid var(--separator-opaque);
   border-radius: var(--radius-md);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+
+.docs-list li:hover {
+  background: var(--fill-4);
 }
 
 .docs-list p {

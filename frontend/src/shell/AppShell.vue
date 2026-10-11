@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Monitor, Moon, PanelLeft, Search, Sun } from 'lucide-vue-next';
+import { PanelLeft, Search } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
@@ -9,9 +9,7 @@ import UserMenu from '@/shell/UserMenu.vue';
 import { navGroupsFor } from '@/shell/nav';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { useThemeStore } from '@/stores/theme';
-import type { ThemePreference } from '@/theme/theme';
-import { ABanner, ASpinner, ATooltip } from '@/ui';
+import { ABanner, ASpinner } from '@/ui';
 import { toast } from '@/ui/toast';
 
 const SIDEBAR_STORAGE_KEY = 'apple-frontend:sidebar-collapsed';
@@ -22,7 +20,6 @@ const MEDIUM_MEDIA_QUERY = '(width <= 1200px)';
 
 const route = useRoute();
 const router = useRouter();
-const theme = useThemeStore();
 const auth = useAuthStore();
 const selection = useSelectionStore();
 
@@ -33,7 +30,20 @@ const mediumOverride = ref<boolean | null>(null);
 const mobileSidebarOpen = ref(false);
 const contentScrolled = ref(false);
 const searchQuery = ref('');
-const searchInput = ref<HTMLInputElement | null>(null);
+const searchInput = ref<{ focus?: () => void } | HTMLInputElement | null>(null);
+
+function nativeSearchInput() {
+  const target = searchInput.value;
+  if (target instanceof HTMLInputElement) return target;
+  return document.getElementById('global-search-input') as HTMLInputElement | null;
+}
+
+function focusSearch(select = false) {
+  const input = nativeSearchInput();
+  searchInput.value?.focus?.();
+  input?.focus();
+  if (select) input?.select();
+}
 
 const searchHotkey = /Mac|iPhone|iPad/i.test(navigator.platform)
   ? '⌘K'
@@ -57,16 +67,6 @@ const sidebarExpanded = computed(() =>
 );
 let compactMedia: MediaQueryList | null = null;
 let mediumMedia: MediaQueryList | null = null;
-
-const themeOptions: {
-  icon: typeof Sun;
-  label: string;
-  value: ThemePreference;
-}[] = [
-  { value: 'light', label: '浅色', icon: Sun },
-  { value: 'dark', label: '深色', icon: Moon },
-  { value: 'system', label: '跟随系统', icon: Monitor },
-];
 
 function readCollapsed() {
   try {
@@ -113,15 +113,11 @@ function onContentScroll(event: Event) {
   contentScrolled.value = target.scrollTop > 0;
 }
 
-function isActive(path: string) {
-  return route.path === path;
-}
-
 function submitSearch() {
   const value = searchQuery.value.trim();
   if (!value) {
     toast.warning('请输入搜索关键词');
-    searchInput.value?.focus();
+    focusSearch();
     return;
   }
   void router.push({ path: '/selection/search', query: { q: value } });
@@ -143,15 +139,18 @@ function onSearchHotkey(event: KeyboardEvent) {
   const other = isMac ? event.ctrlKey : event.metaKey;
   if (!primary || other) return;
   event.preventDefault();
-  searchInput.value?.focus();
-  searchInput.value?.select();
+  focusSearch(true);
 }
 
 function focusSearchFromSurface(event: MouseEvent) {
   const target = event.target as HTMLElement | null;
   if (target?.closest('input, button, a, [role="button"]')) return;
   event.preventDefault();
-  searchInput.value?.focus();
+  focusSearch();
+}
+
+function onMenuClick(info: { key: string | number }) {
+  void router.push(String(info.key));
 }
 
 onMounted(() => {
@@ -210,132 +209,38 @@ watch(
     }"
   >
     <a class="skip-link" href="#main-content">跳到主要内容</a>
-    <header
-      class="toolbar material-toolbar"
-      :class="{ 'toolbar--scrolled': contentScrolled }"
-    >
-      <div class="toolbar__start">
-        <button
-          class="icon-button"
-          type="button"
-          :aria-expanded="sidebarExpanded"
-          aria-controls="app-sidebar"
-          :aria-label="sidebarExpanded ? '折叠侧栏' : '展开侧栏'"
-          @click="toggleSidebar"
-        >
-          <PanelLeft :size="18" :stroke-width="1.5" />
-        </button>
-
-        <RouterLink class="brand" to="/selection/customer">
-          <BrandMark />
-          <span class="brand__name">感应器选型</span>
-        </RouterLink>
-      </div>
-
-      <form
-        class="search"
-        role="search"
-        @mousedown="focusSearchFromSurface"
-        @submit.prevent="submitSearch"
-      >
-        <Search :size="18" :stroke-width="1.5" aria-hidden="true" />
-        <input
-          id="global-search-input"
-          ref="searchInput"
-          v-model="searchQuery"
-          type="search"
-          name="globalSearch"
-          aria-label="全局搜索"
-          autocomplete="off"
-          placeholder="搜索客户、制程、机型或型号"
-          @keydown="onSearchKeydown"
-        >
-        <kbd>{{ searchHotkey }}</kbd>
-      </form>
-
-      <div class="toolbar__end">
-        <div class="theme-switch" role="radiogroup" aria-label="外观">
-          <button
-            v-for="option in themeOptions"
-            :key="option.value"
-            class="icon-button"
-            type="button"
-            role="radio"
-            :aria-checked="theme.preference === option.value"
-            :aria-label="option.label"
-            :title="option.label"
-            @click="theme.setPreference(option.value)"
-          >
-            <component :is="option.icon" :size="18" :stroke-width="1.5" />
-          </button>
-        </div>
-
-        <UserMenu />
-      </div>
-    </header>
-
-    <div v-if="selection.backendStatus === 'unauthorized'" class="shell-banner">
-      <ABanner
-        tone="error"
-        message="登录已失效，请重新登录"
-        action-label="去登录"
-        @action="router.push('/login')"
-      />
-    </div>
-    <div v-else-if="backendUnavailable" class="shell-banner">
-      <ABanner
-        tone="warning"
-        message="无法连接后端服务，页面未加载演示数据。请连接后端后重试。"
-        action-label="重新连接"
-        @action="selection.reconnect()"
-      />
-    </div>
-
     <div class="body">
       <nav
         id="app-sidebar"
-        class="sidebar material-sidebar"
+        class="sidebar"
         aria-label="主导航"
         :aria-hidden="compactViewport && !mobileSidebarOpen ? true : undefined"
         :inert="compactViewport && !mobileSidebarOpen ? true : undefined"
       >
-        <section v-for="group in groups" :key="group.id" class="nav-group">
-          <!--
-            侧栏分组是 <nav aria-label="主导航"> 内的装饰性分组标签，不是
-            正文的一部分；之前用 <h2> 会在文档大纲里排在页面自己的 <h1>
-            前面，把标题层级弄反。侧栏本身的 aria-label 已经足够让读屏
-            用户识别这是导航区，这里改回普通文本即可。
-          -->
-          <p v-if="sidebarExpanded" class="nav-group__label">
-            {{ group.label }}
-          </p>
-          <ATooltip
-            v-for="item in group.items"
-            :key="item.to"
-            :content="item.label"
-            side="right"
-            :disabled="sidebarExpanded"
+        <RouterLink class="brand" to="/selection/customer">
+          <BrandMark />
+          <span class="brand__name">感应器选型</span>
+        </RouterLink>
+        <a-menu
+          theme="dark"
+          mode="inline"
+          :inline-collapsed="!compactViewport && !sidebarExpanded"
+          :selected-keys="[route.path]"
+          @click="onMenuClick"
+        >
+          <a-menu-item-group
+            v-for="group in groups"
+            :key="group.id"
+            :title="sidebarExpanded ? group.label : undefined"
           >
-            <template #trigger>
-              <RouterLink
-                class="nav-item"
-                :class="{ 'nav-item--active': isActive(item.to) }"
-                :to="item.to"
-                :title="sidebarExpanded ? undefined : item.label"
-              >
-                <component
-                  :is="item.icon"
-                  class="nav-item__icon"
-                  :size="18"
-                  :stroke-width="1.5"
-                />
-                <span v-if="sidebarExpanded" class="nav-item__label">{{
-                  item.label
-                }}</span>
-              </RouterLink>
-            </template>
-          </ATooltip>
-        </section>
+            <a-menu-item v-for="item in group.items" :key="item.to">
+              <template #icon>
+                <component :is="item.icon" :size="16" :stroke-width="1.5" />
+              </template>
+              {{ item.label }}
+            </a-menu-item>
+          </a-menu-item-group>
+        </a-menu>
       </nav>
 
       <button
@@ -346,17 +251,75 @@ watch(
         @click="mobileSidebarOpen = false"
       />
 
-      <main
-        id="main-content"
-        class="content"
-        tabindex="-1"
-        @scroll="onContentScroll"
-      >
-        <div v-if="connecting" class="content__loading">
-          <ASpinner :size="24" />
+      <div class="workspace">
+        <header class="toolbar" :class="{ 'toolbar--scrolled': contentScrolled }">
+          <a-button
+            type="text"
+            :aria-expanded="sidebarExpanded"
+            aria-controls="app-sidebar"
+            :aria-label="sidebarExpanded ? '折叠侧栏' : '展开侧栏'"
+            @click="toggleSidebar"
+          >
+            <PanelLeft :size="18" :stroke-width="1.5" />
+          </a-button>
+          <form
+            class="search"
+            role="search"
+            @mousedown="focusSearchFromSurface"
+            @submit.prevent="submitSearch"
+          >
+            <a-input
+              id="global-search-input"
+              ref="searchInput"
+              v-model:value="searchQuery"
+              allow-clear
+              aria-label="全局搜索"
+              autocomplete="off"
+              placeholder="搜索客户、制程、机型或型号"
+              @keydown="onSearchKeydown"
+            >
+              <template #prefix>
+                <Search :size="16" aria-hidden="true" />
+              </template>
+              <template #suffix>
+                <kbd>{{ searchHotkey }}</kbd>
+              </template>
+            </a-input>
+          </form>
+          <div class="toolbar__end">
+            <UserMenu />
+          </div>
+        </header>
+
+        <div v-if="selection.backendStatus === 'unauthorized'" class="shell-banner">
+          <ABanner
+            tone="error"
+            message="登录已失效，请重新登录"
+            action-label="去登录"
+            @action="router.push('/login')"
+          />
         </div>
-        <slot v-else />
-      </main>
+        <div v-else-if="backendUnavailable" class="shell-banner">
+          <ABanner
+            tone="warning"
+            message="无法连接后端服务，页面未加载演示数据。请连接后端后重试。"
+            action-label="重新连接"
+            @action="selection.reconnect()"
+          />
+        </div>
+
+        <main
+          id="main-content"
+          class="content"
+          tabindex="-1"
+          @scroll="onContentScroll"
+        >
+          <div v-if="connecting" class="content__loading">
+            <ASpinner :size="24" />
+          </div>
+          <slot v-else />
+        </main>
+      </div>
     </div>
   </div>
 </template>
@@ -366,193 +329,103 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  min-height: 0;
   background: var(--bg-window);
   color: var(--label);
 }
 
 .skip-link {
   position: fixed;
-  top: var(--space-3);
-  left: var(--space-3);
+  top: 12px;
+  left: 12px;
   z-index: var(--z-toast);
-  padding: var(--space-3) var(--space-4);
+  padding: 8px 12px;
   color: var(--label-on-color);
   text-decoration: none;
   background: var(--sys-blue-solid);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
-  transform: translateY(calc(-100% - var(--space-5)));
-  transition: transform var(--dur-1) ease;
+  transform: translateY(-150%);
 }
 
 .skip-link:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring), var(--shadow-1);
   transform: translateY(0);
 }
 
+.workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-window);
+}
+
 .toolbar {
-  position: relative;
-  z-index: 30;
-  display: grid;
+  display: flex;
   flex-shrink: 0;
-  grid-template-columns: 1fr minmax(0, 28rem) 1fr;
-  gap: var(--space-3);
+  gap: 12px;
   align-items: center;
   height: var(--toolbar-height);
-  padding: 0 var(--space-4);
+  padding: 0 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--separator-opaque);
 }
 
-.toolbar__start,
 .toolbar__end {
   display: flex;
-  gap: var(--space-2);
+  gap: 8px;
   align-items: center;
-}
-
-.toolbar__start {
   min-width: 0;
-}
-
-.toolbar__end {
-  justify-self: end;
-}
-
-.toolbar--scrolled::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 1px;
-  pointer-events: none;
-  content: '';
-  background: var(--separator);
-  box-shadow: var(--shadow-1);
-  transform: scaleY(0.5);
-  transform-origin: bottom;
+  margin-left: auto;
 }
 
 .brand {
   display: flex;
-  gap: var(--space-2);
+  flex-shrink: 0;
+  gap: 8px;
   align-items: center;
+  height: var(--toolbar-height);
   min-width: 0;
-  color: var(--label);
+  padding: 0 16px;
+  color: var(--sider-text);
+  text-decoration: none;
 }
 
-.brand:focus-visible {
-  border-radius: var(--radius-sm);
+.brand :deep(.brand-mark) {
+  filter: brightness(0) invert(1);
 }
 
 .brand__name {
-  font: var(--text-headline);
-  letter-spacing: var(--tracking-headline);
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  width: 100%;
+  flex: 1;
   min-width: 0;
-  height: var(--control-height-lg);
-  padding: 0 var(--space-4);
-  color: var(--label-3);
-  background: var(--fill-2);
-  border: 0;
-  border-radius: var(--radius-pill);
-  transition:
-    background-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out);
+  max-width: 28rem;
 }
 
 .search input {
-  align-self: stretch;
-  flex: 1;
-  min-width: 0;
-  padding: 0;
   font: var(--text-field);
-  color: var(--label);
-  appearance: none;
-  background: transparent;
-  border: 0;
-  outline: none;
-}
-
-.search input[type='search']::-webkit-search-decoration,
-.search input[type='search']::-webkit-search-cancel-button,
-.search input[type='search']::-webkit-search-results-button,
-.search input[type='search']::-webkit-search-results-decoration {
-  display: none;
 }
 
 .search input::placeholder {
   color: var(--label-placeholder);
 }
 
-.search input:focus,
-.search input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
 .search kbd {
-  flex-shrink: 0;
-  padding: var(--space-1) var(--space-2);
-  font: var(--text-caption);
   color: var(--label-placeholder);
-  letter-spacing: var(--tracking-caption);
-  background: var(--fill-3);
-  border-radius: var(--radius-sm);
-}
-
-.search:hover {
-  background: var(--fill-3);
-}
-
-.search:has(:focus-visible) {
-  box-shadow: var(--focus-ring);
-}
-
-.theme-switch {
-  display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  background: var(--fill-4);
-  border-radius: var(--radius-lg);
-}
-
-.icon-button {
-  display: grid;
-  place-items: center;
-  width: var(--control-height-md);
-  height: var(--control-height-md);
-  color: var(--label-2);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-}
-
-.icon-button:hover {
-  background: var(--fill-3);
-}
-
-.icon-button:active {
-  opacity: 0.7;
-}
-
-.icon-button[aria-checked='true'] {
-  color: var(--sys-blue);
-  background: var(--sys-blue-fill);
 }
 
 .shell-banner {
   flex-shrink: 0;
-  padding: var(--space-3) var(--space-4) 0;
+  padding: 8px 16px 0;
 }
 
 .body {
-  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -560,195 +433,93 @@ watch(
 
 .sidebar {
   display: flex;
-  flex-direction: column;
   flex-shrink: 0;
-  gap: var(--space-4);
-  width: var(--sidebar-width);
-  padding: var(--space-3);
+  flex-direction: column;
+  width: 220px;
   overflow: auto;
-  box-shadow: inset -1px 0 0 var(--separator);
-  transition:
-    width var(--dur-4) var(--ease-in-out),
-    padding var(--dur-4) var(--ease-in-out);
+  background: var(--sider-bg);
+  color: var(--sider-text);
+}
+
+.sidebar :deep(.ant-menu) {
+  flex: 1;
+  background: transparent;
+  border-inline-end: 0;
+}
+
+/* 分组标题是导航的“目录”，不能和菜单项同字号同亮度 */
+.sidebar :deep(.ant-menu-item-group-title) {
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-2);
+  font: var(--text-toolbar-em);
+  color: var(--sider-text-2);
 }
 
 .app-shell--collapsed .sidebar {
-  width: var(--sidebar-collapsed-width);
-  padding: var(--space-3) var(--space-2);
+  width: 80px;
 }
 
 .app-shell--collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-shell--collapsed .brand__name {
   display: none;
 }
 
-.app-shell--collapsed .toolbar__start {
-  width: calc(var(--sidebar-collapsed-width) - var(--space-4) * 2);
-  justify-content: center;
-}
-
-.nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.nav-group__label {
-  padding: var(--space-1) var(--space-3);
-  margin: 0;
-  font: var(--text-caption);
-
-  /* --label-2 在侧栏底色上实测只有 4.43:1，13px 不算大字号，仍要 4.5:1。
-     层级靠字号（13 vs 15）、大写和字距区分，不靠降低对比度。 */
-  color: var(--label);
-  letter-spacing: var(--tracking-caption);
-  text-transform: uppercase;
-}
-
-.nav-item {
-  display: flex;
+.app-shell--compact .toolbar {
   gap: var(--space-2);
-  align-items: center;
-  min-height: var(--control-height-lg);
-  padding: var(--space-1) var(--space-3);
-  color: var(--label);
-  border-radius: var(--radius-md);
-  transition: background-color var(--dur-1) var(--ease-out);
+  padding: 0 var(--space-3);
 }
 
-.nav-item:hover {
-  background: var(--fill-3);
+.app-shell--compact .search kbd {
+  display: none;
 }
 
-.nav-item:active {
-  opacity: 0.7;
+.app-shell--compact .search,
+.app-shell--compact .search :deep(.ant-input-affix-wrapper) {
+  width: 100%;
+  min-width: 0;
 }
 
-.nav-item--active {
-  color: var(--sys-blue);
-  background: var(--sys-blue-fill);
+.app-shell--compact .sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  width: min(240px, calc(100vw - 48px));
+  transform: translateX(-100%);
 }
 
-.nav-item--active:hover {
-  background: var(--sys-blue-fill);
+.app-shell--compact .sidebar :deep(.ant-menu) {
+  width: 100%;
 }
 
-.nav-item__icon {
-  flex-shrink: 0;
+.app-shell--drawer-open .sidebar {
+  transform: none;
 }
 
-.nav-item__label {
-  overflow: hidden;
-  font: var(--text-control);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-shell--collapsed .nav-item {
-  justify-content: center;
-  padding: var(--space-2);
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--overlay);
+  border: 0;
 }
 
 .content {
-  display: flex;
   flex: 1;
-  flex-direction: column;
   min-width: 0;
-  min-height: 0;
   padding: var(--space-5);
-  overflow: hidden;
-  background: var(--bg-content);
-}
-
-.content > * {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden auto;
+  overflow: auto;
+  background: var(--bg-window);
 }
 
 .content__loading {
   display: grid;
+  height: 100%;
   place-items: center;
-  min-height: calc(var(--space-9) * 6);
-}
-
-@media (width <= 960px) {
-  .toolbar {
-    grid-template-columns: auto minmax(8rem, 1fr) auto;
-    gap: var(--space-3);
-    padding: 0 var(--space-3);
-  }
-
-  .toolbar__start,
-  .toolbar__end {
-    gap: var(--space-2);
-  }
-
-  .brand__name,
-  .search kbd {
-    display: none;
-  }
-
-  .sidebar {
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 20;
-    width: min(var(--sidebar-width), calc(100vw - 48px));
-    padding: var(--space-3);
-    box-shadow: var(--shadow-4);
-    transform: translateX(-105%);
-    transition: transform var(--dur-3) var(--ease-sheet);
-  }
-
-  .app-shell--drawer-open .sidebar {
-    transform: translateX(0);
-  }
-
-  .sidebar-backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    padding: 0;
-    background: var(--overlay);
-    border: 0;
-    backdrop-filter: var(--overlay-blur);
-  }
-
-  .content {
-    padding: var(--space-4);
-  }
-}
-
-@media (width < 560px) {
-  .toolbar {
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-  }
-
-  .brand {
-    display: none;
-  }
-
-  .search {
-    height: var(--control-height-md);
-    padding: 0 var(--space-3);
-  }
-
-  .theme-switch {
-    gap: 0;
-    padding: 0;
-  }
-
-  .content {
-    padding: var(--space-3);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar,
-  .sidebar-backdrop,
-  .nav-item {
-    transition: none;
-  }
 }
 </style>

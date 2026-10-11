@@ -88,6 +88,7 @@ watch(
 
 .a-form-row__label {
   display: inline-flex;
+  margin-bottom: var(--space-1);
   gap: var(--space-1);
   align-items: center;
   font: var(--text-control-em);
@@ -115,7 +116,8 @@ watch(
 }
 
 .a-form-row__hint {
-  margin: 0;
+  /* 说明文字比占位行多出的部分，避免紧贴下一个字段的标签 */
+  margin: 0 0 var(--space-2);
   font: var(--text-caption);
   color: var(--label-2);
   letter-spacing: var(--tracking-caption);

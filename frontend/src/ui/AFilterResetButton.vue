@@ -14,7 +14,7 @@ const emit = defineEmits<{
 
 <template>
   <AButton
-    variant="plain"
+    variant="borderless"
     :disabled="!active"
     :aria-label="active ? '重置筛选' : '当前没有已应用的筛选条件'"
     :title="active ? undefined : '当前没有已应用的筛选条件'"

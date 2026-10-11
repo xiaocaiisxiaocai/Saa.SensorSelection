@@ -1,9 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ATreeSelect from './ATreeSelect.vue';
@@ -20,98 +15,112 @@ const nodes: TreeNode[] = [
         children: [{ id: 3, label: '上海办' }],
       },
       { id: 4, label: '华南' },
+      { id: 5, label: '停用办', disabled: true },
+      { id: 6, label: '研发', hint: 'R&D' },
     ],
   },
 ];
-const treeSelectSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'ATreeSelect.vue'),
-  'utf8',
-);
+
+function titles(): string[] {
+  return [...document.querySelectorAll('.ant-select-tree-title')].map(
+    (node) => node.textContent?.trim() ?? '',
+  );
+}
+
+async function openTree(wrapper: ReturnType<typeof mount>) {
+  await wrapper.get('.ant-select-selector').trigger('mousedown');
+  await flushPromises();
+}
 
 describe('ATreeSelect', () => {
   afterEach(() => {
     document.body.innerHTML = '';
   });
 
-  it('selects a nested node after expanding', async () => {
+  it('maps id and label into the tree and updates the model from a nested node', async () => {
     const wrapper = mount(ATreeSelect, {
       attachTo: document.body,
       props: { nodes, placeholder: '所属组织' },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
+    expect(wrapper.get('.a-tree-select').classes()).toContain('a-tree-select');
+    expect(wrapper.get('.ant-select-selection-placeholder').text()).toBe('所属组织');
 
-    document
-      .querySelector<HTMLButtonElement>('[aria-label="展开"]')
-      ?.click();
-    await nextTick();
-
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (node) => node.textContent?.includes('华东'),
+    await openTree(wrapper);
+    expect(titles()).toEqual(
+      expect.arrayContaining(['总部', '华东', '上海办', '华南', '研发（R&D）']),
     );
-    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
+
+    const east = [...document.querySelectorAll('.ant-select-tree-title')].find(
+      (node) => node.textContent?.trim() === '华东',
+    );
+    east?.closest<HTMLElement>('.ant-select-tree-node-content-wrapper')?.click();
+    await flushPromises();
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([2]);
     wrapper.unmount();
   });
 
-  it('expands matching ancestors when searching', async () => {
+  it('shows the selected node label', () => {
     const wrapper = mount(ATreeSelect, {
-      attachTo: document.body,
-      props: { nodes, placeholder: '所属组织' },
-    });
-
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    const input = document.querySelector<HTMLInputElement>('input[type="search"]');
-    expect(input).not.toBeNull();
-    input!.value = '上海';
-    input!.dispatchEvent(new Event('input', { bubbles: true }));
-    await nextTick();
-
-    expect(document.body.textContent).toContain('上海办');
-    expect(document.body.textContent).toContain('总部');
-    wrapper.unmount();
-  });
-
-  it('keeps tree labels on one line while the panel can grow', async () => {
-    const wrapper = mount(ATreeSelect, {
-      attachTo: document.body,
-      props: { nodes, placeholder: '所属组织' },
-    });
-
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
-    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
-    expect(treeSelectSource).toMatch(
-      /\.a-tree-select__option-label\s*\{[^}]*white-space:\s*nowrap;/s,
-    );
-
-    wrapper.unmount();
-  });
-
-  it('expands every ancestor of the selected node when opening', async () => {
-    const wrapper = mount(ATreeSelect, {
-      attachTo: document.body,
       props: { nodes, modelValue: 3 },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
+    expect(wrapper.get('.ant-select-selection-item').text()).toContain('上海办');
+  });
 
-    // 选中的「上海办」在 总部 → 华东 下面，打开时必须直接可见且标记为已选
-    const selected = document.querySelector('[role="option"][aria-selected="true"]');
-    expect(selected?.textContent).toContain('上海办');
-    expect(
-      [...document.querySelectorAll('[role="option"]')].map((node) =>
-        node.textContent?.trim(),
-      ),
-    ).toEqual(['总部', '华东', '上海办', '华南']);
+  it('does not select a disabled node', async () => {
+    const wrapper = mount(ATreeSelect, {
+      attachTo: document.body,
+      props: { nodes, placeholder: '所属组织' },
+    });
+
+    await openTree(wrapper);
+    const disabled = [...document.querySelectorAll('.ant-select-tree-title')].find(
+      (node) => node.textContent?.trim() === '停用办',
+    );
+    disabled?.closest<HTMLElement>('.ant-select-tree-node-content-wrapper')?.click();
+    await flushPromises();
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('filters by title and keeps matching nested labels', async () => {
+    const wrapper = mount(ATreeSelect, {
+      attachTo: document.body,
+      props: { nodes, placeholder: '所属组织' },
+    });
+
+    await openTree(wrapper);
+    await wrapper.get('input[role="combobox"]').setValue('上海');
+    await flushPromises();
+
+    const shown = titles();
+    expect(shown.some((title) => title.includes('上海办'))).toBe(true);
+    expect(shown.some((title) => title.includes('华南'))).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('clears the selected id', async () => {
+    const wrapper = mount(ATreeSelect, {
+      props: { nodes, modelValue: 3 },
+    });
+
+    await wrapper.get('.ant-select-clear').trigger('mousedown');
+    // Ant Design TreeSelect clears with undefined; the wrapper does not coerce it to null.
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([undefined]);
+  });
+
+  it('does not open when disabled', async () => {
+    const wrapper = mount(ATreeSelect, {
+      attachTo: document.body,
+      props: { nodes, disabled: true, placeholder: '所属组织' },
+    });
+
+    expect(wrapper.get('input').attributes('disabled')).toBeDefined();
+    await openTree(wrapper);
+    expect(titles()).toHaveLength(0);
     wrapper.unmount();
   });
 });

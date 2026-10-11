@@ -412,14 +412,12 @@ onMounted(restoreWidth);
     <div v-if="searchable" class="a-source-list__search">
       <ASearchField
         v-model="query"
-        size="small"
         :placeholder="`搜索${itemLabel}…`"
         :aria-label="`搜索${itemLabel}`"
       />
       <AIconButton
         :icon="allGroupsExpanded ? ChevronsUp : ChevronsDown"
         :label="`${allGroupsExpanded ? '折叠' : '展开'}全部${groupLabel}`"
-        size="small"
         side="bottom"
         :disabled="groups.length === 0"
         @click="toggleAllGroups"
@@ -427,21 +425,19 @@ onMounted(restoreWidth);
     </div>
     <div v-if="editable" class="a-source-list__toolbar">
       <AButton
-        size="small"
         :aria-label="`新建${groupLabel}`"
         @click="emit('createGroup')"
       >
-        <Plus :size="16" :stroke-width="1.5" />
+        <Plus :size="14" :stroke-width="1.75" />
         {{ groupLabel }}
       </AButton>
       <AButton
-        size="small"
         variant="filled"
         :disabled="groups.length === 0"
         :aria-label="`新建${itemLabel}`"
         @click="emit('createItem')"
       >
-        <Plus :size="16" :stroke-width="1.5" />
+        <Plus :size="14" :stroke-width="1.75" />
         {{ itemLabel }}
       </AButton>
     </div>
@@ -640,20 +636,17 @@ onMounted(restoreWidth);
   content: '';
 }
 
+/*
+ * 顶部不留内边距、行距取 --space-3：左侧「搜索」「新建」两行正好与右侧
+ * 「标题 + 页签」「筛选栏」两行（同为 medium 控件高度、--space-3 间距）对齐。
+ * 左侧贴齐页面内边距，右侧留出与分隔线的间距。
+ */
 .a-source-list__search,
 .a-source-list__toolbar {
   display: flex;
   flex-shrink: 0;
-  gap: var(--space-2);
-  padding: var(--space-3);
-}
-
-.a-source-list__search {
-  padding-bottom: var(--space-2);
-}
-
-.a-source-list__toolbar {
-  padding-top: 0;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-3) 0;
 }
 
 .a-source-list__toolbar .a-button {
@@ -662,9 +655,10 @@ onMounted(restoreWidth);
   white-space: nowrap;
 }
 
-.a-source-list__search :deep(.a-control) {
+.a-source-list__search :deep(.a-search-field) {
   flex: 1;
   width: 100%;
+  min-width: 0;
 }
 
 .a-source-list__search :deep(.a-icon-button-host) {
@@ -679,6 +673,9 @@ onMounted(restoreWidth);
 }
 
 .a-source-list__row {
+  /* 行底色。悬停浮出的操作按钮组用同一个值垫底，和整行融为一体 */
+  --row-bg: var(--bg-content);
+
   position: relative;
   display: flex;
   gap: var(--space-1);
@@ -692,17 +689,32 @@ onMounted(restoreWidth);
 }
 
 .a-source-list__row--item {
-  padding-left: var(--space-7);
+  /* 子项文字与分组名文字左对齐：分组行在同一位置多了 18px 折叠箭头 + 间距 */
+  padding-left: calc(var(--space-3) + 18px + var(--space-2));
 }
 
 .a-source-list__row--item:hover,
 .a-source-list__row--group:hover {
-  background: var(--fill-4);
+  --row-bg: var(--fill-4-opaque);
+
+  background: var(--row-bg);
 }
 
 .a-source-list__row--selected,
 .a-source-list__row--selected:hover {
-  background: var(--sys-blue-fill);
+  --row-bg: var(--sys-blue-fill-opaque);
+
+  background: var(--row-bg);
+}
+
+.a-source-list__row--selected::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  content: '';
+  background: var(--sys-blue);
 }
 
 .a-source-list__handle,
@@ -753,8 +765,10 @@ onMounted(restoreWidth);
 }
 
 .a-source-list__toggle {
-  color: var(--label-2);
+  font: var(--text-control-em);
+  color: var(--label);
 }
+
 
 .a-source-list__item {
   overflow: hidden;
@@ -788,6 +802,7 @@ onMounted(restoreWidth);
 
 .a-source-list__chevron {
   flex-shrink: 0;
+  color: var(--label-2);
   transition: transform var(--dur-2) var(--ease-in-out);
 }
 
@@ -816,11 +831,13 @@ onMounted(restoreWidth);
   right: var(--space-2);
   display: flex;
   flex-shrink: 0;
-  gap: var(--space-1);
+
+  /* 不再套白色卡片：那样「编辑」「删除」两个按钮像被焊成一个控件。
+     按钮各自独立、留出间距，底色跟随所在行，左侧再羽化遮住长名称。 */
+  gap: var(--space-2);
   pointer-events: none;
-  background: var(--bg-content);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-1);
+  background: var(--row-bg);
+  box-shadow: calc(var(--space-3) * -1) 0 var(--space-3) var(--row-bg);
   opacity: 0;
   transform: translateY(-50%);
   transition: opacity var(--dur-1) var(--ease-out);

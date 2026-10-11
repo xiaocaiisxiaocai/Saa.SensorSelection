@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { Modal } from 'ant-design-vue';
 
 export interface AlertRequest {
   title: string;
@@ -8,36 +8,25 @@ export interface AlertRequest {
   destructive?: boolean;
 }
 
-export interface AlertState extends AlertRequest {
-  confirmText: string;
-  cancelText: string;
-}
-
-const request = ref<AlertState | null>(null);
-let settle: ((value: boolean) => void) | null = null;
-
-function finish(value: boolean) {
-  const resolve = settle;
-  settle = null;
-  request.value = null;
-  resolve?.(value);
-}
-
 export const alert = {
   confirm(options: AlertRequest): Promise<boolean> {
-    finish(false);
-
     return new Promise((resolve) => {
-      settle = resolve;
-      request.value = {
-        ...options,
-        confirmText: options.confirmText ?? '确定',
-        cancelText: options.cancelText ?? '取消',
+      let settled = false;
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
       };
+
+      Modal.confirm({
+        title: options.title,
+        content: options.message,
+        okText: options.confirmText ?? '确定',
+        cancelText: options.cancelText ?? '取消',
+        okType: options.destructive ? 'danger' : 'primary',
+        onOk: () => finish(true),
+        onCancel: () => finish(false),
+      });
     });
   },
 };
-
-export function useAlertState() {
-  return { request, finish };
-}

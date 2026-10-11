@@ -1,13 +1,6 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  useId,
-  watch,
-} from 'vue';
+import { Segmented as AntSegmented } from 'ant-design-vue';
+import { computed, h, useId } from 'vue';
 
 import type { SegmentedSize, SegmentOption } from './types';
 
@@ -16,13 +9,6 @@ const props = withDefaults(
     segments: SegmentOption[];
     size?: SegmentedSize;
     ariaLabel?: string;
-    /**
-     * 分段控件与它切换的内容区之间的 ARIA 关联基准。传入后每个标签会得到
-     * `${id}-tab-${value}` / `${id}-panel-${value}` 一对 id，调用方把后者
-     * 用在对应内容容器上（`role="tabpanel"` + `aria-labelledby` 指回标签
-     * id）即可组成完整的 tab/tabpanel 关系。不传时仅组件内部保持 id 唯一，
-     * 不与外部内容关联。
-     */
     id?: string;
   }>(),
   {
@@ -32,270 +18,38 @@ const props = withDefaults(
 
 const fallbackId = useId();
 const baseId = computed(() => props.id ?? fallbackId);
+const model = defineModel<string>({ required: true });
+// antd Segmented 只有 large / small，默认尺寸即中号
+const antdSize = computed(() => (props.size === 'large' ? 'large' : undefined));
+const options = computed(() =>
+  props.segments.map((segment) => ({
+    value: segment.value,
+    label: h(
+      'span',
+      { id: `${baseId.value}-tab-${segment.value}` },
+      segment.badge == null
+        ? segment.label
+        : [
+            segment.label,
+            // 计数是信息不是告警：不用 antd Badge（红底徽标），用弱化的数字
+            h('span', { class: 'a-segmented__count' }, String(segment.badge)),
+          ],
+    ),
+  })),
+);
 
 defineExpose({
   tabId: (value: string) => `${baseId.value}-tab-${value}`,
   panelId: (value: string) => `${baseId.value}-panel-${value}`,
 });
-
-const model = defineModel<string>({ required: true });
-const root = ref<HTMLElement | null>(null);
-const thumbX = ref(0);
-const thumbWidth = ref(0);
-let resizeObserver: ResizeObserver | null = null;
-
-const selectedIndex = computed(() => {
-  const index = props.segments.findIndex((item) => item.value === model.value);
-  return index < 0 ? 0 : index;
-});
-
-function updateThumb() {
-  const selected = root.value?.querySelector<HTMLElement>(
-    '[aria-selected="true"]',
-  );
-  if (!selected) {
-    thumbX.value = 0;
-    thumbWidth.value = 0;
-    return;
-  }
-  thumbX.value = selected.offsetLeft;
-  thumbWidth.value = selected.offsetWidth;
-  selected.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-}
-
-function select(value: string) {
-  if (value !== model.value) {
-    model.value = value;
-  }
-}
-
-function focusTab(value: string) {
-  void nextTick(() => {
-    root.value
-      ?.querySelector<HTMLElement>(`[data-segment-value="${CSS.escape(value)}"]`)
-      ?.focus();
-  });
-}
-
-function selectAndFocus(value: string) {
-  select(value);
-  focusTab(value);
-}
-
-function onKeydown(event: KeyboardEvent) {
-  const index = selectedIndex.value;
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    event.preventDefault();
-    const next = props.segments[index + 1];
-    if (next) {
-      selectAndFocus(next.value);
-    }
-    return;
-  }
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    event.preventDefault();
-    const prev = props.segments[index - 1];
-    if (prev) {
-      selectAndFocus(prev.value);
-    }
-    return;
-  }
-  if (event.key === 'Home') {
-    event.preventDefault();
-    const first = props.segments[0];
-    if (first) {
-      selectAndFocus(first.value);
-    }
-    return;
-  }
-  if (event.key === 'End') {
-    event.preventDefault();
-    const last = props.segments[props.segments.length - 1];
-    if (last) {
-      selectAndFocus(last.value);
-    }
-  }
-}
-
-onMounted(() => {
-  updateThumb();
-  if (typeof ResizeObserver === 'undefined' || !root.value) return;
-  resizeObserver = new ResizeObserver(() => updateThumb());
-  resizeObserver.observe(root.value);
-});
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect();
-});
-
-watch(
-  [model, () => props.segments],
-  async () => {
-    await nextTick();
-    updateThumb();
-  },
-  { deep: true },
-);
 </script>
 
 <template>
-  <div
-    ref="root"
+  <AntSegmented
+    v-model:value="model"
     class="a-segmented"
-    :class="`a-segmented--${size}`"
-    role="tablist"
     :aria-label="ariaLabel"
-    @keydown="onKeydown"
-  >
-    <div
-      class="a-segmented__thumb"
-      aria-hidden="true"
-      :style="{
-        width: `${thumbWidth}px`,
-        transform: `translateX(${thumbX}px)`,
-      }"
-    />
-    <button
-      v-for="(segment, index) in segments"
-      :id="id ? `${baseId}-tab-${segment.value}` : undefined"
-      :key="segment.value"
-      class="a-segmented__tab"
-      :class="{ 'a-segmented__tab--selected': segment.value === model }"
-      type="button"
-      role="tab"
-      :data-segment-value="segment.value"
-      :aria-selected="segment.value === model"
-      :aria-controls="id ? `${baseId}-panel-${segment.value}` : undefined"
-      :tabindex="segment.value === model ? 0 : -1"
-      @click="select(segment.value)"
-    >
-      <span>{{ segment.label }}</span>
-      <span
-        v-if="segment.badge != null"
-        class="a-segmented__badge"
-        :class="{ 'a-segmented__badge--empty': segment.badge === 0 }"
-      >
-        {{ segment.badge }}
-      </span>
-      <span
-        v-if="index < segments.length - 1"
-        class="a-segmented__rule"
-        aria-hidden="true"
-      />
-    </button>
-  </div>
+    :options="options"
+    :size="antdSize"
+  />
 </template>
-
-<style scoped>
-.a-segmented {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-self: flex-start;
-  width: max-content;
-  max-width: 100%;
-  padding: var(--space-1);
-  overflow: auto hidden;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
-  background: var(--fill-1);
-  border-radius: var(--radius-lg);
-}
-
-.a-segmented::-webkit-scrollbar {
-  height: var(--space-2);
-}
-
-.a-segmented::-webkit-scrollbar-thumb {
-  background: var(--fill-1);
-  border-radius: var(--radius-pill);
-}
-
-.a-segmented__thumb {
-  position: absolute;
-  top: var(--space-1);
-  bottom: var(--space-1);
-  left: 0;
-  z-index: 0;
-  background: var(--bg-content);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
-  transition:
-    transform var(--dur-2) var(--ease-in-out),
-    width var(--dur-2) var(--ease-in-out);
-}
-
-.a-segmented__tab {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: var(--space-1);
-  align-items: center;
-  justify-content: center;
-  padding: 0 var(--space-3);
-  overflow: hidden;
-  color: var(--label-2);
-  background: transparent;
-  border: 0;
-  white-space: nowrap;
-}
-
-.a-segmented--medium .a-segmented__tab {
-  height: var(--control-height-md);
-  font: var(--text-field);
-}
-
-.a-segmented--large .a-segmented__tab {
-  height: var(--control-height-lg);
-  font: var(--text-control);
-}
-
-.a-segmented__tab--selected {
-  color: var(--label);
-}
-
-.a-segmented__tab:active:not(.a-segmented__tab--selected) {
-  opacity: 0.7;
-}
-
-.a-segmented__badge {
-  font: var(--text-caption);
-
-  /* 计数是信息，不能用只允许给占位符/禁用态的 --label-3（实测 1.73:1）。 */
-  color: var(--label-2);
-  letter-spacing: var(--tracking-caption);
-}
-
-/* 0 本身就是「这里什么都没有」的状态，这时才轮到 --label-3 */
-.a-segmented__badge--empty {
-  color: var(--label-3);
-}
-
-.a-segmented__tab--selected .a-segmented__badge {
-  color: var(--label-2);
-}
-
-.a-segmented__rule {
-  position: absolute;
-  top: var(--space-2);
-  right: 0;
-  bottom: var(--space-2);
-  width: 0.5px;
-  background: var(--separator);
-  opacity: 1;
-  transition: opacity var(--dur-1) var(--ease-out);
-}
-
-.a-segmented__tab--selected .a-segmented__rule,
-.a-segmented__tab:has(+ .a-segmented__tab--selected) .a-segmented__rule {
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .a-segmented__thumb,
-  .a-segmented__rule {
-    transition: none;
-  }
-}
-</style>

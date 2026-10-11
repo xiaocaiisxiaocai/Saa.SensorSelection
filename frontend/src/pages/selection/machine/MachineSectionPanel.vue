@@ -1007,7 +1007,7 @@ async function removeImage(index: number) {
   max-width: none;
 }
 
-.machine-structure-toolbar .a-control.machine-structure-toolbar__search {
+.machine-structure-toolbar .a-search-field.machine-structure-toolbar__search {
   width: 100%;
   min-width: 0;
 }

@@ -115,7 +115,7 @@ describe('ProcessPage', () => {
 
   it('keeps the process layer column compact', async () => {
     const wrapper = await mountPage();
-    await wrapper.findAll('[role="tab"]')[1]?.trigger('click');
+    await wrapper.findAll('.ant-segmented-item')[1]?.get('input').trigger('change');
     await nextTick();
 
     expect(wrapper.find('thead th').attributes('style')).toContain(
@@ -127,7 +127,7 @@ describe('ProcessPage', () => {
 
   it('resets the process layer and keyword filters together', async () => {
     const wrapper = await mountPage();
-    await wrapper.findAll('[role="tab"]')[1]?.trigger('click');
+    await wrapper.findAll('.ant-segmented-item')[1]?.get('input').trigger('change');
     await nextTick();
 
     const layer = wrapper.getComponent(ASelect);

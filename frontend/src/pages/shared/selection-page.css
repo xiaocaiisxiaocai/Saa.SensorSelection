@@ -11,8 +11,11 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: var(--space-1);
+  padding: var(--space-4);
   overflow: hidden;
+  background: var(--bg-content);
+  border: 1px solid var(--separator-opaque);
+  border-radius: var(--radius-md);
 }
 
 .selection-panel {
@@ -81,11 +84,9 @@
   flex-shrink: 1;
 }
 
-/* 主操作按钮与其它页面工具栏（.selection-toolbar）同一字号 */
 .dictionary-header .a-button {
   flex-shrink: 0;
   margin-left: auto;
-  font: var(--text-toolbar-em);
 }
 
 .selection-split {
@@ -110,6 +111,9 @@
 .entity-source .a-source-list {
   flex: 0 0 auto;
   min-width: 0;
+  background: var(--bg-content);
+  border-right: 1px solid var(--separator-opaque);
+  box-shadow: none;
 }
 
 .selection-panel > .selection-panel,
@@ -127,16 +131,6 @@
   gap: var(--space-3);
   align-items: center;
   min-width: 0;
-}
-
-.selection-toolbar .a-control,
-.selection-toolbar .a-control__input,
-.selection-toolbar .a-token-field__chip {
-  font: var(--text-toolbar);
-}
-
-.selection-toolbar .a-button {
-  font: var(--text-toolbar-em);
 }
 
 .selection-toolbar__count {
@@ -159,7 +153,7 @@
   min-width: 7.5rem;
 }
 
-.selection-toolbar .a-control.selection-toolbar__filter {
+.selection-toolbar .a-search-field.selection-toolbar__filter {
   flex: 1 1 16rem;
   width: auto;
   min-width: 12rem;
@@ -514,9 +508,17 @@
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
-  background: var(--fill-2);
+  padding: var(--space-3) var(--space-4);
+
+  /* 白底描边卡片：原来的 --fill-2 灰底在白色内容区上像整行被禁用 */
+  background: var(--bg-content);
+  border: 1px solid var(--separator-opaque);
   border-radius: var(--radius-md);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+
+.docs-list li:hover {
+  background: var(--fill-4);
 }
 
 .docs-list li.docs-list--focus {
@@ -653,7 +655,7 @@
 
   .selection-toolbar .a-select.selection-toolbar__filter,
   .selection-toolbar .a-token-field.selection-toolbar__filter,
-  .selection-toolbar .a-control.selection-toolbar__filter {
+  .selection-toolbar .a-search-field.selection-toolbar__filter {
     flex: 1 1 12rem;
     width: auto;
     min-width: min(100%, 12rem);
@@ -673,4 +675,18 @@
     flex: 0 0 auto;
     min-height: 36rem;
   }
+}
+
+/* 当前客户和区域已经在左侧列表标明，右侧只放资料分类页签。 */
+.entity-header {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
+  min-width: 0;
+}
+
+.entity-header .entity-header__tabs.a-segmented {
+  align-self: center;
 }

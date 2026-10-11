@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与自建 Apple 规范组件库（Reka UI 无样式底座，不使用 Element Plus / Tailwind）。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
+这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与自建 `A*` 组件库（主要封装 ant-design-vue 4，少数组件仍用 Reka UI 无样式底座；不使用 Element Plus / Tailwind）。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
 
 ## 开发命令
 
@@ -18,7 +18,7 @@ cd ..
 dotnet run --launch-profile http --project backend/Saa.SensorSelection.Api   # 后端 API，默认 http://localhost:5080，Swagger 仅 Development 下 /swagger
 
 pnpm run test:selection        # 领域合同回归（scripts/selection-contract-test.cjs），修改持久化/路由/搜索前必须先扩展这里
-pnpm run test:unit             # 等价于 pnpm run test，vitest run（frontend/src/**/*.test.ts，happy-dom，单 worker）
+pnpm run test:unit             # 等价于 pnpm run test，vitest run（frontend/src/**/*.test.ts，happy-dom，单 worker；`src/test-setup.ts` 全局注册 Antd 并 stub `matchMedia`）
 pnpm run check:type            # vue-tsc --noEmit
 pnpm run lint                  # eslint src && stylelint "src/**/*.{css,vue}"
 pnpm --dir frontend format     # prettier --write .（未挂到根目录）
@@ -76,8 +76,8 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - `router/guards.ts`：路由级权限守卫，按页面所需权限码放行/拦截。生产构建用 hash 路由（`.env.production` 中 `VITE_ROUTER_HISTORY=hash`）。
 - `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）；`pages/shared` 放跨页复用逻辑（如文件上传）。
 - `pages/system`：用户、角色、组织、操作日志系统管理页（`/system/user|role|org|audit-log`，各自对应下方权限码）。
-- `ui/`：自建 Apple 规范组件库（`A*` 前缀组件），无业务逻辑，Reka UI 作无样式底座；设计规范见 `frontend/docs/01-design-system.md`、`02-component-library.md`。
-- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方；`theme/` 管浅色/深色/跟随系统（本地键 `apple-frontend:theme`）。
+- `ui/`：自建组件库（`A*` 前缀组件），无业务逻辑。多数组件（按钮、表格、选择器、日期、分页、提示、alert/toast 等）是 ant-design-vue 的封装，`AMenu` / `APopover` / `AImageViewer` 仍基于 Reka UI；业务页只用 `A*`，不直接用 `a-*`（目前只有 `shell/AppShell.vue` 直接用 antd 的 menu/button/input）。`main.ts` 全局 `app.use(Antd)`，`App.vue` 用 `a-config-provider` 统一 zh_CN 语言、主题 token 与 `auto-insert-space-in-button=false`；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格。设计规范见 `frontend/docs/01-design-system.md`、`02-component-library.md`，但这两份仍按旧的 Apple 规范 + Reka UI + 深色模式撰写。**项目已不再遵循 Apple 规范**，界面以 ant-design-vue 的风格和 `tokens.css` 为准，与这两份文档冲突时以代码和本文件为准。
+- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方。**只有浅色模式**（`tokens.test.ts` 断言不含深色），旧的主题切换已移除，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
 - `shell/AppShell.vue`：整体布局（52px 工具栏 + 侧栏 + 内容区，无多标签页，⌘K / Ctrl+K 聚焦全局搜索）。
 
 ### 后端（`backend/Saa.SensorSelection.Api`）

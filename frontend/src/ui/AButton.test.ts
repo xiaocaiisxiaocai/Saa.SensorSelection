@@ -1,15 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import AButton from './AButton.vue';
-
-const source = readFileSync(
-  fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'),
-  'utf8',
-);
 
 describe('AButton', () => {
   it('renders a button with the plain medium defaults', () => {
@@ -17,45 +9,59 @@ describe('AButton', () => {
     const button = wrapper.get('button');
 
     expect(button.attributes('type')).toBe('button');
-    expect(button.classes()).toContain('a-button--plain');
-    expect(button.classes()).toContain('a-button--medium');
-    expect(button.text()).toBe('取消');
+    expect(button.classes()).toEqual(
+      expect.arrayContaining(['a-button', 'a-button--plain', 'a-button--medium']),
+    );
+    // Ant Design inserts a space between a two-character CJK label.
+    expect(button.text().replace(/\s/g, '')).toBe('取消');
   });
 
   it('applies variant, size, and block modifiers', () => {
     const wrapper = mount(AButton, {
       props: { variant: 'filled', size: 'xlarge', block: true },
-      slots: { default: '登 录' },
+      slots: { default: '登录' },
     });
+    const button = wrapper.get('button');
 
-    expect(wrapper.classes()).toContain('a-button--filled');
-    expect(wrapper.classes()).toContain('a-button--xlarge');
-    expect(wrapper.classes()).toContain('a-button--block');
+    expect(button.classes()).toEqual(
+      expect.arrayContaining([
+        'a-button--filled',
+        'a-button--xlarge',
+        'a-button--block',
+      ]),
+    );
   });
 
-  it('does not emit click when disabled or loading', async () => {
+  it('uses the submit html type when asked', () => {
+    const wrapper = mount(AButton, {
+      props: { type: 'submit' },
+      slots: { default: '保存' },
+    });
+
+    expect(wrapper.get('button').attributes('type')).toBe('submit');
+  });
+
+  it('emits click from the button and ignores disabled or loading clicks', async () => {
+    const enabled = mount(AButton, { slots: { default: '保存' } });
+    await enabled.get('button').trigger('click');
+    expect(enabled.emitted('click')).toHaveLength(1);
+
     const disabled = mount(AButton, {
       props: { disabled: true },
       slots: { default: '保存' },
     });
-    await disabled.trigger('click');
+    const disabledButton = disabled.get('button');
+    expect(disabledButton.attributes('disabled')).toBeDefined();
+    await disabledButton.trigger('click');
     expect(disabled.emitted('click')).toBeUndefined();
 
     const loading = mount(AButton, {
       props: { loading: true },
       slots: { default: '保存' },
     });
-    expect(loading.attributes('aria-busy')).toBe('true');
-    expect(loading.attributes('disabled')).toBeDefined();
-    expect(loading.find('.a-spinner').exists()).toBe(true);
-    await loading.trigger('click');
+    const loadingButton = loading.get('button');
+    expect(loadingButton.attributes('aria-busy')).toBe('true');
+    await loadingButton.trigger('click');
     expect(loading.emitted('click')).toBeUndefined();
-  });
-
-  it('keeps a disabled filled button legible instead of fading white text on pale blue', () => {
-    expect(source).toMatch(
-      /\.a-button--filled:disabled\s*\{[^}]*color:\s*var\(--label\);[^}]*background:\s*var\(--fill-2\);/,
-    );
-    expect(source).toMatch(/\.a-button:disabled\s*\{[^}]*opacity:\s*0\.5;/);
   });
 });

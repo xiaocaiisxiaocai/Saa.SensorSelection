@@ -41,6 +41,28 @@ describe('CustomerPage', () => {
     wrapper.unmount();
   });
 
+  it('keeps the selected customer available to assistive tech and shows per-tab counts', async () => {
+    const wrapper = await mountPage();
+    const store = useSelectionStore();
+    const group = store.entityGroups('customer')[0]!;
+    const item = group.items[0]!;
+    const category = group.name;
+
+    const heading = wrapper.get('.entity-header h2');
+    expect(heading.classes()).toContain('visually-hidden');
+    expect(heading.text()).toContain(item);
+    expect(heading.text()).toContain(category);
+    expect(wrapper.find('.entity-header__title').exists()).toBe(false);
+    expect(wrapper.find('.entity-header__meta').exists()).toBe(false);
+    const reqTab = wrapper
+      .findAll('.ant-segmented-item')
+      .find((button) => button.text().trim().startsWith('客户通用要求'));
+    expect(reqTab?.get('.a-segmented__count').text()).toBe(
+      String(store.crudItems('customer-req', item).length),
+    );
+    wrapper.unmount();
+  });
+
   it('wires a confirm-close guard on the sidebar create/edit region dialog', async () => {
     const wrapper = await mountPage(true);
     // EntitySource 的“新建/编辑区域”弹窗必须带 confirmClose，否则 Esc/点
@@ -58,10 +80,10 @@ describe('CustomerPage', () => {
     const wrapper = await mountPage(true);
     const clickTab = async (label: string) => {
       const tab = wrapper
-        .findAll('[role="tab"]')
-        .find((button) => button.text().trim() === label);
+        .findAll('.ant-segmented-item')
+        .find((button) => button.text().trim().startsWith(label));
       expect(tab).toBeDefined();
-      await tab!.trigger('click');
+      await tab!.get('input').trigger('change');
       await flushPromises();
     };
 
@@ -73,7 +95,11 @@ describe('CustomerPage', () => {
     ] as const) {
       await clickTab(label);
       const tab = wrapper.get(`#customer-tabs-tab-${value}`);
-      expect(tab.attributes('aria-selected')).toBe('true');
+      expect(
+        tab.element
+          .closest('.ant-segmented-item')
+          ?.classList.contains('ant-segmented-item-selected'),
+      ).toBe(true);
       const panel = wrapper.get(`#customer-tabs-panel-${value}`);
       expect(panel.attributes('role')).toBe('tabpanel');
       expect(panel.attributes('aria-labelledby')).toBe(
@@ -95,15 +121,13 @@ describe('CustomerPage', () => {
     // 规范忽略单元格的 min-width，靠 CSS 写 min-width 的话这些列等于没有
     // 宽度，会被平均分配。jsdom 没有布局，容器宽度为 0，所以弹性列正好
     // 落在各自声明的下限上。
-    expect(widths).toMatchObject({
-      备注: 'width: 140px;',
-      来源: 'width: 108px;',
-      操作: 'width: 96px;',
-      要求内容: 'width: 230px;',
-      要求分类: 'width: 136px;',
-      适用制程: 'width: 130px;',
-      适用机型: 'width: 90px;',
-    });
+    expect(widths['备注']).toContain('width: 140px');
+    expect(widths['来源']).toContain('width: 108px');
+    expect(widths['操作']).toContain('width: 96px');
+    expect(widths['要求内容']).toContain('width: 230px');
+    expect(widths['要求分类']).toContain('width: 136px');
+    expect(widths['适用制程']).toContain('width: 130px');
+    expect(widths['适用机型']).toContain('width: 90px');
     wrapper.unmount();
   });
 
@@ -233,10 +257,10 @@ describe('CustomerPage', () => {
     };
     const clickTab = async (label: string) => {
       const tab = wrapper
-        .findAll('button')
-        .find((button) => button.text().trim() === label);
+        .findAll('.ant-segmented-item')
+        .find((button) => button.text().trim().startsWith(label));
       expect(tab).toBeDefined();
-      await tab!.trigger('click');
+      await tab!.get('input').trigger('change');
       await flushPromises();
     };
 
@@ -293,10 +317,10 @@ describe('CustomerPage', () => {
     const wrapper = await mountPage(true);
     const clickTab = async (label: string) => {
       const tab = wrapper
-        .findAll('button')
-        .find((button) => button.text().trim() === label);
+        .findAll('.ant-segmented-item')
+        .find((button) => button.text().trim().startsWith(label));
       expect(tab).toBeDefined();
-      await tab!.trigger('click');
+      await tab!.get('input').trigger('change');
     };
     const readWidths = () =>
       Object.fromEntries(
@@ -306,25 +330,23 @@ describe('CustomerPage', () => {
       );
 
     await clickTab('制程注意事项');
-    expect(readWidths()).toMatchObject({
-      备注: 'width: 130px;',
-      操作: 'width: 96px;',
-      制程作用: 'width: 150px;',
-      制程分类: 'width: 104px;',
-      制程特性: 'width: 150px;',
-      sensor使用注意事项: 'width: 190px;',
-    });
+    const processWidths = readWidths();
+    expect(processWidths['备注']).toContain('width: 130px');
+    expect(processWidths['操作']).toContain('width: 96px');
+    expect(processWidths['制程作用']).toContain('width: 150px');
+    expect(processWidths['制程分类']).toContain('width: 104px');
+    expect(processWidths['制程特性']).toContain('width: 150px');
+    expect(processWidths['sensor使用注意事项']).toContain('width: 190px');
 
     await clickTab('厂外反馈问题项');
-    expect(readWidths()).toMatchObject({
-      反馈时间: 'width: 120px;',
-      处理状态: 'width: 90px;',
-      操作: 'width: 96px;',
-      改善对策: 'width: 205px;',
-      适用机型: 'width: 90px;',
-      问题分类: 'width: 168px;',
-      问题点: 'width: 205px;',
-    });
+    const feedbackWidths = readWidths();
+    expect(feedbackWidths['反馈时间']).toContain('width: 120px');
+    expect(feedbackWidths['处理状态']).toContain('width: 90px');
+    expect(feedbackWidths['操作']).toContain('width: 96px');
+    expect(feedbackWidths['改善对策']).toContain('width: 205px');
+    expect(feedbackWidths['适用机型']).toContain('width: 90px');
+    expect(feedbackWidths['问题分类']).toContain('width: 168px');
+    expect(feedbackWidths['问题点']).toContain('width: 205px');
     wrapper.unmount();
   });
 
@@ -375,10 +397,10 @@ describe('CustomerPage', () => {
       feedback!.id,
     );
     const tab = wrapper
-      .findAll('button')
-      .find((button) => button.text().trim() === '厂外反馈问题项');
+      .findAll('.ant-segmented-item')
+      .find((button) => button.text().trim().startsWith('厂外反馈问题项'));
     expect(tab).toBeDefined();
-    await tab!.trigger('click');
+    await tab!.get('input').trigger('change');
     await flushPromises();
 
     const historyButton = wrapper.find('button[aria-label="查看改善对策历史"]');
@@ -453,10 +475,10 @@ describe('CustomerPage', () => {
     }
 
     const tab = wrapper
-      .findAll('button')
-      .find((button) => button.text().trim() === '厂外反馈问题项');
+      .findAll('.ant-segmented-item')
+      .find((button) => button.text().trim().startsWith('厂外反馈问题项'));
     expect(tab).toBeDefined();
-    await tab!.trigger('click');
+    await tab!.get('input').trigger('change');
     await flushPromises();
 
     const tonesByStatus = Object.fromEntries(

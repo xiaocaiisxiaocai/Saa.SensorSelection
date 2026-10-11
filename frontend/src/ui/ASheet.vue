@@ -1,16 +1,5 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next';
 import { computed } from 'vue';
-import {
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  DialogRoot,
-  DialogTitle,
-  DialogTrigger,
-} from 'reka-ui';
-
-import AIconButton from './AIconButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -18,11 +7,6 @@ const props = withDefaults(
     width?: number | string;
     closeOnOverlay?: boolean;
     viewport?: boolean;
-    /**
-     * 关闭前的守卫：表单有未保存改动时返回 false（或 resolve false）可以
-     * 拦下这次关闭。遮罩点击、Esc、右上角关闭按钮都会经过它；
-     * 页脚“取消”按钮走页面自己的 `@click`，不受这里控制。
-     */
     confirmClose?: () => boolean | Promise<boolean>;
   }>(),
   {
@@ -33,185 +17,60 @@ const props = withDefaults(
 
 const open = defineModel<boolean>('open', { default: false });
 
-async function guardedClose(event?: Event) {
-  if (!props.confirmClose) {
-    open.value = false;
-    return;
-  }
-
-  event?.preventDefault();
-  if (await props.confirmClose()) {
-    open.value = false;
-  }
-}
-
 const panelWidth = computed(() => {
-  if (props.viewport) {
-    return 'calc(100vw - var(--space-8))';
-  }
-
-  if (props.width == null) {
-    return 'calc(var(--space-9) * 13)';
-  }
-
-  return typeof props.width === 'number' ? `${props.width}px` : props.width;
+  if (props.viewport) return 'calc(100vw - 48px)';
+  if (props.width == null) return 560;
+  return props.width;
 });
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+async function requestClose() {
+  if (props.confirmClose && !(await props.confirmClose())) return;
+  open.value = false;
+}
 
-function onDismissOutside(event: Event) {
-  if (!props.closeOnOverlay) {
-    event.preventDefault();
+function onUpdateOpen(next: boolean) {
+  if (next) {
+    open.value = true;
     return;
   }
-  if (props.confirmClose) {
-    event.preventDefault();
-    void guardedClose();
-  }
-}
-
-function onEscapeKeyDown(event: Event) {
-  if (props.confirmClose) {
-    event.preventDefault();
-    void guardedClose();
-  }
-}
-
-function onOpenAutoFocus(event: Event) {
-  event.preventDefault();
-  const sheet =
-    event.target instanceof HTMLElement
-      ? (event.target.closest('.a-sheet') ?? event.target)
-      : null;
-  const next = sheet
-    ?.querySelector<HTMLElement>('.a-sheet__body')
-    ?.querySelector<HTMLElement>(FOCUSABLE);
-  (next ?? (sheet instanceof HTMLElement ? sheet : null))?.focus();
+  void requestClose();
 }
 </script>
 
 <template>
-  <DialogRoot v-model:open="open">
-    <DialogTrigger v-if="$slots.trigger" as-child>
-      <slot name="trigger" />
-    </DialogTrigger>
-    <DialogPortal>
-      <DialogOverlay class="a-sheet__overlay" />
-      <DialogContent
-        class="a-sheet"
-        :class="{ 'a-sheet--viewport': viewport }"
-        aria-modal="true"
-        :aria-describedby="undefined"
-        :style="{ width: panelWidth }"
-        @open-auto-focus="onOpenAutoFocus"
-        @pointer-down-outside="onDismissOutside"
-        @interact-outside="onDismissOutside"
-        @escape-key-down="onEscapeKeyDown"
-      >
-        <header class="a-sheet__header">
-          <DialogTitle class="a-sheet__title">{{ title }}</DialogTitle>
-          <span class="a-sheet__close">
-            <AIconButton :icon="X" label="关闭" @click="guardedClose()" />
-          </span>
-        </header>
-        <div class="a-sheet__body">
-          <slot />
-        </div>
-        <footer v-if="$slots.footer" class="a-sheet__footer">
-          <slot name="footer" />
-        </footer>
-      </DialogContent>
-    </DialogPortal>
-  </DialogRoot>
+  <a-modal
+    class="a-sheet"
+    :wrap-class-name="viewport ? 'a-sheet--viewport' : undefined"
+    :open="open"
+    :title="title"
+    :width="panelWidth"
+    :mask-closable="closeOnOverlay"
+    :footer="$slots.footer ? undefined : null"
+    destroy-on-close
+    @update:open="onUpdateOpen"
+  >
+    <slot />
+    <template v-if="$slots.footer" #footer>
+      <slot name="footer" />
+    </template>
+  </a-modal>
 </template>
 
 <style>
-/* Teleported to document.body — do not scope. */
-.a-sheet {
-  --sheet-edge-gap: 56px;
+.a-sheet .ant-modal-body {
+  max-height: calc(100dvh - 220px);
+  overflow: auto;
+}
 
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  z-index: var(--z-overlay);
+/* 标题与第一个字段之间留出分组感（antd 默认只有 8px，几乎贴在一起） */
+.ant-modal.a-sheet .ant-modal-header {
+  margin-bottom: var(--space-5);
+}
+
+/* 直接放在弹窗里的表单行（不经 AFormGrid）与网格内的行用同一行距 */
+.ant-modal-wrap:not(.a-sheet--viewport) .a-sheet .ant-modal-body {
   display: flex;
   flex-direction: column;
-  max-width: calc(100vw - var(--space-8));
-
-  /* 上下各留 56px：底部居中的 toast（距底 16px、高约 34px）弹出时落在弹窗
-     下方的空白里，不再压在弹窗底边和底部按钮上。内容更长时弹窗内部滚动。 */
-  max-height: calc(100dvh - var(--sheet-edge-gap) * 2);
-  overflow: hidden;
-  color: var(--label);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-2xl);
-  box-shadow:
-    var(--shadow-4),
-    inset 0 0 0 0.5px var(--separator);
-  transform: translate(-50%, -50%);
-}
-
-.a-sheet[data-state='open'] {
-  animation: a-sheet-in var(--dur-3) var(--ease-sheet);
-}
-
-.a-sheet--viewport {
-  height: calc(100dvh - var(--space-8));
-  max-height: calc(100dvh - var(--space-8));
-}
-
-.a-sheet__header {
-  position: relative;
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  min-height: var(--row-height-loose);
-  padding: var(--space-3) var(--space-8);
-}
-
-.a-sheet__title {
-  margin: 0;
-  font: var(--text-headline);
-  font-weight: 600;
-  letter-spacing: var(--tracking-title-2);
-  text-align: center;
-}
-
-.a-sheet__close {
-  position: absolute;
-  top: 50%;
-  right: var(--space-4);
-  transform: translateY(-50%);
-}
-
-.a-sheet__body {
-  min-width: 0;
-  min-height: 0;
-  padding: var(--space-5);
-  overflow: hidden auto;
-}
-
-.a-sheet__footer {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-3);
-  align-items: center;
-  justify-content: flex-end;
-  padding: var(--space-4) var(--space-5);
-}
-
-.a-sheet--viewport .a-sheet__body {
-  display: flex;
-  flex: 1;
-  padding: var(--space-3);
-  overflow: hidden;
-}
-
-.a-sheet--viewport .a-pdf-viewer {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
+  gap: var(--space-2);
 }
 </style>

@@ -30,8 +30,8 @@ describe('SearchPage', () => {
     expect(wrapper.text()).toContain('搜索“庆鼎”');
     expect(wrapper.text()).toContain('客户');
     expect(wrapper.find('mark').text()).toBe('庆鼎');
-    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toMatch(
-      /全部\d+/,
+    expect(wrapper.get('.ant-segmented-item-selected').text()).toMatch(
+      /全部\s*\d+/,
     );
     wrapper.unmount();
   });

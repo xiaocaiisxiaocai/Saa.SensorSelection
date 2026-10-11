@@ -57,8 +57,8 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'name', label: '名称', minWidth: 220, align: 'start', fixed: 'start' },
     { key: 'level', label: '层级', width: 100 },
     // 计数列右对齐：表格已启用等宽数字，右对齐才能逐位比较大小。
-    { key: 'childCount', label: '子节点', width: 88, align: 'end' },
-    { key: 'userCount', label: '人数', width: 72, align: 'end' },
+    { key: 'childCount', label: '子节点', width: 88, align: 'center' },
+    { key: 'userCount', label: '人数', width: 72, align: 'center' },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });

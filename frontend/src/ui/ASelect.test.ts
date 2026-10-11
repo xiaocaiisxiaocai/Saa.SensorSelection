@@ -1,13 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import ASelect from './ASelect.vue';
 import AFormRow from './AFormRow.vue';
+import ASelect from './ASelect.vue';
 import type { SelectOption } from './types';
 
 const options: SelectOption[] = [
@@ -16,32 +11,32 @@ const options: SelectOption[] = [
   { label: '停用', value: 'retired', disabled: true },
   { label: 'OMRON E3Z-D61', value: 'e3z', hint: '漫反射' },
 ];
-const selectSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'ASelect.vue'),
-  'utf8',
-);
-const menuSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'menu.css'),
-  'utf8',
-);
+
+function visibleOptions(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')];
+}
+
+async function openSelect(wrapper: ReturnType<typeof mount>) {
+  await wrapper.get('.ant-select-selector').trigger('mousedown');
+  await flushPromises();
+}
 
 describe('ASelect', () => {
   afterEach(() => {
     document.body.innerHTML = '';
   });
 
-  it('exposes combobox semantics and the placeholder', () => {
+  it('shows the placeholder and uses it as the accessible name', () => {
     const wrapper = mount(ASelect, {
       props: { options, placeholder: '选择状态' },
     });
-    const trigger = wrapper.get('[role="combobox"]');
 
-    expect(trigger.attributes('aria-expanded')).toBe('false');
-    expect(trigger.attributes('aria-label')).toBe('选择状态');
-    expect(trigger.text()).toContain('选择状态');
+    expect(wrapper.get('.a-select').classes()).toContain('a-select');
+    expect(wrapper.get('.ant-select-selection-placeholder').text()).toBe('选择状态');
+    expect(wrapper.get('.a-select').attributes('aria-label')).toBe('选择状态');
   });
 
-  it('allows a standalone selector to expose a more specific accessible name', () => {
+  it('prefers an explicit accessible name over the placeholder', () => {
     const wrapper = mount(ASelect, {
       props: {
         ariaLabel: '工艺制程筛选',
@@ -50,43 +45,31 @@ describe('ASelect', () => {
       },
     });
 
-    expect(wrapper.get('[role="combobox"]').attributes('aria-label')).toBe(
-      '工艺制程筛选',
-    );
+    expect(wrapper.get('.a-select').attributes('aria-label')).toBe('工艺制程筛选');
   });
 
-  it('keeps the visible form-row label as the accessible name', () => {
+  it('uses the visible form-row label as the accessible name', () => {
     const wrapper = mount({
       components: { AFormRow, ASelect },
       data: () => ({ options }),
       template:
         '<AFormRow label="状态"><ASelect :options="options" placeholder="请选择状态" /></AFormRow>',
     });
-    const trigger = wrapper.get('[role="combobox"]');
-    const label = wrapper.get('label');
+    const combobox = wrapper.get('[role="combobox"]');
 
-    expect(trigger.attributes('aria-label')).toBeUndefined();
-    expect(label.attributes('for')).toBe(trigger.attributes('id'));
-    expect(label.text()).toBe('状态');
+    expect(wrapper.get('.a-select').attributes('aria-label')).toBeUndefined();
+    expect(wrapper.get('label').attributes('for')).toBe(combobox.attributes('id'));
+    expect(wrapper.get('label').text()).toContain('状态');
   });
 
-  it('shows the selected label and marks the option selected', async () => {
+  it('shows the selected label, including a hint', () => {
     const wrapper = mount(ASelect, {
-      attachTo: document.body,
-      props: { options, modelValue: 'backup', placeholder: '选择状态' },
+      props: { options, modelValue: 'e3z', placeholder: '选择状态' },
     });
 
-    expect(wrapper.get('[role="combobox"]').text()).toContain('备选');
-
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    const selected = document.querySelector(
-      '[role="option"][aria-selected="true"]',
+    expect(wrapper.get('.ant-select-selection-item').text()).toBe(
+      'OMRON E3Z-D61（漫反射）',
     );
-    expect(selected?.textContent).toContain('备选');
-
-    wrapper.unmount();
   });
 
   it('updates the model when an enabled option is chosen', async () => {
@@ -95,42 +78,28 @@ describe('ASelect', () => {
       props: { options, placeholder: '选择状态' },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (node) => node.textContent?.includes('现用'),
-    );
-    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
+    await openSelect(wrapper);
+    const option = visibleOptions().find((node) => node.textContent?.includes('现用'));
+    expect(option).toBeTruthy();
+    option?.click();
+    await flushPromises();
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['active']);
-    expect(document.querySelector('.a-popover[data-state="open"]')).toBeNull();
-
     wrapper.unmount();
   });
 
-  it('closes and keeps the value when the selected option is picked again', async () => {
+  it('marks the current option selected', async () => {
     const wrapper = mount(ASelect, {
       attachTo: document.body,
       props: { options, modelValue: 'backup', placeholder: '选择状态' },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
+    expect(wrapper.get('.ant-select-selection-item').text()).toContain('备选');
+    await openSelect(wrapper);
 
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (node) => node.textContent?.includes('备选'),
-    );
-    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
-
-    expect(document.querySelector('.a-popover[data-state="open"]')).toBeNull();
-    expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([
-      null,
-    ]);
-    expect(wrapper.get('[role="combobox"]').text()).toContain('备选');
-
+    const selected = document.querySelector('.ant-select-item-option-selected');
+    expect(selected?.textContent).toContain('备选');
+    expect(selected?.getAttribute('aria-selected')).toBe('true');
     wrapper.unmount();
   });
 
@@ -140,17 +109,13 @@ describe('ASelect', () => {
       props: { options, placeholder: '选择状态' },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    const option = [...document.querySelectorAll('[role="option"]')].find(
-      (node) => node.textContent?.includes('停用'),
-    );
-    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
+    await openSelect(wrapper);
+    const option = visibleOptions().find((node) => node.textContent?.includes('停用'));
+    expect(option?.className).toContain('ant-select-item-option-disabled');
+    option?.click();
+    await flushPromises();
 
     expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-
     wrapper.unmount();
   });
 
@@ -160,56 +125,13 @@ describe('ASelect', () => {
       props: { options, filterable: true, placeholder: '选择状态' },
     });
 
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
+    await openSelect(wrapper);
+    await wrapper.get('input[role="combobox"]').setValue('omron');
+    await flushPromises();
 
-    const filter = document.querySelector('input');
-    expect(filter).not.toBeNull();
-    if (filter) {
-      filter.value = 'omron';
-      filter.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    await nextTick();
-
-    const labels = [...document.querySelectorAll('[role="option"]')].map(
-      (node) => node.textContent,
-    );
-    expect(labels.some((text) => text?.includes('OMRON'))).toBe(true);
-    expect(labels.some((text) => text?.includes('现用'))).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it('keeps compact option labels on one line while the panel can grow', async () => {
-    const boardOptions: SelectOption[] = [
-      { label: '电镀 · PTH电镀', value: 'pth' },
-      { label: '电镀 · VCP电镀', value: 'vcp' },
-    ];
-    const wrapper = mount(ASelect, {
-      attachTo: document.body,
-      props: {
-        options: boardOptions,
-        filterable: true,
-        placeholder: '板件特性',
-      },
-    });
-
-    await wrapper.get('[role="combobox"]').trigger('click');
-    await nextTick();
-
-    expect(document.querySelector('.a-popover--min-trigger')).not.toBeNull();
-    expect(document.querySelector('.a-popover--match-trigger')).toBeNull();
-    expect(
-      document
-        .querySelector('[role="option"] .a-menu-item__label')
-        ?.getAttribute('title'),
-    ).toBe('电镀 · PTH电镀');
-    expect(selectSource).toContain('min-trigger-width');
-    expect(menuSource).toMatch(
-      /\.a-menu-item__text \.a-menu-item__label,[\s\S]*?white-space:\s*nowrap;/,
-    );
-    expect(menuSource).toMatch(/word-break:\s*keep-all;/);
-
+    const labels = visibleOptions().map((node) => node.textContent ?? '');
+    expect(labels.some((text) => text.includes('OMRON'))).toBe(true);
+    expect(labels.some((text) => text.includes('现用'))).toBe(false);
     wrapper.unmount();
   });
 
@@ -223,8 +145,28 @@ describe('ASelect', () => {
       },
     });
 
-    await wrapper.get('[aria-label="清除"]').trigger('click');
-
+    await wrapper.get('.ant-select-clear').trigger('mousedown');
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([null]);
+  });
+
+  it('does not render a clear control unless clearable', () => {
+    const wrapper = mount(ASelect, {
+      props: { options, modelValue: 'active', placeholder: '选择状态' },
+    });
+
+    expect(wrapper.find('.ant-select-clear').exists()).toBe(false);
+  });
+
+  it('does not open when disabled', async () => {
+    const wrapper = mount(ASelect, {
+      attachTo: document.body,
+      props: { options, disabled: true, placeholder: '选择状态' },
+    });
+
+    expect(wrapper.get('.a-select').classes()).toContain('ant-select-disabled');
+    expect(wrapper.get('[role="combobox"]').attributes('disabled')).toBeDefined();
+    await openSelect(wrapper);
+    expect(visibleOptions()).toHaveLength(0);
+    wrapper.unmount();
   });
 });

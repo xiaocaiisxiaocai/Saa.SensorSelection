@@ -19,6 +19,8 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@fontsource/noto-sans-sc": "^5.2.8",
+    "ant-design-vue": "4",
+    "dayjs": "^1.11.23",
     "lucide-vue-next": "^0.544.0",
     "pdfjs-dist": "^6.2.108",
     "pinia": "^3.0.3",
@@ -47,6 +49,9 @@
     "vue-tsc": "^3.0.6"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "vue-demi"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "vue-demi"
+    ]
   }
 }

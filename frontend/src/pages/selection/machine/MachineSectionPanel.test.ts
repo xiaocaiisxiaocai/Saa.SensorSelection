@@ -162,8 +162,11 @@ describe('MachineSectionPanel', () => {
       'matchMedia',
       vi.fn(() => ({
         addEventListener: vi.fn(),
+        addListener: vi.fn(),
         matches: false,
+        media: '',
         removeEventListener: vi.fn(),
+        removeListener: vi.fn(),
       })),
     );
 

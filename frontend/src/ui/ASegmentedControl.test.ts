@@ -1,16 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import ASegmentedControl from './ASegmentedControl.vue';
-
-const source = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'ASegmentedControl.vue'),
-  'utf8',
-);
 
 const segments = [
   { label: '要求', value: 'req' },
@@ -19,73 +10,65 @@ const segments = [
 ];
 
 describe('ASegmentedControl', () => {
-  it('exposes tablist semantics and the selected tab', () => {
+  it('renders the native segmented options, the selected item, and its badge', () => {
     const wrapper = mount(ASegmentedControl, {
-      props: { modelValue: 'proc', segments },
+      props: { ariaLabel: '客户资料分类', modelValue: 'proc', segments },
     });
+    const items = wrapper.findAll('.ant-segmented-item');
 
-    expect(wrapper.get('[role="tablist"]').attributes('role')).toBe('tablist');
-    const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs).toHaveLength(3);
-    expect(tabs[1]?.attributes('aria-selected')).toBe('true');
-    expect(tabs[1]?.text()).toContain('3');
+    expect(wrapper.get('.a-segmented').attributes('aria-label')).toBe(
+      '客户资料分类',
+    );
+    expect(items).toHaveLength(3);
+    expect(items[0]?.classes()).not.toContain('ant-segmented-item-selected');
+    expect(items[1]?.classes()).toContain('ant-segmented-item-selected');
+    expect(items[1]?.text()).toContain('制程');
+    expect(items[1]?.text()).toContain('3');
+    expect(items[2]?.classes()).not.toContain('ant-segmented-item-selected');
   });
 
   it('emits the clicked segment', async () => {
     const wrapper = mount(ASegmentedControl, {
       props: { modelValue: 'req', segments },
     });
+    const docs = wrapper
+      .findAll('.ant-segmented-item')
+      .find((item) => item.text().includes('文档'));
 
-    await wrapper.findAll('[role="tab"]')[2]?.trigger('click');
+    await docs!.get('input').trigger('change');
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['docs']);
   });
 
-  it('moves the selection with arrow keys', async () => {
-    const wrapper = mount(ASegmentedControl, {
-      props: { modelValue: 'req', segments },
-    });
-
-    await wrapper.get('[role="tablist"]').trigger('keydown', { key: 'ArrowRight' });
-    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['proc']);
-  });
-
-  it('keeps long tab sets horizontally scrollable instead of clipping them', () => {
-    expect(source).toMatch(/\.a-segmented\s*\{[^}]*overflow:\s*auto hidden;/s);
-  });
-
-  it('wires tab/tabpanel ids from the id prop so callers can associate their content', () => {
+  it('stamps option ids from the id prop and exposes tab and panel ids', () => {
     const wrapper = mount(ASegmentedControl, {
       props: { id: 'demo-tabs', modelValue: 'proc', segments },
     });
 
-    const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs[1]?.attributes('id')).toBe('demo-tabs-tab-proc');
-    expect(tabs[1]?.attributes('aria-controls')).toBe('demo-tabs-panel-proc');
+    expect(wrapper.vm.tabId('proc')).toBe('demo-tabs-tab-proc');
+    expect(wrapper.vm.panelId('docs')).toBe('demo-tabs-panel-docs');
+
+    for (const segment of segments) {
+      const tabId = `demo-tabs-tab-${segment.value}`;
+      const owned = wrapper.get(`#${tabId}`);
+      const item = wrapper
+        .findAll('.ant-segmented-item')
+        .find((node) => node.text().includes(segment.label));
+      expect(item?.element.contains(owned.element)).toBe(true);
+    }
   });
 
-  it('omits id/aria-controls entirely when no id prop is given', () => {
+  it('keeps exposed ids aligned with the rendered options when no id is passed', () => {
     const wrapper = mount(ASegmentedControl, {
-      props: { modelValue: 'proc', segments },
+      props: { modelValue: 'req', segments },
     });
 
-    const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs[1]?.attributes('id')).toBeUndefined();
-    expect(tabs[1]?.attributes('aria-controls')).toBeUndefined();
-  });
-
-  it('labels the tablist and hides the decorative thumb from the a11y tree', () => {
-    const wrapper = mount(ASegmentedControl, {
-      props: { ariaLabel: '客户资料分类', modelValue: 'proc', segments },
-    });
-
-    const tablist = wrapper.get('[role="tablist"]');
-    expect(tablist.attributes('aria-label')).toBe('客户资料分类');
-
-    const strays = [...tablist.element.children].filter(
-      (child) =>
-        child.getAttribute('role') !== 'tab' &&
-        child.getAttribute('aria-hidden') !== 'true',
-    );
-    expect(strays).toHaveLength(0);
+    for (const segment of segments) {
+      const tabId = wrapper.vm.tabId(segment.value);
+      expect(tabId.endsWith(`-tab-${segment.value}`)).toBe(true);
+      expect(wrapper.vm.panelId(segment.value).endsWith(`-panel-${segment.value}`)).toBe(
+        true,
+      );
+      expect(wrapper.find(`#${CSS.escape(tabId)}`).exists()).toBe(true);
+    }
   });
 });

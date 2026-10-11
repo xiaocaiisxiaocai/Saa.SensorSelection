@@ -1222,7 +1222,9 @@ onMounted(restoreWidth);
 
 .machine-tree-row--item:hover,
 .machine-tree-row--item.is-selected {
-  background: var(--sys-blue-fill);
+  --row-bg: var(--sys-blue-fill-opaque);
+
+  background: var(--row-bg);
   color: var(--sys-blue);
 }
 
@@ -1322,11 +1324,14 @@ onMounted(restoreWidth);
   top: 50%;
   right: var(--space-1);
   display: inline-flex;
-  gap: 1px;
+
+  /* 按钮各自独立（间距 + 各自的悬停底），底色跟随所在行：
+     以前固定白底，在蓝色选中/悬停行上是一块突兀的白色补丁 */
+  gap: var(--space-2);
   pointer-events: none;
-  background: var(--bg-content);
-  border-radius: var(--radius-sm);
-  box-shadow: calc(var(--space-2) * -2) 0 var(--space-2) var(--bg-content);
+  background: var(--row-bg, var(--bg-content));
+  box-shadow: calc(var(--space-3) * -1) 0 var(--space-3)
+    var(--row-bg, var(--bg-content));
   opacity: 0;
   transform: translateY(-50%);
 }

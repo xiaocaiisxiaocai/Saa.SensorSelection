@@ -1,28 +1,41 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { mount } from '@vue/test-utils';
 import { h, nextTick } from 'vue';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import ATable from './ATable.vue';
-import ATooltip from './ATooltip.vue';
-import type { TableColumn } from './types';
+import type { TableColumn, TableSortState } from './types';
 
-const tableSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'ATable.vue'),
-  'utf8',
-);
+function mountTable<T>(options: {
+  props: {
+    columns: TableColumn<T>[];
+    rows: T[];
+    rowKey: string | ((row: T) => string | number);
+    emptyText?: string;
+    loading?: boolean;
+    striped?: boolean;
+    rowHeight?: 'compact' | 'loose';
+    virtual?: boolean;
+    selectedKey?: string | number | null;
+    sort?: TableSortState | null;
+  };
+  slots?: object;
+}) {
+  // vue-test-utils instantiates the generic SFC as unknown, which rejects
+  // TableColumn<T> under strictFunctionTypes. The helper keeps that check.
+  return mount(ATable, options as never);
+}
 
 interface SensorRow {
   id: string;
   model: string;
-  note: string;
+  note?: string | null;
+  group?: string;
+  detail?: string;
+  actions?: string;
 }
 
-const columns: TableColumn[] = [
-  { key: 'model', label: '型号', mono: true },
+const columns: TableColumn<SensorRow>[] = [
+  { key: 'model', label: '型号' },
   { key: 'note', label: '说明' },
   { key: 'actions', label: '操作', fixed: 'end' },
 ];
@@ -32,574 +45,380 @@ const rows: SensorRow[] = [
   { id: '2', model: 'PZ-G41', note: '对射' },
 ];
 
-describe('ATable', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
+function antTable(wrapper: ReturnType<typeof mount>) {
+  const match = wrapper
+    .findAllComponents({ name: 'ATable' })
+    .find((item) => {
+      const first = (item.props('columns') as { title?: string }[] | undefined)?.[0];
+      return Boolean(first && 'title' in first);
+    });
+  if (!match) throw new Error('ant table not found');
+  return match;
+}
 
-  it('renders a labelled data table', () => {
-    const wrapper = mount(ATable, {
+function columnProps(wrapper: ReturnType<typeof mount>) {
+  return antTable(wrapper).props('columns') as Array<{
+    title: string;
+    dataIndex: string;
+    key: string;
+    width?: number;
+    align?: string;
+    fixed?: string;
+    sorter?: boolean;
+    sortOrder?: 'ascend' | 'descend' | null;
+    customCell?: (row: SensorRow, index?: number) => { rowSpan?: number };
+    customHeaderCell?: () => { style?: Record<string, string> };
+  }>;
+}
+
+function dataRows(wrapper: ReturnType<typeof mount>) {
+  return wrapper.findAll('tbody tr.ant-table-row');
+}
+
+describe('ATable', () => {
+  it('renders labelled columns and row text in an ant table', () => {
+    const wrapper = mountTable( {
       props: { columns, rows, rowKey: 'id' },
     });
 
-    expect(wrapper.get('table')).toBeTruthy();
     expect(wrapper.get('.a-table').classes()).toContain('a-table');
-    expect(wrapper.get('th').attributes('scope')).toBe('col');
-    expect(wrapper.get('th').classes()).toContain('a-table__cell--start');
-    expect(wrapper.get('td').classes()).toContain('a-table__cell--start');
-    expect(wrapper.get('td .a-table__ellipsis').text()).toContain('E3Z-D61');
+    expect(wrapper.find('table').exists()).toBe(true);
     expect(wrapper.text()).toContain('型号');
     expect(wrapper.text()).toContain('E3Z-D61');
+    expect(wrapper.text()).toContain('对射');
+    expect(antTable(wrapper).props('pagination')).toBe(false);
+    expect(wrapper.get('.a-table').attributes('aria-busy')).toBeUndefined();
+
+    const rendered = columnProps(wrapper);
+    expect(rendered.map((column) => column.title)).toEqual(['型号', '说明', '操作']);
+    expect(rendered.map((column) => column.dataIndex)).toEqual([
+      'model',
+      'note',
+      'actions',
+    ]);
+    expect(rendered[2]?.fixed).toBe('right');
   });
 
-  it('wraps body content while keeping table headers on one line', () => {
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
-      props: { columns, rows, rowKey: 'id' },
-    });
-
-    expect(wrapper.get('thead .a-table__ellipsis').classes()).toContain(
-      'a-table__header-content',
-    );
-    expect(wrapper.get('tbody .a-table__ellipsis').classes()).toContain(
-      'a-table__body-content',
-    );
-
-    wrapper.unmount();
-  });
-
-  it('uses start alignment when a column requests it', () => {
-    const wrapper = mount(ATable, {
-      props: {
-        columns: [{ key: 'model', label: '型号', align: 'start' }],
-        rows,
-        rowKey: 'id',
-      },
-    });
-
-    expect(wrapper.get('th').classes()).toContain('a-table__cell--start');
-    expect(wrapper.get('td').classes()).toContain('a-table__cell--start');
-  });
-
-  it('keeps declared column widths instead of crushing text on narrow screens', () => {
-    const wrapper = mount(ATable, {
+  it('maps alignment, width, minWidth, and fixed edges onto ant columns', () => {
+    const wrapper = mountTable( {
       props: {
         columns: [
-          { key: 'model', label: '型号', width: 100 },
-          { key: 'note', label: '说明', minWidth: 220 },
-          { key: 'actions', label: '操作' },
+          { key: 'model', label: '型号', width: 100, align: 'end', fixed: 'start' },
+          { key: 'note', label: '说明', minWidth: 220, align: 'center' },
+          { key: 'actions', label: '操作', align: 'start', fixed: 'end' },
         ],
         rows,
         rowKey: 'id',
       },
     });
 
-    expect(wrapper.get('table').attributes('style')).toContain(
-      'min-width: 440px',
-    );
-  });
-
-  it('keeps a fixed-start identity column visible during horizontal scrolling', () => {
-    const wrapper = mount(ATable, {
-      props: {
-        columns: [
-          { key: 'model', label: '型号', fixed: 'start' },
-          { key: 'note', label: '说明', minWidth: 400 },
-        ],
-        rows,
-        rowKey: 'id',
-      },
+    const rendered = columnProps(wrapper);
+    expect(rendered[0]).toMatchObject({
+      width: 100,
+      align: 'right',
+      fixed: 'left',
     });
-
-    expect(wrapper.get('th').classes()).toContain('a-table__cell--fixed-start');
-    expect(wrapper.get('td').classes()).toContain('a-table__cell--fixed-start');
-  });
-
-  it('ignores fixed-start on non-leading columns to prevent overlap', () => {
-    const wrapper = mount(ATable, {
-      props: {
-        columns: [
-          { key: 'note', label: '说明' },
-          { key: 'model', label: '型号', fixed: 'start' },
-        ],
-        rows,
-        rowKey: 'id',
-      },
+    // minWidth 列不写 width，只在表头单元格上设 min-width，让它吸收多余宽度。
+    expect(rendered[1]).toMatchObject({ align: 'center' });
+    expect(rendered[1]?.width).toBeUndefined();
+    expect(rendered[1]?.customHeaderCell?.().style).toEqual({
+      minWidth: '220px',
     });
-
-    expect(wrapper.findAll('th')[1]?.classes()).not.toContain(
-      'a-table__cell--fixed-start',
-    );
-    expect(wrapper.findAll('td')[1]?.classes()).not.toContain(
-      'a-table__cell--fixed-start',
-    );
+    expect(rendered[1]?.fixed).toBeUndefined();
+    expect(rendered[2]).toMatchObject({ align: 'left', fixed: 'right' });
   });
 
-  it('releases fixed columns on narrow screens', () => {
-    expect(tableSource).toMatch(
-      /@media \(width <= 40rem\)[\s\S]*\.a-table__cell--fixed\s*\{[^}]*position:\s*static;/s,
-    );
-  });
-
-  it('flags which sides carry a sticky column so edge shadows can skip them', () => {
-    const withEnd = mount(ATable, { props: { columns, rows, rowKey: 'id' } });
-    expect(withEnd.get('.a-table').classes()).toContain('a-table--fixed-end');
-    expect(withEnd.get('.a-table').classes()).not.toContain('a-table--fixed-start');
-
-    const plain = mount(ATable, {
-      props: {
-        columns: [
-          { key: 'model', label: '型号' },
-          { key: 'note', label: '说明', fixed: 'start' },
-        ],
-        rows,
-        rowKey: 'id',
-      },
-    });
-    expect(plain.get('.a-table').classes()).not.toContain('a-table--fixed-start');
-    expect(plain.get('.a-table').classes()).not.toContain('a-table--fixed-end');
-  });
-
-  it('never paints the container scroll shadow behind a sticky column', () => {
-    // 固定列只铺到最后一行，容器内阴影会在行下方空白处露成竖带
-    expect(tableSource).toMatch(
-      /\.a-table--overflow-end:not\(\.a-table--fixed-end\)\s*\{[^}]*--a-table-edge-end:/,
-    );
-    expect(tableSource).toMatch(
-      /\.a-table--overflow-start:not\(\.a-table--fixed-start\)\s*\{[^}]*--a-table-edge-start:/,
-    );
-    expect(tableSource).not.toMatch(/box-shadow:\s*inset -20px/);
-  });
-
-  it('fades content sliding under a sticky column instead of hard-cutting it', () => {
-    // overflow:hidden 会把探出单元格的渐变一起裁掉；border-collapse 下 Chrome
-    // 又不画 td 的外阴影。只能用 clip-path 在渐变一侧放宽裁剪。
-    const fixedRule = tableSource.match(/^\.a-table__cell--fixed \{([^}]*)\}/m)?.[1] ?? '';
-    expect(fixedRule).toContain('position: sticky');
-    expect(fixedRule).toMatch(/overflow:\s*visible;/);
-    expect(tableSource).toMatch(
-      /\.a-table__cell--fixed-end\s*\{[^}]*clip-path:\s*inset\(0 0 0 calc\(var\(--a-table-fade\) \* -1\)\);/,
-    );
-    expect(tableSource).toMatch(
-      /\.a-table--overflow-end \.a-table__cell--fixed-end::before,\s*\.a-table--overflow-start \.a-table__cell--fixed-start::before\s*\{[^}]*opacity:\s*1;/,
-    );
-  });
-
-  it('keeps sticky cells opaque on hovered and selected rows', () => {
-    // 直接继承行的半透明底色会让滚到下面的内容透出来
-    expect(tableSource).not.toMatch(/\.a-table__cell--fixed[^{]*\{\s*background:\s*inherit;/);
-    expect(tableSource).toMatch(
-      /\.a-table tbody tr\.a-table__row--selected \.a-table__cell--fixed\s*\{[^}]*--a-table-row-tint:\s*var\(--sys-blue-fill\);/,
-    );
-  });
-
-  it('uses a theme-safe shadow colour instead of a text colour for scroll edges', () => {
-    // --label-2 在暗色主题是浅色，拿它画阴影会变成一条白带
-    expect(tableSource).not.toMatch(/box-shadow:[^;]*var\(--label-2\)/);
-    expect(tableSource).toMatch(/var\(--shadow-scroll-edge\)/);
-  });
-
-  it('renders empty cells with a UI-font em dash even in mono columns', () => {
-    const wrapper = mount(ATable, {
-      props: {
-        columns: [
-          { key: 'model', label: '型号', mono: true },
-          { key: 'note', label: '说明' },
-        ],
-        rows: [{ id: '1', model: '', note: '  ' }],
-        rowKey: 'id',
-      },
-    });
-
-    const placeholders = wrapper.findAll('td .a-table__placeholder');
-    expect(placeholders).toHaveLength(2);
-    expect(placeholders.every((node) => node.text() === '—')).toBe(true);
-    // 等宽字体会把长横画成短横，占位符必须回到界面字体
-    expect(tableSource).toMatch(
-      /\.a-table :deep\(\.a-table__placeholder\)\s*\{[^}]*font-family:\s*var\(--font-ui\);/,
-    );
-  });
-
-  it('uses tabular figures for consistent numeric comparison', () => {
-    expect(tableSource).toMatch(/font-variant-numeric:\s*tabular-nums;/);
-  });
-
-  it('renders a custom cell slot', () => {
-    const wrapper = mount(ATable, {
+  it('renders a custom cell slot with the row', () => {
+    const wrapper = mountTable( {
       props: { columns, rows, rowKey: 'id' },
       slots: {
-        'cell-model': (props: { row: unknown }) =>
-          `#${(props.row as SensorRow).model}`,
+        'cell-model': ({ row }: { row: SensorRow }) => `#${row.model}`,
+        'cell-note': ({ value }: { value: unknown }) => `值:${String(value)}`,
       },
     });
 
     expect(wrapper.text()).toContain('#E3Z-D61');
+    expect(wrapper.text()).toContain('#PZ-G41');
+    expect(wrapper.text()).toContain('值:漫反射');
+    expect(wrapper.text()).toContain('值:对射');
   });
 
-  it('shows the full custom cell text when a nested element is truncated', async () => {
-    const fullSpec =
-      'OMRON E3Z-D61 · 检测距离 0~300mm；12~24V DC；PNP/NPN；IP67';
-    const wrapper = mount(ATable, {
-      props: {
-        columns: [{ key: 'spec', label: '规格' }],
-        rows: [{ id: '1', spec: fullSpec }],
-        rowKey: 'id',
-      },
-      slots: {
-        'cell-spec': (props: { value: unknown }) =>
-          h('div', { class: 'spec-lines' }, String(props.value)),
-      },
-    });
-
-    const cell = wrapper.findAll('.a-table__ellipsis')[1];
-    expect(cell).toBeTruthy();
-    if (!cell) return;
-    const nestedContent = cell.get('.spec-lines').element;
-    Object.defineProperty(cell.element, 'clientWidth', {
-      value: 244,
-      configurable: true,
-    });
-    Object.defineProperty(cell.element, 'scrollWidth', {
-      value: 244,
-      configurable: true,
-    });
-    Object.defineProperty(nestedContent, 'clientWidth', {
-      value: 244,
-      configurable: true,
-    });
-    Object.defineProperty(nestedContent, 'scrollWidth', {
-      value: 430,
-      configurable: true,
-    });
-
-    await cell.trigger('mouseenter');
-    await nextTick();
-
-    const tooltip = wrapper.findAllComponents(ATooltip)[1];
-    expect(tooltip?.props('content')).toBe(fullSpec);
-    expect(tooltip?.props('disabled')).toBe(false);
-  });
-
-  it('supports row-spanned cells while keeping detail cells on each physical row', () => {
-    const groupedRows = [
-      { id: '1-a', group: '进板检测', detail: '漫反射' },
-      { id: '1-b', group: '进板检测', detail: '对射' },
-    ];
-    const wrapper = mount(ATable, {
+  it('renders an em dash for null and blank cells', () => {
+    const wrapper = mountTable( {
       props: {
         columns: [
-          {
-            key: 'group',
-            label: '功能作用',
-            rowSpan: (_row, index) => (index === 0 ? 2 : 0),
-          },
-          { key: 'detail', label: '传感器类型' },
+          { key: 'model', label: '型号' },
+          { key: 'note', label: '说明' },
+          { key: 'missing', label: '缺失' },
         ],
-        rows: groupedRows,
+        rows: [{ id: '1', model: '', note: '   ' }],
         rowKey: 'id',
       },
     });
 
-    expect(wrapper.findAll('tbody tr')).toHaveLength(2);
-    expect(
-      wrapper.findAll('tbody tr')[0]?.find('td')?.attributes('rowspan'),
-    ).toBe('2');
-    expect(wrapper.findAll('tbody tr')[1]?.findAll('td')).toHaveLength(1);
-    expect(wrapper.text()).toContain('漫反射');
-    expect(wrapper.text()).toContain('对射');
+    const cells = dataRows(wrapper)[0]?.findAll('td') ?? [];
+    expect(cells.map((cell) => cell.text())).toEqual(['—', '—', '—']);
   });
 
-  it('shows an empty state when there are no rows', () => {
-    const wrapper = mount(ATable, {
-      props: { columns, rows: [], rowKey: 'id', emptyText: '暂无型号' },
+  it('shows the default empty text, or the empty slot when one is provided', () => {
+    const defaults = mountTable( {
+      props: { columns, rows: [], rowKey: 'id' },
     });
+    expect(defaults.text()).toContain('暂无数据');
+    expect(defaults.getComponent({ name: 'AEmpty' }).props('description')).toBe(
+      '暂无数据',
+    );
+    expect(dataRows(defaults)).toHaveLength(0);
 
-    expect(wrapper.text()).toContain('暂无型号');
-    expect(wrapper.find('tbody tr').exists()).toBe(false);
+    const custom = mountTable( {
+      props: { columns, rows: [], rowKey: 'id', emptyText: '暂无型号' },
+      slots: { empty: '<p class="custom-empty">没有型号</p>' },
+    });
+    expect(custom.get('.custom-empty').text()).toBe('没有型号');
+    expect(custom.findComponent({ name: 'AEmpty' }).exists()).toBe(false);
+    expect(custom.text()).not.toContain('暂无型号');
   });
 
   it('marks the table busy while loading', () => {
-    const wrapper = mount(ATable, {
+    const wrapper = mountTable( {
       props: { columns, rows, rowKey: 'id', loading: true },
     });
 
     expect(wrapper.get('.a-table').attributes('aria-busy')).toBe('true');
-    expect(wrapper.find('.a-spinner').exists()).toBe(true);
+    expect(antTable(wrapper).props('loading')).toBe(true);
+    expect(wrapper.find('.ant-spin-spinning').exists()).toBe(true);
   });
 
-  it('moves row focus with the arrow keys', async () => {
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
-      props: { columns, rows, rowKey: 'id' },
+  it('sorts through ascending, descending, and cleared using the sort model', async () => {
+    const sortable: TableColumn<SensorRow>[] = [
+      { key: 'model', label: '型号', sortable: true },
+      { key: 'note', label: '说明', sortable: true },
+    ];
+    const unsorted: SensorRow[] = [
+      { id: '1', model: 'PZ-G41', note: '对射' },
+      { id: '2', model: 'E3Z-D61', note: '漫反射' },
+    ];
+    const wrapper = mountTable( {
+      props: { columns: sortable, rows: unsorted, rowKey: 'id' },
     });
+    const header = () => {
+      const cell = wrapper
+        .findAll('th.ant-table-column-has-sorters')
+        .find((item) => item.text().includes('型号'));
+      if (!cell) throw new Error('sortable model header not found');
+      return cell;
+    };
+    const models = () => dataRows(wrapper).map((row) => row.findAll('td')[0]?.text());
 
-    const first = wrapper.get('tbody tr');
-    await first.trigger('keydown', { key: 'ArrowDown' });
+    await header().trigger('click');
     await nextTick();
+    expect(wrapper.emitted('update:sort')?.[0]).toEqual([
+      { key: 'model', direction: 'ascending' },
+    ]);
+    expect(models()).toEqual(['E3Z-D61', 'PZ-G41']);
+    expect(header().attributes('aria-sort')).toBe('ascending');
+    expect(columnProps(wrapper)[0]?.sortOrder).toBe('ascend');
 
-    const bodyRows = wrapper.findAll('tbody tr');
-    expect(document.activeElement).toBe(bodyRows[1]?.element);
-
-    wrapper.unmount();
-  });
-
-  it('announces and exposes keyboard scrolling when columns overflow', async () => {
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
-      props: { columns, rows, rowKey: 'id' },
-    });
-    const scroller = wrapper.get('.a-table');
-    Object.defineProperty(scroller.element, 'clientWidth', {
-      value: 320,
-      configurable: true,
-    });
-    Object.defineProperty(scroller.element, 'scrollWidth', {
-      value: 720,
-      configurable: true,
-    });
-
-    await scroller.trigger('scroll');
-    expect(scroller.attributes('tabindex')).toBe('0');
-    expect(scroller.attributes('aria-label')).toContain('横向滚动');
-    expect(scroller.classes()).toContain('a-table--overflow-end');
-
-    await scroller.trigger('keydown', { key: 'ArrowRight' });
-    expect(scroller.element.scrollLeft).toBeGreaterThan(0);
-    wrapper.unmount();
-  });
-  it('renders only the visible window of rows when virtual=true', async () => {
-    // 生成 100 行数据
-    const manyRows = Array.from({ length: 100 }, (_, i) => ({
-      id: String(i + 1),
-      model: `Sensor-${i + 1}`,
-      note: `说明${i + 1}`,
-    }));
-
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
-      props: { columns, rows: manyRows, rowKey: 'id', virtual: true },
-    });
-
-    // JSDOM 中 clientHeight 默认为 0，需要模拟容器高度。
-    Object.defineProperty(wrapper.element, 'clientHeight', {
-      value: 160,
-      configurable: true,
-    });
-    // 触发 ResizeObserver 回调（JSDOM 不实现 ResizeObserver，直接注入值）
-    // 通过模拟 scrollTop=0，验证默认只渲染 start..end 范围
+    await header().trigger('click');
     await nextTick();
+    expect(wrapper.emitted('update:sort')?.[1]).toEqual([
+      { key: 'model', direction: 'descending' },
+    ]);
+    expect(models()).toEqual(['PZ-G41', 'E3Z-D61']);
+    expect(header().attributes('aria-sort')).toBe('descending');
 
-    // virtual=true 时，visibleRows 应远小于 100
-    const dataRows = wrapper.findAll('tbody tr:not(.a-table__spacer)');
-    // OVERSCAN=5，containerHeight=0 时 visibleCount=0，因此 end = min(100, 0+0+10) = 10
-    expect(dataRows.length).toBeLessThan(manyRows.length);
-    expect(dataRows.length).toBeLessThanOrEqual(10 + 5); // overscan 窗口
-
-    // 底部占位行应存在（总行数 - 渲染行数 > 0）
-    expect(wrapper.find('.a-table__spacer').exists()).toBe(true);
-
-    wrapper.unmount();
+    await header().trigger('click');
+    await nextTick();
+    expect(wrapper.emitted('update:sort')?.[2]).toEqual([null]);
+    expect(models()).toEqual(['PZ-G41', 'E3Z-D61']);
+    expect(header().attributes('aria-sort')).toBe('none');
   });
 
-  it('resolves every column to a concrete px width, honouring minWidth as a floor', () => {
-    // table-layout:fixed 规范忽略单元格的 min-width。历史上给 minWidth 列写
-    // CSS min-width，结果它们等于没有宽度、被平均分配：机型表 9 列全变成
-    // 120px，声明 220px 的列被压到 120px，拉丁品牌名被从词中间断开。
-    const wrapper = mount(ATable, {
+  it('keeps a controlled sort and ignores a sort key that is not a column', () => {
+    const sortable: TableColumn<SensorRow>[] = [
+      { key: 'model', label: '型号', sortable: true },
+      { key: 'note', label: '说明' },
+    ];
+    const unsorted: SensorRow[] = [
+      { id: '1', model: 'PZ-G41', note: '对射' },
+      { id: '2', model: 'E3Z-D61', note: '漫反射' },
+    ];
+    const sorted = mountTable( {
       props: {
-        columns: [
-          { key: 'icon', label: '状态', width: 60 },
-          { key: 'name', label: '名称', minWidth: 200 },
-          { key: 'note', label: '备注', minWidth: 100 },
-          { key: 'actions', label: '操作', width: 72 },
-        ],
-        rows: [{ icon: 'a', name: 'b', note: 'c', actions: 'd' }],
-        rowKey: 'name',
+        columns: sortable,
+        rows: unsorted,
+        rowKey: 'id',
+        sort: { key: 'model', direction: 'descending' },
+      },
+    });
+    expect(dataRows(sorted).map((row) => row.findAll('td')[0]?.text())).toEqual([
+      'PZ-G41',
+      'E3Z-D61',
+    ]);
+
+    const unknown = mountTable( {
+      props: {
+        columns: sortable,
+        rows: unsorted,
+        rowKey: 'id',
+        sort: { key: 'missing', direction: 'ascending' },
+      },
+    });
+    expect(dataRows(unknown).map((row) => row.findAll('td')[0]?.text())).toEqual([
+      'PZ-G41',
+      'E3Z-D61',
+    ]);
+  });
+
+  it('passes rowSpan through customCell and ignores sorting while a span column exists', () => {
+    const spanned: TableColumn<SensorRow>[] = [
+      {
+        key: 'group',
+        label: '功能作用',
+        sortable: true,
+        rowSpan: (_row, index) => (index === 0 ? 2 : 0),
+      },
+      { key: 'detail', label: '传感器类型', sortable: true },
+    ];
+    const grouped: SensorRow[] = [
+      { id: '1-a', model: '', group: '进板检测', detail: 'b' },
+      { id: '1-b', model: '', group: '进板检测', detail: 'a' },
+    ];
+    const wrapper = mountTable( {
+      props: {
+        columns: spanned,
+        rows: grouped,
+        rowKey: 'id',
+        sort: { key: 'detail', direction: 'ascending' },
       },
     });
 
-    const style = (label: string) =>
-      wrapper
-        .findAll('th')
-        .find((th) => th.text() === label)
-        ?.attributes('style');
-
-    // 每一列都必须落成具体的 width，不能只有 min-width
-    expect(style('状态')).toBe('width: 60px;');
-    expect(style('操作')).toBe('width: 72px;');
-    // jsdom 没有布局（容器宽度 0），弹性列正好停在各自声明的下限上
-    expect(style('名称')).toBe('width: 200px;');
-    expect(style('备注')).toBe('width: 100px;');
-    expect(wrapper.find('th[style*="min-width"]').exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it('lets the user resize a column, remembers it, and can reset it', async () => {
-    const wrapper = mount(ATable, {
-      props: {
-        storageKey: 'resize-spec',
-        columns: [
-          { key: 'name', label: '名称', minWidth: 200 },
-          { key: 'note', label: '备注', minWidth: 100 },
-        ],
-        rows: [{ name: 'a', note: 'b' }],
-        rowKey: 'name',
-      },
-    });
-
-    const width = (label: string) =>
-      wrapper
-        .findAll('th')
-        .find((th) => th.text() === label)
-        ?.attributes('style');
-    expect(width('名称')).toBe('width: 200px;');
-
-    // 手柄刻意不进 Tab 顺序：每列一个停留点会把键盘导航淹掉（实测 36 个
-    // 停留点里 11 个是手柄），而列宽只是显示偏好，不影响读到任何内容。
-    const handle = wrapper.get('[aria-label="调整名称列宽"]');
-    expect(handle.attributes('tabindex')).toBe('-1');
-
-    // 键盘调宽：右方向键一次 16px
-    await handle.trigger('keydown', { key: 'ArrowRight' });
-    expect(width('名称')).toBe('width: 216px;');
-
-    // 拖出来的宽度要记到本地，换个实例还在
+    const rendered = columnProps(wrapper);
+    expect(rendered.every((column) => column.sorter === false)).toBe(true);
+    expect(wrapper.find('th.ant-table-column-has-sorters').exists()).toBe(false);
+    expect(rendered[0]?.customCell?.(grouped[0]!, 0)).toEqual({ rowSpan: 2 });
+    expect(rendered[0]?.customCell?.(grouped[1]!, 1)).toEqual({ rowSpan: 0 });
     expect(
-      JSON.parse(localStorage.getItem('a-table:widths:resize-spec') ?? '{}'),
-    ).toEqual({ name: 216 });
+      rendered[0]?.customCell?.(grouped[0]!, undefined),
+    ).toEqual({});
 
-    // Home 还原成自动宽度
-    await handle.trigger('keydown', { key: 'Home' });
-    expect(width('名称')).toBe('width: 200px;');
+    const body = dataRows(wrapper);
+    expect(body).toHaveLength(2);
+    expect(body[0]?.find('td').attributes('rowspan')).toBe('2');
+    expect(body[0]?.text()).toContain('进板检测');
+    expect(body[0]?.text()).toContain('b');
+    expect(body[1]?.text()).toContain('a');
+    expect(body[1]?.text()).not.toContain('进板检测');
 
-    wrapper.unmount();
+    const invalid: TableColumn<SensorRow>[] = [
+      { key: 'group', label: '功能作用', rowSpan: () => -1 },
+      { key: 'detail', label: '传感器类型', rowSpan: () => 1.5 },
+    ];
+    const rejected = mountTable( {
+      props: {
+        columns: invalid,
+        rows: grouped,
+        rowKey: 'id',
+      },
+    });
+    const rejectedColumns = columnProps(rejected);
+    expect(rejectedColumns[0]?.customCell?.(grouped[0]!, 0)).toEqual({ rowSpan: 1 });
+    expect(rejectedColumns[1]?.customCell?.(grouped[0]!, 0)).toEqual({ rowSpan: 1 });
   });
 
-  it('does not put a resize handle after the last column', () => {
-    const wrapper = mount(ATable, {
+  it('activates a row click and marks the selected row', async () => {
+    const wrapper = mountTable( {
       props: {
-        columns: [
-          { key: 'name', label: '名称', minWidth: 200 },
-          { key: 'actions', label: '操作', width: 96 },
-        ],
-        rows: [{ name: 'a', actions: '' }],
-        rowKey: 'name',
+        columns,
+        rows,
+        rowKey: (row: SensorRow) => row.id,
       },
     });
 
-    // 最后一列右边没有可拖的边界，挂手柄只会让人误以为能拖
-    expect(wrapper.find('[aria-label="调整名称列宽"]').exists()).toBe(true);
-    expect(wrapper.find('[aria-label="调整操作列宽"]').exists()).toBe(false);
-    wrapper.unmount();
+    await dataRows(wrapper)[1]?.trigger('click');
+    await nextTick();
+
+    expect(wrapper.emitted('activate')?.[0]).toEqual([rows[1]]);
+    expect(wrapper.emitted('update:selectedKey')?.[0]).toEqual(['2']);
+    expect(dataRows(wrapper)[1]?.classes()).toContain('a-table__row--selected');
+    expect(dataRows(wrapper)[0]?.classes()).not.toContain('a-table__row--selected');
   });
 
-  it('ignores keys pressed on controls inside a row instead of activating the row', async () => {
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
+  it('keeps a controlled selected key on the matching row', () => {
+    const wrapper = mountTable( {
+      props: { columns, rows, rowKey: 'id', selectedKey: '1' },
+    });
+
+    expect(dataRows(wrapper)[0]?.classes()).toContain('a-table__row--selected');
+    expect(dataRows(wrapper)[1]?.classes()).not.toContain('a-table__row--selected');
+  });
+
+  it('does not activate a row when the click is inside an interactive control', async () => {
+    const wrapper = mountTable( {
       props: { columns, rows, rowKey: 'id' },
       slots: {
-        'cell-actions': () => h('button', { type: 'button', class: 'row-delete' }, '删除'),
+        'cell-actions': () =>
+          h('div', [
+            h('button', { type: 'button', class: 'row-button' }, '删除'),
+            h('a', { href: '#detail', class: 'row-link' }, '链接'),
+            h('input', { class: 'row-input' }),
+            h('textarea', { class: 'row-textarea' }),
+            h('select', { class: 'row-select' }, [h('option', 'A')]),
+            h('span', { role: 'button', class: 'row-role' }, '更多'),
+          ]),
       },
     });
 
-    const button = wrapper.get('tbody tr .row-delete');
-    (button.element as HTMLElement).focus();
-    const enter = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      cancelable: true,
-    });
-    button.element.dispatchEvent(enter);
-    await button.trigger('keydown', { key: 'ArrowDown' });
+    for (const selector of [
+      '.row-button',
+      '.row-link',
+      '.row-input',
+      '.row-textarea',
+      '.row-select',
+      '.row-role',
+    ]) {
+      await dataRows(wrapper)[0]?.get(selector).trigger('click');
+    }
     await nextTick();
 
-    // 在行内「删除」按钮上按 Enter 不能变成激活整行（打开编辑）
     expect(wrapper.emitted('activate')).toBeUndefined();
-    expect(enter.defaultPrevented).toBe(false);
-    // 方向键也不应把焦点从按钮上抢走
-    expect(document.activeElement).toBe(button.element);
-
-    // 行本身获得焦点时 Enter 仍然激活
-    await wrapper.get('tbody tr').trigger('keydown', { key: 'Enter' });
-    expect(wrapper.emitted('activate')).toHaveLength(1);
-
-    wrapper.unmount();
+    expect(wrapper.emitted('update:selectedKey')).toBeUndefined();
+    expect(dataRows(wrapper)[0]?.classes()).not.toContain('a-table__row--selected');
   });
 
-  it('persists a dragged column width once on pointer release, not on every move', async () => {
-    localStorage.removeItem('a-table:widths:drag-spec');
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
+  it('passes striped, compact, and virtual options through', () => {
+    const wrapper = mountTable( {
       props: {
-        storageKey: 'drag-spec',
-        columns: [
-          { key: 'name', label: '名称', minWidth: 200 },
-          { key: 'note', label: '备注', minWidth: 100 },
-        ],
-        rows: [{ name: 'a', note: 'b' }],
-        rowKey: 'name',
+        columns,
+        rows,
+        rowKey: 'id',
+        striped: true,
+        rowHeight: 'compact',
+        virtual: true,
       },
     });
-    const handle = wrapper.get('[aria-label="调整名称列宽"]');
-    const el = handle.element as HTMLElement;
-    el.setPointerCapture = () => {};
-    el.releasePointerCapture = () => {};
 
-    await handle.trigger('pointerdown', { clientX: 100, pointerId: 1 });
-    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 140 }));
-    el.dispatchEvent(new PointerEvent('pointermove', { clientX: 150 }));
-    await nextTick();
-
-    expect(
-      wrapper.findAll('th').find((th) => th.text() === '名称')?.attributes('style'),
-    ).toBe('width: 250px;');
-    expect(localStorage.getItem('a-table:widths:drag-spec')).toBeNull();
-
-    el.dispatchEvent(new PointerEvent('pointerup', { clientX: 150 }));
-    expect(
-      JSON.parse(localStorage.getItem('a-table:widths:drag-spec') ?? '{}'),
-    ).toEqual({ name: 250 });
-
-    wrapper.unmount();
+    expect(wrapper.get('.a-table').attributes('data-striped')).toBe('');
+    const table = antTable(wrapper);
+    expect(table.props('size')).toBe('small');
+    // ant-design-vue 4 has no virtual prop; the flag only enables a fixed body height.
+    expect(table.props('scroll')).toEqual({ x: 'max-content', y: 480 });
   });
 
-  it('refreshes horizontal overflow hints after a column is resized', async () => {
-    const wrapper = mount(ATable, {
-      attachTo: document.body,
+  it('scrolls horizontally from the declared column widths so flexible columns wrap', () => {
+    const wrapper = mountTable({
       props: {
         columns: [
-          { key: 'name', label: '名称', minWidth: 200 },
-          { key: 'note', label: '备注', minWidth: 100 },
+          { key: 'model', label: '型号', width: 120 },
+          { key: 'note', label: '说明', minWidth: 240 },
+          { key: 'actions', label: '操作', width: 96, fixed: 'end' },
         ],
-        rows: [{ name: 'a', note: 'b' }],
-        rowKey: 'name',
+        rows,
+        rowKey: 'id',
       },
     });
-    const scroller = wrapper.get('.a-table');
-    Object.defineProperty(scroller.element, 'clientWidth', {
-      value: 320,
-      configurable: true,
-    });
-    Object.defineProperty(scroller.element, 'scrollWidth', {
-      value: 320,
-      configurable: true,
-    });
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(scroller.classes()).not.toContain('a-table--overflow-end');
 
-    // 列被拉宽后内容溢出，不经过 window resize/scroll 也要刷新渐隐提示
-    Object.defineProperty(scroller.element, 'scrollWidth', {
-      value: 720,
-      configurable: true,
-    });
-    await wrapper
-      .get('[aria-label="调整名称列宽"]')
-      .trigger('keydown', { key: 'ArrowRight' });
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    await nextTick();
-    expect(scroller.classes()).toContain('a-table--overflow-end');
-
-    wrapper.unmount();
+    expect(antTable(wrapper).props('scroll')).toEqual({ x: 456, y: undefined });
+    expect(antTable(wrapper).props('tableLayout')).toBe('auto');
   });
 });

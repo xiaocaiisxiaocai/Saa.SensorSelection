@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { message } from 'ant-design-vue';
 
 export type ToastTone = 'success' | 'error' | 'warning' | 'info';
 
@@ -10,66 +11,40 @@ export interface ToastItem {
 
 const items = ref<ToastItem[]>([]);
 let nextId = 1;
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+
+message.config({ duration: 3.2, maxCount: 3 });
+
+function push(tone: ToastTone, content: string) {
+  const id = nextId;
+  nextId += 1;
+  items.value = [...items.value, { id, tone, message: content }].slice(-3);
+  if (tone === 'error') {
+    message.error({ content, duration: 0 });
+    return;
+  }
+  message[tone](content);
+}
 
 function dismiss(id: number) {
-  const timer = timers.get(id);
-  if (timer) {
-    clearTimeout(timer);
-    timers.delete(id);
-  }
-
   items.value = items.value.filter((item) => item.id !== id);
 }
 
-function push(tone: ToastTone, message: string) {
-  const id = nextId;
-  nextId += 1;
-  const next = [...items.value, { id, tone, message }];
-  const overflow = next.slice(0, -3);
-  for (const item of overflow) {
-    const timer = timers.get(item.id);
-    if (timer) {
-      clearTimeout(timer);
-      timers.delete(item.id);
-    }
-  }
-  items.value = next.slice(-3);
-
-  // 错误需要用户读完并可以手动关闭，不再限时自动消失；
-  // 其余提示保持短暂自动消失，但比原来的 2.4s 留出更从容的阅读时间。
-  if (tone === 'error') {
-    return;
-  }
-  const duration = 3200;
-  timers.set(
-    id,
-    setTimeout(() => {
-      dismiss(id);
-    }, duration),
-  );
-}
-
 export const toast = {
-  success(message: string) {
-    push('success', message);
+  success(content: string) {
+    push('success', content);
   },
-  error(message: string) {
-    push('error', message);
+  error(content: string) {
+    push('error', content);
   },
-  warning(message: string) {
-    push('warning', message);
+  warning(content: string) {
+    push('warning', content);
   },
-  info(message: string) {
-    push('info', message);
+  info(content: string) {
+    push('info', content);
   },
   clear() {
-    for (const timer of timers.values()) {
-      clearTimeout(timer);
-    }
-
-    timers.clear();
     items.value = [];
+    message.destroy();
   },
 };
 

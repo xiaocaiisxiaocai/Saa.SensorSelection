@@ -1,69 +1,63 @@
-import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import ADatePicker from './ADatePicker.vue';
+
+const dateKey = /^\d{4}-\d{2}-\d{2}$/;
+
+function inViewDays(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('td.ant-picker-cell-in-view')];
+}
 
 describe('ADatePicker', () => {
   afterEach(() => {
     document.body.innerHTML = '';
   });
 
-  it('opens a Monday-first calendar and emits a date key', async () => {
+  it('shows a YYYY-MM-DD value and commits a picked day as that string', async () => {
     const wrapper = mount(ADatePicker, {
       attachTo: document.body,
-      props: { modelValue: '2026-08-20', placeholder: '选择日期' },
+      props: { id: 'ship-date', modelValue: '2026-08-20', placeholder: '选择日期' },
     });
+    const input = wrapper.get<HTMLInputElement>('input');
 
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
-
-    expect(document.body.textContent).toContain('一');
-    expect(document.body.textContent).toContain('2026年8月');
-    expect(document.body.textContent).not.toContain('上个月');
-
-    const mutedDays = [
-      ...document.querySelectorAll('.a-date-picker__day--muted'),
-    ];
-    expect(mutedDays.length).toBeGreaterThan(0);
-    for (const cell of mutedDays) {
-      expect(cell.textContent?.trim()).toBe('');
-    }
-
-    const day = [...document.querySelectorAll('.a-date-picker__day')].find(
-      (node) =>
-        node.textContent?.trim() === '21' &&
-        !node.className.includes('a-date-picker__day--muted'),
+    expect(wrapper.findComponent({ name: 'ADatePicker' }).props('valueFormat')).toBe(
+      'YYYY-MM-DD',
     );
-    day?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
+    expect(wrapper.get('.a-date-picker').classes()).toContain('a-date-picker');
+    expect(input.attributes('id')).toBe('ship-date');
+    expect(input.attributes('placeholder')).toBe('选择日期');
+    expect(input.element.value).toBe('2026-08-20');
+
+    await wrapper.get('.a-date-picker').trigger('mouseup');
+    await flushPromises();
+
+    const day = document.querySelector<HTMLElement>('td[title="2026-08-21"]');
+    expect(day).not.toBeNull();
+    day?.click();
+    await flushPromises();
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-08-21']);
     wrapper.unmount();
   });
 
-  it('moves the grid to the previous month from the header control', async () => {
+  it('clears a single value back to null and can hide the clear control', async () => {
     const wrapper = mount(ADatePicker, {
       attachTo: document.body,
-      props: { modelValue: '2026-08-20', placeholder: '选择日期' },
+      props: { modelValue: '2026-08-20' },
     });
 
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
-    expect(document.body.textContent).toContain('2026年8月');
+    await wrapper.get('.ant-picker-clear').trigger('mouseup');
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([null]);
 
-    document
-      .querySelector<HTMLButtonElement>('[aria-label="上个月"]')
-      ?.click();
-    await nextTick();
-
-    expect(document.body.textContent).toContain('2026年7月');
-    expect(document.body.textContent).not.toContain('2026年8月');
-    expect(document.body.textContent).not.toContain('上个月');
+    const locked = mount(ADatePicker, {
+      props: { modelValue: '2026-08-20', clearable: false },
+    });
+    expect(locked.find('.ant-picker-clear').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('fills a range from two clicks', async () => {
+  it('uses a range picker whose value format is YYYY-MM-DD', async () => {
     const wrapper = mount(ADatePicker, {
       attachTo: document.body,
       props: {
@@ -72,99 +66,55 @@ describe('ADatePicker', () => {
         placeholder: ['开始时间', '结束时间'],
       },
     });
+    const inputs = wrapper.findAll('input');
 
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
-
-    const days = [...document.querySelectorAll('.a-date-picker__day')].filter(
-      (node) => !node.className.includes('a-date-picker__day--muted'),
+    expect(wrapper.findComponent({ name: 'ARangePicker' }).props('valueFormat')).toBe(
+      'YYYY-MM-DD',
     );
-    days[9]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
-    days[11]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await nextTick();
+    expect(wrapper.find('.a-date-picker').exists()).toBe(true);
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.attributes('placeholder')).toBe('开始时间');
+    expect(inputs[1]?.attributes('placeholder')).toBe('结束时间');
+
+    await wrapper.get('input').trigger('mousedown');
+    await flushPromises();
+
+    const first = inViewDays()[9];
+    expect(first).toBeTruthy();
+    first?.click();
+    await flushPromises();
+    const second = inViewDays()[11];
+    expect(second).toBeTruthy();
+    second?.click();
+    await flushPromises();
 
     const emitted = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as [
       string,
       string,
     ];
+    expect(emitted?.[0]).toMatch(dateKey);
+    expect(emitted?.[1]).toMatch(dateKey);
     expect(emitted[0] < emitted[1]).toBe(true);
     wrapper.unmount();
   });
 
-  it('keeps Enter on the month buttons for paging instead of picking a date', async () => {
-    const wrapper = mount(ADatePicker, {
-      attachTo: document.body,
-      props: { modelValue: '2026-08-20' },
+  it('uses the default placeholders and reports invalid or disabled state', () => {
+    const single = mount(ADatePicker, { props: { modelValue: null } });
+    expect(single.get('input').attributes('placeholder')).toBe('选择日期');
+
+    const range = mount(ADatePicker, {
+      props: { range: true, modelValue: null },
     });
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
+    const inputs = range.findAll('input');
+    expect(inputs[0]?.attributes('placeholder')).toBe('开始日期');
+    expect(inputs[1]?.attributes('placeholder')).toBe('结束日期');
 
-    const prev = document.querySelector<HTMLButtonElement>('[aria-label="上个月"]');
-    const enter = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      cancelable: true,
+    const invalid = mount(ADatePicker, {
+      props: { modelValue: '2026-08-20', invalid: true, disabled: true },
     });
-    prev?.dispatchEvent(enter);
-    await nextTick();
-
-    // 翻月按钮的 Enter 不能被网格劫持成选中日期，也不能被 preventDefault
-    expect(enter.defaultPrevented).toBe(false);
-    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-    wrapper.unmount();
-  });
-
-  it('moves focus to the new day cell when navigating with arrow keys', async () => {
-    const wrapper = mount(ADatePicker, {
-      attachTo: document.body,
-      props: { modelValue: '2026-08-31' },
-    });
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
-
-    const current = document.querySelector<HTMLElement>(
-      '[data-date-key="2026-08-31"]',
+    expect(invalid.get('.a-date-picker').classes()).toContain(
+      'ant-picker-status-error',
     );
-    current?.focus();
-    current?.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
-    );
-    await nextTick();
-    await nextTick();
-
-    // 跨月后网格重新渲染，焦点要跟到新的日期格上
-    expect(document.body.textContent).toContain('2026年9月');
-    expect(document.activeElement).toBe(
-      document.querySelector('[data-date-key="2026-09-01"]'),
-    );
-
-    (document.activeElement as HTMLElement).dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
-    await nextTick();
-    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-09-01']);
-    wrapper.unmount();
-  });
-
-  it('recomputes today each time the panel opens', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(2026, 7, 20, 23, 59));
-    const wrapper = mount(ADatePicker, {
-      attachTo: document.body,
-      props: { modelValue: '2026-08-20' },
-    });
-
-    vi.setSystemTime(new Date(2026, 7, 21, 0, 1));
-    await wrapper.get('button.a-date-picker__trigger').trigger('click');
-    await nextTick();
-
-    expect(
-      document.querySelector('.a-date-picker__day--today')?.getAttribute(
-        'data-date-key',
-      ),
-    ).toBe('2026-08-21');
-    wrapper.unmount();
-    vi.useRealTimers();
+    expect(invalid.get('input').attributes('disabled')).toBeDefined();
   });
 });

@@ -12,19 +12,23 @@ describe('AField', () => {
 
     expect(input.attributes('aria-invalid')).toBe('true');
     expect(input.attributes('aria-describedby')).toBe('name-error');
+    expect(wrapper.find('.ant-input-affix-wrapper-status-error').exists()).toBe(
+      true,
+    );
 
     await input.setValue('admin');
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['admin']);
   });
 
-  it('shows a clear button when focused with a value', async () => {
+  it('clears the value from the allow-clear control', async () => {
+    const empty = mount(AField, { props: { modelValue: '' } });
+    expect(empty.find('.ant-input-clear-icon-hidden').exists()).toBe(true);
+
     const wrapper = mount(AField, { props: { modelValue: 'hello' } });
-
-    expect(wrapper.find('[aria-label="清除"]').exists()).toBe(false);
-    await wrapper.get('input').trigger('focus');
-    expect(wrapper.find('[aria-label="清除"]').exists()).toBe(true);
-
-    await wrapper.get('[aria-label="清除"]').trigger('click');
+    const clear = wrapper.get(
+      '.ant-input-clear-icon:not(.ant-input-clear-icon-hidden)',
+    );
+    await clear.trigger('click');
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['']);
   });
 
@@ -34,9 +38,10 @@ describe('AField', () => {
     });
 
     expect(wrapper.get('input').attributes('type')).toBe('password');
-    await wrapper.get('[aria-label="显示密码"]').trigger('click');
+    await wrapper.get('.ant-input-password-icon').trigger('click');
     expect(wrapper.get('input').attributes('type')).toBe('text');
-    expect(wrapper.find('[aria-label="隐藏密码"]').exists()).toBe(true);
+    await wrapper.get('.ant-input-password-icon').trigger('click');
+    expect(wrapper.get('input').attributes('type')).toBe('password');
   });
 
   it('forwards autocomplete to the native input', () => {
@@ -46,23 +51,40 @@ describe('AField', () => {
     expect(wrapper.get('input').attributes('autocomplete')).toBe('username');
   });
 
-  it('shows the character count when focused or over 80 percent', async () => {
+  it('shows the character count while maxlength is set', () => {
     const wrapper = mount(AField, {
       props: { modelValue: 'abcd', maxlength: 5 },
     });
 
-    expect(wrapper.text()).not.toContain('4/5');
-    await wrapper.get('input').trigger('focus');
-    expect(wrapper.text()).toContain('4/5');
+    expect(wrapper.get('input').attributes('maxlength')).toBe('5');
+    expect(wrapper.get('.ant-input-show-count-suffix').text()).toBe('4 / 5');
   });
 
-  it('can hide the character count while keeping the maxlength', async () => {
+  it('can hide the character count while keeping the maxlength', () => {
     const wrapper = mount(AField, {
       props: { modelValue: '', maxlength: 64, showCount: false },
     });
 
-    await wrapper.get('input').trigger('focus');
     expect(wrapper.get('input').attributes('maxlength')).toBe('64');
-    expect(wrapper.text()).not.toContain('0/64');
+    expect(wrapper.find('.ant-input-show-count-suffix').exists()).toBe(false);
+  });
+
+  it('focuses the input from the exposed method', () => {
+    const wrapper = mount(AField, {
+      attachTo: document.body,
+      props: { modelValue: 'admin' },
+    });
+
+    wrapper.vm.focus();
+    expect(document.activeElement).toBe(wrapper.get('input').element);
+    wrapper.unmount();
+  });
+
+  it('does not offer a clear control when clearable is off', () => {
+    const wrapper = mount(AField, {
+      props: { modelValue: 'hello', clearable: false },
+    });
+
+    expect(wrapper.find('.ant-input-clear-icon').exists()).toBe(false);
   });
 });

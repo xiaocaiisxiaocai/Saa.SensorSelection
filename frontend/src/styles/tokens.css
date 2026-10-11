@@ -12,8 +12,14 @@
   --sys-purple: #af52de;
   --sys-pink: #ff2d55;
   --sys-gray: #8e8e93;
-  --sys-blue-fill: rgb(0 94 184 / 12%);
-  --sys-blue-fill-strong: rgb(0 94 184 / 18%);
+  --sys-blue-fill: rgb(22 119 255 / 16%);
+  --sys-blue-fill-strong: rgb(22 119 255 / 24%);
+
+  /* 与 --sys-blue-fill / --fill-4 叠在白底上的视觉结果一致的不透明色。
+     列表行悬停时浮出的操作按钮需要“垫底色”遮住下面的长名称，
+     半透明色叠两层会比整行更深，所以单独给不透明版本。 */
+  --sys-blue-fill-opaque: #dae9ff;
+  --fill-4-opaque: #f4f4f5;
   --sys-green-fill: rgb(22 115 60 / 14%);
   --sys-red-fill: rgb(201 24 43 / 14%);
   --sys-red-fill-strong: rgb(201 24 43 / 18%);
@@ -38,8 +44,8 @@
   --label-4: rgb(60 60 67 / 18%);
   --label-placeholder: #59595e;
 
-  --separator: rgb(60 60 67 / 16%);
-  --separator-opaque: #dededf;
+  --separator: rgb(0 0 0 / 6%);
+  --separator-opaque: #f0f0f0;
   --control-stroke: rgb(60 60 67 / 36%);
   --scrollbar-thumb: rgb(60 60 67 / 22%);
   --scrollbar-thumb-hover: rgb(60 60 67 / 34%);
@@ -49,10 +55,13 @@
   --fill-3: rgb(118 118 128 / 12%);
   --fill-4: rgb(116 116 128 / 8%);
 
-  --bg-window: #f5f5f7;
+  --bg-window: #f0f2f5;
   --bg-content: #fff;
-  --bg-grouped: #fbfbfd;
+  --bg-grouped: #f5f5f5;
   --bg-elevated: #fff;
+  --sider-bg: #001529;
+  --sider-text: rgb(255 255 255 / 88%);
+  --sider-text-2: rgb(255 255 255 / 45%);
 
   --surface-0: #fafafa;
   --surface-1: #f5f5f5;
@@ -163,79 +172,6 @@
   --switch-track-lg-height: 28px;
   --switch-inset: 1px;
   --stepper-nudge-height: 12px;
-}
-
-:root[data-theme='dark'] {
-  color-scheme: dark;
-
-  --sys-blue: #66b3ff;
-  --sys-blue-solid: #0066cc;
-  --sys-green: #30d158;
-  --sys-red: #ff453a;
-  --sys-orange: #ff9f0a;
-  --sys-yellow: #ffd60a;
-  --sys-teal: #40c8e0;
-  --sys-indigo: #5e5ce6;
-  --sys-purple: #bf5af2;
-  --sys-pink: #ff375f;
-  --sys-blue-fill: rgb(102 179 255 / 18%);
-  --sys-blue-fill-strong: rgb(102 179 255 / 28%);
-  --sys-green-fill: rgb(48 209 88 / 16%);
-  --sys-red-fill: rgb(255 69 58 / 22%);
-  --sys-red-fill-strong: rgb(255 69 58 / 32%);
-  --sys-orange-fill: rgb(255 159 10 / 22%);
-  --sys-yellow-fill: rgb(255 214 10 / 22%);
-  --sys-teal-fill: rgb(64 200 224 / 22%);
-  --sys-indigo-fill: rgb(94 92 230 / 22%);
-  --focus-ring: 0 0 0 2px var(--sys-blue);
-  --focus-ring-offset: 0 0 0 2px var(--bg-content), 0 0 0 4px var(--sys-blue);
-
-  --gray-1: #8e8e93;
-  --gray-2: #636366;
-  --gray-3: #48484a;
-  --gray-4: #3a3a3c;
-  --gray-5: #2c2c2e;
-  --gray-6: #1c1c1e;
-
-  --label: rgb(255 255 255);
-  --label-on-color: #fff;
-  --label-2: rgb(235 235 245 / 60%);
-  --label-3: rgb(235 235 245 / 30%);
-  --label-4: rgb(235 235 245 / 16%);
-  --label-placeholder: #b8b8c0;
-
-  --separator: rgb(84 84 88 / 65%);
-  --separator-opaque: #38383a;
-  --control-stroke: rgb(235 235 245 / 42%);
-  --scrollbar-thumb: rgb(235 235 245 / 24%);
-  --scrollbar-thumb-hover: rgb(235 235 245 / 38%);
-
-  --fill-1: rgb(120 120 128 / 36%);
-  --fill-2: rgb(120 120 128 / 32%);
-  --fill-3: rgb(118 118 128 / 24%);
-  --fill-4: rgb(118 118 128 / 18%);
-
-  --bg-window: #1e1e1e;
-  --bg-content: #1c1c1e;
-  --bg-grouped: #000;
-  --bg-elevated: #2c2c2e;
-
-  --surface-0: #05070c;
-  --surface-1: #0a0d12;
-  --surface-2: #0f131c;
-  --surface-3: #161d2b;
-  --surface-4: #1e2636;
-
-  --material-sidebar-bg: rgb(30 30 32 / 72%);
-  --material-toolbar-bg: rgb(28 28 30 / 72%);
-  --material-menu-bg: rgb(44 44 46 / 80%);
-
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
-  --shadow-2: 0 4px 12px rgb(0 0 0 / 45%);
-  --shadow-3: 0 8px 24px rgb(0 0 0 / 50%);
-  --shadow-4: 0 24px 64px rgb(0 0 0 / 60%);
-  --shadow-scroll-edge: rgb(0 0 0 / 55%);
-  --overlay: rgb(0 0 0 / 40%);
 }
 
 @media (pointer: coarse) {

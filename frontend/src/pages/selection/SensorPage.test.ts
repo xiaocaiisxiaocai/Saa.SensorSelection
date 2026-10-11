@@ -52,7 +52,7 @@ describe('SensorPage', () => {
     const wrapper = await mountPage();
     expect(wrapper.get('h1.visually-hidden').text()).toBe('Sensor型号');
     const labels = wrapper
-      .findAll('.a-segmented button')
+      .findAll('.ant-segmented-item')
       .map((button) => button.text());
 
     expect(labels).toEqual(['型号', 'SOP', '型录', '3D']);
@@ -97,10 +97,13 @@ describe('SensorPage', () => {
       .findAll('th')
       .find((header) => header.text().includes('品牌'));
     expect(brandHeader).toBeDefined();
-    await brandHeader!.get('button').trigger('click');
+    await brandHeader!.trigger('click');
     await nextTick();
 
-    expect(wrapper.get('tbody tr').text()).toContain('AAA排序测试品牌');
+    const dataRows = wrapper
+      .findAll('tbody tr')
+      .filter((row) => !row.classes().includes('ant-table-measure-row'));
+    expect(dataRows[0]?.text()).toContain('AAA排序测试品牌');
     expect(brandHeader!.attributes('aria-sort')).toBe('ascending');
 
     wrapper.unmount();
@@ -191,7 +194,11 @@ describe('SensorPage', () => {
     await nextTick();
 
     expect(document.querySelector('.a-pdf-viewer--large')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain(
       '安装作业',
     );
 
@@ -219,7 +226,11 @@ describe('SensorPage', () => {
     await nextTick();
 
     expect(document.querySelector('.a-pdf-viewer--large')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain(
       '产品资料',
     );
 
@@ -228,15 +239,15 @@ describe('SensorPage', () => {
 
   it('returns from a resource workspace to the previous model status', async () => {
     const wrapper = await mountPage({ tab: '备选' }, writer);
-    const tabs = wrapper.findAll('[role="tab"]');
+    const tabs = wrapper.findAll('.ant-segmented-item');
 
-    await tabs.find((tab) => tab.text() === 'SOP')!.trigger('click');
+    await tabs.find((tab) => tab.text() === 'SOP')!.get('input').trigger('change');
     await nextTick();
-    await tabs[0]!.trigger('click');
+    await tabs[0]!.get('input').trigger('change');
     await nextTick();
 
     expect(wrapper.getComponent(ASelect).props('modelValue')).toBe('备选');
-    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
       '型号',
     );
     wrapper.unmount();
@@ -326,10 +337,14 @@ describe('SensorPage', () => {
     await documentButton!.trigger('click');
     await nextTick();
 
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain(
       '产品资料',
     );
-    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
       '型号',
     );
 
@@ -343,10 +358,14 @@ describe('SensorPage', () => {
     await model3dButton!.trigger('click');
     await nextTick();
 
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain(
       '三维图纸',
     );
-    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
+    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
       '型号',
     );
 
@@ -528,7 +547,11 @@ describe('SensorPage', () => {
     await nextTick();
 
     expect(document.querySelector('.a-pdf-viewer--large')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain(
       '设备模型',
     );
 
@@ -682,9 +705,9 @@ describe('SensorPage', () => {
     const brandHeader = wrapper
       .findAll('th')
       .find((header) => header.text().includes('品牌'));
-    await brandHeader!.get('button').trigger('click');
+    await brandHeader!.trigger('click');
     await nextTick();
-    await brandHeader!.get('button').trigger('click');
+    await brandHeader!.trigger('click');
     await nextTick();
     expect(brandHeader!.attributes('aria-sort')).toBe('descending');
 

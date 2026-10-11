@@ -12,13 +12,6 @@ import { AEmptyState, ASegmentedControl, type SegmentOption } from '@/ui';
 
 import '../shared/selection-page.css';
 
-const tabs: SegmentOption[] = [
-  { label: '客户通用要求', value: 'req' },
-  { label: '制程注意事项', value: 'proc' },
-  { label: '感应器选用标准', value: 'sop' },
-  { label: '厂外反馈问题项', value: 'feedback' },
-];
-
 const route = useRoute();
 const router = useRouter();
 const store = useSelectionStore();
@@ -50,6 +43,38 @@ watch(
   { immediate: true },
 );
 
+const panelLabel = computed(() =>
+  selection.value.category
+    ? `${selection.value.item}，${selection.value.category}`
+    : selection.value.item,
+);
+
+const tabs = computed<SegmentOption[]>(() => {
+  const name = selection.value.item;
+  return [
+    {
+      label: '客户通用要求',
+      value: 'req',
+      badge: store.crudItems('customer-req', name).length,
+    },
+    {
+      label: '制程注意事项',
+      value: 'proc',
+      badge: store.crudItems('customer-proc', name).length,
+    },
+    {
+      label: '感应器选用标准',
+      value: 'sop',
+      badge: store.controlledDocuments(name).length,
+    },
+    {
+      label: '厂外反馈问题项',
+      value: 'feedback',
+      badge: store.crudItems('customer-feedback', name).length,
+    },
+  ];
+});
+
 function selectEntity(payload: { category: string; item: string }) {
   void router.replace({ path: route.path, query: payload });
 }
@@ -65,12 +90,16 @@ function selectEntity(payload: { category: string; item: string }) {
         @select="selectEntity"
       />
       <div v-if="selection.item" class="selection-panel">
-        <ASegmentedControl
-          id="customer-tabs"
-          v-model="customerTab"
-          aria-label="客户资料分类"
-          :segments="tabs"
-        />
+        <header class="entity-header">
+          <h2 class="visually-hidden">{{ panelLabel }}</h2>
+          <ASegmentedControl
+            id="customer-tabs"
+            v-model="customerTab"
+            class="entity-header__tabs"
+            aria-label="客户资料分类"
+            :segments="tabs"
+          />
+        </header>
         <div
           v-if="customerTab === 'req'"
           id="customer-tabs-panel-req"

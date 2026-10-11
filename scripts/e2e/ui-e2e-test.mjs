@@ -360,15 +360,12 @@ async function runLogin() {
     assertEqual(await shell.getAttribute('class'), before, 'sidebar did not restore')
   })
 
-  await check('The theme switch applies dark mode and returns to light', async () => {
+  await check('The app stays in light mode with no theme switcher', async () => {
     const root = page.locator('html')
-    await page.getByRole('radio', { name: '深色' }).click()
-    await settle()
-    assertEqual(await root.getAttribute('data-theme'), 'dark', 'dark theme not applied')
-    // light mode is the default and clears the attribute rather than setting it
-    await page.getByRole('radio', { name: '浅色' }).click()
-    await settle()
-    assertEqual(await root.getAttribute('data-theme'), null, 'light theme not restored')
+    assertEqual(await root.getAttribute('data-theme'), null, 'dark theme attribute should be absent')
+    assertEqual(await page.getByRole('radio', { name: '深色' }).count(), 0, 'dark mode switch should be gone')
+    assertEqual(await page.getByRole('radio', { name: '浅色' }).count(), 0, 'light mode switch should be gone')
+    assertEqual(await page.getByLabel('外观').count(), 0, 'toolbar appearance switch should be gone')
   })
 }
 
@@ -1351,20 +1348,17 @@ async function runUiAudit() {
     await sheet().waitFor({ state: 'hidden', timeout: 5000 })
   })
 
-  await check('Dark mode keeps text readable (no transparent or identical colours)', async () => {
-    await page.getByRole('radio', { name: '深色' }).click()
-    await settle()
+  await check('Light mode keeps text readable (no transparent or identical colours)', async () => {
     const sample = await page.evaluate(() => {
       const node = document.querySelector('.content')
       if (!node) return null
       const style = getComputedStyle(node)
       return { color: style.color, background: style.backgroundColor }
     })
-    await page.getByRole('radio', { name: '浅色' }).click()
-    await settle()
+    assertEqual(await page.locator('html').getAttribute('data-theme'), null, 'page should stay light')
     assert(sample, 'no content element found')
-    assert(sample.color !== sample.background, `text and background are identical in dark mode (${sample.color})`)
-    assert(!/rgba\(0,\s*0,\s*0,\s*0\)/.test(sample.color), 'text colour is fully transparent in dark mode')
+    assert(sample.color !== sample.background, `text and background are identical (${sample.color})`)
+    assert(!/rgba\(0,\s*0,\s*0,\s*0\)/.test(sample.color), 'text colour is fully transparent')
   })
 
   await check('The browser console stayed clean during the whole run', async () => {

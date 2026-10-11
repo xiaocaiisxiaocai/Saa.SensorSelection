@@ -175,13 +175,17 @@ function openResult(item: SearchItem) {
   padding: var(--space-3) var(--space-4);
   text-align: start;
   cursor: pointer;
-  background: var(--fill-2);
-  border: 0;
+  background: var(--bg-content);
+  border: 1px solid var(--separator-opaque);
   border-radius: var(--radius-md);
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
 }
 
 .search-list button:hover {
-  background: var(--fill-3);
+  background: var(--fill-4);
+  border-color: var(--sys-blue-fill-strong);
 }
 
 .search-list__title {

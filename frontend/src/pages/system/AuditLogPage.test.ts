@@ -58,9 +58,11 @@ describe('AuditLogPage', () => {
     expect(document.body.textContent).toContain('127.0.0.1');
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
-    document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
+    [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '关闭')
+      ?.click();
     await vi.waitFor(() => {
-      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.querySelector('.ant-modal-title')).toBeNull();
     });
     wrapper.unmount();
   });

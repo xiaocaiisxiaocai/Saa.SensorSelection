@@ -14,5 +14,6 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['src/**/*.test.ts'],
     maxWorkers: 1,
+    setupFiles: ['./src/test-setup.ts'],
   },
 });

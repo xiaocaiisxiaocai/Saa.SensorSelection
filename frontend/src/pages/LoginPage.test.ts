@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
 import { SEED_VERSION } from '@/domain';
-import { useThemeStore } from '@/stores/theme';
 import { toast } from '@/ui/toast';
 import LoginPage from './LoginPage.vue';
 
@@ -128,17 +127,6 @@ describe('LoginPage', () => {
     expect(wrapper.find('.login__error').text()).toBe('用户名或密码错误');
     // 密码框被清空后不该显示“请输入密码”，那会盖掉真正的失败原因。
     expect(wrapper.findAll('.a-form-row__error')).toHaveLength(0);
-    wrapper.unmount();
-  });
-
-  it('switches theme preference from the top-right switcher', async () => {
-    const wrapper = await mountLogin();
-    const themeStore = useThemeStore();
-    const darkBtn = wrapper.find('button[aria-label="深色"]');
-    expect(darkBtn.exists()).toBe(true);
-
-    await darkBtn.trigger('click');
-    expect(themeStore.preference).toBe('dark');
     wrapper.unmount();
   });
 

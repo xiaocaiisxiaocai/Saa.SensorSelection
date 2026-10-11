@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Lock, Monitor, Moon, Sun, User } from 'lucide-vue-next';
+import { Lock, User } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -8,13 +8,10 @@ import { safeRedirect } from '@/router/guards';
 import BrandMark from '@/shell/BrandMark.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { useThemeStore } from '@/stores/theme';
-import type { ThemePreference } from '@/theme/theme';
 import { AButton, AField, AFormRow, toast } from '@/ui';
 
 const auth = useAuthStore();
 const selection = useSelectionStore();
-const theme = useThemeStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -38,16 +35,6 @@ const loginError = ref<string | null>(null);
 const usernameField = ref<InstanceType<typeof AField> | null>(null);
 const passwordField = ref<InstanceType<typeof AField> | null>(null);
 let backendReady: null | Promise<void> = null;
-
-const themeOptions: {
-  icon: typeof Sun;
-  label: string;
-  value: ThemePreference;
-}[] = [
-  { value: 'light', label: '浅色', icon: Sun },
-  { value: 'dark', label: '深色', icon: Moon },
-  { value: 'system', label: '跟随系统', icon: Monitor },
-];
 
 function targetPath() {
   return safeRedirect(route.query.redirect);
@@ -202,29 +189,6 @@ onMounted(async () => {
     <footer class="login-layout__footer">
       <p>© 2026 Symtek Automation China. 保留所有权利。</p>
     </footer>
-
-    <!--
-      主题切换放在 DOM 最后，让 Tab 顺序落在表单和游客链接之后——
-      HIG 的键盘顺序要跟视觉主任务顺序一致，一个外观偏好开关不该抢在
-      用户名输入框前面。视觉位置仍用绝对定位钉在右上角。
-    -->
-    <header class="login-layout__header">
-      <div class="theme-switch" role="radiogroup" aria-label="外观主题">
-        <button
-          v-for="option in themeOptions"
-          :key="option.value"
-          class="theme-switch__btn"
-          type="button"
-          role="radio"
-          :aria-checked="theme.preference === option.value"
-          :aria-label="option.label"
-          :title="option.label"
-          @click="theme.setPreference(option.value)"
-        >
-          <component :is="option.icon" :size="16" :stroke-width="1.5" />
-        </button>
-      </div>
-    </header>
   </div>
 </template>
 
@@ -248,53 +212,6 @@ onMounted(async () => {
       transparent 55%
     ),
     var(--bg-window);
-}
-
-.login-layout__header {
-  position: absolute;
-  top: var(--space-5);
-  right: var(--space-5);
-  display: flex;
-  align-items: center;
-}
-
-.theme-switch {
-  display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  background: var(--fill-4);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-lg);
-  backdrop-filter: blur(10px);
-}
-
-.theme-switch__btn {
-  display: grid;
-  place-items: center;
-  width: var(--control-height-md);
-  height: var(--control-height-md);
-  color: var(--label-2);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-  transition:
-    color var(--dur-1) var(--ease-out),
-    background-color var(--dur-1) var(--ease-out);
-}
-
-.theme-switch__btn:hover {
-  color: var(--label);
-  background: var(--fill-3);
-}
-
-.theme-switch__btn:active {
-  opacity: 0.7;
-}
-
-.theme-switch__btn[aria-checked='true'] {
-  color: var(--sys-blue);
-  background: var(--sys-blue-fill);
 }
 
 .login-layout__main {

@@ -99,3 +99,47 @@
   background: var(--fill-3);
   border-radius: var(--radius-sm);
 }
+
+/*
+ * antd 自带的占位符是 rgba(0,0,0,.25)，对比度约 1.9:1，筛选框里的「要求分类」
+ * 「要求来源」看起来像禁用态。统一换成 --label-placeholder。
+ * 选择器叠一层类名，是为了压过 antd 运行时注入（顺序更靠后）的同权重样式。
+ */
+.ant-select .ant-select-selector .ant-select-selection-placeholder,
+.ant-picker .ant-picker-input > input::placeholder,
+.ant-input.ant-input::placeholder,
+.ant-input-affix-wrapper .ant-input::placeholder,
+.ant-input-number .ant-input-number-input::placeholder {
+  color: var(--label-placeholder);
+}
+
+/*
+ * 分段控件在纵向 flex 容器里默认被拉满整行，变成一条灰色横幅；
+ * 让它按内容收缩，超出时仍可横向滚动。
+ */
+.a-segmented.ant-segmented {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.a-segmented__count {
+  margin-left: var(--space-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+
+.ant-segmented-item-selected .a-segmented__count {
+  color: var(--sys-blue);
+}
+
+/*
+ * reset.css 把 svg 设成 display:block，而 antd 按钮靠 text-align:center
+ * 居中内容——对块级元素无效，图标会贴在按钮左侧（24px 圆钮里偏左 4px，
+ * 32px 里偏左 7px）。图标按钮改用 flex 双向居中。
+ */
+.ant-btn.a-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

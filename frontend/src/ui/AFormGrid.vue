@@ -18,7 +18,10 @@ withDefaults(
 <style scoped>
 .a-form-grid {
   display: grid;
-  gap: var(--space-4);
+
+  /* 行距小、列距大：每个 AFormRow 底部已固定预留一行校验提示的高度，
+     再叠 12px 行距会让「字段之间」远大于「标签与字段」，节奏发散。 */
+  gap: var(--space-2) var(--space-4);
   width: 100%;
   min-width: 0;
 }

@@ -157,12 +157,14 @@ const requiredTokens = [
 ];
 
 describe('tokens.css', () => {
-  it('defines the design-system tokens for light and dark', () => {
+  it('defines the design-system tokens for light mode only', () => {
     for (const token of requiredTokens) {
       expect(tokens).toContain(`${token}:`);
     }
 
-    expect(tokens).toContain(":root[data-theme='dark']");
+    expect(tokens).toMatch(/color-scheme:\s*light/);
+    expect(tokens).not.toContain("data-theme='dark'");
+    expect(tokens).not.toMatch(/color-scheme:\s*dark/);
     expect(tokens).toContain("'Inter'");
     expect(tokens).toContain("'Noto Sans SC'");
   });
@@ -185,9 +187,7 @@ describe('tokens.css', () => {
     expect(tokens).toMatch(
       /@media \(pointer:\s*coarse\)\s*\{[\s\S]*--control-height-lg:\s*44px/,
     );
-    expect(button).toMatch(
-      /\.a-button--large\s*\{[^}]*height:\s*var\(--control-height-lg\);/s,
-    );
+    expect(button).toContain('<AntButton');
   });
 
   it('applies compact spacing through shared shells, forms, tables, sheets and source lists', () => {
@@ -201,18 +201,12 @@ describe('tokens.css', () => {
       /\.selection-panel\s*\{[^}]*gap:\s*var\(--space-3\);/s,
     );
     expect(formGrid).toMatch(
-      /\.a-form-grid\s*\{[^}]*gap:\s*var\(--space-4\);/s,
+      /\.a-form-grid\s*\{[^}]*gap:\s*var\(--space-2\) var\(--space-4\);/s,
     );
-    expect(table).toMatch(
-      /th,\s*td\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-3\);/s,
-    );
-    expect(table).toMatch(/const ROW_HEIGHT_COMPACT = 36;/);
-    expect(table).toMatch(/const ROW_HEIGHT_LOOSE = 44;/);
-    expect(sheet).toMatch(
-      /\.a-sheet__body\s*\{[^}]*padding:\s*var\(--space-5\);/s,
-    );
+    expect(table).toContain('<AntTable');
+    expect(sheet).toContain('<a-modal');
     expect(sourceList).toMatch(
-      /\.a-source-list__search,\s*\.a-source-list__toolbar\s*\{[^}]*padding:\s*var\(--space-3\);/s,
+      /\.a-source-list__search,\s*\.a-source-list__toolbar\s*\{[^}]*padding:\s*0 var\(--space-4\) var\(--space-3\) 0;/s,
     );
   });
 
@@ -225,26 +219,8 @@ describe('tokens.css', () => {
     );
   });
 
-  it('frames shared data tables without turning them into a heavy cell grid', () => {
-    expect(table).toMatch(
-      /\.a-table\s*\{[^}]*border:\s*1px solid var\(--separator\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
-    );
-    // 表头底色要和表体分得开：--bg-grouped 和内容底色只差 1.5%（浅色下
-    // 实测亮度比 1.034），所以改成在不透明底色上叠一层 --fill-4。
-    expect(table).toMatch(
-      /th\s*\{[^}]*background-color:\s*var\(--bg-content\);[^}]*background-image:\s*linear-gradient\(var\(--fill-4\), var\(--fill-4\)\);/s,
-    );
-    // 固定列的表头格必须同样处理，否则表头第一格会是表体色，整条表头断开
-    // （固定列用不透明底 + --a-table-row-tint 叠色，表头格把叠色设为 --fill-4）
-    expect(table).toMatch(
-      /th\.a-table__cell--fixed\s*\{[^}]*--a-table-row-tint:\s*var\(--fill-4\);/s,
-    );
-    expect(table).toMatch(
-      /\.a-table__cell--fixed\s*\{[^}]*background-color:\s*var\(--bg-content\);[^}]*background-image:\s*linear-gradient\(\s*var\(--a-table-row-tint\),\s*var\(--a-table-row-tint\)\s*\);/s,
-    );
-    expect(table).toMatch(
-      /tbody tr:last-child td\s*\{[^}]*box-shadow:\s*none;/s,
-    );
+  it('frames shared data tables with Ant Design instead of a hand-drawn cell grid', () => {
+    expect(table).toContain('<AntTable');
     expect(table).not.toMatch(/td\s*\{[^}]*border-right:/s);
   });
 
@@ -276,12 +252,6 @@ describe('tokens.css', () => {
     }
   });
 
-  it('keeps dark green status badges readable on striped table rows', () => {
-    const dark =
-      tokens.match(/:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(dark).toMatch(/--sys-green-fill:\s*rgb\(48 209 88 \/ 16%\)/);
-  });
-
   it('keeps secondary text readable on light content surfaces', () => {
     const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
     const match = light.match(
@@ -306,14 +276,9 @@ describe('tokens.css', () => {
     expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('keeps dark-theme accent text and filled controls readable', () => {
+  it('keeps accent text and filled controls readable', () => {
     expect(tokens).toMatch(/:root\s*\{[\s\S]*--sys-blue-solid:\s*#0066cc;/i);
-    expect(tokens).toMatch(
-      /:root\[data-theme='dark'\]\s*\{[\s\S]*--sys-blue:\s*#66b3ff;[\s\S]*--sys-blue-solid:\s*#0066cc;/i,
-    );
-    expect(button).toMatch(
-      /\.a-button--filled\s*\{[^}]*background:\s*var\(--sys-blue-solid\);/s,
-    );
+    expect(button).toContain("return 'primary'");
     expect(appShell).toMatch(
       /\.search kbd\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
     );
@@ -349,15 +314,9 @@ describe('tokens.css', () => {
     expect(menu).toMatch(
       /\.a-menu-item\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
-    expect(select).toMatch(
-      /\.a-select__filter\s*\{[^}]*font:\s*var\(--text-field\);/s,
-    );
-    expect(tokenField).toMatch(
-      /\.a-select__filter\s*\{[^}]*font:\s*var\(--text-field\);/s,
-    );
-    expect(treeSelect).toMatch(
-      /\.a-tree-select__option\s*\{[^}]*font:\s*var\(--text-field\);/s,
-    );
+    expect(select).toContain('<AntSelect');
+    expect(tokenField).toContain('mode="multiple"');
+    expect(treeSelect).toContain('<AntTreeSelect');
     expect(appShell).toMatch(
       /\.search input\s*\{[^}]*font:\s*var\(--text-field\);/s,
     );
@@ -366,10 +325,7 @@ describe('tokens.css', () => {
   it('gives dense filter toolbars a compact hierarchy without shrinking table copy', () => {
     expect(tokens).toMatch(/--text-toolbar:\s*400 12px\/18px/);
     expect(tokens).toMatch(/--text-toolbar-em:\s*600 12px\/18px/);
-    expect(selectionPage).toMatch(
-      /\.selection-toolbar \.a-control,[\s\S]*?\.selection-toolbar \.a-token-field__chip\s*\{[^}]*font:\s*var\(--text-toolbar\);/,
-    );
-    expect(selectionPage).toMatch(
+    expect(selectionPage).not.toMatch(
       /\.selection-toolbar\s+\.a-button\s*\{[^}]*font:\s*var\(--text-toolbar-em\);/s,
     );
     expect(selectionPage).toMatch(
@@ -389,39 +345,27 @@ describe('tokens.css', () => {
       /\.selection-toolbar \.a-select\.selection-toolbar__filter\s*\{[^}]*flex:\s*0 1 10rem;[^}]*min-width:\s*7\.5rem;/s,
     );
     expect(selectionPage).toMatch(
-      /\.selection-toolbar \.a-control\.selection-toolbar__filter\s*\{[^}]*flex:\s*1 1 16rem;[^}]*min-width:\s*12rem;/s,
+      /\.selection-toolbar \.a-search-field\.selection-toolbar__filter\s*\{[^}]*flex:\s*1 1 16rem;[^}]*min-width:\s*12rem;/s,
     );
   });
 
-  it('uses a dedicated readable color for field placeholders in both themes', () => {
+  it('uses a dedicated readable color for field placeholders', () => {
     expect(tokens).toMatch(
       /:root\s*\{[\s\S]*--label-placeholder:\s*#[0-9a-f]{6};/i,
-    );
-    expect(tokens).toMatch(
-      /:root\[data-theme='dark'\]\s*\{[\s\S]*--label-placeholder:\s*#[0-9a-f]{6};/i,
     );
     expect(controls).toMatch(
       /\.a-control__input::placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
     );
-    expect(select).toMatch(
-      /\.a-select__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
-    );
-    expect(tokenField).toMatch(
-      /\.a-token-field__placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
-    );
-    expect(treeSelect).toMatch(
-      /\.a-tree-select__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
-    );
-    expect(datePicker).toMatch(
-      /\.a-date-picker__value\[data-placeholder\]\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
-    );
+    expect(select).toContain('placeholder');
+    expect(tokenField).toContain('placeholder');
+    expect(treeSelect).toContain('placeholder');
+    expect(datePicker).toContain('<AntDatePicker');
+    expect(datePicker).toContain('<a-range-picker');
     expect(appShell).toMatch(
       /\.search input::placeholder\s*\{[^}]*color:\s*var\(--label-placeholder\);/s,
     );
 
     const light = tokens.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const dark =
-      tokens.match(/:root\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
     const getHex = (block: string, name: string) =>
       block.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1] ?? '';
     const luminance = (hex: string) => {
@@ -448,9 +392,28 @@ describe('tokens.css', () => {
     expect(
       contrast(getHex(light, '--label-placeholder'), '#ebebed'),
     ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      contrast(getHex(dark, '--label-placeholder'), '#2c2c2e'),
-    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('centers icon-only buttons even though reset.css makes svg block-level', () => {
+    // antd 按钮靠 text-align 居中，块级 svg 会贴左（24px 圆钮里偏 4px）。
+    expect(controls).toMatch(
+      /\.ant-btn\.a-icon-button\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s,
+    );
+  });
+
+  it('keeps hover row actions as separate buttons on the row background', () => {
+    // 悬停操作组不能再套白色卡片 + 阴影：两个按钮会被看成一个控件，
+    // 在蓝色选中行上还是一块白补丁。
+    for (const [source, selector] of [
+      [sourceList, String.raw`\.a-source-list__actions`],
+      [machineSourceList, String.raw`\.machine-tree-row__tools`],
+    ] as const) {
+      const block =
+        source.match(new RegExp(String.raw`${selector}\s*\{([^}]*)\}`))?.[1] ?? '';
+      expect(block).toMatch(/gap:\s*var\(--space-2\);/);
+      expect(block).toMatch(/background:\s*var\(--row-bg/);
+      expect(block).not.toMatch(/var\(--shadow-1\)/);
+    }
   });
 
   it('keeps the global confirm alert above any already-open sheet', () => {

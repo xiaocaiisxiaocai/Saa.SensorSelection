@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { message } from 'ant-design-vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -6,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
-import { toast } from '@/ui/toast';
 import UserMenu from './UserMenu.vue';
 
 async function mountMenu() {
@@ -49,13 +49,15 @@ describe('UserMenu', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     document.body.innerHTML = '';
-    toast.clear();
+    message.destroy();
   });
 
-  it('lets the signed-in user open change-password from the chip menu', async () => {
+  it('lets the signed-in user open change-password from the user menu', async () => {
     const wrapper = await mountMenu();
-    await wrapper.get('.user-chip--menu').trigger('click');
-    await nextTick();
+    await wrapper.get('.user-menu__trigger').trigger('click');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    );
     expect(document.body.textContent).toContain('修改密码');
     expect(document.body.textContent).toContain('退出登录');
     wrapper.unmount();
@@ -63,17 +65,21 @@ describe('UserMenu', () => {
 
   it('saves a new password through the auth endpoint', async () => {
     const changePassword = vi.spyOn(api, 'changePassword').mockResolvedValue();
-    const success = vi.spyOn(toast, 'success');
+    const success = vi.spyOn(message, 'success');
     const wrapper = await mountMenu();
-    await wrapper.get('.user-chip--menu').trigger('click');
-    await nextTick();
-    const item = [...document.querySelectorAll('[role="menuitem"]')].find((node) =>
-      node.textContent?.includes('修改密码'),
+    await wrapper.get('.user-menu__trigger').trigger('click');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    );
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (node) => node.textContent?.includes('修改密码'),
     );
     item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await nextTick();
     await nextTick();
-    expect(document.querySelector('.password-form')).not.toBeNull();
+    await vi.waitFor(() =>
+      expect(document.querySelector('.ant-modal .ant-form')).not.toBeNull(),
+    );
 
     fill('请输入当前密码', 'admin123');
     fill('至少 4 位', 'admin456');
@@ -93,8 +99,10 @@ describe('UserMenu', () => {
   it('logs out without reloading the full selection store', async () => {
     const getStore = vi.spyOn(api, 'getStore').mockResolvedValue({});
     const wrapper = await mountMenu();
-    await wrapper.get('.user-chip--menu').trigger('click');
-    await nextTick();
+    await wrapper.get('.user-menu__trigger').trigger('click');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    );
     const item = [...document.querySelectorAll('[role="menuitem"]')].find(
       (node) => node.textContent?.includes('退出登录'),
     );

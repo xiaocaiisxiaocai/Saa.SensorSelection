@@ -3,15 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { searchItemDetail, type SearchItem } from '@/domain';
+import { TAB_COUNT_STYLE } from '@/pages/shared/tabs';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  ABadge,
-  AEmptyState,
-  AHighlightText,
-  ASegmentedControl,
-  type BadgeTone,
-  type SegmentOption,
-} from '@/ui';
+import { AHighlightText } from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -48,12 +42,12 @@ const resultCounts = computed(() => {
   return counts;
 });
 
-const tabs = computed<SegmentOption[]>(() => [
-  { label: '全部', value: 'all', badge: allResults.value.length },
-  { label: '客户', value: 'customer', badge: resultCounts.value.customer },
-  { label: '制程', value: 'process', badge: resultCounts.value.process },
-  { label: '机型', value: 'machine', badge: resultCounts.value.machine },
-  { label: 'Sensor', value: 'sensor', badge: resultCounts.value.sensor },
+const tabs = computed(() => [
+  { label: '全部', value: 'all', count: allResults.value.length },
+  { label: '客户', value: 'customer', count: resultCounts.value.customer },
+  { label: '制程', value: 'process', count: resultCounts.value.process },
+  { label: '机型', value: 'machine', count: resultCounts.value.machine },
+  { label: 'Sensor', value: 'sensor', count: resultCounts.value.sensor },
 ]);
 
 const typeLabel: Record<SearchItem['type'], string> = {
@@ -63,9 +57,10 @@ const typeLabel: Record<SearchItem['type'], string> = {
   sensor: 'Sensor',
 };
 
-const typeTone: Record<SearchItem['type'], BadgeTone> = {
+// a-tag 预设色
+const typeColor: Record<SearchItem['type'], string> = {
   customer: 'green',
-  process: 'indigo',
+  process: 'purple',
   machine: 'orange',
   sensor: 'blue',
 };
@@ -88,51 +83,75 @@ function openResult(item: SearchItem) {
 
 <template>
   <section class="selection-page">
-    <header class="search-heading">
-      <h1>搜索“{{ query }}”</h1>
-      <p>{{ results.length }} 条结果</p>
-    </header>
-    <ASegmentedControl
-      id="search-tabs"
-      v-model="activeType"
-      aria-label="按类型筛选搜索结果"
-      :segments="tabs"
+    <a-page-header
+      class="search-heading"
+      :title="`搜索“${query}”`"
+      :sub-title="`${results.length} 条结果`"
     />
-    <div
-      :id="`search-tabs-panel-${activeType}`"
-      role="tabpanel"
-      :aria-labelledby="`search-tabs-tab-${activeType}`"
-      tabindex="0"
-    >
-      <AEmptyState
-        v-if="results.length === 0"
-        title="没有匹配的结果"
-        description="换个关键词试试，可搜索客户、制程、机型和 Sensor 型号"
-      />
-      <ul v-else class="search-list">
-        <li
-          v-for="(item, index) in results"
-          :key="`${item.path}-${item.title}-${index}`"
+    <a-tabs v-model:active-key="activeType" class="entity-tabs">
+      <a-tab-pane v-for="tab in tabs" :key="tab.value">
+        <template #tab>
+          {{ tab.label }}
+          <a-badge
+            :count="tab.count"
+            show-zero
+            :overflow-count="999"
+            :number-style="TAB_COUNT_STYLE"
+          />
+        </template>
+        <a-list
+          v-if="tab.value === activeType"
+          class="search-list"
+          :data-source="results"
+          item-layout="vertical"
+          :locale="{
+            emptyText:
+              '没有匹配的结果，换个关键词试试，可搜索客户、制程、机型和 Sensor 型号',
+          }"
         >
-          <button type="button" @click="openResult(item)">
-            <span class="search-list__title">
-              <AHighlightText :text="item.title" :query="query" />
-            </span>
-            <ABadge :label="typeLabel[item.type]" :tone="typeTone[item.type]" />
-            <span class="search-list__meta">
-              <AHighlightText :text="item.category" :query="query" />
-            </span>
-            <span
-              v-if="searchItemDetail(item)"
-              class="search-list__sub"
-              :title="searchItemDetail(item)"
-            >
-              <AHighlightText :text="searchItemDetail(item)" :query="query" />
-            </span>
-          </button>
-        </li>
-      </ul>
-    </div>
+          <template #renderItem="{ item }">
+            <a-list-item class="search-list__item">
+              <template #extra>
+                <a-tag :color="typeColor[(item as SearchItem).type]">
+                  {{ typeLabel[(item as SearchItem).type] }}
+                </a-tag>
+              </template>
+              <a-list-item-meta>
+                <template #title>
+                  <a-button
+                    class="search-list__title"
+                    type="link"
+                    @click="openResult(item as SearchItem)"
+                  >
+                    <AHighlightText
+                      :text="(item as SearchItem).title"
+                      :query="query"
+                    />
+                  </a-button>
+                </template>
+                <template #description>
+                  <AHighlightText
+                    :text="(item as SearchItem).category"
+                    :query="query"
+                  />
+                </template>
+              </a-list-item-meta>
+              <a-typography-paragraph
+                v-if="searchItemDetail(item as SearchItem)"
+                class="search-list__sub"
+                type="secondary"
+                :title="searchItemDetail(item as SearchItem)"
+              >
+                <AHighlightText
+                  :text="searchItemDetail(item as SearchItem)"
+                  :query="query"
+                />
+              </a-typography-paragraph>
+            </a-list-item>
+          </template>
+        </a-list>
+      </a-tab-pane>
+    </a-tabs>
   </section>
 </template>
 
@@ -142,71 +161,24 @@ function openResult(item: SearchItem) {
 }
 
 .search-heading {
-  display: flex;
-  gap: var(--space-3);
-  align-items: baseline;
-}
-
-.search-heading h1 {
-  margin: 0;
-  font: var(--text-title-1);
-  letter-spacing: var(--tracking-title-1);
-}
-
-.search-heading p {
-  margin: 0;
-  font: var(--text-control);
-  color: var(--label-2);
-}
-
-.search-list {
-  display: grid;
-  gap: var(--space-2);
   padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.search-list button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1) var(--space-3);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  text-align: start;
-  cursor: pointer;
-  background: var(--bg-content);
-  border: 1px solid var(--separator-opaque);
-  border-radius: var(--radius-md);
-  transition:
-    background-color var(--dur-1) var(--ease-out),
-    border-color var(--dur-1) var(--ease-out);
-}
-
-.search-list button:hover {
-  background: var(--fill-4);
-  border-color: var(--sys-blue-fill-strong);
 }
 
 .search-list__title {
-  font: var(--text-headline);
-  letter-spacing: var(--tracking-headline);
+  height: auto;
+  padding: 0;
+  font: var(--font-heading-5);
+  white-space: normal;
+  text-align: start;
 }
 
-.search-list__meta,
-.search-list__sub {
-  font: var(--text-caption);
-  color: var(--label-2);
-}
-
+/* 正文行长控制在 ~70 字符，最多两行。高亮片段是子节点，不能用 antd 的
+   ellipsis（它只支持纯文本 content），所以用 CSS 截断。 */
 .search-list__sub {
   display: -webkit-box;
-  grid-column: 1 / -1;
-
-  /* 正文行长控制在 ~70 字符：跑满 1240px 的一行读起来会丢行。 */
   max-width: 70ch;
+  margin-bottom: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;

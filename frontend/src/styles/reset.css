@@ -12,15 +12,9 @@ body,
 }
 
 html {
-  background: var(--bg-window);
-  color: var(--label);
-  font: var(--text-control);
-  font-family: var(--font-ui);
-  text-rendering: optimizelegibility;
-  -webkit-font-smoothing: antialiased;
-  transition:
-    background-color var(--dur-2) var(--ease-out),
-    color var(--dur-2) var(--ease-out);
+  background: var(--color-bg-layout);
+  color: var(--color-text);
+  font: var(--font-body);
 }
 
 body {

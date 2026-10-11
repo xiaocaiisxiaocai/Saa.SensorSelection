@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
-import ASelect from '@/ui/ASelect.vue';
 import OrgPage from './OrgPage.vue';
 
 async function mountPage() {
@@ -56,7 +55,7 @@ describe('OrgPage', () => {
 
   it('lists organizations in a full-width table with indented children', async () => {
     const wrapper = await mountPage();
-    expect(wrapper.find('.a-table').exists()).toBe(true);
+    expect(wrapper.find('.ant-table-wrapper').exists()).toBe(true);
     expect(wrapper.text()).toContain('制造事业部');
     expect(wrapper.text()).toContain('选型课');
     expect(wrapper.text()).toContain('事业部');
@@ -76,9 +75,9 @@ describe('OrgPage', () => {
     await nextTick();
 
     const levels = wrapper
-      .findAllComponents(ASelect)[0]
+      .findAllComponents({ name: 'ASelect' })[0]
       ?.props('options')
-      .map((option) => String(option.value));
+      .map((option: { value: unknown }) => String(option.value));
     expect(levels).toEqual(['课别']);
     wrapper.unmount();
   });
@@ -95,7 +94,9 @@ describe('OrgPage', () => {
     await nextTick();
 
     expect(
-      document.querySelector('.a-form-row__error')?.textContent?.trim(),
+      document
+        .querySelector('.ant-form-item-explain-error')
+        ?.textContent?.trim(),
     ).toBe('请输入组织名称');
     wrapper.unmount();
   });

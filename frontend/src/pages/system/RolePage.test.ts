@@ -49,7 +49,10 @@ describe('RolePage', () => {
     await nextTick();
 
     expect(document.body.textContent).toContain('新建角色');
-    expect(document.querySelector('.a-form-row--wide')).not.toBeNull();
+    // 描述占满整行
+    expect(
+      document.querySelector('#role-description')?.closest('.ant-col-24'),
+    ).not.toBeNull();
     expect(document.body.textContent).toContain('已选 0 / 3');
     expect(document.body.textContent).toContain('查看业务数据');
     expect(document.body.textContent).toContain('查看系统管理');
@@ -57,9 +60,7 @@ describe('RolePage', () => {
     const group = [
       ...document.querySelectorAll('.permission-group__head'),
     ].find((node) => node.textContent?.includes('业务'));
-    group
-      ?.querySelector('[role="checkbox"]')
-      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    group?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click();
     await nextTick();
     expect(document.body.textContent).toContain('已选 2 / 3');
     wrapper.unmount();
@@ -77,8 +78,8 @@ describe('RolePage', () => {
     await nextTick();
 
     expect(
-      [...document.querySelectorAll('.a-form-row__error')].map((item) =>
-        item.textContent?.trim(),
+      [...document.querySelectorAll('.ant-form-item-explain-error')].map(
+        (item) => item.textContent?.trim(),
       ),
     ).toEqual(['请输入角色标识', '请输入角色名称']);
     wrapper.unmount();
@@ -100,10 +101,14 @@ describe('RolePage', () => {
 
     const reason = '系统内置角色，不可修改或删除';
     for (const label of ['编辑', '删除']) {
-      const button = document.querySelector(`[aria-label="${label}（${reason}）"]`);
-      expect(button).toBeTruthy();
-      expect(button?.getAttribute('aria-disabled')).toBe('true');
+      const button = wrapper.get(`button[aria-label="${label}"]`);
+      expect(button.attributes('disabled')).toBeDefined();
     }
+    // 禁用原因放在 tooltip 里
+    const titles = wrapper
+      .findAllComponents({ name: 'ATooltip' })
+      .map((tooltip) => tooltip.props('title'));
+    expect(titles.filter((title) => title === reason)).toHaveLength(2);
     wrapper.unmount();
   });
 });

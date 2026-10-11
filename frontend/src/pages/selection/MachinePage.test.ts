@@ -2,79 +2,34 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { message } from 'ant-design-vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AField, ASearchField, ASelect, ATokenField } from '@/ui';
-import { alert } from '@/ui/alert';
-import { toast, useToastState } from '@/ui/toast';
-import EntitySource from './EntitySource.vue';
+import { dialogs } from '@/pages/shared/confirm';
+import {
+  chooseSegment,
+  columnWidths,
+  findButton,
+  runTreeAction,
+  toggleTreeCheck,
+  treeChecks,
+  treeNodes,
+} from '@/test-helpers';
+import EntityTree from './EntityTree.vue';
 import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
 
-const selectionPageCss = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'shared',
-    'selection-page.css',
-  ),
-  'utf8',
-);
-const machinePageSource = readFileSync(
-  fileURLToPath(import.meta.url).replace(/\.test\.ts$/, '.vue'),
-  'utf8',
-);
-const machineSourceListSource = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    'machine',
-    'MachineSourceList.vue',
-  ),
-  'utf8',
-);
-const machineGlobalSearchSource = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    'machine',
-    'MachineGlobalSearch.vue',
-  ),
-  'utf8',
-);
 const machineSectionPanelSource = readFileSync(
   join(
     dirname(fileURLToPath(import.meta.url)),
     'machine',
     'MachineSectionPanel.vue',
-  ),
-  'utf8',
-);
-const entitySource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'EntitySource.vue'),
-  'utf8',
-);
-const sharedSourceListSource = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-    'ui',
-    'ASourceList.vue',
-  ),
-  'utf8',
-);
-const globalCss = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-    'styles',
-    'global.css',
   ),
   'utf8',
 );
@@ -114,9 +69,29 @@ async function mountPage(
   return mount(MachinePage, { global: { plugins: [pinia, router] } });
 }
 
+/** 按 placeholder 找 a-select（含多选） */
+function selectBy(
+  wrapper: Pick<VueWrapper, 'findAllComponents'>,
+  placeholder: string,
+) {
+  return wrapper
+    .findAllComponents({ name: 'ASelect' })
+    .find((component) => component.props('placeholder') === placeholder);
+}
+
+/** 按 placeholder 找 a-input */
+function inputBy(
+  wrapper: Pick<VueWrapper, 'findAllComponents'>,
+  placeholder: string,
+) {
+  return wrapper
+    .findAllComponents({ name: 'AInput' })
+    .find((component) => component.props('placeholder') === placeholder);
+}
+
 describe('MachinePage', () => {
   afterEach(() => {
-    toast.clear();
+    message.destroy();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -125,22 +100,33 @@ describe('MachinePage', () => {
     expect(wrapper.get('h1.visually-hidden').text()).toBe('机型结构');
     const catalogTabs = wrapper.get('.machine-catalog-tabs');
     const tabLabels = catalogTabs
-      .findAll('[role="tab"]')
-      .map((tab) => tab.text());
+      .findAll('.ant-segmented-item')
+      .map((tab) => tab.text().trim());
 
     expect(tabLabels).toEqual(['结构', '专案机型']);
     expect(wrapper.text()).toContain('标准输送段配置');
     expect(wrapper.text()).not.toContain('CSL(U)R-802（插框机）');
 
-    await catalogTabs
-      .findAll('[role="tab"]')
-      .find((tab) => tab.text() === '专案机型')
-      ?.trigger('click');
-    await flushPromises();
+    await chooseSegment(
+      wrapper.getComponent({ name: 'ASegmented' }),
+      '专案机型',
+    );
 
-    expect(wrapper.text()).toContain('CSL(U)R-802（插框机）');
-    expect(wrapper.text()).not.toContain('标准输送段配置');
-    expect(wrapper.find('[aria-label="新建配置"]').exists()).toBe(false);
+    // 看树节点而不是整页文字：antd 树切换数据时的动画占位在测试环境里不会结束
+    expect(treeNodes(wrapper, 'CSL(U)R-802（插框机）').length).toBeGreaterThan(
+      0,
+    );
+    expect(wrapper.getComponent(EntityTree).props('groups')).not.toContainEqual(
+      expect.objectContaining({
+        configurations: expect.arrayContaining([
+          expect.objectContaining({ name: '标准输送段配置' }),
+        ]),
+      }),
+    );
+    // 专案机型没有「配置」这一层
+    expect(wrapper.getComponent(EntityTree).props('allowConfigurations')).toBe(
+      false,
+    );
     expect(wrapper.vm.$route.query.catalog).toBe('project');
     wrapper.unmount();
   });
@@ -154,7 +140,10 @@ describe('MachinePage', () => {
     await flushPromises();
 
     expect(
-      wrapper.get('.machine-catalog-tabs [aria-selected="true"]').text(),
+      wrapper
+        .get('.machine-catalog-tabs .ant-segmented-item-selected')
+        .text()
+        .trim(),
     ).toBe('专案机型');
     expect(wrapper.text()).toContain('CSL(U)R-802（插框机）');
     expect(wrapper.vm.$route.query.catalog).toBe('project');
@@ -180,7 +169,7 @@ describe('MachinePage', () => {
     await flushPromises();
 
     const processSelect = wrapper
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find((component) => component.props('placeholder') === '选择制程');
     expect(processSelect).toBeDefined();
     expect(processSelect?.props('size')).toBe('small');
@@ -195,10 +184,10 @@ describe('MachinePage', () => {
     expect(wrapper.find('.machine-process-context__label').exists()).toBe(
       false,
     );
-    expect(processSelect?.props('ariaLabel')).toBe('当前浏览制程');
+    expect(processSelect?.attributes('aria-label')).toBe('当前浏览制程');
     expect(wrapper.text()).toContain('管理制程');
     expect(wrapper.get('.machine-process-context__manage').classes()).toContain(
-      'a-button--small',
+      'ant-btn-sm',
     );
     expect(wrapper.text()).toContain('标准输送段配置');
 
@@ -206,7 +195,7 @@ describe('MachinePage', () => {
     await flushPromises();
     expect(document.body.textContent).not.toContain('默认制程 · 兼容现有数据');
 
-    processSelect?.vm.$emit('update:modelValue', second.item.id);
+    processSelect?.vm.$emit('update:value', second.item.id);
     await flushPromises();
 
     expect(wrapper.getComponent(MachineSectionPanel).props('processId')).toBe(
@@ -221,35 +210,20 @@ describe('MachinePage', () => {
   it('keeps the current browsing process while global structure search defaults to every process', async () => {
     const wrapper = await mountPage(true, true);
 
-    const browsingProcess = wrapper
-      .findAllComponents(ASelect)
-      .find((component) => component.props('ariaLabel') === '当前浏览制程');
+    const browsingProcess = selectBy(wrapper, '选择制程');
     expect(browsingProcess).toBeDefined();
     expect(wrapper.text()).toContain('目录浏览');
     expect(wrapper.text()).toContain('条件查找');
-    expect(wrapper.get('.selection-split').attributes('style')).toContain(
-      '--machine-source-width: 280px',
-    );
 
-    wrapper.getComponent(EntitySource).vm.$emit('resize', 300);
-    await flushPromises();
-    expect(wrapper.get('.selection-split').attributes('style')).toContain(
-      '--machine-source-width: 300px',
+    await chooseSegment(
+      wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
+      '条件查找',
     );
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '条件查找')
-      ?.trigger('click');
-    await flushPromises();
 
     expect(wrapper.text()).not.toContain('全局查找不受当前浏览制程限制');
     expect(wrapper.text()).toContain('全部制程');
     expect(wrapper.text()).not.toContain('默认覆盖所有上层制程');
-    expect(wrapper.get('.selection-split').attributes('style')).toContain(
-      '--machine-source-width: 300px',
-    );
-    expect(wrapper.getComponent(ASelect).props('modelValue')).toBe(1);
+    expect(browsingProcess?.props('value')).toBe(1);
     wrapper.unmount();
   });
 
@@ -304,34 +278,30 @@ describe('MachinePage', () => {
     }
     await flushPromises();
 
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '条件查找')
-      ?.trigger('click');
-    await flushPromises();
+    await chooseSegment(
+      wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
+      '条件查找',
+    );
 
     const globalSearch = wrapper.getComponent(MachineGlobalSearch);
     expect(
       globalSearch
-        .findAllComponents(ATokenField)
-        .every((field) => field.props('maxVisibleTokens') === 3),
+        .findAllComponents({ name: 'ASelect' })
+        .every((field) => field.props('maxTagCount') === 3),
     ).toBe(true);
     const machineField = globalSearch
-      .findAllComponents(ATokenField)
+      .findAllComponents({ name: 'ASelect' })
       .find((component) => component.props('placeholder') === '选择适用机型');
-    machineField?.vm.$emit('update:modelValue', [machineModel.id]);
+    machineField?.vm.$emit('update:value', [machineModel.id]);
     await flushPromises();
-    await globalSearch
-      .findAll('button')
-      .find((button) => button.text() === '查找')
-      ?.trigger('click');
+    await findButton(globalSearch, '查找')?.trigger('click');
     await flushPromises();
 
     expect(globalSearch.text()).toContain('制程1（1个结构）');
     expect(globalSearch.text()).toContain('制程2（1个结构）');
-    const secondResult = globalSearch.findAll(
-      '.machine-global-search__result',
-    )[1];
+    const secondResult = globalSearch
+      .findAll('button')
+      .filter((button) => button.text().includes('查看结构'))[1];
     expect(secondResult).toBeDefined();
     await secondResult?.trigger('click');
     await flushPromises();
@@ -350,20 +320,17 @@ describe('MachinePage', () => {
 
   it('enables global search when only an upper process is selected', async () => {
     const wrapper = await mountPage(true, true);
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '条件查找')
-      ?.trigger('click');
-    await flushPromises();
+    await chooseSegment(
+      wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
+      '条件查找',
+    );
 
     const globalSearch = wrapper.getComponent(MachineGlobalSearch);
-    const processField = globalSearch.findAllComponents(ATokenField)[3];
-    processField?.vm.$emit('update:modelValue', [1]);
+    const processField = globalSearch.findAllComponents({ name: 'ASelect' })[3];
+    processField?.vm.$emit('update:value', [1]);
     await flushPromises();
 
-    const searchButton = globalSearch
-      .findAll('button')
-      .find((button) => button.text() === '查找');
+    const searchButton = findButton(globalSearch, '查找');
     expect(searchButton?.attributes('disabled')).toBeUndefined();
     wrapper.unmount();
   });
@@ -373,7 +340,7 @@ describe('MachinePage', () => {
     expect(wrapper.text()).not.toContain('生成并下载报告');
     expect(wrapper.text()).not.toContain('预览 / 打印 PDF');
     expect(wrapper.text()).not.toContain('全选机型');
-    expect(wrapper.find('[aria-label^="选择"]').exists()).toBe(false);
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
     expect(wrapper.text()).toMatch(/输送机构|分类/);
     wrapper.unmount();
   });
@@ -383,26 +350,20 @@ describe('MachinePage', () => {
     expect(wrapper.text()).toContain('生成并下载报告');
     expect(wrapper.text()).toContain('预览 / 打印 PDF');
     expect(wrapper.text()).toContain('全选机型');
-    expect(wrapper.find('[aria-label^="选择"]').exists()).toBe(true);
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(true);
     expect(wrapper.text()).toMatch(/输送机构|分类/);
     wrapper.unmount();
   });
 
   it('checks only the selected tree node when machine names are duplicated', async () => {
     const wrapper = await mountPage(true);
-    const duplicateCheckboxes = wrapper.findAll(
-      'input[aria-label="选择 01 中心拍板"]',
+    const duplicates = treeNodes(wrapper, '01 中心拍板');
+    expect(duplicates.length).toBeGreaterThan(1);
+    await toggleTreeCheck(wrapper, '01 中心拍板', 0);
+
+    expect(treeChecks(wrapper, '01 中心拍板')).toEqual(
+      duplicates.map((_, index) => index === 0),
     );
-
-    expect(duplicateCheckboxes.length).toBeGreaterThan(1);
-    await duplicateCheckboxes[0]?.setValue(true);
-    await flushPromises();
-
-    expect(
-      wrapper
-        .findAll('input[aria-label="选择 01 中心拍板"]')
-        .map((checkbox) => (checkbox.element as HTMLInputElement).checked),
-    ).toEqual(duplicateCheckboxes.map((_, index) => index === 0));
     expect(wrapper.text()).toMatch(/已选\s+1\s+\//);
     wrapper.unmount();
   });
@@ -410,9 +371,10 @@ describe('MachinePage', () => {
   it('shows configuration management and machine sorting to writers', async () => {
     const wrapper = await mountPage(true, true);
 
-    expect(wrapper.find('[aria-label="新建配置"]').exists()).toBe(true);
-    await wrapper.get('[aria-label^="编辑机型"]').trigger('click');
-    await flushPromises();
+    expect(wrapper.getComponent(EntityTree).props('allowConfigurations')).toBe(
+      true,
+    );
+    await runTreeAction(wrapper, '01 单段输送段（搭配）', '编辑机型');
 
     expect(document.body.textContent).toContain('配置（可选）');
     expect(document.body.textContent).toContain('排序');
@@ -423,11 +385,11 @@ describe('MachinePage', () => {
   it('lets writers choose between structure and machine-notes tab types', async () => {
     const wrapper = await mountPage(true, true);
 
-    await wrapper.get('[aria-label="新增 Tab"]').trigger('click');
+    await wrapper.get('.ant-tabs-nav-add').trigger('click');
     await flushPromises();
 
     const typeSelect = wrapper
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find((component) =>
         (component.props('options') as Array<{ value: string }>).some(
           (item) => item.value === 'notes',
@@ -444,23 +406,14 @@ describe('MachinePage', () => {
 
   it('explains why a selected machine with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
-    const checkbox = wrapper.get(
-      'input[aria-label="选择 01 单段输送段（搭配）"]',
-    );
-    await checkbox.setValue(true);
-    await flushPromises();
+    await toggleTreeCheck(wrapper, '01 单段输送段（搭配）');
 
     const openSpy = vi.spyOn(window, 'open');
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '预览 / 打印 PDF')
-      ?.trigger('click');
+    const warning = vi.spyOn(message, 'warning');
+    await findButton(wrapper, '预览/打印PDF')?.trigger('click');
 
     expect(openSpy).not.toHaveBeenCalled();
-    expect(useToastState().items.value.at(-1)).toMatchObject({
-      tone: 'warning',
-      message: '所选机型暂无可生成的内容',
-    });
+    expect(warning).toHaveBeenLastCalledWith('所选机型暂无可生成的内容');
     wrapper.unmount();
   });
 
@@ -505,13 +458,13 @@ describe('MachinePage', () => {
     await addStructure?.trigger('click');
     await flushPromises();
     const processSelect = structurePanel
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find(
         (component) =>
           component.props('placeholder') === '选择工艺制程（可选）',
       );
     expect(processSelect).toBeDefined();
-    expect(processSelect?.props('clearable')).toBe(true);
+    expect(processSelect?.props('allowClear')).toBe(true);
     expect(processSelect?.props('options')).toEqual(
       selectionStore.processSteps.map((item) => ({
         label: `${item.layer} · ${item.name}`,
@@ -535,7 +488,7 @@ describe('MachinePage', () => {
     await flushPromises();
     expect(
       notesPanel
-        .findAllComponents(ASelect)
+        .findAllComponents({ name: 'ASelect' })
         .some(
           (component) =>
             component.props('placeholder') === '选择工艺制程（可选）',
@@ -543,7 +496,7 @@ describe('MachinePage', () => {
     ).toBe(false);
     expect(
       notesPanel
-        .findAllComponents(ASelect)
+        .findAllComponents({ name: 'ASelect' })
         .some(
           (component) =>
             component.props('placeholder') === '选择机型（可选）' ||
@@ -587,26 +540,26 @@ describe('MachinePage', () => {
     await flushPromises();
 
     const machineSelect = wrapper
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find(
         (component) => component.props('placeholder') === '选择机型（可选）',
       );
     const boardSelect = wrapper
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find(
         (component) =>
           component.props('placeholder') === '选择板件特性（可选）',
       );
-    expect(machineSelect?.props('filterable')).toBe(true);
-    expect(machineSelect?.props('clearable')).toBe(true);
+    expect(machineSelect?.props('showSearch')).toBe(true);
+    expect(machineSelect?.props('allowClear')).toBe(true);
     expect(machineSelect?.props('options')).toEqual(
       selectionStore.dictionaryItems('machine-model').map((item) => ({
         label: item.name,
         value: item.id,
       })),
     );
-    expect(boardSelect?.props('filterable')).toBe(true);
-    expect(boardSelect?.props('clearable')).toBe(true);
+    expect(boardSelect?.props('showSearch')).toBe(true);
+    expect(boardSelect?.props('allowClear')).toBe(true);
     expect(boardSelect?.props('options')).toEqual(
       selectionStore.dictionaryItems('board-characteristic').map((item) => ({
         label: item.name,
@@ -671,10 +624,10 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const search = panel.getComponent(ASearchField);
-    expect(search.props('placeholder')).toBe('搜索规格、型号或功能');
+    const search = inputBy(panel, '搜索规格、型号或功能');
+    expect(search).toBeDefined();
 
-    search.vm.$emit('update:modelValue', secondProcessStep.name);
+    search!.vm.$emit('update:value', secondProcessStep.name);
     await flushPromises();
 
     expect(panel.text()).toContain('制程搜索-匹配');
@@ -719,11 +672,11 @@ describe('MachinePage', () => {
     await flushPromises();
 
     const processFilter = panel
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find((component) => component.props('placeholder') === '工艺制程');
     expect(processFilter).toBeDefined();
-    expect(processFilter?.props('filterable')).toBe(true);
-    expect(processFilter?.props('clearable')).toBe(true);
+    expect(processFilter?.props('showSearch')).toBe(true);
+    expect(processFilter?.props('allowClear')).toBe(true);
     expect(processFilter?.props('options')).toEqual(
       selectionStore.processSteps.map((item) => ({
         label: `${item.layer} · ${item.name}`,
@@ -731,7 +684,7 @@ describe('MachinePage', () => {
       })),
     );
 
-    processFilter?.vm.$emit('update:modelValue', secondProcessStep.id);
+    processFilter?.vm.$emit('update:value', secondProcessStep.id);
     await flushPromises();
 
     expect(panel.text()).toContain('制程下拉-匹配');
@@ -739,7 +692,7 @@ describe('MachinePage', () => {
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(processFilter?.props('modelValue')).toBeNull();
+    expect(processFilter?.props('value')).toBeNull();
     expect(panel.text()).toContain('制程下拉-不匹配');
     wrapper.unmount();
   });
@@ -795,7 +748,7 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const selects = panel.findAllComponents(ASelect);
+    const selects = panel.findAllComponents({ name: 'ASelect' });
     const machineModelFilter = selects.find(
       (component) => component.props('placeholder') === '机型',
     );
@@ -804,8 +757,8 @@ describe('MachinePage', () => {
     );
 
     expect(machineModelFilter).toBeDefined();
-    expect(machineModelFilter?.props('filterable')).toBe(true);
-    expect(machineModelFilter?.props('clearable')).toBe(true);
+    expect(machineModelFilter?.props('showSearch')).toBe(true);
+    expect(machineModelFilter?.props('allowClear')).toBe(true);
     expect(machineModelFilter?.props('options')).toEqual(
       selectionStore.dictionaryItems('machine-model').map((item) => ({
         label: item.name,
@@ -813,8 +766,8 @@ describe('MachinePage', () => {
       })),
     );
     expect(boardCharacteristicFilter).toBeDefined();
-    expect(boardCharacteristicFilter?.props('filterable')).toBe(true);
-    expect(boardCharacteristicFilter?.props('clearable')).toBe(true);
+    expect(boardCharacteristicFilter?.props('showSearch')).toBe(true);
+    expect(boardCharacteristicFilter?.props('allowClear')).toBe(true);
     expect(boardCharacteristicFilter?.props('options')).toEqual(
       selectionStore.dictionaryItems('board-characteristic').map((item) => ({
         label: item.name,
@@ -822,14 +775,14 @@ describe('MachinePage', () => {
       })),
     );
 
-    machineModelFilter?.vm.$emit('update:modelValue', secondMachineModel.id);
+    machineModelFilter?.vm.$emit('update:value', secondMachineModel.id);
     await flushPromises();
     expect(panel.text()).toContain('字典筛选-第二项');
     expect(panel.text()).not.toContain('字典筛选-第一项');
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     boardCharacteristicFilter?.vm.$emit(
-      'update:modelValue',
+      'update:value',
       firstBoardCharacteristic.id,
     );
     await flushPromises();
@@ -838,8 +791,8 @@ describe('MachinePage', () => {
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(machineModelFilter?.props('modelValue')).toBeNull();
-    expect(boardCharacteristicFilter?.props('modelValue')).toBeNull();
+    expect(machineModelFilter?.props('value')).toBeNull();
+    expect(boardCharacteristicFilter?.props('value')).toBeNull();
     expect(panel.text()).toContain('字典筛选-第一项');
     expect(panel.text()).toContain('字典筛选-第二项');
     wrapper.unmount();
@@ -847,135 +800,11 @@ describe('MachinePage', () => {
 
   it('keeps structure labels compact and gives specifications more room', async () => {
     const wrapper = await mountPage(true, true);
-    const headers = wrapper.findAll('.a-table thead th');
+    const widths = Object.values(columnWidths(wrapper));
 
-    expect(headers[0]?.attributes('style')).toContain('width: 90px');
-    expect(headers[1]?.attributes('style')).toContain('width: 100px');
-    expect(headers[2]?.attributes('style')).toContain('width: 110px');
-    expect(headers[3]?.attributes('style')).toContain('width: 120px');
-    expect(headers[4]?.attributes('style')).toContain('width: 100px');
-    expect(headers[5]?.attributes('style')).toContain('width: 220px');
-    expect(headers[6]?.attributes('style')).toContain('width: 120px');
-    expect(headers[7]?.attributes('style')).toContain('width: 96px');
-    expect(headers[8]?.attributes('style')).toContain('width: 72px');
+    expect(widths).toEqual([90, 100, 110, 120, 100, 220, 120, 96, 72]);
 
     wrapper.unmount();
-  });
-
-  it('uses the default control scale for sidebar entity text, keeping counts and small action buttons compact', () => {
-    expect(machinePageSource).toMatch(
-      /\.machine-source-stack\s*\{[^}]*gap:\s*var\(--space-2\);/s,
-    );
-    expect(machinePageSource).toMatch(
-      /\.machine-catalog-tabs :deep\(\.a-tab-bar__tab\)\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-control\);/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-tree-row\s*\{[^}]*font:\s*var\(--text-control\);/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-source__search\s*\{[^}]*height:\s*var\(--control-height-md\);[^}]*font:\s*var\(--text-control\);/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-source__action\s*\{[^}]*height:\s*var\(--control-height-sm\);[^}]*font:\s*var\(--text-caption\);/s,
-    );
-    expect(sharedSourceListSource).toMatch(
-      /\.a-source-list__toggle,\s*\.a-source-list__item\s*\{[^}]*font:\s*var\(--text-control\);/s,
-    );
-    expect(sharedSourceListSource).toMatch(
-      /\.a-source-list__count\s*\{[^}]*font:\s*var\(--text-caption\);/s,
-    );
-  });
-
-  it('does not reserve invisible action space that makes tree labels wrap early', () => {
-    expect(machineSourceListSource).toMatch(
-      /\.machine-tree-row\s*\{[^}]*position:\s*relative;/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-tree-row__tools\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-1\);/s,
-    );
-    expect(machineSourceListSource).not.toMatch(
-      /\.machine-tree-row__tools\s*\{[^}]*margin-left:\s*auto;/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-source__tree\s*\{[^}]*overflow:\s*hidden auto;/s,
-    );
-    expect(machineSourceListSource).toMatch(
-      /\.machine-tree-row__toggle span,\s*\.machine-tree-row__name\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s,
-    );
-    expect(entitySource).toMatch(
-      /<MachineSourceList[\s\S]*?:storage-key="`selection:source-list-width:\$\{kind\}:v5`"/,
-    );
-  });
-
-  it('left-aligns custom badge and action content inside table cells', async () => {
-    window.localStorage.clear();
-    const wrapper = await mountPage(true, true);
-    const selectionStore = useSelectionStore();
-    const panel = wrapper.getComponent(MachineSectionPanel);
-    const machineName = panel.props('machineName') as string;
-    const section = panel.props('section') as { id: number; kind: string };
-    const sensor = selectionStore.sensors[0];
-
-    expect(section.kind).toBe('structure');
-    expect(sensor).toBeDefined();
-    if (!sensor) return;
-
-    expect(
-      selectionStore.saveMachineSectionRow(section.id, machineName, {
-        note: '',
-        purpose: '',
-        role: '对齐测试',
-        sensorIds: [sensor.id],
-      }).ok,
-    ).toBe(true);
-    await flushPromises();
-
-    expect(wrapper.find('.badge-wrap').exists()).toBe(true);
-    expect(wrapper.find('.table-actions').exists()).toBe(true);
-    expect(selectionPageCss).toMatch(
-      /\.badge-wrap\s*\{[^}]*justify-content:\s*flex-start;/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.table-actions\s*\{[^}]*justify-content:\s*flex-start;/s,
-    );
-
-    wrapper.unmount();
-  });
-
-  it('widens uploaded schematic previews without changing the upload control', () => {
-    expect(selectionPageCss).toMatch(
-      /\.machine-images:not\(\.machine-images--collapsed\)\s*\{[^}]*padding-left:\s*var\(--space-3\);[^}]*border-left:\s*1px solid var\(--separator\);/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.machine-images \.image-card\s*\{[^}]*justify-self:\s*end;[^}]*width:\s*calc\(100% \+ var\(--space-4\)\);/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.machine-images \.a-file-drop\s*\{[^}]*min-height:/s,
-    );
-    expect(selectionPageCss).not.toMatch(
-      /\.machine-images \.a-file-drop\s*\{[^}]*width:\s*calc\(100% \+[^}]*\}/s,
-    );
-    expect(machineSectionPanelSource).toContain('class="image-card__preview"');
-    expect(machineSectionPanelSource).toContain('class="image-card__footer"');
-    expect(machineSectionPanelSource).toContain('class="image-card__name"');
-    expect(machineSectionPanelSource).toContain('class="image-card__actions"');
-    expect(machineSectionPanelSource).toContain('class="image-card__media"');
-    expect(machineSectionPanelSource).toContain(':icon="Maximize2"');
-    expect(selectionPageCss).toMatch(
-      /\.image-card\s*\{[^}]*background:\s*var\(--bg-content\);[^}]*border:\s*1px solid var\(--separator-opaque\);[^}]*overflow:\s*hidden;/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.image-card__media\s*\{[^}]*background:\s*var\(--fill-3\);/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.image-card__footer\s*\{[^}]*border-top:\s*1px solid var\(--separator\);/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /\.image-card img\s*\{[^}]*object-fit:\s*contain;/s,
-    );
-    expect(machineSectionPanelSource).not.toMatch(
-      /<button[^>]*class="image-card"/,
-    );
   });
 
   it('labels the table authoring action as a new selection', async () => {
@@ -988,18 +817,6 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('keeps the new selection action readable when the content panel narrows', () => {
-    expect(machineSectionPanelSource).toMatch(
-      /\.machine-body\s*>\s*\.selection-panel\s*\{[^}]*container-type:\s*inline-size;/s,
-    );
-    expect(machineSectionPanelSource).toMatch(
-      /\.machine-structure-toolbar\s*>\s*\.a-button:last-child\s*\{[^}]*min-width:\s*6rem;/s,
-    );
-    expect(machineSectionPanelSource).toMatch(
-      /@container\s*\(width\s*<=\s*48rem\)\s*\{[\s\S]*?\.machine-structure-toolbar__search\s*\{[^}]*grid-column:\s*1\s*\/\s*3;/s,
-    );
-  });
-
   it('uses aligned separators for sensor entries inside a compound row', () => {
     expect(machineSectionPanelSource).toContain(
       "'machine-sensor-entry--continued': !row.groupEnd",
@@ -1008,19 +825,7 @@ describe('MachinePage', () => {
       'class="machine-spec-cell machine-sensor-entry"',
     );
     expect(machineSectionPanelSource).toMatch(
-      /\.machine-sensor-entry--continued\s*\{[^}]*border-bottom:\s*1px solid var\(--separator\);/s,
-    );
-  });
-
-  it('uses a slim overlay scrollbar throughout the app', () => {
-    expect(globalCss).toMatch(
-      /\*::-webkit-scrollbar\s*\{[^}]*width:\s*6px;[^}]*height:\s*6px;/s,
-    );
-    expect(globalCss).toMatch(
-      /\*::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*transparent;/s,
-    );
-    expect(globalCss).toMatch(
-      /\*:hover::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*var\(--scrollbar-thumb\);/s,
+      /\.machine-sensor-entry--continued\s*\{[^}]*border-bottom:\s*1px solid var\(--color-split\);/s,
     );
   });
 
@@ -1049,69 +854,15 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('keeps medium widths side by side and stacks only on narrow screens', () => {
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.selection-split\s*\{[^}]*grid-template-rows:\s*minmax\(12rem,\s*42vh\)\s+minmax\(0,\s*1fr\);/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.entity-source\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
-    );
-    expect(machinePageSource).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.machine-source-stack\s*\{[^}]*width:\s*100%;/s,
-    );
-    expect(machinePageSource).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(9rem,\s*1fr\) minmax\(8rem,\s*1fr\);/s,
-    );
-    expect(machinePageSource).toMatch(
-      /@media \(width <= 40rem\)[\s\S]*\.machine-report\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/s,
-    );
-    expect(machinePageSource).toMatch(
-      /@media \(48rem < width <= 60rem\)[\s\S]*\.selection-split--machine\s*\{[^}]*grid-template-columns:/s,
-    );
-    expect(machineGlobalSearchSource).toMatch(
-      /@media \(48rem < width <= 60rem\)[\s\S]*\.machine-global-search\s*\{[^}]*grid-template-columns:/s,
-    );
-    expect(machineGlobalSearchSource).toMatch(
-      /@media \(width <= 48rem\)[\s\S]*\.machine-global-search\s*\{[^}]*grid-template-columns:\s*1fr;/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 48rem\)[\s\S]*\.selection-split--machine > \.selection-panel\s*\{[^}]*overflow:\s*hidden auto;/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 48rem\)[\s\S]*\.selection-split--machine > \.selection-panel > \.machine-body\s*\{[^}]*min-height:\s*36rem;/s,
-    );
-  });
-
-  it('keeps the structure table usable when the schematic stacks below it', () => {
-    // 单列时若不给行高，隐式行把表格压成几像素，示意图反盖在筛选栏上
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.machine-body--with-images\s*\{[^}]*flex:\s*1 0 auto;[^}]*grid-template-rows:\s*minmax\(24rem,\s*1fr\) auto;/s,
-    );
-    expect(selectionPageCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.selection-tabpanel\s*\{[^}]*overflow:\s*hidden auto;/s,
-    );
-  });
-
   it('combines the active section and report actions into one desktop context bar', async () => {
     const wrapper = await mountPage(true, true);
-    const header = wrapper.get('.machine-panel-header');
-
-    expect(header.find('.machine-section-tabs').exists()).toBe(true);
-    expect(header.find('.machine-report').exists()).toBe(true);
-    expect(machinePageSource).toMatch(
-      /\.machine-panel-header\s*\{[^}]*display:\s*flex;[^}]*border-bottom:\s*1px solid var\(--separator\);/s,
-    );
-    expect(machinePageSource).toMatch(
-      /@media \(width <= 70rem\)[\s\S]*\.machine-panel-header\s*\{[^}]*align-items:\s*stretch;[^}]*flex-direction:\s*column;/s,
-    );
-
+    // 报告操作放在分区 a-tabs 的右侧区域，与标签同一行
+    expect(
+      wrapper
+        .find('.machine-section-tabs .ant-tabs-extra-content .machine-report')
+        .exists(),
+    ).toBe(true);
     wrapper.unmount();
-  });
-
-  it('keeps the structure filters and actions in a deterministic compact grid', () => {
-    expect(machineSectionPanelSource).toMatch(
-      /\.machine-structure-toolbar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(7rem,\s*1\.2fr\)\s+repeat\(3,\s*minmax\(6\.25rem,\s*1fr\)\)\s+minmax\(7\.5rem,\s*2\.6fr\)\s+auto\s+auto;/s,
-    );
   });
 
   it('shows the schematic upload only after the current tab has content', async () => {
@@ -1125,7 +876,7 @@ describe('MachinePage', () => {
     const expandImages = panel.find('[aria-label="展开结构示意图"]');
     if (expandImages.exists()) await expandImages.trigger('click');
 
-    expect(panel.find('.a-file-drop').exists()).toBe(false);
+    expect(panel.find('.ant-upload-drag').exists()).toBe(false);
     expect(panel.text()).toContain('请先新增内容后再添加图片');
     expect(sensor).toBeDefined();
     if (!sensor) return;
@@ -1140,7 +891,7 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    expect(panel.find('.a-file-drop').exists()).toBe(true);
+    expect(panel.find('.ant-upload-drag').exists()).toBe(true);
     expect(panel.text()).not.toContain('请先新增内容后再添加图片');
     wrapper.unmount();
   });
@@ -1177,10 +928,10 @@ describe('MachinePage', () => {
     });
     await flushPromises();
 
-    const typeFilter = panel.getComponent(ATokenField);
-    expect(typeFilter.props('placeholder')).toBe('传感器类型');
+    const typeFilter = selectBy(panel, '传感器类型')!;
+    expect(typeFilter).toBeDefined();
     typeFilter.vm.$emit(
-      'update:modelValue',
+      'update:value',
       sensors.slice(0, 2).map((sensor) => sensor.sensorType),
     );
     await flushPromises();
@@ -1191,7 +942,7 @@ describe('MachinePage', () => {
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(typeFilter.props('modelValue')).toEqual([]);
+    expect(typeFilter.props('value')).toEqual([]);
     expect(wrapper.text()).toContain('机型类型多选-3');
     wrapper.unmount();
   });
@@ -1199,7 +950,10 @@ describe('MachinePage', () => {
   it('resets the process form when the process being edited is deleted, and confirms before switching away from unsaved input', async () => {
     const wrapper = await mountPage(true, true);
     const selectionStore = useSelectionStore();
-    const extra = selectionStore.saveMachineProcess({ name: '待删制程', sort: 9 });
+    const extra = selectionStore.saveMachineProcess({
+      name: '待删制程',
+      sort: 9,
+    });
     if (!extra.ok) throw new Error('process fixture failed');
     await flushPromises();
 
@@ -1208,7 +962,9 @@ describe('MachinePage', () => {
 
     const processButton = (name: string, label: string) => {
       const row = [
-        ...document.querySelectorAll<HTMLElement>('.machine-process-list__item'),
+        ...document.querySelectorAll<HTMLElement>(
+          '.machine-process-list .ant-list-item',
+        ),
       ].find((item) => item.textContent?.includes(name));
       const button = row?.querySelector<HTMLButtonElement>(
         `button[aria-label="${label}"]`,
@@ -1216,25 +972,24 @@ describe('MachinePage', () => {
       if (!button) throw new Error(`${name} ${label} button missing`);
       return button;
     };
-    const nameField = () =>
-      wrapper
-        .findAllComponents(AField)
-        .find((field) => field.props('placeholder') === '例如：制程2')!;
+    const nameField = () => inputBy(wrapper, '例如：制程2')!;
 
     // 有未保存的新增草稿时切到编辑，用户选择“继续编辑”就保留草稿。
-    nameField().vm.$emit('update:modelValue', '未保存草稿');
+    nameField().vm.$emit('update:value', '未保存草稿');
     await flushPromises();
-    const confirmSpy = vi.spyOn(alert, 'confirm').mockResolvedValueOnce(false);
+    const confirmSpy = vi
+      .spyOn(dialogs, 'confirm')
+      .mockResolvedValueOnce(false);
     processButton('待删制程', '编辑制程').click();
     await flushPromises();
     expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(nameField().props('modelValue')).toBe('未保存草稿');
+    expect(nameField().props('value')).toBe('未保存草稿');
 
     // 确认放弃后才切到编辑该制程。
     confirmSpy.mockResolvedValueOnce(true);
     processButton('待删制程', '编辑制程').click();
     await flushPromises();
-    expect(nameField().props('modelValue')).toBe('待删制程');
+    expect(nameField().props('value')).toBe('待删制程');
     expect(document.body.textContent).toContain('编辑制程');
 
     // 删掉正在编辑的制程，表单退回新增状态。
@@ -1244,9 +999,11 @@ describe('MachinePage', () => {
     expect(
       selectionStore.machineProcesses.some((item) => item.id === extra.item.id),
     ).toBe(false);
-    expect(nameField().props('modelValue')).toBe('');
+    expect(nameField().props('value')).toBe('');
     expect(
-      document.querySelector('.machine-process-form h3')?.textContent,
+      document
+        .querySelector('.machine-process-form .ant-divider')
+        ?.textContent?.trim(),
     ).toBe('新增制程');
 
     wrapper.unmount();

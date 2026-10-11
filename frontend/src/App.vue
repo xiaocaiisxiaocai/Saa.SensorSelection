@@ -7,20 +7,10 @@ import AppShell from '@/shell/AppShell.vue';
 
 const route = useRoute();
 const useShell = computed(() => route.meta.layout !== 'none');
-const antdTheme = {
-  token: {
-    borderRadius: 6,
-    colorPrimary: '#1677ff',
-  },
-};
 </script>
 
 <template>
-  <a-config-provider
-    :auto-insert-space-in-button="false"
-    :locale="zhCN"
-    :theme="antdTheme"
-  >
+  <a-config-provider :auto-insert-space-in-button="false" :locale="zhCN">
     <AppShell v-if="useShell">
       <RouterView />
     </AppShell>

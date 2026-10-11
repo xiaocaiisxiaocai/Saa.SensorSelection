@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UPLOADING_TITLE } from '@/pages/shared/upload-lock';
 import { useAuthStore } from '@/stores/auth';
-import { AFileDrop } from '@/ui';
-import { toast } from '@/ui/toast';
+import { message } from 'ant-design-vue';
 import CustomerDocsPanel from './customer/CustomerDocsPanel.vue';
 import ProcessIntroPanel from './process/ProcessIntroPanel.vue';
 import Sensor3dPanel from './sensor/Sensor3dPanel.vue';
@@ -33,7 +32,7 @@ describe('upload panels', () => {
     uploadFileMock.mockReset();
   });
   afterEach(() => {
-    toast.clear();
+    message.destroy();
     vi.restoreAllMocks();
   });
 
@@ -59,21 +58,25 @@ describe('upload panels', () => {
 
       const wrapper = mount(panel, { props, global: { plugins: [pinia] } });
       const file = new File(['%PDF'], 'spec.pdf', { type: 'application/pdf' });
-      wrapper.getComponent(AFileDrop).vm.$emit('files', [file]);
-      await flushPromises();
+      const dragger = () => wrapper.getComponent({ name: 'AUploadDragger' });
+      const pick = async () => {
+        (dragger().props('beforeUpload') as (file: File) => boolean)(file);
+        // createFilePicker 用 setTimeout 把同一次选择的文件合成一批
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushPromises();
+      };
 
-      const drop = wrapper.getComponent(AFileDrop);
-      expect(drop.props('disabled')).toBe(true);
-      expect(drop.props('title')).toBe(UPLOADING_TITLE);
+      await pick();
+      expect(dragger().props('disabled')).toBe(true);
+      expect(wrapper.find('.ant-upload-text').text()).toBe(UPLOADING_TITLE);
 
-      drop.vm.$emit('files', [file]);
-      await flushPromises();
+      await pick();
       expect(uploadFileMock).toHaveBeenCalledTimes(1);
 
       // 上传失败（返回 null）同样要解锁。
       finish(null);
       await flushPromises();
-      expect(wrapper.getComponent(AFileDrop).props('disabled')).toBe(false);
+      expect(dragger().props('disabled')).toBe(false);
       wrapper.unmount();
     },
   );

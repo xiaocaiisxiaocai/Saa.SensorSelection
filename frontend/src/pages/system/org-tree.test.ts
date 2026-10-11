@@ -43,7 +43,7 @@ describe('org-tree', () => {
     expect(tree.map((node) => node.name)).toEqual(['孤儿', '事业部']);
     expect(tree[1]?.children[0]?.name).toBe('课别');
     expect(flattenOrgTree(tree)).toHaveLength(3);
-    expect(toTreeSelectNodes(nodes).map((node) => node.id)).toEqual([3, 1]);
+    expect(toTreeSelectNodes(nodes).map((node) => node.value)).toEqual([3, 1]);
   });
 
   it('forbids inverted org ranks but allows skipping a level', () => {

@@ -1,28 +1,14 @@
 <script setup lang="ts">
-import { Pencil, Trash2 } from 'lucide-vue-next';
+import type { TableColumnType } from 'ant-design-vue';
+import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import type { CustomerReqItem } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
+import { rowClick, scrollX, sortBy } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  AButton,
-  AField,
-  AFilterResetButton,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  ASearchField,
-  ASelect,
-  ASheet,
-  ATable,
-  ATextArea,
-  ATokenField,
-  type SelectOption,
-  type TableColumn,
-} from '@/ui';
 
 const props = defineProps<{ entityName: string }>();
 const store = useSelectionStore();
@@ -33,8 +19,8 @@ const dialogOpen = ref(false);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const query = ref('');
-const typeFilters = ref<Array<string | number>>([]);
-const sourceFilters = ref<Array<string | number>>([]);
+const typeFilters = ref<string[]>([]);
+const sourceFilters = ref<string[]>([]);
 const form = reactive({
   content: '',
   machine: '',
@@ -45,12 +31,12 @@ const form = reactive({
 });
 const dirtyGuard = useDirtyGuard(form);
 
-const typeOptions = computed<SelectOption[]>(() =>
+const typeOptions = computed(() =>
   store
     .dictionaryNames('customer-req')
     .map((name) => ({ label: name, value: name })),
 );
-const sourceOptions = computed<SelectOption[]>(() =>
+const sourceOptions = computed(() =>
   store
     .dictionaryNames('customer-req-source')
     .map((name) => ({ label: name, value: name })),
@@ -87,22 +73,51 @@ const hasActiveFilters = computed(
     typeFilters.value.length > 0 ||
     sourceFilters.value.length > 0,
 );
-const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [
+const columns = computed(() => {
+  const cols: TableColumnType<CustomerReqItem>[] = [
     // 136/108：最长字典值「02 两片检测标准」实测 113px、「04 产品迭代」84px，
-    // 加上单元格左右各 8px 内边距才不会折成两行把行高撑乱。
-    { key: 'type', label: '要求分类', width: 136, fixed: 'start', sortable: true },
-    { key: 'machine', label: '适用机型', width: 90 },
-    { key: 'process', label: '适用制程', width: 130 },
-    { key: 'content', label: '要求内容', minWidth: 230 },
-    { key: 'source', label: '来源', width: 108, sortable: true },
-    { key: 'note', label: '备注', minWidth: 140 },
+    // 加上单元格左右内边距才不会折成两行把行高撑乱。
+    {
+      key: 'type',
+      dataIndex: 'type',
+      title: '要求分类',
+      width: 136,
+      fixed: 'left',
+      sorter: sortBy<CustomerReqItem>('type'),
+    },
+    { key: 'machine', dataIndex: 'machine', title: '适用机型', width: 90 },
+    { key: 'process', dataIndex: 'process', title: '适用制程', width: 130 },
+    { key: 'content', dataIndex: 'content', title: '要求内容', width: 230 },
+    {
+      key: 'source',
+      dataIndex: 'source',
+      title: '来源',
+      width: 108,
+      sorter: sortBy<CustomerReqItem>('source'),
+    },
+    { key: 'note', dataIndex: 'note', title: '备注', width: 140 },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
+    cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
   }
   return cols;
 });
+const customRow = computed(() =>
+  rowClick<CustomerReqItem>((row) => {
+    if (writable.value) editItem(row);
+  }),
+);
+const typeError = computed(() =>
+  validationAttempted.value && !form.type ? '请选择要求分类' : undefined,
+);
+const sourceError = computed(() =>
+  validationAttempted.value && !form.source ? '请选择来源' : undefined,
+);
+const contentError = computed(() =>
+  validationAttempted.value && !form.content.trim()
+    ? '请输入要求内容'
+    : undefined,
+);
 
 watch(
   () => props.entityName,
@@ -162,7 +177,7 @@ function saveItem() {
     editId.value,
   );
   if (
-    toastResult(result, editId.value ? '要求已更新' : '要求已新增', {
+    notifyResult(result, editId.value ? '要求已更新' : '要求已新增', {
       stale: '该要求已被其他页面删除',
     })
   ) {
@@ -171,15 +186,13 @@ function saveItem() {
 }
 
 async function cancelDialog() {
-  if (await dirtyGuard.confirmClose()) {
-    dialogOpen.value = false;
-  }
+  if (await dirtyGuard.confirmClose()) dialogOpen.value = false;
 }
 
 async function deleteItem(item: CustomerReqItem) {
   const ok = await confirmDelete('删除要求', `确认删除“${item.content}”吗？`);
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteCrud('customer-req', props.entityName, item.id),
     '要求已删除',
     { stale: '该要求已被其他页面删除' },
@@ -190,117 +203,180 @@ async function deleteItem(item: CustomerReqItem) {
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <ATokenField
-        v-model="typeFilters"
+      <a-select
+        v-model:value="typeFilters"
         class="selection-toolbar__filter"
+        mode="multiple"
         :options="typeOptions"
         placeholder="要求分类"
         aria-label="要求分类筛选"
-        :max-visible-tokens="1"
+        :max-tag-count="1"
+        allow-clear
       />
-      <ATokenField
-        v-model="sourceFilters"
+      <a-select
+        v-model:value="sourceFilters"
         class="selection-toolbar__filter"
+        mode="multiple"
         :options="sourceOptions"
         placeholder="要求来源"
         aria-label="要求来源筛选"
-        :max-visible-tokens="1"
+        :max-tag-count="1"
+        allow-clear
       />
-      <ASearchField
-        v-model="query"
+      <a-input
+        v-model:value="query"
         class="selection-toolbar__filter"
         placeholder="搜索分类、机型、制程、内容、来源或备注"
         aria-label="搜索客户要求"
-      />
-      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-      <AButton v-if="writable" variant="filled" @click="addItem">
+        allow-clear
+      >
+        <template #prefix><Search :size="14" /></template>
+      </a-input>
+      <a-button
+        type="text"
+        :disabled="!hasActiveFilters"
+        aria-label="重置筛选"
+        @click="resetFilters"
+      >
+        <template #icon><RotateCcw :size="14" /></template>
+        重置
+      </a-button>
+      <a-button v-if="writable" type="primary" @click="addItem">
         新增要求
-      </AButton>
+      </a-button>
     </div>
-    <ATable
+    <a-table
       :columns="columns"
-      :rows="filtered"
+      :data-source="filtered"
       row-key="id"
-      :empty-text="
-        query.trim() || typeFilters.length || sourceFilters.length
-          ? '没有匹配的要求记录'
-          : '暂无要求记录'
-      "
-      @activate="writable && editItem($event)"
+      :pagination="false"
+      :custom-row="customRow"
+      :scroll="{ x: scrollX(columns) }"
+      :locale="{
+        emptyText: hasActiveFilters ? '没有匹配的要求记录' : '暂无要求记录',
+      }"
     >
-      <template #cell-actions="{ row }">
-        <div class="table-actions">
-          <AIconButton
-            :icon="Pencil"
-            label="编辑"
-            size="small"
-            @click="editItem(row)"
-          />
-          <AIconButton
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            @click="deleteItem(row)"
-          />
-        </div>
+      <template #bodyCell="{ column, record, text }">
+        <a-space v-if="column.key === 'actions'" :size="4">
+          <a-tooltip title="编辑">
+            <a-button
+              type="text"
+              size="small"
+              aria-label="编辑"
+              @click="editItem(record as CustomerReqItem)"
+            >
+              <template #icon><Pencil :size="14" /></template>
+            </a-button>
+          </a-tooltip>
+          <a-tooltip title="删除">
+            <a-button
+              type="text"
+              size="small"
+              danger
+              aria-label="删除"
+              @click="deleteItem(record as CustomerReqItem)"
+            >
+              <template #icon><Trash2 :size="14" /></template>
+            </a-button>
+          </a-tooltip>
+        </a-space>
+        <template v-else>{{ text || '—' }}</template>
       </template>
-    </ATable>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-table>
+    <a-modal
+      :open="dialogOpen"
       :title="editId ? '编辑要求' : '新增要求'"
       :width="560"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelDialog"
     >
-      <AFormGrid>
-        <AFormRow
-          label="要求分类"
-          required
-          :error="
-            validationAttempted && !form.type ? '请选择要求分类' : undefined
-          "
-        >
-          <ASelect v-model="form.type" :options="typeOptions" />
-        </AFormRow>
-        <AFormRow
-          label="来源"
-          required
-          :error="
-            validationAttempted && !form.source ? '请选择来源' : undefined
-          "
-        >
-          <ASelect v-model="form.source" :options="sourceOptions" />
-        </AFormRow>
-        <AFormRow label="适用机型">
-          <AField
-            v-model="form.machine"
-            :maxlength="100"
-            placeholder="如 ALL"
-          />
-        </AFormRow>
-        <AFormRow label="适用制程">
-          <AField v-model="form.process" :maxlength="100" placeholder="如 ALL" />
-        </AFormRow>
-        <AFormRow
-          label="要求内容"
-          required
-          wide
-          :error="
-            validationAttempted && !form.content.trim()
-              ? '请输入要求内容'
-              : undefined
-          "
-        >
-          <ATextArea v-model="form.content" :rows="3" :maxlength="600" />
-        </AFormRow>
-        <AFormRow label="备注">
-          <AField v-model="form.note" :maxlength="200" />
-        </AFormRow>
-      </AFormGrid>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item
+              html-for="customer-req-type"
+              label="要求分类"
+              required
+              :validate-status="typeError ? 'error' : undefined"
+              :help="typeError"
+            >
+              <a-select
+                id="customer-req-type"
+                v-model:value="form.type"
+                :options="typeOptions"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item
+              html-for="customer-req-source"
+              label="来源"
+              required
+              :validate-status="sourceError ? 'error' : undefined"
+              :help="sourceError"
+            >
+              <a-select
+                id="customer-req-source"
+                v-model:value="form.source"
+                :options="sourceOptions"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="customer-req-machine" label="适用机型">
+              <a-input
+                id="customer-req-machine"
+                v-model:value="form.machine"
+                :maxlength="100"
+                placeholder="如 ALL"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="customer-req-process" label="适用制程">
+              <a-input
+                id="customer-req-process"
+                v-model:value="form.process"
+                :maxlength="100"
+                placeholder="如 ALL"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item
+              html-for="customer-req-content"
+              label="要求内容"
+              required
+              :validate-status="contentError ? 'error' : undefined"
+              :help="contentError"
+            >
+              <a-textarea
+                id="customer-req-content"
+                v-model:value="form.content"
+                :rows="3"
+                :maxlength="600"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="customer-req-note" label="备注">
+              <a-input
+                id="customer-req-note"
+                v-model:value="form.note"
+                :maxlength="200"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelDialog">取消</AButton>
-        <AButton variant="filled" @click="saveItem">保存</AButton>
+        <a-button @click="cancelDialog">取消</a-button>
+        <a-button type="primary" @click="saveItem">保存</a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </div>
 </template>

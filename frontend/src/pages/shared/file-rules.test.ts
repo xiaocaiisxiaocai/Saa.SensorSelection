@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  describeFileRule,
-  formatBytes,
-  validateFile,
-} from './file-drop';
+import { describeFileRule, formatBytes, validateFile } from './file-rules';
 
 function makeFile(name: string, type: string, size: number) {
   const file = new File(['x'], name, { type });
@@ -22,7 +18,9 @@ const imageRule = {
 describe('file-drop helpers', () => {
   it('formats byte limits and a human hint', () => {
     expect(formatBytes(2 * 1024 * 1024)).toBe('2 MB');
-    expect(describeFileRule(imageRule)).toBe('支持 JPG / JPEG / PNG / WEBP，最大 2 MB');
+    expect(describeFileRule(imageRule)).toBe(
+      '支持 JPG / JPEG / PNG / WEBP，最大 2 MB',
+    );
   });
 
   it('rejects unsupported types and oversized files', () => {

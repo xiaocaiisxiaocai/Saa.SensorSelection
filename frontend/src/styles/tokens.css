@@ -1,105 +1,84 @@
+/*
+ * 设计令牌：数值全部取自 ant-design-vue 4 的默认主题（theme.defaultAlgorithm），
+ * 命名对应 antd 的 token 名（colorPrimary → --color-primary）。
+ * 自写样式只在需要 antd 组件以外的布局/装饰时才用到这些变量，
+ * 能用 antd 组件表达的地方不要再手写样式。
+ */
 :root {
   color-scheme: light;
 
-  --sys-blue: #005eb8;
-  --sys-blue-solid: #0066cc;
-  --sys-green: #16733c;
-  --sys-red: #c9182b;
-  --sys-orange: #9a4d00;
-  --sys-yellow: #ffcc00;
-  --sys-teal: #30b0c7;
-  --sys-indigo: #5856d6;
-  --sys-purple: #af52de;
-  --sys-pink: #ff2d55;
-  --sys-gray: #8e8e93;
-  --sys-blue-fill: rgb(22 119 255 / 16%);
-  --sys-blue-fill-strong: rgb(22 119 255 / 24%);
+  /* 品牌与功能色 */
+  --color-primary: #1677ff;
+  --color-primary-hover: #4096ff;
+  --color-primary-bg: #e6f4ff;
+  --color-primary-bg-hover: #bae0ff;
+  --color-primary-border: #91caff;
+  --color-success: #52c41a;
+  --color-success-bg: #f6ffed;
+  --color-warning: #faad14;
+  --color-warning-bg: #fffbe6;
+  --color-error: #ff4d4f;
+  --color-error-bg: #fff2f0;
+  --color-error-bg-hover: #fff1f0;
+  --color-info: #1677ff;
+  --color-info-bg: #e6f4ff;
+  --color-highlight-bg: #ffe58f;
 
-  /* 与 --sys-blue-fill / --fill-4 叠在白底上的视觉结果一致的不透明色。
-     列表行悬停时浮出的操作按钮需要“垫底色”遮住下面的长名称，
-     半透明色叠两层会比整行更深，所以单独给不透明版本。 */
-  --sys-blue-fill-opaque: #dae9ff;
-  --fill-4-opaque: #f4f4f5;
-  --sys-green-fill: rgb(22 115 60 / 14%);
-  --sys-red-fill: rgb(201 24 43 / 14%);
-  --sys-red-fill-strong: rgb(201 24 43 / 18%);
-  --sys-orange-fill: rgb(154 77 0 / 14%);
-  --sys-yellow-fill: rgb(255 204 0 / 18%);
-  --sys-teal-fill: rgb(48 176 199 / 14%);
-  --sys-indigo-fill: rgb(88 86 214 / 14%);
-  --focus-ring: 0 0 0 2px var(--sys-blue);
-  --focus-ring-offset: 0 0 0 2px var(--bg-content), 0 0 0 4px var(--sys-blue);
+  /* 文本 */
+  --color-text: rgb(0 0 0 / 88%);
+  --color-text-secondary: rgb(0 0 0 / 65%);
+  --color-text-tertiary: rgb(0 0 0 / 45%);
+  --color-text-quaternary: rgb(0 0 0 / 25%);
+  --color-text-light-solid: #fff;
 
-  --gray-1: #8e8e93;
-  --gray-2: #aeaeb2;
-  --gray-3: #c7c7cc;
-  --gray-4: #d1d1d6;
-  --gray-5: #e5e5ea;
-  --gray-6: #f2f2f7;
+  /* 边框与分割线 */
+  --color-border: #d9d9d9;
+  --color-border-secondary: #f0f0f0;
+  --color-split: rgb(5 5 5 / 6%);
 
-  --label: rgb(0 0 0);
-  --label-on-color: #fff;
-  --label-2: rgb(60 60 67 / 71%);
-  --label-3: rgb(60 60 67 / 30%);
-  --label-4: rgb(60 60 67 / 18%);
-  --label-placeholder: #59595e;
+  /* 填充 */
+  --color-fill: rgb(0 0 0 / 15%);
+  --color-fill-secondary: rgb(0 0 0 / 6%);
+  --color-fill-tertiary: rgb(0 0 0 / 4%);
+  --color-fill-quaternary: rgb(0 0 0 / 2%);
+  --color-fill-alter: #fafafa;
 
-  --separator: rgb(0 0 0 / 6%);
-  --separator-opaque: #f0f0f0;
-  --control-stroke: rgb(60 60 67 / 36%);
-  --scrollbar-thumb: rgb(60 60 67 / 22%);
-  --scrollbar-thumb-hover: rgb(60 60 67 / 34%);
+  /* 背景 */
+  --color-bg-layout: #f5f5f5;
+  --color-bg-container: #fff;
+  --color-bg-elevated: #fff;
+  --color-bg-mask: rgb(0 0 0 / 45%);
 
-  --fill-1: rgb(120 120 128 / 20%);
-  --fill-2: rgb(120 120 128 / 16%);
-  --fill-3: rgb(118 118 128 / 12%);
-  --fill-4: rgb(116 116 128 / 8%);
+  /* Layout.Sider 的暗色主题 */
+  --layout-sider-bg: #001529;
+  --layout-sider-text: rgb(255 255 255 / 65%);
+  --layout-sider-text-active: #fff;
 
-  --bg-window: #f0f2f5;
-  --bg-content: #fff;
-  --bg-grouped: #f5f5f5;
-  --bg-elevated: #fff;
-  --sider-bg: #001529;
-  --sider-text: rgb(255 255 255 / 88%);
-  --sider-text-2: rgb(255 255 255 / 45%);
+  --scrollbar-thumb: rgb(0 0 0 / 20%);
+  --scrollbar-thumb-hover: rgb(0 0 0 / 35%);
 
-  --surface-0: #fafafa;
-  --surface-1: #f5f5f5;
-  --surface-2: #eeeeee;
-  --surface-3: #e8e8e8;
-  --surface-4: #e0e0e0;
+  /* antd 按钮/输入框 focus-visible 时的外环 */
+  --focus-ring: 0 0 0 2px var(--color-primary-border);
 
-  --material-sidebar-bg: rgb(246 246 248 / 72%);
-  --material-toolbar-bg: rgb(255 255 255 / 72%);
-  --material-menu-bg: rgb(250 250 252 / 80%);
-  --material-blur: saturate(180%) blur(20px);
+  /* 字体：antd 默认字体栈 */
+  --font-family:
+    -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, 'Helvetica Neue',
+    arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-family-code:
+    'SFMono-Regular', consolas, 'Liberation Mono', menlo, courier, monospace;
 
-  --font-ui:
-    -apple-system, 'BlinkMacSystemFont', 'SF Pro Text', 'SF Pro Display',
-    'Inter var', 'Inter', 'PingFang SC', 'Noto Sans SC', 'HarmonyOS Sans SC',
-    'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
-  --font-mono:
-    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', consolas,
-    monospace;
+  /* 字号：fontSize 14 / fontSizeSM 12 / fontSizeLG 16 与 Typography 标题 */
+  --font-heading-3: 600 24px/32px var(--font-family);
+  --font-heading-4: 600 20px/28px var(--font-family);
+  --font-heading-5: 600 16px/24px var(--font-family);
+  --font-lg: 400 16px/24px var(--font-family);
+  --font-body: 400 14px/22px var(--font-family);
+  --font-body-strong: 600 14px/22px var(--font-family);
+  --font-sm: 400 12px/20px var(--font-family);
+  --font-sm-strong: 600 12px/20px var(--font-family);
 
-  --text-display: 700 28px/36px var(--font-ui);
-  --text-title-1: 600 24px/30px var(--font-ui);
-  --text-title-2: 600 20px/26px var(--font-ui);
-  --text-headline: 600 15px/22px var(--font-ui);
-  --text-body: 400 15px/22px var(--font-ui);
-  --text-control: 400 15px/22px var(--font-ui);
-  --text-control-em: 600 15px/22px var(--font-ui);
-  --text-field: 400 13px/18px var(--font-ui);
-  --text-field-em: 600 13px/18px var(--font-ui);
-  --text-toolbar: 400 12px/18px var(--font-ui);
-  --text-toolbar-em: 600 12px/18px var(--font-ui);
-  --text-caption: 400 13px/18px var(--font-ui);
-  --tracking-display: -0.5px;
-  --tracking-title-1: -0.4px;
-  --tracking-title-2: -0.3px;
-  --tracking-headline: -0.2px;
-  --tracking-caption: 0;
-
+  /* 间距：沿用 4 的倍数，与 antd 的 paddingXXS…paddingXL 对齐 */
   --space-1: 2px;
   --space-2: 4px;
   --space-3: 8px;
@@ -110,94 +89,37 @@
   --space-8: 32px;
   --space-9: 40px;
 
-  --page-padding: var(--space-6);
-  --section-gap: var(--space-5);
-  --card-padding: var(--space-4);
-  --list-item-padding: var(--space-3) var(--space-4);
-  --sidebar-width: 152px;
-  --sidebar-collapsed-width: 56px;
-  --source-list-width: 220px;
-  --toolbar-height: 52px;
-  --row-height: 36px;
-  --row-height-loose: 44px;
+  /* 布局 */
+  --sidebar-width: 200px;
+  --sidebar-collapsed-width: 80px;
+  --source-list-width: 240px;
+  --header-height: 56px;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
+  /* 圆角：borderRadiusXS / SM / 默认 / LG */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
   --radius-pill: 999px;
 
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 4%);
-  --shadow-2: 0 4px 12px rgb(0 0 0 / 8%);
-  --shadow-3: 0 8px 24px rgb(0 0 0 / 12%);
-  --shadow-4: 0 24px 64px rgb(0 0 0 / 20%);
-  --shadow-scroll-edge: rgb(0 0 0 / 16%);
-  --hairline: inset 0 -0.5px 0 var(--separator);
+  /* 阴影：boxShadowTertiary / boxShadow */
+  --box-shadow-tertiary:
+    0 1px 2px 0 rgb(0 0 0 / 3%), 0 1px 6px -1px rgb(0 0 0 / 2%),
+    0 2px 4px 0 rgb(0 0 0 / 2%);
+  --box-shadow:
+    0 6px 16px 0 rgb(0 0 0 / 8%), 0 3px 6px -4px rgb(0 0 0 / 12%),
+    0 9px 28px 8px rgb(0 0 0 / 5%);
 
-  --dur-0: 0ms;
-  --dur-1: 120ms;
-  --dur-2: 200ms;
-  --dur-3: 300ms;
-  --dur-4: 400ms;
-  --dur-spin: 1000ms;
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  /* 动效：motionDurationFast / Mid / Slow 与 motionEaseInOut / EaseOut */
+  --motion-duration-none: 0s;
+  --motion-duration-fast: 100ms;
+  --motion-duration-mid: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --motion-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
 
-  --control-height-sm: 26px;
-  --control-height-md: 30px;
-  --control-height-lg: 34px;
-  --control-height-xl: 42px;
-  --control-pad-sm: 8px;
-  --control-pad-md: 10px;
-  --control-pad-lg: 12px;
-  --control-pad-xl: 16px;
-  --touch-target: 44px;
-  --z-popover: 60;
-  --z-overlay: 50;
-  --z-toast: 70;
-
-  /* AAlertHost 常驻挂载在应用根部，DOM 位置天然早于任何后打开的 ASheet；
-     和 ASheet 共用 --z-overlay 会导致后开的 ASheet 按 DOM 序盖住确认框
-     （ASheet 的 confirmClose 场景下尤其明显）。独立给它最高一档。 */
-  --z-alert: 90;
-  --overlay: rgb(0 0 0 / 24%);
-  --overlay-blur: blur(2px);
-  --switch-track-md-width: 38px;
-  --switch-track-md-height: 22px;
-  --switch-track-lg-width: 48px;
-  --switch-track-lg-height: 28px;
-  --switch-inset: 1px;
-  --stepper-nudge-height: 12px;
-}
-
-@media (pointer: coarse) {
-  :root {
-    --row-height: 44px;
-    --row-height-loose: 52px;
-    --control-height-sm: 36px;
-    --control-height-md: 40px;
-    --control-height-lg: 44px;
-    --control-height-xl: 48px;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  :root {
-    --material-sidebar-bg: var(--bg-window);
-    --material-toolbar-bg: var(--bg-content);
-    --material-menu-bg: var(--bg-elevated);
-    --material-blur: none;
-    --overlay-blur: none;
-  }
-}
-
-@media (prefers-contrast: more) {
-  :root {
-    --separator: var(--separator-opaque);
-    --focus-ring: 0 0 0 4px var(--sys-blue);
-  }
+  /* 控件高度：controlHeightSM / controlHeight / controlHeightLG */
+  --control-height-sm: 24px;
+  --control-height: 32px;
+  --control-height-lg: 40px;
 }

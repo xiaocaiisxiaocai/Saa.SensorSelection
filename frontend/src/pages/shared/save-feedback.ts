@@ -1,6 +1,8 @@
+import { message } from 'ant-design-vue';
+
 import type { SaveFailure } from '@/domain';
-import { alert } from '@/ui/alert';
-import { toast } from '@/ui/toast';
+
+import { dialogs } from './confirm';
 
 const DEFAULT_FAILURE: Partial<Record<SaveFailure, string>> = {
   storage: '数据保存失败，本次修改未保存',
@@ -14,31 +16,22 @@ export function failureMessage(
   reason: SaveFailure,
   overrides: Partial<Record<SaveFailure, string>> = {},
 ): string {
-  return (
-    overrides[reason] ||
-    DEFAULT_FAILURE[reason] ||
-    '保存失败，请重试'
-  );
+  return overrides[reason] || DEFAULT_FAILURE[reason] || '保存失败，请重试';
 }
 
-export function toastResult(
+export function notifyResult(
   result: { ok: true } | { ok: false; reason: SaveFailure },
   success: string,
   overrides: Partial<Record<SaveFailure, string>> = {},
 ): boolean {
   if (!result.ok) {
-    toast.error(failureMessage(result.reason, overrides));
+    message.error(failureMessage(result.reason, overrides));
     return false;
   }
-  if (success) toast.success(success);
+  if (success) message.success(success);
   return true;
 }
 
-export function confirmDelete(title: string, message: string) {
-  return alert.confirm({
-    title,
-    message,
-    confirmText: '删除',
-    destructive: true,
-  });
+export function confirmDelete(title: string, content: string) {
+  return dialogs.confirm({ title, content, okText: '删除', danger: true });
 }

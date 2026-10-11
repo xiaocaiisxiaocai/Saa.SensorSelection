@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Eye, Trash2 } from 'lucide-vue-next';
+import { Eye, Inbox, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 import {
@@ -9,19 +9,13 @@ import {
   detectControlledFileKind,
   formatLocalDateTime,
 } from '@/domain';
+import { combineFileRules, createFilePicker } from '@/pages/shared/file-rules';
 import { formatFileSize, uploadFile } from '@/pages/shared/files';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  AEmptyState,
-  AFileDrop,
-  AIconButton,
-  APdfViewer,
-  ASearchField,
-  ASheet,
-} from '@/ui';
+import { APdfViewer } from '@/ui';
 
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -48,6 +42,20 @@ function onFiles(picked: File[]) {
   return runUpload(() => uploadPicked(picked));
 }
 
+const pickerRule = combineFileRules(
+  CONTROLLED_FILE_RULES.pdf,
+  CONTROLLED_FILE_RULES.word,
+  CONTROLLED_FILE_RULES.ppt,
+);
+const picker = createFilePicker(
+  {
+    ...pickerRule,
+    sizeMessage: '文件大小超出限制',
+    typeMessage: '文件类型不受支持',
+  },
+  onFiles,
+);
+
 async function uploadPicked(picked: File[]) {
   for (const file of picked) {
     const kind = detectControlledFileKind(
@@ -67,7 +75,7 @@ async function uploadPicked(picked: File[]) {
       size: file.size,
       uploadedAt: new Date().toISOString(),
     });
-    toastResult(result, '文件已上传', {
+    notifyResult(result, '文件已上传', {
       size: '文件大小超出限制',
       type: '文件类型不受支持',
     });
@@ -77,7 +85,7 @@ async function uploadPicked(picked: File[]) {
 async function remove(item: ControlledFileItem) {
   const ok = await confirmDelete('删除文件', `确认删除“${item.fileName}”吗？`);
   if (!ok) return;
-  toastResult(store.deleteProcessIntroFile(item.id), '文件已删除');
+  notifyResult(store.deleteProcessIntroFile(item.id), '文件已删除');
   if (preview.value?.id === item.id) preview.value = null;
 }
 </script>
@@ -86,115 +94,100 @@ async function remove(item: ControlledFileItem) {
   <div class="selection-panel">
     <!-- 一个文件都没有时没什么可搜的，搜索框只会占位 -->
     <div v-if="files.length > 0" class="selection-toolbar">
-      <ASearchField
-        v-model="query"
+      <a-input
+        v-model:value="query"
         class="selection-toolbar__filter"
         placeholder="搜索文件名"
         aria-label="搜索制程文件"
-      />
+        allow-clear
+      >
+        <template #prefix><Search :size="14" /></template>
+      </a-input>
     </div>
     <!-- 还没有任何文件时，整页只剩一个上传框，看不出这里是放什么的 -->
-    <div v-if="writable && files.length === 0" class="process-intro-hint">
-      <p class="process-intro-hint__title">还没有制程介绍资料</p>
-      <p class="process-intro-hint__text">
-        上传工艺说明、制程培训或规范文件，团队成员可在此查阅；PDF 支持在线预览。
-      </p>
-    </div>
-    <AFileDrop
+    <a-alert
+      v-if="writable && files.length === 0"
+      type="info"
+      show-icon
+      message="还没有制程介绍资料"
+      description="上传工艺说明、制程培训或规范文件，团队成员可在此查阅；PDF 支持在线预览。"
+    />
+    <a-upload-dragger
       v-if="writable"
+      :accept="pickerRule.accept"
+      :before-upload="picker.beforeUpload"
       :disabled="uploading"
-      :title="uploading ? UPLOADING_TITLE : undefined"
-      :accept="`${CONTROLLED_FILE_RULES.pdf.accept},${CONTROLLED_FILE_RULES.word.accept},${CONTROLLED_FILE_RULES.ppt.accept}`"
-      :max-bytes="CONTROLLED_FILE_RULES.pdf.maxBytes"
-      :extensions="[
-        ...CONTROLLED_FILE_RULES.pdf.extensions,
-        ...CONTROLLED_FILE_RULES.word.extensions,
-        ...CONTROLLED_FILE_RULES.ppt.extensions,
-      ]"
-      :mime-types="[
-        ...CONTROLLED_FILE_RULES.pdf.mimeTypes,
-        ...CONTROLLED_FILE_RULES.word.mimeTypes,
-        ...CONTROLLED_FILE_RULES.ppt.mimeTypes,
-      ]"
       multiple
-      hint="支持 PDF、Word 与 PPT，各不超过 8 MB"
-      size-message="文件大小超出限制"
-      type-message="文件类型不受支持"
-      @files="onFiles"
-    />
-    <ul v-if="visible.length" class="docs-list">
-      <li v-for="item in visible" :key="item.id">
-        <div>
-          <strong>{{ item.fileName }}</strong>
-          <p>
-            {{ formatFileSize(item.size) }} ·
-            {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
-          </p>
-        </div>
-        <div class="table-actions">
-          <AIconButton
-            v-if="item.kind === 'pdf'"
-            :icon="Eye"
-            label="预览"
-            size="small"
-            @click="preview = item"
+      :show-upload-list="false"
+      @reject="picker.onReject"
+    >
+      <p class="ant-upload-drag-icon"><Inbox :size="40" /></p>
+      <p class="ant-upload-text">
+        {{ uploading ? UPLOADING_TITLE : '点击或将文件拖到此处上传' }}
+      </p>
+      <p class="ant-upload-hint">支持 PDF、Word 与 PPT，各不超过 8 MB</p>
+    </a-upload-dragger>
+    <a-list
+      v-if="visible.length"
+      class="file-list"
+      :data-source="visible"
+      bordered
+    >
+      <template #renderItem="{ item }">
+        <a-list-item>
+          <a-list-item-meta
+            :title="item.fileName"
+            :description="`${formatFileSize(item.size)} · ${formatLocalDateTime(new Date(item.uploadedAt))}`"
           />
-          <AIconButton
-            v-if="writable"
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            @click="remove(item)"
-          />
-        </div>
-      </li>
-    </ul>
+          <template #actions>
+            <a-tooltip v-if="item.kind === 'pdf'" title="预览">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="预览"
+                @click="preview = item"
+              >
+                <template #icon><Eye :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip v-if="writable" title="删除">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                aria-label="删除"
+                @click="remove(item)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </template>
+        </a-list-item>
+      </template>
+    </a-list>
     <!--
-      可写用户看到的上传区本身就是空状态，再挂一个「拖入文件或点击上方区域
-      上传」只是把同一句话说两遍。所以空状态只留给两种情况：搜不到匹配，
-      或只读用户（没有上传区可看）。
+      可写用户看到的上传区本身就是空状态，再挂一句「拖入…上传」只是把同一
+      句话说两遍。空状态只留给：搜不到匹配，或只读用户（没有上传区）。
     -->
-    <AEmptyState
+    <a-empty
       v-else-if="query.trim()"
-      title="没有匹配的文件"
-      description="换个关键词，或清空搜索框查看全部文件"
+      description="没有匹配的文件，换个关键词或清空搜索框查看全部文件"
     />
-    <AEmptyState v-else-if="!writable" title="暂无制程介绍文件" />
-    <ASheet
+    <a-empty v-else-if="!writable" description="暂无制程介绍文件" />
+    <a-modal
       :open="Boolean(preview)"
-      title="预览 PDF"
-      viewport
-      @update:open="
-        (open) => {
-          if (!open) preview = null;
-        }
-      "
+      :title="'预览 PDF'"
+      width="calc(100vw - 48px)"
+      wrap-class-name="pdf-preview-modal"
+      :footer="null"
+      destroy-on-close
+      @cancel="preview = null"
     >
       <APdfViewer
         v-if="preview"
         class="a-pdf-viewer--large"
         :src="preview.dataUrl"
       />
-    </ASheet>
+    </a-modal>
   </div>
 </template>
-
-<style scoped>
-.process-intro-hint {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.process-intro-hint__title {
-  margin: 0;
-  font: var(--text-headline);
-  color: var(--label);
-}
-
-.process-intro-hint__text {
-  margin: 0;
-  font: var(--text-caption);
-  color: var(--label-2);
-}
-</style>

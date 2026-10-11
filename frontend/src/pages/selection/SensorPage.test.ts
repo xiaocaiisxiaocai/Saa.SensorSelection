@@ -1,4 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { message } from 'ant-design-vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -7,10 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import ASearchField from '@/ui/ASearchField.vue';
-import ASelect from '@/ui/ASelect.vue';
-import ATokenField from '@/ui/ATokenField.vue';
-import { toast } from '@/ui/toast';
+import {
+  activeTabText,
+  clickTab,
+  findButton,
+  findSelect,
+  tagColor,
+} from '@/test-helpers';
 import SensorPage from './SensorPage.vue';
 
 const writer: UserProfile = {
@@ -37,10 +41,36 @@ async function mountPage(
   return mount(SensorPage, { global: { plugins: [pinia, router] } });
 }
 
+/** 状态筛选（型号工作区里的第一个 a-select） */
+function statusSelect(wrapper: VueWrapper) {
+  return wrapper.findAllComponents({ name: 'ASelect' })[0]!;
+}
+
+function searchInput(wrapper: VueWrapper) {
+  return wrapper
+    .findAllComponents({ name: 'AInput' })
+    .find(
+      (input) =>
+        input.props('placeholder') ===
+        '搜索类型、品牌、型号、料号、停用或问题点',
+    )!;
+}
+
+/** 当前表格某列的受控排序状态 */
+function sortOrder(wrapper: VueWrapper, key: string) {
+  const columns = wrapper
+    .getComponent({ name: 'ATable' })
+    .props('columns') as Array<{
+    key: string;
+    sortOrder?: string | null;
+  }>;
+  return columns.find((column) => column.key === key)?.sortOrder ?? null;
+}
+
 describe('SensorPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    toast.clear();
+    message.destroy();
   });
 
   afterEach(() => {
@@ -52,12 +82,12 @@ describe('SensorPage', () => {
     const wrapper = await mountPage();
     expect(wrapper.get('h1.visually-hidden').text()).toBe('Sensor型号');
     const labels = wrapper
-      .findAll('.ant-segmented-item')
-      .map((button) => button.text());
+      .findAll('.ant-tabs-tab')
+      .map((tab) => tab.text().trim());
 
     expect(labels).toEqual(['型号', 'SOP', '型录', '3D']);
     expect(wrapper.text()).toContain('现用');
-    expect(wrapper.getComponent(ASelect).props('options')).toContainEqual({
+    expect(statusSelect(wrapper).props('options')).toContainEqual({
       label: '全部',
       value: '全部',
     });
@@ -70,7 +100,7 @@ describe('SensorPage', () => {
     const table = wrapper.getComponent({ name: 'ATable' });
     const columns = table.props('columns') as Array<{
       key: string;
-      fixed?: 'start' | 'end';
+      fixed?: 'left' | 'right';
     }>;
 
     expect(
@@ -104,25 +134,28 @@ describe('SensorPage', () => {
       .findAll('tbody tr')
       .filter((row) => !row.classes().includes('ant-table-measure-row'));
     expect(dataRows[0]?.text()).toContain('AAA排序测试品牌');
-    expect(brandHeader!.attributes('aria-sort')).toBe('ascending');
+    expect(sortOrder(wrapper, 'brand')).toBe('ascend');
 
     wrapper.unmount();
   });
 
   it('hides and restores optional columns via the column menu, persisting the choice', async () => {
     const wrapper = await mountPage({ tab: '全部' }, writer);
-    const headerLabels = () =>
-      wrapper.findAll('th').map((item) => item.text());
+    const headerLabels = () => wrapper.findAll('th').map((item) => item.text());
 
     expect(headerLabels()).toContain('规格参数');
 
     await wrapper.get('[aria-label="显示的列"]').trigger('click');
-    await nextTick();
+    await vi.waitFor(() =>
+      expect(
+        document.body.querySelector('.ant-popover .ant-checkbox-wrapper'),
+      ).not.toBeNull(),
+    );
     const specCheckbox = [
-      ...document.body.querySelectorAll('.sensor-column-menu__item'),
+      ...document.body.querySelectorAll('.ant-popover .ant-checkbox-wrapper'),
     ]
       .find((item) => item.textContent?.includes('规格参数'))
-      ?.querySelector<HTMLElement>('[role="checkbox"]');
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(specCheckbox).toBeDefined();
     specCheckbox!.click();
     await nextTick();
@@ -149,17 +182,12 @@ describe('SensorPage', () => {
     const table = wrapper.getComponent({ name: 'ATable' });
     const columns = table.props('columns') as Array<{
       key: string;
-      minWidth?: number;
       width?: number;
     }>;
 
-    expect(columns.find((column) => column.key === 'spec')?.minWidth).toBe(180);
-    expect(columns.find((column) => column.key === 'feature')?.minWidth).toBe(
-      200,
-    );
-    expect(columns.find((column) => column.key === 'scene')?.minWidth).toBe(
-      160,
-    );
+    expect(columns.find((column) => column.key === 'spec')?.width).toBe(180);
+    expect(columns.find((column) => column.key === 'feature')?.width).toBe(200);
+    expect(columns.find((column) => column.key === 'scene')?.width).toBe(160);
     expect(columns.find((column) => column.key === 'actions')?.width).toBe(96);
     wrapper.unmount();
   });
@@ -168,7 +196,7 @@ describe('SensorPage', () => {
     const wrapper = await mountPage({ tab: 'sop-library' }, writer);
     // 可写用户在空列表下看到的就是上传区本身，不再额外挂一句「暂无 SOP 文件」
     // 把同一件事说两遍；一个文件都没有时也不显示搜索框。
-    expect(wrapper.text()).toContain('将文件拖到此处，或点击选择');
+    expect(wrapper.text()).toContain('点击或将文件拖到此处上传');
     expect(wrapper.text()).toContain('仅支持 PDF，不超过 8 MB');
     expect(wrapper.text()).not.toContain('暂无 SOP 文件');
     expect(wrapper.find('[aria-label="搜索 SOP 文件"]').exists()).toBe(false);
@@ -198,9 +226,7 @@ describe('SensorPage', () => {
       [...document.querySelectorAll('[role="dialog"]')]
         .map((node) => node.textContent)
         .join(''),
-    ).toContain(
-      '安装作业',
-    );
+    ).toContain('安装作业');
 
     wrapper.unmount();
   });
@@ -230,26 +256,18 @@ describe('SensorPage', () => {
       [...document.querySelectorAll('[role="dialog"]')]
         .map((node) => node.textContent)
         .join(''),
-    ).toContain(
-      '产品资料',
-    );
+    ).toContain('产品资料');
 
     wrapper.unmount();
   });
 
   it('returns from a resource workspace to the previous model status', async () => {
     const wrapper = await mountPage({ tab: '备选' }, writer);
-    const tabs = wrapper.findAll('.ant-segmented-item');
+    await clickTab(wrapper, 'SOP');
+    await clickTab(wrapper, '型号');
 
-    await tabs.find((tab) => tab.text() === 'SOP')!.get('input').trigger('change');
-    await nextTick();
-    await tabs[0]!.get('input').trigger('change');
-    await nextTick();
-
-    expect(wrapper.getComponent(ASelect).props('modelValue')).toBe('备选');
-    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
-      '型号',
-    );
+    expect(statusSelect(wrapper).props('value')).toBe('备选');
+    expect(activeTabText(wrapper)).toBe('型号');
     wrapper.unmount();
   });
 
@@ -262,7 +280,7 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
-  it('copies a non-empty part number on double click', async () => {
+  it('copies a non-empty part number with the copy action', async () => {
     const wrapper = await mountPage({ tab: '全部' }, writer);
     const store = useSelectionStore();
     expect(
@@ -275,16 +293,21 @@ describe('SensorPage', () => {
     ).toMatchObject({ ok: true });
     await nextTick();
 
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('navigator', { clipboard: { writeText } });
-    const success = vi.spyOn(toast, 'success');
-    const partNumber = wrapper.get('[aria-label="复制料号 PN-COPY-001"]');
+    // antd 的 copyable 通过 execCommand('copy') 写剪贴板
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    });
+    const row = wrapper
+      .findAll('tbody tr')
+      .find((item) => item.text().includes('PN-COPY-001'));
+    await row!.get('.ant-typography-copy').trigger('click');
 
-    expect(partNumber.attributes('title')).toBe('双击复制料号');
-    await partNumber.trigger('dblclick');
-
-    expect(writeText).toHaveBeenCalledWith('PN-COPY-001');
-    expect(success).toHaveBeenCalledWith('料号已复制：PN-COPY-001');
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    await vi.waitFor(() =>
+      expect(row!.find('.ant-typography-copy-success').exists()).toBe(true),
+    );
 
     wrapper.unmount();
   });
@@ -341,14 +364,10 @@ describe('SensorPage', () => {
       [...document.querySelectorAll('[role="dialog"]')]
         .map((node) => node.textContent)
         .join(''),
-    ).toContain(
-      '产品资料',
-    );
-    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
-      '型号',
-    );
+    ).toContain('产品资料');
+    expect(activeTabText(wrapper)).toBe('型号');
 
-    document.querySelector<HTMLButtonElement>('[aria-label="关闭"]')?.click();
+    document.querySelector<HTMLButtonElement>('.ant-modal-close')?.click();
     await nextTick();
 
     const model3dButton = row!
@@ -362,67 +381,75 @@ describe('SensorPage', () => {
       [...document.querySelectorAll('[role="dialog"]')]
         .map((node) => node.textContent)
         .join(''),
-    ).toContain(
-      '三维图纸',
-    );
-    expect(wrapper.get('.ant-segmented-item-selected').text()).toBe(
-      '型号',
-    );
+    ).toContain('三维图纸');
+    expect(activeTabText(wrapper)).toBe('型号');
 
     wrapper.unmount();
   });
 
   it('places 型录 and 3D associations together in one two-column row', async () => {
     const wrapper = await mountPage({}, writer);
-    const addButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '新增型号');
+    const addButton = findButton(wrapper, '新增型号');
 
     expect(addButton).toBeDefined();
     await addButton!.trigger('click');
     await nextTick();
 
     const associationRow = [
-      ...document.body.querySelectorAll('.a-form-grid'),
+      ...document.body.querySelectorAll('[role="dialog"] .ant-form > .ant-row'),
     ].find(
-      (grid) =>
-        grid.textContent?.includes('关联型录') &&
-        grid.textContent.includes('关联 3D'),
+      (row) =>
+        row.textContent?.includes('关联型录') &&
+        row.textContent.includes('关联 3D'),
     );
 
     expect(associationRow).toBeDefined();
-    expect(associationRow?.classList.contains('a-form-grid--2')).toBe(true);
-    expect(associationRow?.children).toHaveLength(2);
+    // 两项各占半行，并排在同一行
+    const associationCols = [...(associationRow?.children ?? [])].filter(
+      (col) => /关联型录|关联 3D/.test(col.textContent ?? ''),
+    );
+    expect(associationCols).toHaveLength(2);
+    for (const col of associationCols) {
+      expect(col.classList.contains('ant-col-12')).toBe(true);
+    }
 
     wrapper.unmount();
   });
 
   it('fills the identity row with brand, model and part number in three columns', async () => {
     const wrapper = await mountPage({}, writer);
-    const addButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '新增型号');
+    const addButton = findButton(wrapper, '新增型号');
     await addButton!.trigger('click');
     await nextTick();
 
-    const grids = [...document.body.querySelectorAll('[role="dialog"] .a-form-grid')];
-    const identityRow = grids.find((grid) => grid.textContent?.includes('料号'));
-    expect(identityRow?.classList.contains('a-form-grid--3')).toBe(true);
+    // 只看 a-form 下的栅格行；a-form-item 自身也带 .ant-row
+    const rows = [
+      ...document.body.querySelectorAll('[role="dialog"] .ant-form > .ant-row'),
+    ];
+    const span = (col: Element) =>
+      Number(/ant-col-(\d+)/.exec(col.className)?.[1] ?? 24);
+    const identityCols = rows
+      .flatMap((row) => [...row.children])
+      .filter((col) =>
+        /^(品牌|型号|料号)$/.test(
+          col
+            .querySelector('.ant-form-item-label label')
+            ?.textContent?.replace(/\s/g, '') ?? '',
+        ),
+      );
     expect(
-      [...(identityRow?.children ?? [])].map((row) =>
-        row
-          .querySelector('label, .a-form-row__label')
-          ?.textContent?.replace(/[*\s]|必填/g, ''),
+      identityCols.map((col) =>
+        col
+          .querySelector('.ant-form-item-label label')
+          ?.textContent?.replace(/\s/g, ''),
       ),
     ).toEqual(['品牌', '型号', '料号']);
-    // 其余多列栅格都是满行，不留半行空格
-    for (const grid of grids) {
-      const columns = grid.classList.contains('a-form-grid--3')
-        ? 3
-        : grid.classList.contains('a-form-grid--2')
-          ? 2
-          : 1;
-      expect(grid.children.length % columns).toBe(0);
+    // 三项各占三分之一行
+    expect(identityCols.map(span)).toEqual([8, 8, 8]);
+    // 每一行的栅格都排满，不留半行空格
+    for (const row of rows) {
+      const total = [...row.children].reduce((sum, col) => sum + span(col), 0);
+      expect(total % 24).toBe(0);
     }
 
     wrapper.unmount();
@@ -435,17 +462,17 @@ describe('SensorPage', () => {
       tab: '全部',
       sensorTypes: '漫反射,对照式',
     });
-    const typeFilter = wrapper.getComponent(ATokenField);
+    const typeFilter = findSelect(wrapper, '感应器类型');
     const rows = wrapper.findAll('tbody tr').map((row) => row.text());
 
-    expect(typeFilter.props('modelValue')).toEqual(['漫反射', '对照式']);
+    expect(typeFilter.props('value')).toEqual(['漫反射', '对照式']);
     expect(rows.some((row) => row.includes('WL12-2B530'))).toBe(true);
     expect(rows.some((row) => row.includes('E3Z-T61'))).toBe(true);
     expect(rows.some((row) => row.includes('E2E-X5MF1'))).toBe(false);
 
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await nextTick();
-    expect(typeFilter.props('modelValue')).toEqual([]);
+    expect(typeFilter.props('value')).toEqual([]);
     expect(
       wrapper
         .findAll('tbody tr')
@@ -521,7 +548,7 @@ describe('SensorPage', () => {
 
   it('renders the 3D file workspace from its tab', async () => {
     const wrapper = await mountPage({ tab: '3d' }, writer);
-    expect(wrapper.text()).toContain('将文件拖到此处，或点击选择');
+    expect(wrapper.text()).toContain('点击或将文件拖到此处上传');
     expect(wrapper.text()).not.toContain('暂无 3D 文件');
     expect(wrapper.text()).toContain('仅支持 PDF，不超过 8 MB');
     wrapper.unmount();
@@ -551,24 +578,22 @@ describe('SensorPage', () => {
       [...document.querySelectorAll('[role="dialog"]')]
         .map((node) => node.textContent)
         .join(''),
-    ).toContain(
-      '设备模型',
-    );
+    ).toContain('设备模型');
 
     wrapper.unmount();
   });
 
-  it('uses green, yellow, and red badges for current, alternate, and disabled sensors', async () => {
+  it('uses green, gold, and red tags for current, alternate, and disabled sensors', async () => {
     const currentWrapper = await mountPage();
-    expect(currentWrapper.get('.a-badge').classes()).toContain(
-      'a-badge--green',
-    );
+    expect(
+      tagColor(currentWrapper.get('.ant-table-tbody .ant-tag').element),
+    ).toBe('green');
     currentWrapper.unmount();
 
     const alternateWrapper = await mountPage({ tab: '备选' });
-    expect(alternateWrapper.get('.a-badge').classes()).toContain(
-      'a-badge--yellow',
-    );
+    expect(
+      tagColor(alternateWrapper.get('.ant-table-tbody .ant-tag').element),
+    ).toBe('gold');
     alternateWrapper.unmount();
 
     const disabledWrapper = await mountPage({ tab: '停用' });
@@ -579,7 +604,9 @@ describe('SensorPage', () => {
       status: '停用',
     });
     await nextTick();
-    expect(disabledWrapper.get('.a-badge').classes()).toContain('a-badge--red');
+    expect(
+      tagColor(disabledWrapper.get('.ant-table-tbody .ant-tag').element),
+    ).toBe('red');
     disabledWrapper.unmount();
   });
 
@@ -639,10 +666,8 @@ describe('SensorPage', () => {
     const currentRow = rows.find((row) => row.text().includes('01 现用'));
     const alternateRow = rows.find((row) => row.text().includes('02 备选'));
 
-    expect(currentRow?.get('.a-badge').classes()).toContain('a-badge--green');
-    expect(alternateRow?.get('.a-badge').classes()).toContain(
-      'a-badge--yellow',
-    );
+    expect(tagColor(currentRow!.get('.ant-tag').element)).toBe('green');
+    expect(tagColor(alternateRow!.get('.ant-tag').element)).toBe('gold');
     expect(alternateRow?.find('[aria-label="替换现用"]').exists()).toBe(true);
 
     wrapper.unmount();
@@ -655,7 +680,7 @@ describe('SensorPage', () => {
     await nextTick();
 
     const sameTypeSelect = wrapper
-      .findAllComponents(ASelect)
+      .findAllComponents({ name: 'ASelect' })
       .find(
         (component) =>
           component.props('placeholder') === '同类型优先，也可选其他现用',
@@ -668,21 +693,20 @@ describe('SensorPage', () => {
   it('keeps the status tab when typing in the search box but honours external model deep links', async () => {
     const wrapper = await mountPage({ tab: '备选' });
     const router = wrapper.vm.$router;
-    const statusSelect = () => wrapper.getComponent(ASelect);
-    expect(statusSelect().props('modelValue')).toBe('备选');
+    expect(statusSelect(wrapper).props('value')).toBe('备选');
 
-    wrapper.getComponent(ASearchField).vm.$emit('update:modelValue', 'E3Z');
+    searchInput(wrapper).vm.$emit('update:value', 'E3Z');
     await flushPromises();
     expect(router.currentRoute.value.query.model).toBe('E3Z');
-    expect(statusSelect().props('modelValue')).toBe('备选');
+    expect(statusSelect(wrapper).props('value')).toBe('备选');
 
     await router.push({
       path: '/selection/sensor',
       query: { tab: '备选', model: 'WL12' },
     });
     await flushPromises();
-    expect(statusSelect().props('modelValue')).toBe('全部');
-    expect(wrapper.getComponent(ASearchField).props('modelValue')).toBe('WL12');
+    expect(statusSelect(wrapper).props('value')).toBe('全部');
+    expect(searchInput(wrapper).props('value')).toBe('WL12');
 
     wrapper.unmount();
   });
@@ -709,7 +733,7 @@ describe('SensorPage', () => {
     await nextTick();
     await brandHeader!.trigger('click');
     await nextTick();
-    expect(brandHeader!.attributes('aria-sort')).toBe('descending');
+    expect(sortOrder(wrapper, 'brand')).toBe('descend');
 
     let exportedBlob: Blob | undefined;
     const NativeUrl = URL;
@@ -738,4 +762,3 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 });
-

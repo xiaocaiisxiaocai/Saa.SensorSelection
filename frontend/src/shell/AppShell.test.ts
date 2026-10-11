@@ -10,7 +10,7 @@ import type { BackendSyncStatus } from '@/domain/types';
 import AppShell from './AppShell.vue';
 
 async function mountShell(backendStatus?: BackendSyncStatus) {
-  localStorage.removeItem('apple-frontend:sidebar-collapsed');
+  localStorage.removeItem('symtek:sidebar-collapsed');
 
   const router = createRouter({
     history: createMemoryHistory(),
@@ -50,7 +50,7 @@ async function mountShell(backendStatus?: BackendSyncStatus) {
 
 describe('AppShell', () => {
   afterEach(() => {
-    localStorage.removeItem('apple-frontend:sidebar-collapsed');
+    localStorage.removeItem('symtek:sidebar-collapsed');
     document.body.innerHTML = '';
   });
 
@@ -88,16 +88,6 @@ describe('AppShell', () => {
     wrapper.unmount();
   });
 
-  it('focuses the global search input from the full pill surface', async () => {
-    const { wrapper } = await mountShell();
-    const input = wrapper.get('input[aria-label="全局搜索"]');
-
-    await wrapper.get('form.search').trigger('mousedown');
-    expect(document.activeElement).toBe(input.element);
-
-    wrapper.unmount();
-  });
-
   it('updates the desktop sidebar toggle label and expanded state', async () => {
     // 宽屏桌面：两个断点都不命中（happy-dom 默认视口 1024px 会命中中等断点）
     vi.stubGlobal('matchMedia', (query: string) => ({
@@ -120,7 +110,7 @@ describe('AppShell', () => {
 
     expect(toggle().attributes('aria-expanded')).toBe('false');
     expect(toggle().attributes('aria-label')).toBe('展开侧栏');
-    expect(localStorage.getItem('apple-frontend:sidebar-collapsed')).toBe('1');
+    expect(localStorage.getItem('symtek:sidebar-collapsed')).toBe('1');
     wrapper.unmount();
     vi.unstubAllGlobals();
   });
@@ -152,15 +142,22 @@ describe('AppShell', () => {
     const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
 
     expect(mediaQueries).toContain('(width <= 960px)');
-    expect(wrapper.classes()).toContain('app-shell--compact');
+    // 窄屏不渲染常驻侧栏，导航放进 a-drawer
+    expect(wrapper.find('.app-shell__sider').exists()).toBe(false);
     expect(toggle().attributes('aria-expanded')).toBe('false');
-    expect(wrapper.find('.sidebar-backdrop').exists()).toBe(false);
+    expect(document.querySelector('.ant-drawer-open')).toBeNull();
 
     await toggle().trigger('click');
     expect(toggle().attributes('aria-expanded')).toBe('true');
-    expect(wrapper.find('.sidebar-backdrop').exists()).toBe(true);
+    await vi.waitFor(() =>
+      expect(document.querySelector('.ant-drawer-open')).not.toBeNull(),
+    );
+    expect(
+      document.querySelector('.ant-drawer [aria-label="主导航"]'),
+    ).not.toBeNull();
 
-    await wrapper.get('.sidebar-backdrop').trigger('click');
+    (document.querySelector('.ant-drawer-mask') as HTMLElement).click();
+    await nextTick();
     expect(toggle().attributes('aria-expanded')).toBe('false');
     wrapper.unmount();
   });
@@ -180,18 +177,18 @@ describe('AppShell', () => {
     const { wrapper } = await mountShell();
     const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
 
-    expect(wrapper.classes()).toContain('app-shell--collapsed');
-    expect(wrapper.classes()).not.toContain('app-shell--compact');
+    const sider = () => wrapper.get('.app-shell__sider');
+    expect(sider().classes()).toContain('ant-layout-sider-collapsed');
     expect(toggle().attributes('aria-expanded')).toBe('false');
 
     await toggle().trigger('click');
-    expect(wrapper.classes()).not.toContain('app-shell--collapsed');
+    expect(sider().classes()).not.toContain('ant-layout-sider-collapsed');
     expect(toggle().attributes('aria-expanded')).toBe('true');
     // 中等宽度下的临时展开不写回宽屏偏好
-    expect(localStorage.getItem('apple-frontend:sidebar-collapsed')).toBeNull();
+    expect(localStorage.getItem('symtek:sidebar-collapsed')).toBeNull();
 
     await toggle().trigger('click');
-    expect(wrapper.classes()).toContain('app-shell--collapsed');
+    expect(sider().classes()).toContain('ant-layout-sider-collapsed');
     wrapper.unmount();
     vi.unstubAllGlobals();
   });
@@ -211,7 +208,9 @@ describe('AppShell', () => {
       return event;
     };
 
-    expect(press({ ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(press({ ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(
+      false,
+    );
     expect(press({ metaKey: true }).defaultPrevented).toBe(false);
     expect(document.activeElement).not.toBe(input);
     expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
@@ -230,13 +229,13 @@ describe('AppShell', () => {
 
   it('keeps the page mounted while reconnecting after a successful first load', async () => {
     const { wrapper } = await mountShell('connecting');
-    expect(wrapper.find('.content__loading').exists()).toBe(true);
+    expect(wrapper.find('.app-shell__loading').exists()).toBe(true);
 
     const selection = useSelectionStore();
     selection.hasConnected = true;
     await nextTick();
 
-    expect(wrapper.find('.content__loading').exists()).toBe(false);
+    expect(wrapper.find('.app-shell__loading').exists()).toBe(false);
     wrapper.unmount();
   });
 

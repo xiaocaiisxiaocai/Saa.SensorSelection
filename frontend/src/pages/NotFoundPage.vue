@@ -1,59 +1,29 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 </script>
 
 <template>
-  <section class="missing">
-    <h1>未找到页面</h1>
-    <p>这个地址不在感应器选型软件里。</p>
-    <RouterLink class="missing__link" to="/selection/customer">
-      返回客户管理
-    </RouterLink>
-  </section>
+  <a-result
+    class="missing"
+    status="404"
+    title="未找到页面"
+    sub-title="这个地址不在感应器选型软件里。"
+  >
+    <template #extra>
+      <a-button type="primary" @click="router.push('/selection/customer')">
+        返回客户管理
+      </a-button>
+    </template>
+  </a-result>
 </template>
 
 <style scoped>
 .missing {
-  display: grid;
-  gap: var(--space-4);
-  place-content: center;
-  justify-items: center;
-  width: 100%;
-  min-width: 0;
-  min-height: 100%;
-  max-width: 36rem;
-  padding: var(--space-6);
-  margin: auto;
-  overflow-y: auto;
-  text-align: center;
-}
-
-h1 {
-  margin: 0;
-  font: var(--text-title-1);
-  letter-spacing: var(--tracking-title-1);
-}
-
-p {
-  margin: 0;
-  font: var(--text-body);
-  color: var(--label-2);
-}
-
-.missing__link {
-  display: inline-flex;
-  align-items: center;
-  height: var(--control-height-md);
-  padding: 0 var(--control-pad-md);
-  font: var(--text-control-em);
-  color: var(--label-on-color);
-  text-decoration: none;
-  background: var(--sys-blue-solid);
-  border-radius: var(--radius-md);
-  transition: filter var(--dur-1) var(--ease-out);
-}
-
-.missing__link:hover {
-  filter: brightness(1.08);
+  height: 100%;
+  overflow: auto;
+  background: var(--color-bg-container);
+  border-radius: var(--radius-lg);
 }
 </style>

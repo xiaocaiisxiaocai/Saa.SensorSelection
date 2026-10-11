@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import type { TableColumnType } from 'ant-design-vue';
 import {
-  Maximize2,
+  ImagePlus,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
   Plus,
+  RotateCcw,
+  Search,
   Trash2,
 } from 'lucide-vue-next';
 import {
@@ -21,40 +24,30 @@ import {
   MACHINE_ROW_IMAGE_RULES,
   isSensorStatus,
   sensorStatusRank,
-  type MachineRowImage,
   type MachineSectionItem,
   type MachineSectionRow,
   type SensorItem,
 } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
+import { createFilePicker } from '@/pages/shared/file-rules';
 import { uploadFile } from '@/pages/shared/files';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { fieldError } from '@/pages/shared/form';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
+import {
+  PAGE_SIZE_OPTIONS,
+  cellText,
+  rowClick,
+  scrollX,
+  sortFromChange,
+  sortOrderOf,
+  sortRows,
+  type TableSortState,
+} from '@/pages/shared/table';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+
 import { buildMachineTableRows, type MachineTableRow } from './table-rows';
-import {
-  ABadge,
-  AButton,
-  AField,
-  AFileDrop,
-  AFilterResetButton,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  AImageViewer,
-  APagination,
-  ASearchField,
-  ASelect,
-  ASheet,
-  ATable,
-  ATextArea,
-  ATokenField,
-  type SelectOption,
-  sortRows,
-  type TableColumn,
-  type TableSortState,
-} from '@/ui';
 
 const props = defineProps<{
   focusRowId?: number;
@@ -78,13 +71,6 @@ const processStepFilter = ref<string | number | null>(null);
 const boardCharacteristicFilter = ref<string | number | null>(null);
 const imagesCollapsed = ref(false);
 const imagesPanelTouched = ref(false);
-const preview = ref<MachineRowImage | null>(null);
-const imageOpen = computed({
-  get: () => Boolean(preview.value),
-  set: (open: boolean) => {
-    if (!open) preview.value = null;
-  },
-});
 const page = ref(1);
 const pageSize = ref(20);
 const sort = ref<TableSortState | null>(null);
@@ -130,12 +116,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   compactImagesMedia?.removeEventListener('change', onCompactImagesChange);
 });
-const typeOptions = computed<SelectOption[]>(() =>
+const typeOptions = computed(() =>
   store
     .dictionaryNames('sensor-type')
     .map((name) => ({ label: name, value: name })),
 );
-const processStepOptions = computed<SelectOption[]>(() =>
+const processStepOptions = computed(() =>
   store.processSteps.map((item) => ({
     label: `${item.layer} · ${item.name}`,
     value: item.id,
@@ -144,13 +130,13 @@ const processStepOptions = computed<SelectOption[]>(() =>
 const machineModelItems = computed(() =>
   store.dictionaryItems('machine-model'),
 );
-const machineModelOptions = computed<SelectOption[]>(() =>
+const machineModelOptions = computed(() =>
   machineModelItems.value.map((item) => ({ label: item.name, value: item.id })),
 );
 const boardCharacteristicItems = computed(() =>
   store.dictionaryItems('board-characteristic'),
 );
-const boardCharacteristicOptions = computed<SelectOption[]>(() =>
+const boardCharacteristicOptions = computed(() =>
   boardCharacteristicItems.value.map((item) => ({
     label: item.name,
     value: item.id,
@@ -161,7 +147,7 @@ const sensorById = computed(
   () => new Map(store.sensors.map((sensor) => [sensor.id, sensor])),
 );
 
-const sensorOptions = computed<SelectOption[]>(() =>
+const sensorOptions = computed(() =>
   [...store.sensors]
     .sort((left, right) => {
       if (left.status === right.status) return left.id - right.id;
@@ -264,61 +250,87 @@ const tableData = computed(() => {
     boardCharacteristicItems.value,
   );
 });
-const columns = computed<TableColumn<MachineTableRow>[]>(() => {
-  const rowSpan = isStructure.value
-    ? (row: MachineTableRow) => (row.groupStart ? row.groupSize : 0)
-    : undefined;
-  const cols: TableColumn<MachineTableRow>[] = isStructure.value
+type Column = TableColumnType<MachineTableRow>;
+const columns = computed<Column[]>(() => {
+  // 结构视图一条记录按传感器展开成多行，除传感器两列外都合并单元格
+  const merged: Pick<Column, 'customCell'> = isStructure.value
+    ? { customCell: (row) => ({ rowSpan: row.groupStart ? row.groupSize : 0 }) }
+    : {};
+  const cols: Column[] = isStructure.value
     ? [
         {
           key: 'role',
-          label: '功能作用',
-          minWidth: 90,
-          rowSpan,
-          fixed: 'start',
+          dataIndex: 'role',
+          title: '功能作用',
+          width: 90,
+          fixed: 'left',
+          ...merged,
         },
-        { key: 'machineModelName', label: '机型', minWidth: 100, rowSpan },
+        {
+          key: 'machineModelName',
+          dataIndex: 'machineModelName',
+          title: '机型',
+          width: 100,
+          ...merged,
+        },
         {
           key: 'processStepName',
-          label: '工艺制程',
-          minWidth: 110,
-          rowSpan,
+          dataIndex: 'processStepName',
+          title: '工艺制程',
+          width: 110,
+          ...merged,
         },
         {
           key: 'boardCharacteristicName',
-          label: '板件特性',
-          minWidth: 120,
-          rowSpan,
+          dataIndex: 'boardCharacteristicName',
+          title: '板件特性',
+          width: 120,
+          ...merged,
         },
-        { key: 'sensorType', label: '传感器类型', minWidth: 100 },
-        { key: 'spec', label: '规格', minWidth: 220 },
+        {
+          key: 'sensorType',
+          dataIndex: 'sensorType',
+          title: '传感器类型',
+          width: 100,
+        },
+        { key: 'spec', dataIndex: 'spec', title: '规格', width: 220 },
         {
           key: 'purpose',
-          label: '作用',
-          minWidth: 120,
-          rowSpan,
+          dataIndex: 'purpose',
+          title: '作用',
+          width: 120,
+          ...merged,
         },
-        { key: 'note', label: '备注', minWidth: 96, rowSpan },
+        { key: 'note', dataIndex: 'note', title: '备注', width: 96, ...merged },
       ]
     : [
         {
           key: 'role',
-          label: '注意分类',
+          dataIndex: 'role',
+          title: '注意分类',
           width: 120,
-          fixed: 'start',
-          sortable: true,
+          fixed: 'left',
+          sorter: true,
+          sortOrder: sortOrderOf(sort.value, 'role'),
         },
-        { key: 'name', label: '事项名称', minWidth: 140, sortable: true },
-        { key: 'desc', label: '说明', minWidth: 180 },
-        { key: 'note', label: '备注', minWidth: 120 },
+        {
+          key: 'name',
+          dataIndex: 'name',
+          title: '事项名称',
+          width: 140,
+          sorter: true,
+          sortOrder: sortOrderOf(sort.value, 'name'),
+        },
+        { key: 'desc', dataIndex: 'desc', title: '说明', width: 180 },
+        { key: 'note', dataIndex: 'note', title: '备注', width: 120 },
       ];
   if (writable.value) {
     cols.push({
       key: 'actions',
-      label: '操作',
+      title: '操作',
       width: 72,
-      fixed: 'end',
-      rowSpan,
+      fixed: 'right',
+      ...merged,
     });
   }
   return cols;
@@ -334,7 +346,6 @@ watch(
     boardCharacteristicFilter.value = null;
     page.value = 1;
     dialogOpen.value = false;
-    preview.value = null;
   },
 );
 watch(
@@ -554,7 +565,7 @@ function saveItem() {
     editId.value,
     props.processId,
   );
-  if (toastResult(result, editId.value ? '记录已更新' : '记录已新增')) {
+  if (notifyResult(result, editId.value ? '记录已更新' : '记录已新增')) {
     dialogOpen.value = false;
   }
 }
@@ -563,7 +574,7 @@ async function deleteItem(item: MachineSectionRow) {
   const label = item.role || item.name;
   const ok = await confirmDelete('删除记录', `确认删除“${label}”吗？`);
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteMachineSectionRow(
       props.section.id,
       props.machineName,
@@ -578,6 +589,21 @@ async function deleteItem(item: MachineSectionRow) {
 function addImages(files: File[]) {
   return runUpload(() => uploadImages(files));
 }
+
+const imagePicker = createFilePicker(
+  {
+    ...MACHINE_ROW_IMAGE_RULES,
+    sizeMessage: '图片大小不能超过 2 MB',
+    typeMessage: '仅支持 JPG、PNG 或 WebP 图片',
+  },
+  addImages,
+);
+
+const customRow = computed(() =>
+  writable.value
+    ? rowClick<MachineTableRow>((row) => editItem(row.source))
+    : undefined,
+);
 
 async function uploadImages(files: File[]) {
   // 上传是异步的，途中可能切换到别的机型/分区；目标分区和基础图片列表必须在
@@ -600,7 +626,7 @@ async function uploadImages(files: File[]) {
   }
   // 全部上传失败时已逐个提示，不再提交一次没有变化的保存。
   if (next.length === base.length) return;
-  toastResult(
+  notifyResult(
     store.saveMachineSectionImages(sectionId, machineName, next, processId),
     '示意图已更新',
     {
@@ -619,7 +645,7 @@ async function removeImage(index: number) {
   );
   if (!ok) return;
   const next = images.value.filter((_, current) => current !== index);
-  toastResult(
+  notifyResult(
     store.saveMachineSectionImages(
       props.section.id,
       props.machineName,
@@ -640,159 +666,201 @@ async function removeImage(index: number) {
     }"
   >
     <div ref="tableHost" class="selection-panel">
-      <div
-        class="selection-toolbar machine-structure-toolbar"
-        :class="{ 'machine-structure-toolbar--notes': !isStructure }"
-      >
-        <ATokenField
+      <div class="selection-toolbar">
+        <a-select
           v-if="isStructure"
-          v-model="sensorTypeFilters"
-          class="selection-toolbar__filter machine-structure-toolbar__select"
+          v-model:value="sensorTypeFilters"
+          mode="multiple"
+          class="selection-toolbar__filter"
           :options="typeOptions"
           placeholder="传感器类型"
           aria-label="传感器类型筛选"
-          :max-visible-tokens="1"
+          :max-tag-count="1"
+          allow-clear
+          option-filter-prop="label"
         />
-        <ASelect
+        <a-select
           v-if="isStructure"
-          v-model="machineModelFilter"
-          class="selection-toolbar__filter machine-structure-toolbar__select"
+          v-model:value="machineModelFilter"
+          class="selection-toolbar__filter"
           :options="machineModelOptions"
           placeholder="机型"
           aria-label="机型筛选"
-          filterable
-          clearable
+          show-search
+          option-filter-prop="label"
+          allow-clear
         />
-        <ASelect
+        <a-select
           v-if="isStructure"
-          v-model="processStepFilter"
-          class="selection-toolbar__filter machine-structure-toolbar__select"
+          v-model:value="processStepFilter"
+          class="selection-toolbar__filter"
           :options="processStepOptions"
           placeholder="工艺制程"
           aria-label="工艺制程筛选"
-          filterable
-          clearable
+          show-search
+          option-filter-prop="label"
+          allow-clear
         />
-        <ASelect
+        <a-select
           v-if="isStructure"
-          v-model="boardCharacteristicFilter"
-          class="selection-toolbar__filter machine-structure-toolbar__select"
+          v-model:value="boardCharacteristicFilter"
+          class="selection-toolbar__filter"
           :options="boardCharacteristicOptions"
           placeholder="板件特性"
           aria-label="板件特性筛选"
-          filterable
-          clearable
+          show-search
+          option-filter-prop="label"
+          allow-clear
         />
-        <ASearchField
-          v-model="query"
-          class="selection-toolbar__filter machine-structure-toolbar__search"
+        <a-input
+          v-model:value="query"
+          class="selection-toolbar__filter"
           :aria-label="isStructure ? '搜索结构内容' : '搜索机型注意事项'"
           :placeholder="
             isStructure
               ? '搜索规格、型号或功能'
               : '搜索注意分类、事项名称、说明或备注'
           "
-        />
-        <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-        <AButton
+          allow-clear
+        >
+          <template #prefix><Search :size="14" /></template>
+        </a-input>
+        <a-button
+          type="text"
+          :disabled="!hasActiveFilters"
+          aria-label="重置筛选"
+          @click="resetFilters"
+        >
+          <template #icon><RotateCcw :size="14" /></template>
+          重置
+        </a-button>
+        <a-button
           v-if="writable"
-          variant="filled"
+          type="primary"
           :aria-label="isStructure ? '新增选型' : '新增事项'"
           @click="addItem"
         >
           <Plus :size="14" :stroke-width="1.5" />
           {{ isStructure ? '新增选型' : '新增事项' }}
-        </AButton>
+        </a-button>
       </div>
-      <ATable
-        v-model:selected-key="selectedTableRow"
-        v-model:sort="sort"
+      <a-table
         :columns="columns"
-        :rows="tableData"
+        :data-source="tableData"
         row-key="displayId"
-        :empty-text="
-          query.trim() ||
+        :pagination="false"
+        :scroll="{ x: scrollX(columns) }"
+        :custom-row="customRow"
+        :row-class-name="
+          (row: MachineTableRow) =>
+            row.displayId === selectedTableRow ? 'ant-table-row-selected' : ''
+        "
+        :locale="{
+          emptyText:
+            query.trim() ||
             sensorTypeFilters.length ||
             machineModelFilter !== null ||
             processStepFilter !== null ||
             boardCharacteristicFilter !== null
-            ? '没有匹配的记录'
-            : '暂无记录'
+              ? '没有匹配的记录'
+              : '暂无记录',
+        }"
+        @change="
+          (_p: unknown, _f: unknown, sorter: unknown) =>
+            (sort = sortFromChange(sorter))
         "
-        @activate="writable && editItem($event.source)"
       >
-        <template v-if="isStructure" #cell-sensorType="{ row }">
-          <div
-            v-if="sensorTypeList(row).length"
-            class="badge-wrap machine-sensor-entry"
-            :class="{
-              'machine-sensor-entry--continued': !row.groupEnd,
-            }"
-          >
-            <ABadge
-              v-for="type in sensorTypeList(row)"
-              :key="type"
-              :label="type"
-              tone="blue"
-            />
-          </div>
-          <span
-            v-else
-            class="machine-sensor-entry"
-            :class="{
-              'machine-sensor-entry--continued': !row.groupEnd,
-            }"
-          >
-            —
-          </span>
+        <template #bodyCell="{ column, record: row, text }">
+          <template v-if="isStructure && column.key === 'sensorType'">
+            <a-space
+              v-if="sensorTypeList(row).length"
+              class="machine-sensor-entry"
+              :size="[4, 4]"
+              wrap
+              :class="{
+                'machine-sensor-entry--continued': !row.groupEnd,
+              }"
+            >
+              <a-tag
+                v-for="type in sensorTypeList(row)"
+                :key="type"
+                color="blue"
+              >
+                {{ type }}
+              </a-tag>
+            </a-space>
+            <span
+              v-else
+              class="machine-sensor-entry"
+              :class="{
+                'machine-sensor-entry--continued': !row.groupEnd,
+              }"
+            >
+              —
+            </span>
+          </template>
+          <template v-else-if="isStructure && column.key === 'spec'">
+            <div
+              class="machine-spec-cell machine-sensor-entry"
+              :class="{
+                'machine-sensor-entry--continued': !row.groupEnd,
+              }"
+            >
+              <template v-if="row.sensor">
+                <div class="machine-spec-cell__header">
+                  <span class="machine-spec-cell__brand">{{
+                    row.sensor.brand
+                  }}</span>
+                  <span class="machine-spec-cell__model">{{
+                    row.sensor.model
+                  }}</span>
+                </div>
+                <div v-if="row.sensor.spec" class="machine-spec-cell__spec">
+                  {{ row.sensor.spec }}
+                </div>
+              </template>
+              <template v-else>
+                <div class="spec-lines">{{ row.spec || '—' }}</div>
+              </template>
+            </div>
+          </template>
+          <template v-else-if="column.key === 'actions'">
+            <a-space :size="4">
+              <a-tooltip title="编辑">
+                <a-button
+                  type="text"
+                  size="small"
+                  aria-label="编辑"
+                  @click="editItem(row.source)"
+                >
+                  <template #icon><Pencil :size="14" /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="删除">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除"
+                  @click="deleteItem(row.source)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </a-tooltip>
+            </a-space>
+          </template>
+          <template v-else>{{ cellText(text) }}</template>
         </template>
-        <template v-if="isStructure" #cell-spec="{ row }">
-          <div
-            class="machine-spec-cell machine-sensor-entry"
-            :class="{
-              'machine-sensor-entry--continued': !row.groupEnd,
-            }"
-          >
-            <template v-if="row.sensor">
-              <div class="machine-spec-cell__header">
-                <span class="machine-spec-cell__brand">{{
-                  row.sensor.brand
-                }}</span>
-                <span class="machine-spec-cell__model">{{
-                  row.sensor.model
-                }}</span>
-              </div>
-              <div v-if="row.sensor.spec" class="machine-spec-cell__spec">
-                {{ row.sensor.spec }}
-              </div>
-            </template>
-            <template v-else>
-              <div class="spec-lines">{{ row.spec || '—' }}</div>
-            </template>
-          </div>
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="table-actions">
-            <AIconButton
-              :icon="Pencil"
-              label="编辑"
-              size="small"
-              @click="editItem(row.source)"
-            />
-            <AIconButton
-              :icon="Trash2"
-              label="删除"
-              size="small"
-              variant="destructive"
-              @click="deleteItem(row.source)"
-            />
-          </div>
-        </template>
-      </ATable>
-      <APagination
-        v-model:page="page"
+      </a-table>
+      <a-pagination
+        v-model:current="page"
         v-model:page-size="pageSize"
+        class="table-pagination"
         :total="filtered.length"
+        :page-size-options="PAGE_SIZE_OPTIONS"
+        show-size-changer
+        hide-on-single-page
+        :show-total="(count: number) => `共 ${count} 条`"
       />
     </div>
     <aside
@@ -802,282 +870,324 @@ async function removeImage(index: number) {
     >
       <div class="machine-images__header">
         <h3 v-if="!imagesCollapsed">结构示意图</h3>
-        <AIconButton
-          :icon="imagesCollapsed ? PanelRightOpen : PanelRightClose"
-          :label="imagesCollapsed ? '展开结构示意图' : '折叠结构示意图'"
-          size="small"
-          @click="toggleImagesPanel"
-        />
+        <a-tooltip
+          :title="imagesCollapsed ? '展开结构示意图' : '折叠结构示意图'"
+        >
+          <a-button
+            type="text"
+            size="small"
+            :aria-label="imagesCollapsed ? '展开结构示意图' : '折叠结构示意图'"
+            @click="toggleImagesPanel"
+          >
+            <template #icon>
+              <component
+                :is="imagesCollapsed ? PanelRightOpen : PanelRightClose"
+                :size="14"
+              />
+            </template>
+          </a-button>
+        </a-tooltip>
       </div>
-      <AFileDrop
+      <a-upload-dragger
         v-if="
           !imagesCollapsed && writable && hasTabContent && images.length < 2
         "
         :accept="MACHINE_ROW_IMAGE_RULES.accept"
-        :max-bytes="MACHINE_ROW_IMAGE_RULES.maxBytes"
-        :extensions="[...MACHINE_ROW_IMAGE_RULES.extensions]"
-        :mime-types="[...MACHINE_ROW_IMAGE_RULES.mimeTypes]"
+        :before-upload="imagePicker.beforeUpload"
         :disabled="uploading"
-        :title="uploading ? UPLOADING_TITLE : '添加图片'"
-        hint=""
-        size-message="图片大小不能超过 2 MB"
-        type-message="仅支持 JPG、PNG 或 WebP 图片"
-        @files="addImages"
-      />
+        :show-upload-list="false"
+        multiple
+        @reject="imagePicker.onReject"
+      >
+        <p class="ant-upload-drag-icon"><ImagePlus :size="28" /></p>
+        <p class="ant-upload-text">
+          {{ uploading ? UPLOADING_TITLE : '添加图片' }}
+        </p>
+      </a-upload-dragger>
       <p
         v-else-if="!imagesCollapsed && writable && !hasTabContent"
         class="machine-images__empty"
       >
         请先新增内容后再添加图片
       </p>
-      <div
-        v-for="(image, index) in images"
-        v-show="!imagesCollapsed"
-        :key="`${image.fileName}-${index}`"
-        class="image-card"
-      >
-        <button
-          class="image-card__preview"
-          type="button"
-          :aria-label="`预览 ${image.fileName}`"
-          @click="preview = image"
+      <a-image-preview-group v-if="!imagesCollapsed">
+        <a-card
+          v-for="(image, index) in images"
+          :key="`${image.fileName}-${index}`"
+          class="image-card"
+          size="small"
+          :body-style="{ padding: 0 }"
         >
-          <span class="image-card__media">
-            <img :src="image.dataUrl" :alt="image.fileName">
-          </span>
-        </button>
-        <div class="image-card__footer">
-          <span class="image-card__name" :title="image.fileName">
-            {{ image.fileName }}
-          </span>
-          <div class="image-card__actions">
-            <AIconButton
-              :icon="Maximize2"
-              :label="`放大预览 ${image.fileName}`"
-              size="small"
-              @click="preview = image"
-            />
-            <AIconButton
-              v-if="writable"
-              :icon="Trash2"
-              :label="`删除 ${image.fileName}`"
-              size="small"
-              variant="destructive"
-              @click="removeImage(index)"
-            />
-          </div>
-        </div>
-      </div>
+          <a-image
+            class="image-card__media"
+            :src="image.dataUrl"
+            :alt="image.fileName"
+            width="100%"
+          />
+          <template #actions>
+            <span class="image-card__name" :title="image.fileName">
+              {{ image.fileName }}
+            </span>
+            <a-tooltip v-if="writable" :title="`删除 ${image.fileName}`">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                :aria-label="`删除 ${image.fileName}`"
+                @click="removeImage(index)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </template>
+        </a-card>
+      </a-image-preview-group>
     </aside>
   </div>
-  <ASheet
-    v-model:open="dialogOpen"
+  <a-modal
+    :open="dialogOpen"
     :title="editId ? '编辑记录' : '新增记录'"
     :width="isStructure ? 640 : 480"
-    :confirm-close="dirtyGuard.confirmClose"
+    destroy-on-close
+    @cancel="cancelDialog"
   >
-    <AFormGrid v-if="isStructure" :columns="1">
-      <AFormRow
-        label="功能作用"
-        required
-        :error="
-          validationAttempted && !form.role.trim()
-            ? '请输入功能作用'
-            : undefined
-        "
-      >
-        <AField v-model="form.role" :maxlength="80" />
-      </AFormRow>
-      <AFormRow label="机型" hint="可选；来自“数据字典 → 机型”。">
-        <ASelect
-          v-model="form.machineModelId"
-          :options="machineModelOptions"
-          placeholder="选择机型（可选）"
-          filterable
-          clearable
-        />
-      </AFormRow>
-      <AFormRow label="工艺制程" hint="可选；来自“制程管理 → 工艺制程”。">
-        <ASelect
-          v-model="form.processStepId"
-          :options="processStepOptions"
-          placeholder="选择工艺制程（可选）"
-          filterable
-          clearable
-        />
-      </AFormRow>
-      <AFormRow label="板件特性" hint="可选；来自“数据字典 → 板件特性”。">
-        <ASelect
-          v-model="form.boardCharacteristicId"
-          :options="boardCharacteristicOptions"
-          placeholder="选择板件特性（可选）"
-          filterable
-          clearable
-        />
-      </AFormRow>
-      <AFormRow
-        label="关联传感器"
-        required
-        hint="规格和型号来自 Sensor型号；目录替换后这里会自动更新。"
-        :error="
-          validationAttempted && form.sensorIds.length === 0
-            ? '请选择关联传感器'
-            : undefined
-        "
-      >
-        <ATokenField
-          v-model="form.sensorIds"
-          :options="sensorOptions"
-          filterable
-          :max-visible-tokens="2"
-          placeholder="按类型、品牌或型号搜索"
-        />
-      </AFormRow>
-      <AFormRow label="作用">
-        <ATextArea v-model="form.purpose" :rows="3" :maxlength="500" />
-      </AFormRow>
-      <AFormRow label="备注">
-        <AField v-model="form.note" :maxlength="200" />
-      </AFormRow>
-    </AFormGrid>
-    <AFormGrid v-else :columns="1">
-      <AFormRow
-        label="注意分类"
-        required
-        :error="
-          validationAttempted && !form.role.trim()
-            ? '请输入注意分类'
-            : undefined
-        "
-      >
-        <AField v-model="form.role" :maxlength="80" />
-      </AFormRow>
-      <AFormRow
-        label="事项名称"
-        required
-        :error="
-          validationAttempted && !form.name.trim()
-            ? '请输入事项名称'
-            : undefined
-        "
-      >
-        <AField v-model="form.name" :maxlength="80" />
-      </AFormRow>
-      <AFormRow label="说明">
-        <ATextArea v-model="form.desc" :rows="3" :maxlength="500" />
-      </AFormRow>
-      <AFormRow label="备注">
-        <AField v-model="form.note" :maxlength="200" />
-      </AFormRow>
-    </AFormGrid>
+    <a-form v-if="isStructure" layout="vertical">
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-role"
+            label="功能作用"
+            required
+            v-bind="
+              fieldError(
+                validationAttempted && !form.role.trim()
+                  ? '请输入功能作用'
+                  : undefined,
+              )
+            "
+          >
+            <a-input
+              id="machine-section-role"
+              v-model:value="form.role"
+              :maxlength="80"
+              allow-clear
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-machine-model-id"
+            label="机型"
+            extra="可选；来自“数据字典 → 机型”。"
+          >
+            <a-select
+              id="machine-section-machine-model-id"
+              v-model:value="form.machineModelId"
+              :options="machineModelOptions"
+              placeholder="选择机型（可选）"
+              show-search
+              option-filter-prop="label"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-process-step-id"
+            label="工艺制程"
+            extra="可选；来自“制程管理 → 工艺制程”。"
+          >
+            <a-select
+              id="machine-section-process-step-id"
+              v-model:value="form.processStepId"
+              :options="processStepOptions"
+              placeholder="选择工艺制程（可选）"
+              show-search
+              option-filter-prop="label"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-board-characteristic-id"
+            label="板件特性"
+            extra="可选；来自“数据字典 → 板件特性”。"
+          >
+            <a-select
+              id="machine-section-board-characteristic-id"
+              v-model:value="form.boardCharacteristicId"
+              :options="boardCharacteristicOptions"
+              placeholder="选择板件特性（可选）"
+              show-search
+              option-filter-prop="label"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-sensor-ids"
+            label="关联传感器"
+            required
+            v-bind="
+              fieldError(
+                validationAttempted && form.sensorIds.length === 0
+                  ? '请选择关联传感器'
+                  : undefined,
+              )
+            "
+            extra="规格和型号来自 Sensor型号；目录替换后这里会自动更新。"
+          >
+            <a-select
+              id="machine-section-sensor-ids"
+              v-model:value="form.sensorIds"
+              mode="multiple"
+              :options="sensorOptions"
+              placeholder="按类型、品牌或型号搜索"
+              :max-tag-count="2"
+              allow-clear
+              option-filter-prop="label"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="machine-section-purpose" label="作用">
+            <a-textarea
+              id="machine-section-purpose"
+              v-model:value="form.purpose"
+              :rows="3"
+              :maxlength="500"
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="machine-section-note" label="备注">
+            <a-input
+              id="machine-section-note"
+              v-model:value="form.note"
+              :maxlength="200"
+              allow-clear
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-form>
+    <a-form v-else layout="vertical">
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-role-2"
+            label="注意分类"
+            required
+            v-bind="
+              fieldError(
+                validationAttempted && !form.role.trim()
+                  ? '请输入注意分类'
+                  : undefined,
+              )
+            "
+          >
+            <a-input
+              id="machine-section-role-2"
+              v-model:value="form.role"
+              :maxlength="80"
+              allow-clear
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item
+            html-for="machine-section-name"
+            label="事项名称"
+            required
+            v-bind="
+              fieldError(
+                validationAttempted && !form.name.trim()
+                  ? '请输入事项名称'
+                  : undefined,
+              )
+            "
+          >
+            <a-input
+              id="machine-section-name"
+              v-model:value="form.name"
+              :maxlength="80"
+              allow-clear
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="machine-section-desc" label="说明">
+            <a-textarea
+              id="machine-section-desc"
+              v-model:value="form.desc"
+              :rows="3"
+              :maxlength="500"
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="machine-section-note-2" label="备注">
+            <a-input
+              id="machine-section-note-2"
+              v-model:value="form.note"
+              :maxlength="200"
+              allow-clear
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-form>
     <template #footer>
-      <AButton @click="cancelDialog">取消</AButton>
-      <AButton variant="filled" @click="saveItem">保存</AButton>
+      <a-button @click="cancelDialog">取消</a-button>
+      <a-button type="primary" @click="saveItem">保存</a-button>
     </template>
-  </ASheet>
-  <AImageViewer
-    v-if="preview"
-    v-model:open="imageOpen"
-    :src="preview.dataUrl"
-    :alt="preview.fileName"
-  />
+  </a-modal>
 </template>
 
 <style scoped>
-.machine-body > .selection-panel {
-  container-type: inline-size;
-}
-
-.machine-structure-toolbar {
-  display: grid;
-  grid-template-columns:
-    minmax(7rem, 1.2fr) repeat(3, minmax(6.25rem, 1fr))
-    minmax(7.5rem, 2.6fr) auto auto;
-  gap: var(--space-2);
-}
-
-.machine-structure-toolbar--notes {
-  grid-template-columns: minmax(12rem, 1fr) auto auto;
-}
-
-.machine-structure-toolbar .a-select.machine-structure-toolbar__select,
-.machine-structure-toolbar .a-token-field.machine-structure-toolbar__select {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-}
-
-.machine-structure-toolbar .a-search-field.machine-structure-toolbar__search {
-  width: 100%;
-  min-width: 0;
-}
-
-.machine-structure-toolbar > .a-button:last-child {
-  min-width: 6rem;
-}
-
-@container (width <= 48rem) {
-  .machine-structure-toolbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .machine-structure-toolbar__search {
-    grid-column: 1 / 3;
-  }
-}
-
-@media (width <= 48rem) {
-  .machine-structure-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .machine-structure-toolbar__search {
-    grid-column: 1 / -1;
-  }
-}
-
 .machine-spec-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  text-align: left;
-  padding: 2px 0;
+  gap: var(--space-1);
 }
 
+/* 一条记录展开成多行传感器时，行内用分隔线区分各传感器 */
 .machine-sensor-entry {
-  box-sizing: border-box;
   width: 100%;
-  min-height: 2.5rem;
   padding-block: var(--space-2);
 }
 
 .machine-sensor-entry--continued {
-  border-bottom: 1px solid var(--separator);
+  border-bottom: 1px solid var(--color-split);
 }
 
 .machine-spec-cell__header {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-3);
   align-items: center;
-  font: var(--text-field);
-  line-height: 1.3;
 }
 
 .machine-spec-cell__brand {
   font-weight: 600;
-  color: var(--label);
 }
 
 .machine-spec-cell__model {
-  font-family: var(--font-mono);
-  color: var(--sys-blue);
-  font-weight: 500;
+  font-family: var(--font-family-code);
+  color: var(--color-primary);
 }
 
 .machine-spec-cell__spec {
-  font: var(--text-caption);
-  color: var(--label-2);
-  line-height: 1.35;
+  font: var(--font-sm);
+  color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
 </style>

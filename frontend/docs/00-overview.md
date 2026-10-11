@@ -1,5 +1,7 @@
 # 00 · 总览：目标、范围与关键决策
 
+> **历史文档。** 这里记录的是项目早期以 Apple 规范自建组件库的方案。前端现已改为完全使用 ant-design-vue，当前规范见 `01-design-system.md` 与 `02-component-library.md`。
+
 ## 1. 要解决的两个问题
 
 1. **UI 不好看。** 现有界面是 Vben Admin 默认外观 + Element Plus 默认控件，视觉语言不统一（Vben 的 shadcn 变量、Element Plus 的 `--el-*` 变量、`selection.css` 里 1180 行自定义样式三套并存）。

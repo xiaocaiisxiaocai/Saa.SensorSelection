@@ -2,7 +2,7 @@
 
 Symtek Automation China 的客户、PCB 制程、机型结构与 Sensor 型号知识库。
 
-前端是自建 Apple 设计规范组件库 + Vue 3 单一应用（`frontend/`）。后端是 ASP.NET Core 8 + EF Core + SQLite，提供 JWT 登录、RBAC、审计日志和选型数据仓库。
+前端是 Vue 3 + ant-design-vue 4 单一应用（`frontend/`，界面完全使用 antd 默认主题与组件）。后端是 ASP.NET Core 8 + EF Core + SQLite，提供 JWT 登录、RBAC、审计日志和选型数据仓库。
 
 ## 本地运行
 

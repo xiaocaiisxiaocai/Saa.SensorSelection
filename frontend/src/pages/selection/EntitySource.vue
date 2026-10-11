@@ -7,28 +7,12 @@ import {
   type MachineCatalogKind,
 } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { fieldError } from '@/pages/shared/form';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  AButton,
-  AField,
-  AFormRow,
-  ASelect,
-  ASheet,
-  ASourceList,
-  AStepper,
-  type SourceGroup,
-} from '@/ui';
-import {
-  MACHINE_SOURCE_LIST_DEFAULT_WIDTH,
-  MACHINE_SOURCE_LIST_MAX_WIDTH,
-  MACHINE_SOURCE_LIST_MIN_WIDTH,
-  SOURCE_LIST_DEFAULT_WIDTH,
-  SOURCE_LIST_MAX_WIDTH,
-  SOURCE_LIST_MIN_WIDTH,
-} from '@/ui/source-list';
-import MachineSourceList from './machine/MachineSourceList.vue';
+
+import EntityTree from './EntityTree.vue';
 
 const props = defineProps<{
   kind: EntityKind;
@@ -50,7 +34,6 @@ const emit = defineEmits<{
       checked: boolean;
     },
   ];
-  resize: [width: number];
 }>();
 
 const store = useSelectionStore();
@@ -62,12 +45,6 @@ const groupLabel = computed(() =>
 );
 const itemLabel = computed(() => (props.kind === 'customer' ? '客户' : '机型'));
 
-const groups = computed<SourceGroup[]>(() =>
-  store.entityGroups(props.kind).map((group) => ({
-    name: group.name,
-    items: group.items,
-  })),
-);
 const allMachineGroups = computed(() => store.entityGroups('machine'));
 const machineGroups = computed(() =>
   props.machineType
@@ -97,20 +74,10 @@ const itemForm = reactive({
 const groupDirtyGuard = useDirtyGuard(groupForm);
 const configurationDirtyGuard = useDirtyGuard(configurationForm);
 const itemDirtyGuard = useDirtyGuard(itemForm);
-const listMinWidth = computed(() =>
+const treeGroups = computed(() =>
   props.kind === 'machine'
-    ? MACHINE_SOURCE_LIST_MIN_WIDTH
-    : SOURCE_LIST_MIN_WIDTH,
-);
-const listMaxWidth = computed(() =>
-  props.kind === 'machine'
-    ? MACHINE_SOURCE_LIST_MAX_WIDTH
-    : SOURCE_LIST_MAX_WIDTH,
-);
-const listDefaultWidth = computed(() =>
-  props.kind === 'machine'
-    ? MACHINE_SOURCE_LIST_DEFAULT_WIDTH
-    : SOURCE_LIST_DEFAULT_WIDTH,
+    ? machineGroups.value
+    : store.entityGroups('customer'),
 );
 const categoryOptions = computed(() =>
   (props.kind === 'machine'
@@ -144,14 +111,17 @@ watch(
   },
 );
 
-function movedIndex(prev: string[], next: string[]) {
-  const newIndex = next.findIndex((name, index) => name !== prev[index]);
-  if (newIndex < 0) return null;
-  const item = next[newIndex];
-  if (!item) return null;
-  const oldIndex = prev.indexOf(item);
-  if (oldIndex < 0 || oldIndex === newIndex) return null;
-  return { oldIndex, newIndex };
+function onSelect(payload: {
+  category: string;
+  configuration: string | null;
+  item: string;
+}) {
+  emit(
+    'select',
+    props.kind === 'machine'
+      ? payload
+      : { category: payload.category, item: payload.item },
+  );
 }
 
 function openCreateGroup() {
@@ -292,7 +262,7 @@ function saveGroup() {
     editingGroup.value,
   );
   if (
-    toastResult(
+    notifyResult(
       result,
       editingGroup.value
         ? `${groupLabel.value}已更新`
@@ -315,7 +285,7 @@ function saveConfiguration() {
     editingConfiguration.value,
   );
   if (
-    toastResult(
+    notifyResult(
       result,
       editingConfiguration.value ? '配置已更新' : '配置已新增',
       { duplicate: '该配置已存在' },
@@ -334,7 +304,7 @@ async function removeConfiguration(payload: {
     `确认删除“${payload.configuration}”吗？请先清空其下全部机型。`,
   );
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteMachineConfiguration(payload.category, payload.configuration),
     '配置已删除',
     { 'not-empty': '请先清空该配置下的全部机型' },
@@ -347,7 +317,7 @@ async function removeGroup(name: string) {
     `确认删除“${name}”吗？请先清空其下全部${itemLabel.value}。`,
   );
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteEntityGroup(props.kind, name),
     `${groupLabel.value}已删除`,
     {
@@ -375,7 +345,7 @@ function saveItem() {
     previous,
   );
   if (
-    toastResult(
+    notifyResult(
       result,
       previous ? `${itemLabel.value}已更新` : `${itemLabel.value}已新增`,
       {
@@ -404,7 +374,7 @@ async function removeItem(payload: {
     `确认删除“${payload.item}”吗？请先清空其下业务数据。`,
   );
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteEntityItem(
       props.kind,
       payload.item,
@@ -418,51 +388,19 @@ async function removeItem(payload: {
   );
 }
 
-function onReorderGroups(names: string[]) {
-  const current = store.entityGroups(props.kind).map((group) => group.name);
-  const move = movedIndex(current, names);
-  if (!move) return;
-  toastResult(
-    store.reorderEntityGroups(props.kind, move.oldIndex, move.newIndex),
-    '',
-  );
-}
-
-function onReorderItems(payload: { group: string; items: string[] }) {
-  const current =
-    store.entityGroups(props.kind).find((group) => group.name === payload.group)
-      ?.items ?? [];
-  const move = movedIndex(current, payload.items);
-  if (!move) return;
-  toastResult(
-    store.reorderEntityItems(
-      props.kind,
-      payload.group,
-      move.oldIndex,
-      move.newIndex,
-    ),
-    '',
-  );
-}
-
-function onReorderMachineGroups(payload: {
-  oldIndex: number;
-  newIndex: number;
-}) {
-  const oldName = machineGroups.value[payload.oldIndex]?.name;
-  const newName = machineGroups.value[payload.newIndex]?.name;
+function onReorderGroups(payload: { oldIndex: number; newIndex: number }) {
+  // 机型目录按类型过滤后展示，下标要换算回全部分组里的位置
+  const all = store.entityGroups(props.kind);
+  const oldName = treeGroups.value[payload.oldIndex]?.name;
+  const newName = treeGroups.value[payload.newIndex]?.name;
   if (!oldName || !newName) return;
-  const oldIndex = allMachineGroups.value.findIndex(
-    (group) => group.name === oldName,
-  );
-  const newIndex = allMachineGroups.value.findIndex(
-    (group) => group.name === newName,
-  );
+  const oldIndex = all.findIndex((group) => group.name === oldName);
+  const newIndex = all.findIndex((group) => group.name === newName);
   if (oldIndex < 0 || newIndex < 0) return;
-  toastResult(store.reorderEntityGroups('machine', oldIndex, newIndex), '');
+  notifyResult(store.reorderEntityGroups(props.kind, oldIndex, newIndex), '');
 }
 
-function onReorderMachineConfigurations(payload: {
+function onReorderConfigurations(payload: {
   category: string;
   oldIndex: number;
   newIndex: number;
@@ -472,7 +410,7 @@ function onReorderMachineConfigurations(payload: {
   )?.configurations?.[payload.oldIndex];
   if (!configuration) return;
 
-  toastResult(
+  notifyResult(
     store.saveMachineConfiguration(
       payload.category,
       { name: configuration.name, sort: payload.newIndex + 1 },
@@ -482,15 +420,15 @@ function onReorderMachineConfigurations(payload: {
   );
 }
 
-function onReorderMachineItems(payload: {
+function onReorderItems(payload: {
   category: string;
   configuration: string | null;
   oldIndex: number;
   newIndex: number;
 }) {
-  toastResult(
+  notifyResult(
     store.reorderEntityItems(
-      'machine',
+      props.kind,
       payload.category,
       payload.oldIndex,
       payload.newIndex,
@@ -502,46 +440,18 @@ function onReorderMachineItems(payload: {
 </script>
 
 <template>
-  <div class="entity-source">
-    <ASourceList
-      v-if="kind === 'customer'"
-      :groups="groups"
-      :selected="selected"
-      :checked-items="checkedItems"
-      :editable="writable"
-      :sortable="writable"
-      :group-label="groupLabel"
-      :item-label="itemLabel"
-      :min-width="listMinWidth"
-      :max-width="listMaxWidth"
-      :default-width="listDefaultWidth"
-      :storage-key="`selection:source-list-width:${kind}:v4`"
-      @select="emit('select', { category: $event.group, item: $event.item })"
-      @toggle-check="emit('toggleCheck', $event)"
-      @create-group="openCreateGroup"
-      @edit-group="openEditGroup"
-      @delete-group="removeGroup"
-      @create-item="openCreateItem"
-      @edit-item="openEditItem"
-      @delete-item="removeItem"
-      @reorder-groups="onReorderGroups"
-      @reorder-items="onReorderItems"
-    />
-    <MachineSourceList
-      v-else
-      :groups="machineGroups"
+  <div class="entity-source" :class="`entity-source--${kind}`">
+    <EntityTree
+      :groups="treeGroups"
       :selected="selected"
       :selected-key="selectedKey"
       :checked-items="checkedItems"
       :editable="writable"
       :sortable="writable"
-      :allow-configurations="machineType !== 'project'"
-      :min-width="listMinWidth"
-      :max-width="listMaxWidth"
-      :default-width="listDefaultWidth"
-      :storage-key="`selection:source-list-width:${kind}:v5`"
-      @resize="emit('resize', $event)"
-      @select="emit('select', $event)"
+      :allow-configurations="kind === 'machine' && machineType !== 'project'"
+      :group-label="groupLabel"
+      :item-label="itemLabel"
+      @select="onSelect"
       @toggle-check="emit('toggleCheck', $event)"
       @create-group="openCreateGroup"
       @edit-group="openEditGroup"
@@ -552,131 +462,198 @@ function onReorderMachineItems(payload: {
       @create-item="openCreateItem"
       @edit-item="openEditItem"
       @delete-item="removeItem"
-      @reorder-groups="onReorderMachineGroups"
-      @reorder-configurations="onReorderMachineConfigurations"
-      @reorder-items="onReorderMachineItems"
+      @reorder-groups="onReorderGroups"
+      @reorder-configurations="onReorderConfigurations"
+      @reorder-items="onReorderItems"
     />
 
-    <ASheet
-      v-model:open="groupOpen"
+    <a-modal
+      :open="groupOpen"
       :title="editingGroup ? `编辑${groupLabel}` : `新建${groupLabel}`"
       :width="420"
-      :confirm-close="groupDirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelGroupDialog"
     >
-      <AFormRow
-        :label="`${groupLabel}名称`"
-        required
-        :error="
-          groupValidationAttempted && !groupForm.name.trim()
-            ? `请输入${groupLabel}名称`
-            : undefined
-        "
-      >
-        <AField v-model="groupForm.name" :maxlength="40" />
-      </AFormRow>
-      <AFormRow label="排序" required>
-        <AStepper
-          v-model="groupForm.sort"
-          :min="1"
-          :max="
-            Math.max(
-              1,
-              store.entityGroups(kind).length + (editingGroup ? 0 : 1),
+      <a-form layout="vertical">
+        <a-form-item
+          html-for="entity-source-name"
+          :label="`${groupLabel}名称`"
+          required
+          v-bind="
+            fieldError(
+              groupValidationAttempted && !groupForm.name.trim()
+                ? `请输入${groupLabel}名称`
+                : undefined,
             )
           "
-        />
-      </AFormRow>
+        >
+          <a-input
+            id="entity-source-name"
+            v-model:value="groupForm.name"
+            :maxlength="40"
+            allow-clear
+            show-count
+          />
+        </a-form-item>
+        <a-form-item html-for="entity-source-sort" label="排序" required>
+          <a-input-number
+            id="entity-source-sort"
+            v-model:value="groupForm.sort"
+            :min="1"
+            :max="
+              Math.max(
+                1,
+                store.entityGroups(kind).length + (editingGroup ? 0 : 1),
+              )
+            "
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelGroupDialog">取消</AButton>
-        <AButton variant="filled" @click="saveGroup">保存</AButton>
+        <a-button @click="cancelGroupDialog">取消</a-button>
+        <a-button type="primary" @click="saveGroup">保存</a-button>
       </template>
-    </ASheet>
+    </a-modal>
 
-    <ASheet
+    <a-modal
       v-if="kind === 'machine'"
-      v-model:open="configurationOpen"
+      :open="configurationOpen"
       :title="editingConfiguration ? '编辑配置' : '新建配置'"
       :width="420"
-      :confirm-close="configurationDirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelConfigurationDialog"
     >
-      <AFormRow
-        label="分类"
-        required
-        :error="
-          configurationValidationAttempted && !configurationForm.category
-            ? '请选择分类'
-            : undefined
-        "
-      >
-        <ASelect
-          v-model="configurationForm.category"
-          :options="categoryOptions"
-        />
-      </AFormRow>
-      <AFormRow
-        label="配置名称"
-        required
-        :error="
-          configurationValidationAttempted && !configurationForm.name.trim()
-            ? '请输入配置名称'
-            : undefined
-        "
-      >
-        <AField v-model="configurationForm.name" :maxlength="40" />
-      </AFormRow>
-      <AFormRow label="排序" required>
-        <AStepper v-model="configurationForm.sort" :min="1" />
-      </AFormRow>
+      <a-form layout="vertical">
+        <a-form-item
+          html-for="entity-source-category"
+          label="分类"
+          required
+          v-bind="
+            fieldError(
+              configurationValidationAttempted && !configurationForm.category
+                ? '请选择分类'
+                : undefined,
+            )
+          "
+        >
+          <a-select
+            id="entity-source-category"
+            v-model:value="configurationForm.category"
+            :options="categoryOptions"
+            show-search
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          html-for="entity-source-name-2"
+          label="配置名称"
+          required
+          v-bind="
+            fieldError(
+              configurationValidationAttempted && !configurationForm.name.trim()
+                ? '请输入配置名称'
+                : undefined,
+            )
+          "
+        >
+          <a-input
+            id="entity-source-name-2"
+            v-model:value="configurationForm.name"
+            :maxlength="40"
+            allow-clear
+            show-count
+          />
+        </a-form-item>
+        <a-form-item html-for="entity-source-sort-2" label="排序" required>
+          <a-input-number
+            id="entity-source-sort-2"
+            v-model:value="configurationForm.sort"
+            :min="1"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelConfigurationDialog">取消</AButton>
-        <AButton variant="filled" @click="saveConfiguration">保存</AButton>
+        <a-button @click="cancelConfigurationDialog">取消</a-button>
+        <a-button type="primary" @click="saveConfiguration">保存</a-button>
       </template>
-    </ASheet>
+    </a-modal>
 
-    <ASheet
-      v-model:open="itemOpen"
+    <a-modal
+      :open="itemOpen"
       :title="editingItem ? `编辑${itemLabel}` : `新建${itemLabel}`"
       :width="420"
-      :confirm-close="itemDirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelItemDialog"
     >
-      <AFormRow
-        :label="groupLabel"
-        required
-        :error="
-          itemValidationAttempted && !itemForm.category
-            ? `请选择${groupLabel}`
-            : undefined
-        "
-      >
-        <ASelect v-model="itemForm.category" :options="categoryOptions" />
-      </AFormRow>
-      <AFormRow
-        v-if="kind === 'machine' && machineType !== 'project'"
-        label="配置（可选）"
-      >
-        <ASelect
-          v-model="itemForm.configuration"
-          :options="configurationOptions"
-        />
-      </AFormRow>
-      <AFormRow
-        :label="`${itemLabel}名称`"
-        required
-        :error="
-          itemValidationAttempted && !itemForm.name.trim()
-            ? `请输入${itemLabel}名称`
-            : undefined
-        "
-      >
-        <AField v-model="itemForm.name" :maxlength="40" />
-      </AFormRow>
-      <AFormRow label="排序" required>
-        <AStepper v-model="itemForm.sort" :min="1" />
-      </AFormRow>
+      <a-form layout="vertical">
+        <a-form-item
+          html-for="entity-source-category-2"
+          :label="groupLabel"
+          required
+          v-bind="
+            fieldError(
+              itemValidationAttempted && !itemForm.category
+                ? `请选择${groupLabel}`
+                : undefined,
+            )
+          "
+        >
+          <a-select
+            id="entity-source-category-2"
+            v-model:value="itemForm.category"
+            :options="categoryOptions"
+            show-search
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          v-if="kind === 'machine' && machineType !== 'project'"
+          html-for="entity-source-configuration"
+          label="配置（可选）"
+        >
+          <a-select
+            id="entity-source-configuration"
+            v-model:value="itemForm.configuration"
+            :options="configurationOptions"
+            show-search
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          html-for="entity-source-name-3"
+          :label="`${itemLabel}名称`"
+          required
+          v-bind="
+            fieldError(
+              itemValidationAttempted && !itemForm.name.trim()
+                ? `请输入${itemLabel}名称`
+                : undefined,
+            )
+          "
+        >
+          <a-input
+            id="entity-source-name-3"
+            v-model:value="itemForm.name"
+            :maxlength="40"
+            allow-clear
+            show-count
+          />
+        </a-form-item>
+        <a-form-item html-for="entity-source-sort-3" label="排序" required>
+          <a-input-number
+            id="entity-source-sort-3"
+            v-model:value="itemForm.sort"
+            :min="1"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelItemDialog">取消</AButton>
-        <AButton variant="filled" @click="saveItem">保存</AButton>
+        <a-button @click="cancelItemDialog">取消</a-button>
+        <a-button type="primary" @click="saveItem">保存</a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </div>
 </template>

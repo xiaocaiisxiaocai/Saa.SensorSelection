@@ -1,3 +1,4 @@
+import { message } from 'ant-design-vue';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -5,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
 import { SEED_VERSION } from '@/domain';
-import { toast } from '@/ui/toast';
 import LoginPage from './LoginPage.vue';
 
 async function mountLogin() {
@@ -30,7 +30,7 @@ async function mountLogin() {
 describe('LoginPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
-    toast.clear();
+    message.destroy();
     vi.spyOn(api, 'getStore').mockResolvedValue({
       'meta:seed-version': [{ version: SEED_VERSION }],
     });
@@ -47,7 +47,7 @@ describe('LoginPage', () => {
   it('renders brand headings and footer', async () => {
     const wrapper = await mountLogin();
     expect(wrapper.find('.login__title').text()).toBe('感应器选型系统');
-    expect(wrapper.find('.login__subtitle').text()).toBe(
+    expect(wrapper.find('.login__brand').text()).toContain(
       'Symtek Automation China',
     );
     expect(wrapper.find('.login-layout__footer').text()).toContain(
@@ -67,49 +67,57 @@ describe('LoginPage', () => {
     await inputs[1].setValue('secret');
     await inputs[1].trigger('focus');
     expect(wrapper.find('[aria-label="清除"]').exists()).toBe(false);
-    expect(wrapper.find('[aria-label="显示密码"]').exists()).toBe(true);
+    expect(wrapper.find('.ant-input-password-icon').exists()).toBe(true);
     wrapper.unmount();
   });
 
   it('shows inline errors when username or password is empty, without a redundant toast', async () => {
-    const warning = vi.spyOn(toast, 'warning');
+    const warning = vi.spyOn(message, 'warning');
     const wrapper = await mountLogin();
     await wrapper.get('form').trigger('submit');
     // 字段旁边的红字已经说明白了，不需要再弹一条措辞不同的 Toast。
     expect(warning).not.toHaveBeenCalled();
     expect(
-      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+      wrapper
+        .findAll('.ant-form-item-explain-error')
+        .map((item) => item.text()),
     ).toEqual(['请输入用户名', '请输入密码']);
 
     await wrapper.findAll('input')[0].setValue('admin');
     expect(
-      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+      wrapper
+        .findAll('.ant-form-item-explain-error')
+        .map((item) => item.text()),
     ).toEqual(['请输入密码']);
     wrapper.unmount();
   });
 
   it('shows only the password error when username is provided', async () => {
-    const warning = vi.spyOn(toast, 'warning');
+    const warning = vi.spyOn(message, 'warning');
     const wrapper = await mountLogin();
     const inputs = wrapper.findAll('input');
     await inputs[0].setValue('admin');
     await wrapper.get('form').trigger('submit');
     expect(warning).not.toHaveBeenCalled();
     expect(
-      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+      wrapper
+        .findAll('.ant-form-item-explain-error')
+        .map((item) => item.text()),
     ).toEqual(['请输入密码']);
     wrapper.unmount();
   });
 
   it('shows only the username error when password is provided', async () => {
-    const warning = vi.spyOn(toast, 'warning');
+    const warning = vi.spyOn(message, 'warning');
     const wrapper = await mountLogin();
     const inputs = wrapper.findAll('input');
     await inputs[1].setValue('admin123');
     await wrapper.get('form').trigger('submit');
     expect(warning).not.toHaveBeenCalled();
     expect(
-      wrapper.findAll('.a-form-row__error').map((item) => item.text()),
+      wrapper
+        .findAll('.ant-form-item-explain-error')
+        .map((item) => item.text()),
     ).toEqual(['请输入用户名']);
     wrapper.unmount();
   });
@@ -126,7 +134,7 @@ describe('LoginPage', () => {
     });
     expect(wrapper.find('.login__error').text()).toBe('用户名或密码错误');
     // 密码框被清空后不该显示“请输入密码”，那会盖掉真正的失败原因。
-    expect(wrapper.findAll('.a-form-row__error')).toHaveLength(0);
+    expect(wrapper.findAll('.ant-form-item-explain-error')).toHaveLength(0);
     wrapper.unmount();
   });
 
@@ -140,7 +148,10 @@ describe('LoginPage', () => {
     vi.spyOn(api, 'putKey').mockResolvedValue([]);
     vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
     const wrapper = await mountLogin();
-    await wrapper.get('.login__guest-link').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('以游客身份预览'))!
+      .trigger('click');
     await vi.waitFor(() => {
       expect(window.localStorage.getItem('symtek_token')).toBeNull();
       expect(getStore).toHaveBeenCalled();
@@ -169,7 +180,7 @@ describe('LoginPage', () => {
     vi.spyOn(api, 'putKey').mockResolvedValue([]);
     vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
     vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
-    const success = vi.spyOn(toast, 'success');
+    const success = vi.spyOn(message, 'success');
     const wrapper = await mountLogin();
 
     await vi.waitFor(() => expect(getStore).toHaveBeenCalledTimes(1));
@@ -192,7 +203,10 @@ describe('LoginPage', () => {
     // 不给原因的话，他只会看到自己突然回到登录页，完全不知道发生了什么。
     window.localStorage.setItem('symtek_token', 'stale-token');
     vi.spyOn(api, 'me').mockRejectedValue(
-      new (await import('@/api')).ApiError('unauthorized', '账号已停用或已删除'),
+      new (await import('@/api')).ApiError(
+        'unauthorized',
+        '账号已停用或已删除',
+      ),
     );
 
     const wrapper = await mountLogin();

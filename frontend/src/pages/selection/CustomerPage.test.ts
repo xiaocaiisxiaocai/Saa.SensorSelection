@@ -1,11 +1,21 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { ASheet, ATokenField } from '@/ui';
+import { dialogs } from '@/pages/shared/confirm';
+import {
+  chooseSelect,
+  clickTab,
+  clickTreeNode,
+  columnWidths,
+  findButton,
+  findSelect,
+  tabCount,
+  tagColor,
+} from '@/test-helpers';
 import CustomerPage from './CustomerPage.vue';
 
 async function mountPage(authenticated = false) {
@@ -48,86 +58,77 @@ describe('CustomerPage', () => {
     const item = group.items[0]!;
     const category = group.name;
 
-    const heading = wrapper.get('.entity-header h2');
+    const heading = wrapper.get('.selection-panel > h2');
     expect(heading.classes()).toContain('visually-hidden');
     expect(heading.text()).toContain(item);
     expect(heading.text()).toContain(category);
-    expect(wrapper.find('.entity-header__title').exists()).toBe(false);
-    expect(wrapper.find('.entity-header__meta').exists()).toBe(false);
-    const reqTab = wrapper
-      .findAll('.ant-segmented-item')
-      .find((button) => button.text().trim().startsWith('客户通用要求'));
-    expect(reqTab?.get('.a-segmented__count').text()).toBe(
+    expect(tabCount(wrapper, '客户通用要求')).toBe(
       String(store.crudItems('customer-req', item).length),
     );
     wrapper.unmount();
   });
 
-  it('wires a confirm-close guard on the sidebar create/edit region dialog', async () => {
+  it('asks before discarding unsaved input in the sidebar create region dialog', async () => {
     const wrapper = await mountPage(true);
-    // EntitySource 的“新建/编辑区域”弹窗必须带 confirmClose，否则 Esc/点
-    // 遮罩会静默丢弃未保存的输入（回归自一次真实缺口：这个共享侧栏组件
+    // EntitySource 的“新建/编辑区域”弹窗必须带未保存确认，否则 Esc/点
+    // 遮罩会静默丢弃输入（回归自一次真实缺口：这个共享侧栏组件
     // 之前完全没接未保存确认）。
-    const regionSheet = wrapper
-      .findAllComponents(ASheet)
-      .find((sheet) => /区域/.test(String(sheet.props('title'))));
-    expect(regionSheet).toBeDefined();
-    expect(typeof regionSheet!.props('confirmClose')).toBe('function');
+    const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValue(false);
+    await wrapper.get('button[aria-label="新建区域"]').trigger('click');
+    await flushPromises();
+    const input = document.querySelector<HTMLInputElement>(
+      '#entity-source-name input, input#entity-source-name',
+    );
+    expect(input).not.toBeNull();
+    input!.value = '新区域';
+    input!.dispatchEvent(new Event('input', { bubbles: true }));
+    await flushPromises();
+
+    const cancel = [...document.querySelectorAll('.ant-modal button')].find(
+      (button) => button.textContent?.trim() === '取消',
+    ) as HTMLButtonElement;
+    cancel.click();
+    await flushPromises();
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '放弃未保存的修改？' }),
+    );
+    // 用户选择继续编辑，弹窗保持打开
+    expect(
+      document.querySelector('.ant-modal-wrap')?.getAttribute('style') ?? '',
+    ).not.toContain('display: none');
+    confirm.mockRestore();
     wrapper.unmount();
   });
 
-  it('associates each segmented tab with its tabpanel via matching ids', async () => {
+  it('switches the panel content with each customer tab', async () => {
     const wrapper = await mountPage(true);
-    const clickTab = async (label: string) => {
-      const tab = wrapper
-        .findAll('.ant-segmented-item')
-        .find((button) => button.text().trim().startsWith(label));
-      expect(tab).toBeDefined();
-      await tab!.get('input').trigger('change');
-      await flushPromises();
-    };
-
-    for (const [label, value] of [
-      ['客户通用要求', 'req'],
-      ['制程注意事项', 'proc'],
-      ['感应器选用标准', 'sop'],
-      ['厂外反馈问题项', 'feedback'],
-    ] as const) {
-      await clickTab(label);
-      const tab = wrapper.get(`#customer-tabs-tab-${value}`);
-      expect(
-        tab.element
-          .closest('.ant-segmented-item')
-          ?.classList.contains('ant-segmented-item-selected'),
-      ).toBe(true);
-      const panel = wrapper.get(`#customer-tabs-panel-${value}`);
+    const expected = [
+      ['客户通用要求', '新增要求'],
+      ['制程注意事项', '新增'],
+      ['感应器选用标准', '点击或将文件拖到此处上传'],
+      ['厂外反馈问题项', '问题点'],
+    ] as const;
+    for (const [label, content] of expected) {
+      await clickTab(wrapper, label);
+      expect(wrapper.get('.ant-tabs-tab-active').text()).toContain(label);
+      const panel = wrapper.get('.ant-tabs-tabpane-active');
       expect(panel.attributes('role')).toBe('tabpanel');
-      expect(panel.attributes('aria-labelledby')).toBe(
-        `customer-tabs-tab-${value}`,
-      );
+      expect(panel.text()).toContain(content);
     }
     wrapper.unmount();
   });
 
   it('gives short fields less width and descriptive fields more width', async () => {
     const wrapper = await mountPage(true);
-    const widths = Object.fromEntries(
-      wrapper
-        .findAll('th')
-        .map((header) => [header.text(), header.attributes('style')]),
-    );
+    const widths = columnWidths(wrapper);
 
-    // 列宽由 ATable 在 JS 里算成具体像素后写成 width：table-layout:fixed
-    // 规范忽略单元格的 min-width，靠 CSS 写 min-width 的话这些列等于没有
-    // 宽度，会被平均分配。jsdom 没有布局，容器宽度为 0，所以弹性列正好
-    // 落在各自声明的下限上。
-    expect(widths['备注']).toContain('width: 140px');
-    expect(widths['来源']).toContain('width: 108px');
-    expect(widths['操作']).toContain('width: 96px');
-    expect(widths['要求内容']).toContain('width: 230px');
-    expect(widths['要求分类']).toContain('width: 136px');
-    expect(widths['适用制程']).toContain('width: 130px');
-    expect(widths['适用机型']).toContain('width: 90px');
+    expect(widths['备注']).toBe(140);
+    expect(widths['来源']).toBe(108);
+    expect(widths['操作']).toBe(96);
+    expect(widths['要求内容']).toBe(230);
+    expect(widths['要求分类']).toBe(136);
+    expect(widths['适用制程']).toBe(130);
+    expect(widths['适用机型']).toBe(90);
     wrapper.unmount();
   });
 
@@ -160,12 +161,7 @@ describe('CustomerPage', () => {
     });
     await flushPromises();
 
-    const sourceFilter = wrapper
-      .findAllComponents(ATokenField)
-      .find((item) => item.props('placeholder') === '要求来源');
-    expect(sourceFilter).toBeDefined();
-    sourceFilter!.vm.$emit('update:modelValue', sources.slice(0, 2));
-    await flushPromises();
+    await chooseSelect(wrapper, '要求来源', sources.slice(0, 2));
 
     expect(wrapper.text()).toContain('多来源筛选记录-1');
     expect(wrapper.text()).toContain('多来源筛选记录-2');
@@ -248,66 +244,35 @@ describe('CustomerPage', () => {
     });
     await flushPromises();
 
-    const findTokenFilter = (placeholder: string) => {
-      const filter = wrapper
-        .findAllComponents(ATokenField)
-        .find((item) => item.props('placeholder') === placeholder);
-      expect(filter).toBeDefined();
-      return filter!;
-    };
-    const clickTab = async (label: string) => {
-      const tab = wrapper
-        .findAll('.ant-segmented-item')
-        .find((button) => button.text().trim().startsWith(label));
-      expect(tab).toBeDefined();
-      await tab!.get('input').trigger('change');
-      await flushPromises();
-    };
-
-    findTokenFilter('要求分类').vm.$emit(
-      'update:modelValue',
-      requirementTypes.slice(0, 2),
-    );
-    await flushPromises();
+    await chooseSelect(wrapper, '要求分类', requirementTypes.slice(0, 2));
     expect(wrapper.text()).toContain('要求分类多选-1');
     expect(wrapper.text()).toContain('要求分类多选-2');
     expect(wrapper.text()).not.toContain('要求分类多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findTokenFilter('要求分类').props('modelValue')).toEqual([]);
+    expect(findSelect(wrapper, '要求分类').props('value')).toEqual([]);
     expect(wrapper.text()).toContain('要求分类多选-3');
 
-    await clickTab('制程注意事项');
-    findTokenFilter('制程分类').vm.$emit(
-      'update:modelValue',
-      processTypes.slice(0, 2),
-    );
-    await flushPromises();
+    await clickTab(wrapper, '制程注意事项');
+    await chooseSelect(wrapper, '制程分类', processTypes.slice(0, 2));
     expect(wrapper.text()).toContain('制程分类多选-1');
     expect(wrapper.text()).toContain('制程分类多选-2');
     expect(wrapper.text()).not.toContain('制程分类多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findTokenFilter('制程分类').props('modelValue')).toEqual([]);
+    expect(findSelect(wrapper, '制程分类').props('value')).toEqual([]);
     expect(wrapper.text()).toContain('制程分类多选-3');
 
-    await clickTab('厂外反馈问题项');
-    findTokenFilter('问题分类').vm.$emit(
-      'update:modelValue',
-      feedbackTypes.slice(0, 2),
-    );
-    findTokenFilter('处理状态').vm.$emit(
-      'update:modelValue',
-      feedbackStatuses.slice(0, 2),
-    );
-    await flushPromises();
+    await clickTab(wrapper, '厂外反馈问题项');
+    chooseSelect(wrapper, '问题分类', feedbackTypes.slice(0, 2));
+    await chooseSelect(wrapper, '处理状态', feedbackStatuses.slice(0, 2));
     expect(wrapper.text()).toContain('反馈筛选多选-1');
     expect(wrapper.text()).toContain('反馈筛选多选-2');
     expect(wrapper.text()).not.toContain('反馈筛选多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findTokenFilter('问题分类').props('modelValue')).toEqual([]);
-    expect(findTokenFilter('处理状态').props('modelValue')).toEqual([]);
+    expect(findSelect(wrapper, '问题分类').props('value')).toEqual([]);
+    expect(findSelect(wrapper, '处理状态').props('value')).toEqual([]);
     expect(wrapper.text()).toContain('反馈筛选多选-3');
 
     wrapper.unmount();
@@ -315,38 +280,26 @@ describe('CustomerPage', () => {
 
   it('prioritizes descriptive columns in process notes and feedback tables', async () => {
     const wrapper = await mountPage(true);
-    const clickTab = async (label: string) => {
-      const tab = wrapper
-        .findAll('.ant-segmented-item')
-        .find((button) => button.text().trim().startsWith(label));
-      expect(tab).toBeDefined();
-      await tab!.get('input').trigger('change');
-    };
-    const readWidths = () =>
-      Object.fromEntries(
-        wrapper
-          .findAll('th')
-          .map((header) => [header.text(), header.attributes('style')]),
-      );
+    const readWidths = () => columnWidths(wrapper);
 
-    await clickTab('制程注意事项');
+    await clickTab(wrapper, '制程注意事项');
     const processWidths = readWidths();
-    expect(processWidths['备注']).toContain('width: 130px');
-    expect(processWidths['操作']).toContain('width: 96px');
-    expect(processWidths['制程作用']).toContain('width: 150px');
-    expect(processWidths['制程分类']).toContain('width: 104px');
-    expect(processWidths['制程特性']).toContain('width: 150px');
-    expect(processWidths['sensor使用注意事项']).toContain('width: 190px');
+    expect(processWidths['备注']).toBe(130);
+    expect(processWidths['操作']).toBe(96);
+    expect(processWidths['制程作用']).toBe(150);
+    expect(processWidths['制程分类']).toBe(104);
+    expect(processWidths['制程特性']).toBe(150);
+    expect(processWidths['sensor使用注意事项']).toBe(190);
 
-    await clickTab('厂外反馈问题项');
+    await clickTab(wrapper, '厂外反馈问题项');
     const feedbackWidths = readWidths();
-    expect(feedbackWidths['反馈时间']).toContain('width: 120px');
-    expect(feedbackWidths['处理状态']).toContain('width: 90px');
-    expect(feedbackWidths['操作']).toContain('width: 96px');
-    expect(feedbackWidths['改善对策']).toContain('width: 205px');
-    expect(feedbackWidths['适用机型']).toContain('width: 90px');
-    expect(feedbackWidths['问题分类']).toContain('width: 168px');
-    expect(feedbackWidths['问题点']).toContain('width: 205px');
+    expect(feedbackWidths['反馈时间']).toBe(120);
+    expect(feedbackWidths['处理状态']).toBe(90);
+    expect(feedbackWidths['操作']).toBe(96);
+    expect(feedbackWidths['改善对策']).toBe(205);
+    expect(feedbackWidths['适用机型']).toBe(90);
+    expect(feedbackWidths['问题分类']).toBe(168);
+    expect(feedbackWidths['问题点']).toBe(205);
     wrapper.unmount();
   });
 
@@ -358,20 +311,13 @@ describe('CustomerPage', () => {
     expect(search).toBeDefined();
     await search!.setValue('庆鼎筛选');
 
-    const addButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().trim() === '新增要求');
+    const addButton = findButton(wrapper, '新增要求');
     expect(addButton).toBeDefined();
     await addButton!.trigger('click');
     await flushPromises();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
-    const nextCustomer = wrapper
-      .findAll('button')
-      .find((button) => button.text().trim() === '健鼎');
-    expect(nextCustomer).toBeDefined();
-    await nextCustomer!.trigger('click');
-    await flushPromises();
+    await clickTreeNode(wrapper, '健鼎');
 
     const nextSearch = wrapper
       .findAll('input')
@@ -396,12 +342,7 @@ describe('CustomerPage', () => {
       },
       feedback!.id,
     );
-    const tab = wrapper
-      .findAll('.ant-segmented-item')
-      .find((button) => button.text().trim().startsWith('厂外反馈问题项'));
-    expect(tab).toBeDefined();
-    await tab!.get('input').trigger('change');
-    await flushPromises();
+    await clickTab(wrapper, '厂外反馈问题项');
 
     const historyButton = wrapper.find('button[aria-label="查看改善对策历史"]');
     expect(historyButton.exists()).toBe(true);
@@ -415,11 +356,12 @@ describe('CustomerPage', () => {
     expect(dialog?.textContent).toContain('2024-10-15');
     expect(dialog?.textContent).toContain('现行');
     expect(dialog?.textContent).toContain('已作废');
+    // 2 条历史（现行 + 已作废）× 3 列
     expect(
-      dialog?.querySelectorAll('.feedback-history__cell--center'),
-    ).toHaveLength(9);
+      dialog?.querySelectorAll('.feedback-history__table tbody td'),
+    ).toHaveLength(6);
     const obsoleteMeasure = dialog?.querySelector(
-      '.feedback-history__measure--obsolete',
+      '.feedback-history__table del',
     );
     expect(obsoleteMeasure?.textContent).toContain(
       '更换快速响应型真空表头后恢复稳定。',
@@ -474,24 +416,19 @@ describe('CustomerPage', () => {
       ).toBe(true);
     }
 
-    const tab = wrapper
-      .findAll('.ant-segmented-item')
-      .find((button) => button.text().trim().startsWith('厂外反馈问题项'));
-    expect(tab).toBeDefined();
-    await tab!.get('input').trigger('change');
-    await flushPromises();
+    await clickTab(wrapper, '厂外反馈问题项');
 
-    const tonesByStatus = Object.fromEntries(
+    const colorsByStatus = Object.fromEntries(
       wrapper
-        .findAll('.a-badge')
-        .filter((badge) => prefixedStatuses.includes(badge.text()))
-        .map((badge) => [badge.text(), badge.classes()]),
+        .findAll('.ant-tag')
+        .filter((tag) => prefixedStatuses.includes(tag.text()))
+        .map((tag) => [tag.text(), tagColor(tag.element)]),
     );
-    expect(tonesByStatus).toMatchObject({
-      '01 待处理': expect.arrayContaining(['a-badge--neutral']),
-      '02 处理中': expect.arrayContaining(['a-badge--orange']),
-      '03 测试中': expect.arrayContaining(['a-badge--orange']),
-      '04 已解决': expect.arrayContaining(['a-badge--green']),
+    expect(colorsByStatus).toEqual({
+      '01 待处理': 'default',
+      '02 处理中': 'orange',
+      '03 测试中': 'orange',
+      '04 已解决': 'green',
     });
     wrapper.unmount();
   });

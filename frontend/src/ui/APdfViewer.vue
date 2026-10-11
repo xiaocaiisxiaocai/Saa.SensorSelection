@@ -2,7 +2,6 @@
 import { Minus, Plus, RotateCcw } from 'lucide-vue-next';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
-import AIconButton from './AIconButton.vue';
 // 只引类型：pdf.js 体积大且 ./pdf 有设置 workerSrc 的顶层副作用，
 // 运行时在 load() 里按需 import('./pdf')，不让它经 ui/index.ts 进入口 chunk
 import type { PdfDocument, PdfLoadingTask } from './pdf';
@@ -80,11 +79,7 @@ async function renderPages(currentToken: number) {
   cancelRender();
 
   for (let pageNumber = 1; pageNumber <= pageCount.value; pageNumber += 1) {
-    if (
-      currentToken !== token ||
-      currentRender !== renderToken ||
-      !activeDoc
-    ) {
+    if (currentToken !== token || currentRender !== renderToken || !activeDoc) {
       return;
     }
 
@@ -220,35 +215,53 @@ onUnmounted(() => {
 <template>
   <div class="a-pdf-viewer">
     <header class="a-pdf-viewer__toolbar">
-      <span v-if="pageCount" class="a-pdf-viewer__count">共 {{ pageCount }} 页</span>
-      <span class="a-pdf-viewer__zoom">
-        <AIconButton
-          :icon="Minus"
-          label="缩小"
-          size="small"
-          :disabled="loading || zoom <= ZOOM_MIN"
-          @click="zoomBy(-ZOOM_STEP)"
-        />
-        <strong>{{ percent }}</strong>
-        <AIconButton
-          :icon="Plus"
-          label="放大"
-          size="small"
-          :disabled="loading || zoom >= ZOOM_MAX"
-          @click="zoomBy(ZOOM_STEP)"
-        />
-        <AIconButton
-          :icon="RotateCcw"
-          label="适应宽度"
-          size="small"
-          :disabled="loading"
-          @click="fitWidth"
-        />
-      </span>
-      <span v-if="loading" class="a-pdf-viewer__status">正在加载预览…</span>
-      <span v-else-if="error" class="a-pdf-viewer__status a-pdf-viewer__status--error">
+      <a-typography-text v-if="pageCount" type="secondary">
+        共 {{ pageCount }} 页
+      </a-typography-text>
+      <a-typography-text v-if="loading" type="secondary">
+        正在加载预览…
+      </a-typography-text>
+      <a-typography-text v-else-if="error" type="danger">
         {{ error }}
-      </span>
+      </a-typography-text>
+      <a-space class="a-pdf-viewer__zoom" :size="4">
+        <a-tooltip title="缩小">
+          <a-button
+            type="text"
+            size="small"
+            aria-label="缩小"
+            :disabled="loading || zoom <= ZOOM_MIN"
+            @click="zoomBy(-ZOOM_STEP)"
+          >
+            <template #icon><Minus :size="14" /></template>
+          </a-button>
+        </a-tooltip>
+        <a-typography-text class="a-pdf-viewer__percent" strong>
+          {{ percent }}
+        </a-typography-text>
+        <a-tooltip title="放大">
+          <a-button
+            type="text"
+            size="small"
+            aria-label="放大"
+            :disabled="loading || zoom >= ZOOM_MAX"
+            @click="zoomBy(ZOOM_STEP)"
+          >
+            <template #icon><Plus :size="14" /></template>
+          </a-button>
+        </a-tooltip>
+        <a-tooltip title="适应宽度">
+          <a-button
+            type="text"
+            size="small"
+            aria-label="适应宽度"
+            :disabled="loading"
+            @click="fitWidth"
+          >
+            <template #icon><RotateCcw :size="14" /></template>
+          </a-button>
+        </a-tooltip>
+      </a-space>
     </header>
     <div
       ref="stageEl"
@@ -275,9 +288,9 @@ onUnmounted(() => {
   grid-template-rows: auto 1fr;
   min-height: calc(var(--space-9) * 10);
   overflow: hidden;
-  background: var(--bg-grouped);
-  border-radius: var(--radius-md);
-  box-shadow: inset 0 0 0 0.5px var(--separator);
+  background: var(--color-bg-layout);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
 }
 
 .a-pdf-viewer--large {
@@ -288,37 +301,20 @@ onUnmounted(() => {
 .a-pdf-viewer__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-4);
   align-items: center;
-  min-height: var(--row-height-loose);
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-content);
-  box-shadow: var(--hairline);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border-secondary);
 }
 
 .a-pdf-viewer__zoom {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
   margin-left: auto;
 }
 
-.a-pdf-viewer__count,
-.a-pdf-viewer__status {
-  font: var(--text-control);
-  line-height: var(--control-height-sm);
-  color: var(--label-2);
-}
-
-.a-pdf-viewer__status--error {
-  color: var(--sys-red);
-}
-
-.a-pdf-viewer__zoom strong {
+.a-pdf-viewer__percent {
+  display: inline-block;
   min-width: var(--space-8);
-  font: var(--text-control-em);
-  line-height: var(--control-height-sm);
-  color: var(--label);
   text-align: center;
 }
 
@@ -327,8 +323,8 @@ onUnmounted(() => {
   flex-direction: column;
   gap: var(--space-5);
   align-items: center;
+  padding: var(--space-5);
   overflow: auto;
-  padding: var(--space-4);
 }
 
 .a-pdf-viewer__page {
@@ -337,7 +333,7 @@ onUnmounted(() => {
 
 .a-pdf-viewer__page canvas {
   display: block;
-  background: var(--bg-content);
-  box-shadow: var(--shadow-2);
+  background: var(--color-bg-container);
+  box-shadow: var(--box-shadow-tertiary);
 }
 </style>

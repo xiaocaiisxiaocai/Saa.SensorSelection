@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TableColumnType } from 'ant-design-vue';
 import { KeyRound, Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -11,24 +12,12 @@ import {
 } from '@/api';
 import { formatLocalDateTime } from '@/domain';
 import { toTreeSelectNodes } from '@/pages/system/org-tree';
+import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
+import { cellText, rowClick, scrollX, sortBy } from '@/pages/shared/table';
 import { useAccess, useAuthStore } from '@/stores/auth';
-import { toast } from '@/ui/toast';
-import {
-  ABadge,
-  AButton,
-  AField,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  ASelect,
-  ASheet,
-  ASwitch,
-  ATable,
-  ATreeSelect,
-  type TableColumn,
-} from '@/ui';
+import { message } from 'ant-design-vue';
 
 import '../shared/selection-page.css';
 
@@ -76,17 +65,36 @@ const roleHint = computed(() =>
     : undefined,
 );
 const orgNodes = computed(() => toTreeSelectNodes(orgUnits.value));
-const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [
-    { key: 'username', label: '用户名', width: 160, fixed: 'start', sortable: true },
-    { key: 'displayName', label: '显示名', width: 140, sortable: true },
-    { key: 'roles', label: '角色', minWidth: 160 },
-    { key: 'org', label: '所属组织', minWidth: 180 },
-    { key: 'status', label: '状态', width: 88 },
-    { key: 'createdAt', label: '创建时间', width: 192, sortable: true },
+const columns = computed<TableColumnType[]>(() => {
+  const cols: TableColumnType[] = [
+    {
+      key: 'username',
+      dataIndex: 'username',
+      title: '用户名',
+      width: 160,
+      fixed: 'left',
+      sorter: sortBy('username'),
+    },
+    {
+      key: 'displayName',
+      dataIndex: 'displayName',
+      title: '显示名',
+      width: 140,
+      sorter: sortBy('displayName'),
+    },
+    { key: 'roles', dataIndex: 'roles', title: '角色', width: 160 },
+    { key: 'org', dataIndex: 'org', title: '所属组织', width: 180 },
+    { key: 'status', dataIndex: 'status', title: '状态', width: 88 },
+    {
+      key: 'createdAt',
+      dataIndex: 'createdAt',
+      title: '创建时间',
+      width: 192,
+      sorter: sortBy('createdAt'),
+    },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
+    cols.push({ key: 'actions', title: '操作', width: 128, fixed: 'right' });
   }
   return cols;
 });
@@ -105,7 +113,9 @@ async function loadData() {
     roles.value = roleList;
     orgUnits.value = orgList;
   } catch (error) {
-    toast.error(error instanceof ApiError ? error.message : '加载用户列表失败');
+    message.error(
+      error instanceof ApiError ? error.message : '加载用户列表失败',
+    );
   } finally {
     loading.value = false;
   }
@@ -178,7 +188,7 @@ async function saveUser() {
         roleIds: form.roleId === null ? [] : [Number(form.roleId)],
         username: form.username.trim(),
       });
-      toast.success('用户已创建');
+      message.success('用户已创建');
     } else {
       await api.updateUser(editingId.value, {
         displayName: form.displayName.trim(),
@@ -186,12 +196,12 @@ async function saveUser() {
         orgUnitId: form.orgUnitId,
         roleIds: editedRoleIds(),
       });
-      toast.success('用户已更新');
+      message.success('用户已更新');
     }
     dialogOpen.value = false;
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '保存失败');
+    message.error(error instanceof Error ? error.message : '保存失败');
   } finally {
     saving.value = false;
   }
@@ -208,16 +218,16 @@ async function savePassword() {
   if (!passwordUserId.value || passwordSaving.value) return;
   passwordValidationAttempted.value = true;
   if (newPassword.value.length < 4) {
-    toast.warning('新密码至少 4 位');
+    message.warning('新密码至少 4 位');
     return;
   }
   passwordSaving.value = true;
   try {
     await api.resetUserPassword(passwordUserId.value, newPassword.value);
-    toast.success('密码已重置');
+    message.success('密码已重置');
     passwordOpen.value = false;
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '重置失败');
+    message.error(error instanceof Error ? error.message : '重置失败');
   } finally {
     passwordSaving.value = false;
   }
@@ -248,7 +258,7 @@ function deleteBlockedReason(user: RbacUser): string | undefined {
 async function removeUser(user: RbacUser) {
   const blockedReason = deleteBlockedReason(user);
   if (blockedReason) {
-    toast.warning(blockedReason);
+    message.warning(blockedReason);
     return;
   }
   const ok = await confirmDelete(
@@ -258,10 +268,10 @@ async function removeUser(user: RbacUser) {
   if (!ok) return;
   try {
     await api.deleteUser(user.id);
-    toast.success('用户已删除');
+    message.success('用户已删除');
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '删除失败');
+    message.error(error instanceof Error ? error.message : '删除失败');
   }
 }
 
@@ -274,173 +284,237 @@ function orgPath(user: RbacUser) {
   <section class="selection-page">
     <div class="selection-toolbar user-toolbar">
       <h1 class="visually-hidden">用户管理</h1>
-      <AButton v-if="writable" variant="filled" @click="openCreate">
+      <a-button v-if="writable" type="primary" @click="openCreate">
         新增用户
-      </AButton>
+      </a-button>
     </div>
-    <ATable
-      storage-key="system-users"
+    <a-table
       :columns="columns"
-      :rows="users"
+      :data-source="users"
       row-key="id"
-      empty-text="暂无用户"
       :loading="loading"
-      @activate="writable && openEdit($event)"
+      :pagination="false"
+      :scroll="{ x: scrollX(columns) }"
+      :locale="{ emptyText: '暂无用户' }"
+      :custom-row="writable ? rowClick(openEdit) : undefined"
     >
-      <template #cell-roles="{ row }">
-        <div class="badge-wrap">
-          <ABadge v-for="role in row.roles" :key="role.id" :label="role.name" />
-        </div>
+      <template #bodyCell="{ column, record: row, text: value }">
+        <template v-if="column.key === 'roles'">
+          <a-space :size="[4, 4]" wrap>
+            <a-tag v-for="role in row.roles" :key="role.id">
+              {{ role.name }}
+            </a-tag>
+          </a-space>
+        </template>
+        <template v-else-if="column.key === 'org'">{{ orgPath(row) }}</template>
+        <template v-else-if="column.key === 'status'">
+          <a-tag :color="row.isActive ? 'green' : 'default'">
+            {{ row.isActive ? '启用' : '停用' }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'createdAt'">
+          <span class="user-created-at">{{
+            formatLocalDateTime(new Date(row.createdAt))
+          }}</span>
+        </template>
+        <template v-else-if="column.key === 'actions'">
+          <a-space :size="4">
+            <a-tooltip title="编辑">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="编辑"
+                @click="openEdit(row)"
+              >
+                <template #icon><Pencil :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="重置密码">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="重置密码"
+                @click="openPassword(row)"
+              >
+                <template #icon><KeyRound :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip :title="deleteBlockedReason(row) ?? '删除'">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                aria-label="删除"
+                :disabled="Boolean(deleteBlockedReason(row))"
+                @click="removeUser(row)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </a-space>
+        </template>
+        <template v-else>{{ cellText(value) }}</template>
       </template>
-      <template #cell-org="{ row }">{{ orgPath(row) }}</template>
-      <template #cell-status="{ row }">
-        <ABadge
-          :label="row.isActive ? '启用' : '停用'"
-          :tone="row.isActive ? 'green' : 'neutral'"
-        />
-      </template>
-      <template #cell-createdAt="{ row }">
-        <span class="user-created-at">{{
-          formatLocalDateTime(new Date(row.createdAt))
-        }}</span>
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="table-actions">
-          <AIconButton
-            :icon="Pencil"
-            label="编辑"
-            size="small"
-            @click="openEdit(row)"
-          />
-          <AIconButton
-            :icon="KeyRound"
-            label="重置密码"
-            size="small"
-            @click="openPassword(row)"
-          />
-          <AIconButton
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            :disabled="Boolean(deleteBlockedReason(row))"
-            :disabled-reason="deleteBlockedReason(row)"
-            @click="removeUser(row)"
-          />
-        </div>
-      </template>
-    </ATable>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-table>
+    <a-modal
+      :open="dialogOpen"
       :title="editingId ? '编辑用户' : '新建用户'"
       :width="520"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelDialog"
     >
-      <AFormGrid>
-        <AFormRow
-          label="用户名"
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item
+              html-for="user-username"
+              label="用户名"
+              required
+              v-bind="
+                fieldError(
+                  userValidationAttempted && !form.username.trim()
+                    ? '请输入用户名'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="user-username"
+                v-model:value="form.username"
+                :maxlength="64"
+                placeholder="登录账号"
+                :disabled="Boolean(editingId)"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col v-if="!editingId" :span="12">
+            <a-form-item
+              html-for="user-password"
+              label="初始密码"
+              required
+              v-bind="
+                fieldError(
+                  userValidationAttempted && form.password.length < 4
+                    ? '密码至少 4 位'
+                    : undefined,
+                )
+              "
+            >
+              <a-input-password
+                id="user-password"
+                v-model:value="form.password"
+                :maxlength="64"
+                placeholder="至少 4 位"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item
+              html-for="user-display-name"
+              label="显示名"
+              required
+              v-bind="
+                fieldError(
+                  userValidationAttempted && !form.displayName.trim()
+                    ? '请输入显示名'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="user-display-name"
+                v-model:value="form.displayName"
+                :maxlength="64"
+                placeholder="姓名或称呼"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="user-role-id" label="角色" :extra="roleHint">
+              <a-select
+                id="user-role-id"
+                v-model:value="form.roleId"
+                :options="roleOptions"
+                :placeholder="
+                  hasMultipleOriginalRoles ? '保留原有角色' : '请选择一个角色'
+                "
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="user-org-unit-id" label="所属组织">
+              <a-tree-select
+                id="user-org-unit-id"
+                v-model:value="form.orgUnitId"
+                :tree-data="orgNodes"
+                placeholder="可选择任意层级（支持跳级）"
+                tree-default-expand-all
+                tree-node-filter-prop="title"
+                show-search
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="user-is-active" label="启用">
+              <a-switch id="user-is-active" v-model:checked="form.isActive" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <template #footer>
+        <a-button @click="cancelDialog">取消</a-button>
+        <a-button type="primary" :loading="saving" @click="saveUser">
+          保存
+        </a-button>
+      </template>
+    </a-modal>
+    <a-modal
+      :open="passwordOpen"
+      title="重置密码"
+      :width="420"
+      destroy-on-close
+      @cancel="passwordOpen = false"
+    >
+      <a-form layout="vertical">
+        <a-form-item
+          html-for="user-new-password"
+          label="新密码"
           required
-          :error="
-            userValidationAttempted && !form.username.trim()
-              ? '请输入用户名'
-              : undefined
+          v-bind="
+            fieldError(
+              passwordValidationAttempted && newPassword.length < 4
+                ? '新密码至少 4 位'
+                : undefined,
+            )
           "
         >
-          <AField
-            v-model="form.username"
-            :maxlength="64"
-            placeholder="登录账号"
-            :disabled="Boolean(editingId)"
-          />
-        </AFormRow>
-        <AFormRow
-          v-if="!editingId"
-          label="初始密码"
-          required
-          :error="
-            userValidationAttempted && form.password.length < 4
-              ? '密码至少 4 位'
-              : undefined
-          "
-        >
-          <AField
-            v-model="form.password"
-            type="password"
+          <a-input-password
+            id="user-new-password"
+            v-model:value="newPassword"
             :maxlength="64"
             placeholder="至少 4 位"
+            allow-clear
           />
-        </AFormRow>
-        <AFormRow
-          label="显示名"
-          required
-          :error="
-            userValidationAttempted && !form.displayName.trim()
-              ? '请输入显示名'
-              : undefined
-          "
-        >
-          <AField
-            v-model="form.displayName"
-            :maxlength="64"
-            placeholder="姓名或称呼"
-          />
-        </AFormRow>
-        <AFormRow label="角色" :hint="roleHint">
-          <ASelect
-            v-model="form.roleId"
-            :options="roleOptions"
-            :placeholder="
-              hasMultipleOriginalRoles ? '保留原有角色' : '请选择一个角色'
-            "
-            clearable
-          />
-        </AFormRow>
-        <AFormRow label="所属组织" wide>
-          <ATreeSelect
-            v-model="form.orgUnitId"
-            :nodes="orgNodes"
-            placeholder="可选择任意层级（支持跳级）"
-          />
-        </AFormRow>
-        <AFormRow label="启用">
-          <ASwitch v-model="form.isActive" />
-        </AFormRow>
-      </AFormGrid>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelDialog">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveUser">
-          保存
-        </AButton>
-      </template>
-    </ASheet>
-    <ASheet v-model:open="passwordOpen" title="重置密码" :width="420">
-      <AFormRow
-        label="新密码"
-        required
-        :error="
-          passwordValidationAttempted && newPassword.length < 4
-            ? '新密码至少 4 位'
-            : undefined
-        "
-      >
-        <AField
-          v-model="newPassword"
-          type="password"
-          :maxlength="64"
-          placeholder="至少 4 位"
-        />
-      </AFormRow>
-      <template #footer>
-        <AButton @click="passwordOpen = false">取消</AButton>
-        <AButton
-          variant="filled"
+        <a-button @click="passwordOpen = false">取消</a-button>
+        <a-button
+          type="primary"
           :loading="passwordSaving"
           @click="savePassword"
         >
           保存
-        </AButton>
+        </a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>
 
@@ -448,9 +522,5 @@ function orgPath(user: RbacUser) {
 /* 日期和时间拆成两行很难扫读，与操作日志保持一行 */
 .user-created-at {
   white-space: nowrap;
-}
-
-.user-toolbar .a-button {
-  margin-left: auto;
 }
 </style>

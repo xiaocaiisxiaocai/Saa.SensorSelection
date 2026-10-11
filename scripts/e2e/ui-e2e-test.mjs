@@ -89,7 +89,7 @@ async function dismissOverlays(nextCheck) {
       await page.waitForTimeout(300)
       continue
     }
-    if (await isVisible(page.locator('.a-popover'))) {
+    if (await isVisible(page.locator('.ant-popover:visible, .ant-dropdown:visible'))) {
       dismissed = 'popover'
       await page.keyboard.press('Escape').catch(() => {})
       await page.waitForTimeout(250)
@@ -139,16 +139,17 @@ async function screenshot(label) {
 
 // ------------------------------------------------------------------ helpers
 
-const sheet = () => page.locator('.a-sheet')
-const alertBox = () => page.locator('.a-alert')
+// 编辑弹窗（a-modal）与确认框（Modal.confirm）
+const sheet = () => page.locator('.ant-modal:not(.ant-modal-confirm):visible').last()
+const alertBox = () => page.locator('.ant-modal-confirm:visible').last()
 
-/** Resolve the control inside an AFormRow by its exact label text. */
+/** Resolve the control inside an a-form-item by its exact label text. */
 async function controlFor(scope, labelText) {
-  const id = await scope.locator('label.a-form-row__label').evaluateAll(
+  const id = await scope.locator('.ant-form-item-label > label').evaluateAll(
     (labels, text) =>
       labels
         .map((label) => ({
-          own: (label.childNodes[0]?.textContent ?? '').trim(),
+          own: (label.textContent ?? '').trim(),
           id: label.getAttribute('for'),
         }))
         .find((entry) => entry.own === text)?.id ?? null,
@@ -163,22 +164,38 @@ async function fillField(scope, labelText, value) {
   await control.fill(value)
 }
 
+/** a-select 的 id 在内部只读的搜索 input 上，点击要落在外层的选择框。 */
+function selectBox(control) {
+  return control.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " ant-select-selector ")][1]')
+}
+
 async function pickSelect(scope, labelText, optionText) {
   const trigger = await controlFor(scope, labelText)
-  await trigger.click()
-  const panel = page.locator('.a-select__panel:visible')
+  await selectBox(trigger).click()
+  if ((await trigger.getAttribute('readonly')) === null) {
+    await trigger.pressSequentially(optionText)
+  }
+  const panel = page.locator('.ant-select-dropdown:visible')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.locator('.a-menu-item__label', { hasText: optionText }).first().click()
+  // antd 下拉是虚拟列表，只渲染可视区域内的选项；目标不在可视区时往下滚
+  const option = panel.locator('.ant-select-item-option-content', { hasText: optionText }).first()
+  for (let step = 0; step < 60 && !(await option.isVisible().catch(() => false)); step += 1) {
+    await panel.locator('.rc-virtual-list-holder').evaluate((holder) => {
+      holder.scrollTop += 96
+    })
+    await page.waitForTimeout(40)
+  }
+  await option.click()
   await panel.waitFor({ state: 'hidden', timeout: 5000 })
 }
 
 /** Open a select and choose its first option, returning the chosen label. */
 async function pickFirstOption(scope, labelText) {
   const trigger = await controlFor(scope, labelText)
-  await trigger.click()
-  const panel = page.locator('.a-select__panel:visible')
+  await selectBox(trigger).click()
+  const panel = page.locator('.ant-select-dropdown:visible')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
-  const option = panel.locator('.a-menu-item__label').first()
+  const option = panel.locator('.ant-select-item-option-content').first()
   const label = (await option.innerText()).trim()
   await option.click()
   await panel.waitFor({ state: 'hidden', timeout: 5000 })
@@ -191,7 +208,7 @@ async function saveSheet() {
 }
 
 async function expectToast(text) {
-  const toast = page.locator('.a-toast', { hasText: text })
+  const toast = page.locator('.ant-message-notice', { hasText: text })
   await toast.first().waitFor({ state: 'visible', timeout: 8000 })
 }
 
@@ -218,7 +235,7 @@ async function cancelSheet() {
 
 /** Row locator for a table row containing the given text. */
 function tableRow(text) {
-  return page.locator('.a-table tbody tr', { hasText: text })
+  return page.locator('.ant-table-tbody tr.ant-table-row', { hasText: text })
 }
 
 async function rowAction(text, actionLabel) {
@@ -228,24 +245,24 @@ async function rowAction(text, actionLabel) {
 }
 
 /**
- * Source-list row actions are hover-revealed (`pointer-events: none` until the
- * row is hovered or focused), so the row has to be hovered before clicking.
+ * 左侧目录树（a-tree）的行操作放在每行的「更多」下拉菜单里，按钮在悬停时出现。
  */
-async function sourceListAction(rowClass, text, actionLabel) {
-  const row = page.locator(rowClass, { hasText: text }).first()
+async function sourceListAction(text, actionLabel) {
+  const row = page.locator('.ant-tree-treenode', { hasText: text }).first()
   await row.waitFor({ state: 'visible', timeout: 8000 })
   await row.hover()
-  await row.getByRole('button', { name: actionLabel, exact: true }).click()
+  await row.getByRole('button', { name: `${text} 的更多操作`, exact: true }).click()
+  await page.getByRole('menuitem', { name: actionLabel, exact: true }).click()
 }
 
 async function goto(path) {
   await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+  await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
 }
 
 async function navTo(label) {
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: label, exact: true }).click()
-  await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+  await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
 }
 
 async function settle() {
@@ -324,12 +341,12 @@ async function runLogin() {
     await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.waitForURL('**/selection/customer**', { timeout: 20000 })
-    await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+    await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
     await page.getByRole('navigation', { name: '主导航' }).waitFor({ state: 'visible' })
     // The shell mounts before BackendStorage finishes its first sync. Waiting
     // for the real source list prevents the first write from racing the
     // connecting state when the test starts with a cold API process.
-    await page.locator('.a-source-list').waitFor({ state: 'visible', timeout: 20000 })
+    await page.locator('.entity-tree').waitFor({ state: 'visible', timeout: 20000 })
   })
 
   await check('The shell shows no offline or session banner when the backend is reachable', async () => {
@@ -349,15 +366,16 @@ async function runLogin() {
   })
 
   await check('The sidebar collapse toggle works and is reversible', async () => {
-    const shell = page.locator('.app-shell')
-    const before = await shell.getAttribute('class')
+    const sider = page.locator('.app-shell__sider')
+    const collapsed = async () =>
+      ((await sider.getAttribute('class')) ?? '').includes('ant-layout-sider-collapsed')
+    const before = await collapsed()
     await page.getByRole('button', { name: /折叠侧栏|展开侧栏/ }).click()
     await settle()
-    const after = await shell.getAttribute('class')
-    assert(before !== after, 'collapsing did not change the shell state')
+    assert((await collapsed()) !== before, 'collapsing did not change the shell state')
     await page.getByRole('button', { name: /折叠侧栏|展开侧栏/ }).click()
     await settle()
-    assertEqual(await shell.getAttribute('class'), before, 'sidebar did not restore')
+    assertEqual(await collapsed(), before, 'sidebar did not restore')
   })
 
   await check('The app stays in light mode with no theme switcher', async () => {
@@ -379,11 +397,11 @@ async function runCustomerCrud() {
   await check('Creating a region (区域) works', async () => {
     await page.getByRole('button', { name: '新建区域', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新建区域', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建区域', 'sheet title')
     await fillField(sheet(), '区域名称', NAMES.region)
     await saveSheet()
     await expectToast('区域已新增')
-    await page.locator('.a-source-list__name', { hasText: NAMES.region }).first().waitFor({ state: 'visible' })
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.region }).first().waitFor({ state: 'visible' })
   })
 
   await check('A duplicate region name is rejected', async () => {
@@ -410,11 +428,11 @@ async function runCustomerCrud() {
     await fillField(sheet(), '客户名称', NAMES.customer)
     await saveSheet()
     await expectToast('客户已新增')
-    await page.locator('.a-source-list__item', { hasText: NAMES.customer }).first().waitFor({ state: 'visible' })
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.customer }).first().waitFor({ state: 'visible' })
   })
 
   await check('Selecting the customer opens its four tabs', async () => {
-    await page.locator('.a-source-list__item', { hasText: NAMES.customer }).first().click()
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.customer }).first().click()
     await settle()
     for (const tab of ['客户通用要求', '制程注意事项', '感应器选用标准', '厂外反馈问题项']) {
       await page.getByRole('tab', { name: tab }).waitFor({ state: 'visible', timeout: 8000 })
@@ -427,7 +445,7 @@ async function runCustomerCrud() {
     await settle()
     await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新增要求', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增要求', 'sheet title')
     await fillField(sheet(), '适用机型', 'ALL')
     await fillField(sheet(), '要求内容', `${TAG} 要求内容 A`)
     await fillField(sheet(), '备注', `${TAG} 备注`)
@@ -447,7 +465,7 @@ async function runCustomerCrud() {
   await check('客户通用要求: edit the requirement', async () => {
     await rowAction(`${TAG} 要求内容 A`, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑要求', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑要求', 'sheet title')
     await fillField(sheet(), '要求内容', `${TAG} 要求内容 B`)
     await saveSheet()
     await expectToast('要求已更新')
@@ -460,7 +478,7 @@ async function runCustomerCrud() {
     await search.fill('绝对不存在的关键词')
     await settle()
     assertEqual(await tableRow(`${TAG} 要求内容 B`).count(), 0, 'row should be filtered out')
-    await page.locator('.a-table', { hasText: '没有匹配的要求记录' }).waitFor({ state: 'visible' })
+    await page.locator('.ant-table-wrapper', { hasText: '没有匹配的要求记录' }).waitFor({ state: 'visible' })
     await search.fill(`${TAG} 要求内容 B`)
     await settle()
     await tableRow(`${TAG} 要求内容 B`).first().waitFor({ state: 'visible' })
@@ -473,7 +491,7 @@ async function runCustomerCrud() {
     await confirmDelete()
     await expectToast('要求已删除')
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       `${TAG} 要求内容 B`,
       { timeout: 8000 },
     )
@@ -554,14 +572,14 @@ async function runCustomerCrud() {
   await check('Renaming the customer works', async () => {
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
-    await sourceListAction('.a-source-list__row--item', NAMES.customer, '编辑客户')
+    await sourceListAction(NAMES.customer, '编辑客户')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '客户名称', `${NAMES.customer}改`)
     await saveSheet()
     await expectToast('客户已更新')
-    await page.locator('.a-source-list__item', { hasText: `${NAMES.customer}改` }).first().waitFor({ state: 'visible' })
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: `${NAMES.customer}改` }).first().waitFor({ state: 'visible' })
     // rename back so the rest of the run uses a stable name
-    await sourceListAction('.a-source-list__row--item', `${NAMES.customer}改`, '编辑客户')
+    await sourceListAction(`${NAMES.customer}改`, '编辑客户')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '客户名称', NAMES.customer)
     await saveSheet()
@@ -569,7 +587,7 @@ async function runCustomerCrud() {
   })
 
   await check('A region that still has customers cannot be deleted', async () => {
-    await sourceListAction('.a-source-list__row--group', NAMES.region, '删除区域')
+    await sourceListAction(NAMES.region, '删除区域')
     await confirmDelete()
     await expectToast('请先清空该区域下的全部客户')
   })
@@ -586,7 +604,7 @@ async function runProcessCrud() {
     await settle()
     await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新增工艺制程', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增工艺制程', 'sheet title')
     // Re-picking the option that is already selected must still close the panel.
     const layer = await pickFirstOption(sheet(), '制程')
     await pickSelect(sheet(), '制程', layer)
@@ -600,7 +618,7 @@ async function runProcessCrud() {
   await check('工艺制程: edit the step', async () => {
     await rowAction(NAMES.processStep, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑工艺制程', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑工艺制程', 'sheet title')
     await fillField(sheet(), '备注', `${TAG} 备注改`)
     await saveSheet()
     await tableRow(NAMES.processStep).first().waitFor({ state: 'visible' })
@@ -614,7 +632,7 @@ async function runProcessCrud() {
     await rowAction(NAMES.processStep, '删除')
     await confirmDelete()
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       NAMES.processStep,
       { timeout: 8000 },
     )
@@ -636,7 +654,7 @@ async function runSensorCrud() {
   await check('Sensor: create a model', async () => {
     await page.getByRole('button', { name: '新增型号', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新增 Sensor 型号', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增 Sensor 型号', 'sheet title')
     await fillField(sheet(), '料号', `${TAG}-PN-001`)
     await fillField(sheet(), '品牌', `${TAG}Brand`)
     await fillField(sheet(), '型号', NAMES.sensorModel)
@@ -666,7 +684,7 @@ async function runSensorCrud() {
   await check('Sensor: edit the model', async () => {
     await rowAction(NAMES.sensorModel, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑 Sensor 型号', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑 Sensor 型号', 'sheet title')
     await fillField(sheet(), '适用场景', `${TAG} 场景`)
     await saveSheet()
     await expectToast('型号已更新')
@@ -677,7 +695,7 @@ async function runSensorCrud() {
     await search.fill(NAMES.sensorModel)
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
-    const rows = await page.locator('.a-table tbody tr').count()
+    const rows = await page.locator('.ant-table-tbody tr.ant-table-row').count()
     assertEqual(rows, 1, 'search should narrow the table to one row')
     await search.fill('')
     await settle()
@@ -687,16 +705,16 @@ async function runSensorCrud() {
     // 状态是工具栏上的下拉筛选，不是分段控件的 tab。
     const statusFilter = page.locator('[aria-label="状态筛选"]')
     await statusFilter.click()
-    const panel = page.locator('.a-select__panel:visible')
+    const panel = page.locator('.ant-select-dropdown:visible')
     await panel.waitFor({ state: 'visible', timeout: 5000 })
-    await panel.locator('.a-menu-item__label', { hasText: '停用' }).first().click()
+    await panel.locator('.ant-select-item-option-content', { hasText: '停用' }).first().click()
     await panel.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     assertEqual(await tableRow(NAMES.sensorModel).count(), 0, 'a 现用 model must not show under 停用')
 
     await statusFilter.click()
     await panel.waitFor({ state: 'visible', timeout: 5000 })
-    await panel.locator('.a-menu-item__label', { hasText: '全部' }).first().click()
+    await panel.locator('.ant-select-item-option-content', { hasText: '全部' }).first().click()
     await panel.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
@@ -756,35 +774,35 @@ async function runMachineCrud() {
   await navTo('机型结构')
 
   await check('Machine: create a category and a machine', async () => {
-    await page.getByRole('button', { name: '分类', exact: true }).click()
+    await page.getByRole('button', { name: '新建分类', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '分类名称', NAMES.machineCategory)
     await saveSheet()
     await expectToast('分类已新增')
 
-    await page.getByRole('button', { name: '机型', exact: true }).click()
+    await page.getByRole('button', { name: '新建机型', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await pickSelect(sheet(), '分类', NAMES.machineCategory)
     await fillField(sheet(), '机型名称', NAMES.machine)
     await saveSheet()
     await expectToast('机型已新增')
-    await page.getByPlaceholder('搜索分类、配置或机型…').fill(NAMES.machine)
+    await page.getByPlaceholder('搜索分类或机型…').fill(NAMES.machine)
     await settle()
-    await page.locator('.machine-tree-row--item', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
   })
 
   await check('Machine: selecting it shows the structure tabs', async () => {
-    await page.locator('.machine-tree-row--item', { hasText: NAMES.machine }).first().click()
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.machine }).first().click()
     await settle()
 
-    await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
+    await page.locator('.ant-tabs-nav-add, button:has-text("新增 Tab")').first().click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), 'Tab 名称', `${TAG}机构`)
     await pickSelect(sheet(), 'Tab 类型', '结构')
     await saveSheet()
     await expectToast('Tab 已新增')
 
-    await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
+    await page.locator('.ant-tabs-nav-add, button:has-text("新增 Tab")').first().click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), 'Tab 名称', `${TAG}注意事项`)
     await pickSelect(sheet(), 'Tab 类型', '机型注意事项')
@@ -802,7 +820,7 @@ async function runMachineCrud() {
     await settle()
     await page.getByRole('button', { name: '新增事项', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新增记录', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增记录', 'sheet title')
     await fillField(sheet(), '注意分类', `${TAG}分类`)
     await fillField(sheet(), '事项名称', `${TAG}事项`)
     await fillField(sheet(), '说明', `${TAG}说明`)
@@ -812,7 +830,7 @@ async function runMachineCrud() {
 
     await rowAction(`${TAG}事项`, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑记录', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑记录', 'sheet title')
     await fillField(sheet(), '事项名称', `${TAG}事项改`)
     await saveSheet()
     await expectToast('记录已更新')
@@ -822,7 +840,7 @@ async function runMachineCrud() {
     await confirmDelete()
     await expectToast('记录已删除')
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       `${TAG}事项改`,
       { timeout: 8000 },
     )
@@ -852,18 +870,18 @@ async function runSearch() {
   section('Global search')
 
   await check('Global search finds the machine created by this run', async () => {
-    const search = page.getByRole('searchbox', { name: '全局搜索' })
+    const search = page.getByRole('search').getByRole('textbox', { name: '全局搜索' })
     await search.fill(NAMES.machine)
     await search.press('Enter')
     await page.waitForURL('**/selection/search**', { timeout: 10000 })
     await settle()
-    const body = await page.locator('.content').innerText()
+    const body = await page.locator('.app-shell__content').innerText()
     assert(body.includes(NAMES.machine), 'search results do not mention the machine')
   })
 
   await check('An empty search query warns instead of navigating', async () => {
     await navTo('客户管理')
-    const search = page.getByRole('searchbox', { name: '全局搜索' })
+    const search = page.getByRole('search').getByRole('textbox', { name: '全局搜索' })
     await search.fill('   ')
     await search.press('Enter')
     await expectToast('请输入搜索关键词')
@@ -883,7 +901,7 @@ async function runSystemCrud() {
   await check('User: create', async () => {
     await page.getByRole('button', { name: '新增用户', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新建用户', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建用户', 'sheet title')
     await fillField(sheet(), '用户名', NAMES.user)
     await fillField(sheet(), '初始密码', 'e2epass')
     await fillField(sheet(), '显示名', `${TAG} 界面用户`)
@@ -898,7 +916,7 @@ async function runSystemCrud() {
     await fillField(sheet(), '初始密码', 'e2epass')
     await fillField(sheet(), '显示名', 'dup')
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await page.locator('.a-toast').first().waitFor({ state: 'visible', timeout: 8000 })
+    await page.locator('.ant-message-notice').first().waitFor({ state: 'visible', timeout: 8000 })
     assert(await sheet().isVisible(), 'the sheet should stay open after a rejected save')
     await cancelSheet()
   })
@@ -906,7 +924,7 @@ async function runSystemCrud() {
   await check('User: edit the display name', async () => {
     await rowAction(NAMES.user, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑用户', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑用户', 'sheet title')
     await fillField(sheet(), '显示名', `${TAG} 界面用户改`)
     await saveSheet()
     await settle()
@@ -919,7 +937,7 @@ async function runSystemCrud() {
   await check('User: reset the password', async () => {
     await rowAction(NAMES.user, '重置密码')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '重置密码', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '重置密码', 'sheet title')
     await fillField(sheet(), '新密码', 'newpass1')
     await saveSheet()
     await settle()
@@ -929,7 +947,7 @@ async function runSystemCrud() {
     await rowAction(NAMES.user, '删除')
     await confirmDelete()
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       NAMES.user,
       { timeout: 10000 },
     )
@@ -941,11 +959,11 @@ async function runSystemCrud() {
   await check('Role: create with permissions', async () => {
     await page.getByRole('button', { name: '新增角色', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新建角色', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建角色', 'sheet title')
     await fillField(sheet(), '角色标识', NAMES.role)
     await fillField(sheet(), '角色名称', `${TAG} 界面角色`)
     await fillField(sheet(), '描述', `${TAG} 自动化创建`)
-    await sheet().locator('.permission-item').first().click()
+    await sheet().locator('.permission-group .ant-row .ant-checkbox-wrapper').first().click()
     await saveSheet()
     await tableRow(NAMES.role).first().waitFor({ state: 'visible', timeout: 10000 })
   })
@@ -953,7 +971,7 @@ async function runSystemCrud() {
   await check('Role: edit the name', async () => {
     await rowAction(NAMES.role, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑角色', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑角色', 'sheet title')
     await fillField(sheet(), '角色名称', `${TAG} 界面角色改`)
     await saveSheet()
     await settle()
@@ -964,22 +982,19 @@ async function runSystemCrud() {
   })
 
   await check('Role: the built-in admin role explains why it cannot be deleted', async () => {
-    const adminRow = page.locator('.a-table tbody tr', { hasText: '系统内置' }).first()
+    const adminRow = page.locator('.ant-table-tbody tr.ant-table-row', { hasText: '系统内置' }).first()
     await adminRow.waitFor({ state: 'visible' })
-    assertEqual(
-      await adminRow.getByRole('button', { name: '删除', exact: true }).count(),
-      0,
-      'the system role must not expose an enabled delete button',
-    )
-    const blocked = adminRow.getByRole('button', { name: /^删除（/ })
-    assertEqual(await blocked.getAttribute('aria-disabled'), 'true', 'system role delete must be aria-disabled')
+    // 内置角色的删除按钮禁用，原因写在 tooltip 里
+    const remove = adminRow.getByRole('button', { name: '删除', exact: true })
+    assertEqual(await remove.count(), 1, 'the system role should still show its delete action')
+    assert(await remove.isDisabled(), 'the system role must not expose an enabled delete button')
   })
 
   await check('Role: delete', async () => {
     await rowAction(NAMES.role, '删除')
     await confirmDelete()
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       NAMES.role,
       { timeout: 10000 },
     )
@@ -991,7 +1006,7 @@ async function runSystemCrud() {
   await check('Org: create a root unit', async () => {
     await page.getByRole('button', { name: '新建组织', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '新建组织', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建组织', 'sheet title')
     await fillField(sheet(), '组织名称', NAMES.org)
     await pickSelect(sheet(), '层级', '事业部')
     await saveSheet()
@@ -1010,7 +1025,7 @@ async function runSystemCrud() {
   await check('Org: a unit with children cannot be deleted', async () => {
     await rowAction(NAMES.org, '删除')
     await confirmDelete()
-    await page.locator('.a-toast').first().waitFor({ state: 'visible', timeout: 8000 })
+    await page.locator('.ant-message-notice').first().waitFor({ state: 'visible', timeout: 8000 })
     await settle()
     assert((await tableRow(NAMES.org).count()) > 0, 'the parent must survive a rejected delete')
   })
@@ -1018,7 +1033,7 @@ async function runSystemCrud() {
   await check('Org: edit the child then delete both', async () => {
     await rowAction(`${NAMES.org}子`, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.a-sheet__title').innerText(), '编辑组织', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑组织', 'sheet title')
     await fillField(sheet(), '组织名称', `${NAMES.org}子改`)
     await saveSheet()
     await tableRow(`${NAMES.org}子改`).first().waitFor({ state: 'visible', timeout: 10000 })
@@ -1026,14 +1041,14 @@ async function runSystemCrud() {
     await rowAction(`${NAMES.org}子改`, '删除')
     await confirmDelete()
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       `${NAMES.org}子改`,
       { timeout: 10000 },
     )
     await rowAction(NAMES.org, '删除')
     await confirmDelete()
     await page.waitForFunction(
-      (text) => !Array.from(document.querySelectorAll('.a-table tbody tr')).some((row) => row.innerText.includes(text)),
+      (text) => !Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row')).some((row) => row.innerText.includes(text)),
       NAMES.org,
       { timeout: 10000 },
     )
@@ -1043,9 +1058,9 @@ async function runSystemCrud() {
   await check('Audit log lists the operations from this run', async () => {
     await navTo('操作日志')
     await settle()
-    await page.locator('.a-table tbody tr').first().waitFor({ state: 'visible', timeout: 10000 })
+    await page.locator('.ant-table-tbody tr.ant-table-row').first().waitFor({ state: 'visible', timeout: 10000 })
     // The table renders friendly Chinese labels, not the raw action codes.
-    const body = await page.locator('.content').innerText()
+    const body = await page.locator('.app-shell__content').innerText()
     assert(/创建用户|创建角色|创建组织|写入数据|登录/.test(body), `no audit rows from this run: ${body.slice(0, 200)}`)
     assert(body.includes(ADMIN_USERNAME), 'audit rows do not mention the acting user')
   })
@@ -1057,16 +1072,16 @@ async function runReadOnlyGuest() {
   section('Guest read-only mode')
 
   await check('Signing out drops back to the read-only customer page', async () => {
-    await page.locator('.user-chip--menu').click()
+    await page.locator('.user-menu__trigger').click()
     await page.getByRole('menuitem', { name: '退出登录' }).click()
     await page.waitForURL('**/selection/customer**', { timeout: 15000 })
-    await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+    await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
     await settle()
     assert(await page.getByRole('button', { name: '登录', exact: true }).isVisible(), 'no sign-in affordance after logout')
   })
 
   await check('A signed-out visitor can still read business data but sees no write controls', async () => {
-    await page.locator('.a-source-list').waitFor({ state: 'visible', timeout: 10000 })
+    await page.locator('.entity-tree').waitFor({ state: 'visible', timeout: 10000 })
     for (const label of ['新建区域', '新建客户', '新增要求']) {
       assertEqual(
         await page.getByRole('button', { name: label, exact: true }).count(),
@@ -1108,23 +1123,13 @@ async function runUiAudit() {
   await page.locator('input[autocomplete="current-password"]').fill(ADMIN_PASSWORD)
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await page.waitForURL('**/selection/customer**', { timeout: 20000 })
-  await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+  await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
   await settle()
 
-  await check('The Latin and CJK webfonts actually load', async () => {
-    const fonts = await page.evaluate(async () => {
-      await document.fonts.ready
-      const loaded = new Set()
-      document.fonts.forEach((face) => {
-        if (face.status === 'loaded') loaded.add(face.family.replace(/['"]/g, ''))
-      })
-      return Array.from(loaded)
-    })
-    assert(fonts.some((name) => /Inter/i.test(name)), `Inter not loaded (loaded: ${fonts.join(', ') || 'none'})`)
-    assert(
-      fonts.some((name) => /Noto Sans SC/i.test(name)),
-      `Noto Sans SC not loaded (loaded: ${fonts.join(', ') || 'none'})`,
-    )
+  await check('Body text uses the ant-design-vue system font stack', async () => {
+    // 不再额外加载 Web 字体，直接用 antd 默认的系统字体栈
+    const family = await page.locator('body').evaluate((node) => getComputedStyle(node).fontFamily)
+    assert(/Segoe UI/.test(family) && /apple-system/i.test(family), `unexpected font stack: ${family}`)
   })
 
   await check('Body text resolves to a real font family and a sane size', async () => {
@@ -1165,7 +1170,7 @@ async function runUiAudit() {
       for (const node of nodes) {
         // A bare <input> is often only as tall as its text; the styled wrapper
         // around it is what the user actually clicks.
-        const host = node.closest('.a-control, .search') ?? node
+        const host = node.closest('.ant-input-affix-wrapper, .ant-select, .ant-picker, .ant-tabs-tab') ?? node
         const rect = host.getBoundingClientRect()
         if (rect.width === 0 && rect.height === 0) continue
         const style = getComputedStyle(node)
@@ -1295,12 +1300,19 @@ async function runUiAudit() {
   await check('No text node overflows its container horizontally', async () => {
     const clipped = await page.evaluate(() => {
       const results = []
-      for (const node of Array.from(document.querySelectorAll('.content *'))) {
+      for (const node of Array.from(document.querySelectorAll('.app-shell__content *'))) {
         if (node.children.length > 0) continue
         const style = getComputedStyle(node)
         if (style.overflow !== 'visible' || style.position === 'absolute') continue
-        if (node.scrollWidth > node.clientWidth + 2 && node.clientWidth > 0) {
-          results.push(`${node.tagName}.${node.className}: ${node.scrollWidth}>${node.clientWidth}`)
+        if (node.clientWidth === 0) continue
+        // 量文字本身的宽度，而不是 scrollWidth：antd 固定列用伪元素画阴影，
+        // 会把单元格的 scrollWidth 撑大 30px，但并没有文字溢出。
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const textWidth = range.getBoundingClientRect().width
+        const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+        if (textWidth > node.clientWidth - padding + 2) {
+          results.push(`${node.tagName}.${node.className}: ${Math.round(textWidth)}>${node.clientWidth - padding}`)
         }
       }
       return results
@@ -1328,7 +1340,7 @@ async function runUiAudit() {
   await check('Tooltips appear on hover over an icon button', async () => {
     await navTo('Sensor型号')
     await settle()
-    const iconButton = page.locator('.a-table tbody .a-icon-button').first()
+    const iconButton = page.locator('.ant-table-tbody .ant-btn-icon-only').first()
     if ((await iconButton.count()) === 0) {
       warn('Tooltip hover', 'no icon buttons available on this page to hover')
       return
@@ -1342,7 +1354,11 @@ async function runUiAudit() {
   await check('A modal sheet traps focus and closes with Escape', async () => {
     await page.getByRole('button', { name: '新增型号', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    const inside = await page.evaluate(() => Boolean(document.activeElement?.closest('.a-sheet')))
+    // antd 在打开动画结束后才把焦点移进弹窗
+    const inside = await page
+      .waitForFunction(() => Boolean(document.activeElement?.closest('.ant-modal-wrap')), null, { timeout: 3000 })
+      .then(() => true)
+      .catch(() => false)
     assert(inside, 'focus was not moved into the sheet')
     await page.keyboard.press('Escape')
     await sheet().waitFor({ state: 'hidden', timeout: 5000 })
@@ -1350,7 +1366,7 @@ async function runUiAudit() {
 
   await check('Light mode keeps text readable (no transparent or identical colours)', async () => {
     const sample = await page.evaluate(() => {
-      const node = document.querySelector('.content')
+      const node = document.querySelector('.app-shell__content')
       if (!node) return null
       const style = getComputedStyle(node)
       return { color: style.color, background: style.backgroundColor }

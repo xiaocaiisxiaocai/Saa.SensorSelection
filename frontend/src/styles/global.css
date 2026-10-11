@@ -1,31 +1,15 @@
-@import '@fontsource/inter/latin-400.css';
-@import '@fontsource/inter/latin-600.css';
-@import '@fontsource/inter/latin-700.css';
-@import '@fontsource/inter/latin-ext-400.css';
-@import '@fontsource/inter/latin-ext-600.css';
-@import '@fontsource/inter/latin-ext-700.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-600.css';
-@import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
 @import './tokens.css';
 @import './reset.css';
 @import './a11y.css';
-@import '../ui/control.css';
-@import '../ui/menu.css';
-@import '../ui/overlay.css';
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-*:hover {
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 *::-webkit-scrollbar-track,
@@ -34,44 +18,30 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  border-radius: var(--radius-pill);
-}
-
-*:hover::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
 }
 
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
 }
 
-.hairline-bottom {
-  box-shadow: var(--hairline);
+/*
+ * reset.css 把 svg 设成 display:block，而 antd 按钮靠 text-align:center
+ * 居中内容，对块级元素无效。带 Lucide 图标的按钮统一改用 flex 居中。
+ */
+.ant-btn:has(> svg),
+.ant-btn > .ant-btn-icon {
+  display: inline-flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
 }
 
-.material-sidebar {
-  background: var(--material-sidebar-bg);
-  backdrop-filter: var(--material-blur);
-  -webkit-backdrop-filter: var(--material-blur);
-}
-
-.material-toolbar {
-  background: var(--material-toolbar-bg);
-  backdrop-filter: var(--material-blur);
-  -webkit-backdrop-filter: var(--material-blur);
-}
-
-@supports not (
-  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
-) {
-  .material-sidebar {
-    background: var(--bg-window);
-  }
-
-  .material-toolbar {
-    background: var(--bg-content);
-  }
+/* 上传拖拽区的 Lucide 图标：与 antd 的 InboxOutlined 一样居中、取主色 */
+.ant-upload-drag-icon > svg {
+  margin: 0 auto;
+  color: var(--color-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -79,16 +49,8 @@
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    transition-duration: var(--dur-0) !important;
-    animation-duration: var(--dur-0) !important;
+    transition-duration: var(--motion-duration-none) !important;
+    animation-duration: var(--motion-duration-none) !important;
     animation-iteration-count: 1 !important;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .material-sidebar,
-  .material-toolbar {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }

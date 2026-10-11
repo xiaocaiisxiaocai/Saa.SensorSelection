@@ -1,6 +1,6 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import Antd, { ConfigProvider } from 'ant-design-vue';
+import Antd, { ConfigProvider, message } from 'ant-design-vue';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import 'ant-design-vue/dist/reset.css';
@@ -33,4 +33,6 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(router);
 app.use(Antd);
+
+message.config({ maxCount: 3 });
 app.mount('#app');

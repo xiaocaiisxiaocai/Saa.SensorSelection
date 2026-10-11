@@ -9,7 +9,12 @@ import { describe, expect, it } from 'vitest';
 import DictionaryPage from './DictionaryPage.vue';
 
 const selectionPageCss = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'shared', 'selection-page.css'),
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'shared',
+    'selection-page.css',
+  ),
   'utf8',
 );
 
@@ -32,15 +37,9 @@ describe('DictionaryPage', () => {
     wrapper.unmount();
   });
 
-  it('aligns the dictionary action without shrinking toolbar type', () => {
+  it('keeps the add action on the right and lets the header wrap', () => {
     expect(selectionPageCss).toMatch(
-      /\.dictionary-header \.a-button\s*\{[^}]*margin-left:\s*auto;/,
-    );
-    expect(selectionPageCss).not.toMatch(
-      /\.dictionary-header \.a-button\s*\{[^}]*font:\s*var\(--text-toolbar-em\);/,
-    );
-    expect(selectionPageCss).not.toMatch(
-      /\.selection-toolbar\s+\.a-button\s*\{[^}]*font:\s*var\(--text-toolbar-em\);/,
+      /\.dictionary-header\s*\{[^}]*flex-wrap:\s*wrap;[^}]*justify-content:\s*space-between;/,
     );
   });
 });

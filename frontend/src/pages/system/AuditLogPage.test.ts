@@ -6,7 +6,6 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
-import ASelect from '@/ui/ASelect.vue';
 import AuditLogPage from './AuditLogPage.vue';
 
 const auditSource = readFileSync(
@@ -34,16 +33,19 @@ describe('AuditLogPage', () => {
   });
 
   it('opens full audit details from a compact view button', async () => {
-    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({ items: [log], total: 1 });
+    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({
+      items: [log],
+      total: 1,
+    });
     const wrapper = mount(AuditLogPage, { attachTo: document.body });
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.a-table').text()).toContain('查看');
+      expect(wrapper.find('.ant-table-wrapper').text()).toContain('查看');
     });
 
     // 表头现在也有排序按钮，必须精确点到行内的「查看」，不能取第一个 button。
     const detailButton = wrapper
-      .findAll('.a-table tbody button')
+      .findAll('.ant-table-tbody button')
       .find((button) => button.text() === '查看');
     expect(detailButton).toBeDefined();
     await detailButton!.trigger('click');
@@ -75,9 +77,9 @@ describe('AuditLogPage', () => {
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalled());
 
     await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
-    const selects = wrapper.findAllComponents(ASelect);
-    selects[0]?.vm.$emit('update:modelValue', 'auth.login');
-    selects[1]?.vm.$emit('update:modelValue', 'true');
+    const selects = wrapper.findAllComponents({ name: 'ASelect' });
+    selects[0]?.vm.$emit('update:value', 'auth.login');
+    selects[1]?.vm.$emit('update:value', 'true');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
 
     await vi.waitFor(() => {
@@ -91,9 +93,12 @@ describe('AuditLogPage', () => {
         username: undefined,
       });
     });
-    expect(wrapper.get<HTMLInputElement>('input[placeholder="操作用户"]').element.value).toBe('');
-    expect(selects[0]?.props('modelValue')).toBe('');
-    expect(selects[1]?.props('modelValue')).toBe('');
+    expect(
+      wrapper.get<HTMLInputElement>('input[placeholder="操作用户"]').element
+        .value,
+    ).toBe('');
+    expect(selects[0]?.props('value')).toBe('');
+    expect(selects[1]?.props('value')).toBe('');
     wrapper.unmount();
   });
 
@@ -134,27 +139,32 @@ describe('AuditLogPage', () => {
   });
 
   it('breaks the business detail into labelled rows instead of one long run-on', async () => {
-    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({ items: [log], total: 1 });
+    vi.spyOn(api, 'listAuditLogs').mockResolvedValue({
+      items: [log],
+      total: 1,
+    });
     const wrapper = mount(AuditLogPage, { attachTo: document.body });
     await vi.waitFor(() => {
-      expect(wrapper.find('.a-table').text()).toContain('查看');
+      expect(wrapper.find('.ant-table-wrapper').text()).toContain('查看');
     });
     const detailButton = wrapper
-      .findAll('.a-table tbody button')
+      .findAll('.ant-table-tbody button')
       .find((button) => button.text() === '查看');
     await detailButton!.trigger('click');
 
-    const labels = [...document.querySelectorAll('.audit-detail__pair dt')].map(
-      (node) => node.textContent?.trim(),
-    );
+    const labels = [
+      ...document.querySelectorAll(
+        '.audit-detail__pairs .ant-descriptions-item-label',
+      ),
+    ].map((node) => node.textContent?.trim());
     expect(labels).toEqual(['账号', '显示名', '角色', '权限', '组织']);
-    expect(document.querySelector('.audit-detail__summary')?.textContent?.trim()).toBe(
-      '登录成功',
-    );
+    expect(
+      document.querySelector('.audit-detail__summary')?.textContent?.trim(),
+    ).toBe('登录成功');
     // 顿号分隔的权限列表拆成标签，而不是挤成一行
-    const tags = [...document.querySelectorAll('.audit-detail__tag')].map(
-      (node) => node.textContent?.trim(),
-    );
+    const tags = [
+      ...document.querySelectorAll('.audit-detail__pairs .ant-tag'),
+    ].map((node) => node.textContent?.trim());
     expect(tags).toContain('selection:read');
     expect(tags).toContain('selection:write');
 
@@ -170,10 +180,10 @@ describe('AuditLogPage', () => {
     });
     const wrapper = mount(AuditLogPage, { attachTo: document.body });
     await vi.waitFor(() => {
-      expect(wrapper.find('.a-table').text()).toContain('查看');
+      expect(wrapper.find('.ant-table-wrapper').text()).toContain('查看');
     });
     const detailButton = wrapper
-      .findAll('.a-table tbody button')
+      .findAll('.ant-table-tbody button')
       .find((button) => button.text() === '查看');
     await detailButton!.trigger('click');
 
@@ -195,11 +205,17 @@ describe('AuditLogPage', () => {
     ).toBe(false);
 
     await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
-    wrapper.findAllComponents(ASelect)[0]?.vm.$emit('update:modelValue', 'auth.login');
+    wrapper
+      .findAllComponents({ name: 'ASelect' })[0]
+      ?.vm.$emit('update:value', 'auth.login');
 
     await vi.waitFor(() => {
       expect(listAuditLogs).toHaveBeenLastCalledWith(
-        expect.objectContaining({ action: 'auth.login', page: 1, username: 'admin' }),
+        expect.objectContaining({
+          action: 'auth.login',
+          page: 1,
+          username: 'admin',
+        }),
       );
     });
     // 防抖合并成一次请求，不是每个改动各发一次
@@ -210,8 +226,8 @@ describe('AuditLogPage', () => {
   it('does not offer a clear button on filters whose default is already "all"', () => {
     vi.spyOn(api, 'listAuditLogs').mockResolvedValue({ items: [], total: 0 });
     const wrapper = mount(AuditLogPage);
-    for (const select of wrapper.findAllComponents(ASelect)) {
-      expect(select.props('clearable')).toBeFalsy();
+    for (const select of wrapper.findAllComponents({ name: 'ASelect' })) {
+      expect(select.props('allowClear')).toBeFalsy();
     }
     wrapper.unmount();
   });
@@ -243,12 +259,14 @@ describe('AuditLogPage', () => {
     expect(headers).not.toContain('说明');
 
     const detailButton = wrapper
-      .findAll('.a-table tbody button')
+      .findAll('.ant-table-tbody button')
       .find((button) => button.text() === '查看');
     await detailButton!.trigger('click');
     // 详情里仍保留原始 key 供排查
     expect(document.body.textContent).toContain('目标键');
-    expect(document.body.textContent).toContain('machine-section-rows:1002:E2E机型');
+    expect(document.body.textContent).toContain(
+      'machine-section-rows:1002:E2E机型',
+    );
     wrapper.unmount();
   });
 
@@ -273,7 +291,9 @@ describe('AuditLogPage', () => {
     const wrapper = mount(AuditLogPage);
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(1));
 
-    wrapper.findAllComponents(ASelect)[0]?.vm.$emit('update:modelValue', 'auth.login');
+    wrapper
+      .findAllComponents({ name: 'ASelect' })[0]
+      ?.vm.$emit('update:value', 'auth.login');
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(2));
     const table = () => wrapper.getComponent({ name: 'ATable' });
 
@@ -286,7 +306,10 @@ describe('AuditLogPage', () => {
     expect(table().props('loading')).toBe(true);
     expect(wrapper.text()).not.toContain('stale-user');
 
-    resolveSecond({ items: [{ ...log, id: 91, username: 'fresh-user' }], total: 1 });
+    resolveSecond({
+      items: [{ ...log, id: 91, username: 'fresh-user' }],
+      total: 1,
+    });
     await vi.waitFor(() => expect(wrapper.text()).toContain('fresh-user'));
     expect(table().props('loading')).toBe(false);
     expect(wrapper.text()).not.toContain('stale-user');

@@ -7,8 +7,8 @@ import CustomerDocsPanel from '@/pages/selection/customer/CustomerDocsPanel.vue'
 import CustomerFeedbackPanel from '@/pages/selection/customer/CustomerFeedbackPanel.vue';
 import CustomerProcPanel from '@/pages/selection/customer/CustomerProcPanel.vue';
 import CustomerReqPanel from '@/pages/selection/customer/CustomerReqPanel.vue';
+import { TAB_COUNT_STYLE } from '@/pages/shared/tabs';
 import { useSelectionStore } from '@/stores/selection';
-import { AEmptyState, ASegmentedControl, type SegmentOption } from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -49,28 +49,28 @@ const panelLabel = computed(() =>
     : selection.value.item,
 );
 
-const tabs = computed<SegmentOption[]>(() => {
+const tabs = computed(() => {
   const name = selection.value.item;
   return [
     {
       label: '客户通用要求',
       value: 'req',
-      badge: store.crudItems('customer-req', name).length,
+      count: store.crudItems('customer-req', name).length,
     },
     {
       label: '制程注意事项',
       value: 'proc',
-      badge: store.crudItems('customer-proc', name).length,
+      count: store.crudItems('customer-proc', name).length,
     },
     {
       label: '感应器选用标准',
       value: 'sop',
-      badge: store.controlledDocuments(name).length,
+      count: store.controlledDocuments(name).length,
     },
     {
       label: '厂外反馈问题项',
       value: 'feedback',
-      badge: store.crudItems('customer-feedback', name).length,
+      count: store.crudItems('customer-feedback', name).length,
     },
   ];
 });
@@ -90,70 +90,46 @@ function selectEntity(payload: { category: string; item: string }) {
         @select="selectEntity"
       />
       <div v-if="selection.item" class="selection-panel">
-        <header class="entity-header">
-          <h2 class="visually-hidden">{{ panelLabel }}</h2>
-          <ASegmentedControl
-            id="customer-tabs"
-            v-model="customerTab"
-            class="entity-header__tabs"
-            aria-label="客户资料分类"
-            :segments="tabs"
-          />
-        </header>
-        <div
-          v-if="customerTab === 'req'"
-          id="customer-tabs-panel-req"
-          role="tabpanel"
-          aria-labelledby="customer-tabs-tab-req"
-          tabindex="0"
-          class="selection-tabpanel"
+        <h2 class="visually-hidden">{{ panelLabel }}</h2>
+        <a-tabs
+          v-model:active-key="customerTab"
+          class="entity-tabs"
+          destroy-inactive-tab-pane
         >
-          <CustomerReqPanel
-            :key="`req:${selection.item}`"
-            :entity-name="selection.item"
-          />
-        </div>
-        <div
-          v-else-if="customerTab === 'proc'"
-          id="customer-tabs-panel-proc"
-          role="tabpanel"
-          aria-labelledby="customer-tabs-tab-proc"
-          tabindex="0"
-          class="selection-tabpanel"
-        >
-          <CustomerProcPanel
-            :key="`proc:${selection.item}`"
-            :entity-name="selection.item"
-          />
-        </div>
-        <div
-          v-else-if="customerTab === 'sop'"
-          id="customer-tabs-panel-sop"
-          role="tabpanel"
-          aria-labelledby="customer-tabs-tab-sop"
-          tabindex="0"
-          class="selection-tabpanel"
-        >
-          <CustomerDocsPanel
-            :key="`sop:${selection.item}`"
-            :entity-name="selection.item"
-          />
-        </div>
-        <div
-          v-else-if="customerTab === 'feedback'"
-          id="customer-tabs-panel-feedback"
-          role="tabpanel"
-          aria-labelledby="customer-tabs-tab-feedback"
-          tabindex="0"
-          class="selection-tabpanel"
-        >
-          <CustomerFeedbackPanel
-            :key="`feedback:${selection.item}`"
-            :entity-name="selection.item"
-          />
-        </div>
+          <a-tab-pane v-for="tab in tabs" :key="tab.value">
+            <template #tab>
+              {{ tab.label }}
+              <a-badge
+                :count="tab.count"
+                show-zero
+                :overflow-count="999"
+                :number-style="TAB_COUNT_STYLE"
+              />
+            </template>
+            <CustomerReqPanel
+              v-if="tab.value === 'req'"
+              :key="`req:${selection.item}`"
+              :entity-name="selection.item"
+            />
+            <CustomerProcPanel
+              v-else-if="tab.value === 'proc'"
+              :key="`proc:${selection.item}`"
+              :entity-name="selection.item"
+            />
+            <CustomerDocsPanel
+              v-else-if="tab.value === 'sop'"
+              :key="`sop:${selection.item}`"
+              :entity-name="selection.item"
+            />
+            <CustomerFeedbackPanel
+              v-else
+              :key="`feedback:${selection.item}`"
+              :entity-name="selection.item"
+            />
+          </a-tab-pane>
+        </a-tabs>
       </div>
-      <AEmptyState v-else title="暂无客户，请在左侧新建区域和客户" />
+      <a-empty v-else description="暂无客户，请在左侧新建区域和客户" />
     </div>
   </section>
 </template>

@@ -1,5 +1,4 @@
 import type { OrgUnitNode } from '@/api';
-import type { TreeNode } from '@/ui';
 
 export interface OrgTreeNode extends OrgUnitNode {
   children: OrgTreeNode[];
@@ -17,18 +16,29 @@ export function buildOrgTree(nodes: OrgUnitNode[]): OrgTreeNode[] {
     else roots.push(node);
   }
   const sort = (list: OrgTreeNode[]) => {
-    list.sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id);
+    list.sort(
+      (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
+    );
     for (const item of list) sort(item.children);
   };
   sort(roots);
   return roots;
 }
 
-export function toTreeSelectNodes(nodes: OrgUnitNode[]): TreeNode[] {
-  const map = (tree: OrgTreeNode[]): TreeNode[] =>
+export interface OrgTreeSelectNode {
+  title: string;
+  value: number;
+  key: number;
+  children?: OrgTreeSelectNode[];
+}
+
+/** 组织树 → a-tree-select 的 tree-data。 */
+export function toTreeSelectNodes(nodes: OrgUnitNode[]): OrgTreeSelectNode[] {
+  const map = (tree: OrgTreeNode[]): OrgTreeSelectNode[] =>
     tree.map((node) => ({
-      id: node.id,
-      label: node.level ? `${node.name}（${node.level}）` : node.name,
+      title: node.level ? `${node.name}（${node.level}）` : node.name,
+      value: node.id,
+      key: node.id,
       children: node.children.length ? map(node.children) : undefined,
     }));
   return map(buildOrgTree(nodes));
@@ -62,7 +72,9 @@ export function allowedOrgLevels(
   return ORG_LEVELS.filter(
     (level) =>
       canPlaceOrgLevel(parentLevel, level) &&
-      descendantLevels.every((descendant) => canPlaceOrgLevel(level, descendant)),
+      descendantLevels.every((descendant) =>
+        canPlaceOrgLevel(level, descendant),
+      ),
   );
 }
 

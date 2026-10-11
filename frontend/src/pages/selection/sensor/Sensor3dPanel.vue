@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Eye, Trash2 } from 'lucide-vue-next';
+import { Download, Eye, Inbox, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import {
@@ -7,20 +7,14 @@ import {
   formatLocalDateTime,
   type Sensor3dFileItem,
 } from '@/domain';
+import { createFilePicker } from '@/pages/shared/file-rules';
 import { formatFileSize, uploadFile } from '@/pages/shared/files';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import {
-  AEmptyState,
-  AFileDrop,
-  AIconButton,
-  APdfViewer,
-  ASearchField,
-  ASheet,
-} from '@/ui';
-import { toast } from '@/ui/toast';
+import { APdfViewer } from '@/ui';
+import { message } from 'ant-design-vue';
 
 const props = defineProps<{ focusModel3dId?: null | number }>();
 const emit = defineEmits<{ previewed: [id: number] }>();
@@ -65,6 +59,15 @@ function onFiles(picked: File[]) {
   return runUpload(() => uploadPicked(picked));
 }
 
+const picker = createFilePicker(
+  {
+    ...SENSOR_3D_FILE_RULES,
+    sizeMessage: '文件大小超出 8 MB 限制',
+    typeMessage: '3D 文件暂仅支持 PDF',
+  },
+  onFiles,
+);
+
 async function uploadPicked(picked: File[]) {
   for (const file of picked) {
     const dataUrl = await uploadFile(file);
@@ -77,7 +80,7 @@ async function uploadPicked(picked: File[]) {
       title: file.name.replace(/\.pdf$/i, ''),
       uploadedAt: new Date().toISOString(),
     });
-    toastResult(result, '3D 文件已上传', {
+    notifyResult(result, '3D 文件已上传', {
       size: '文件大小超出 8 MB 限制',
       type: '3D 文件暂仅支持 PDF',
       storage: '数据保存失败，文件未保存',
@@ -92,14 +95,14 @@ function download(item: Sensor3dFileItem) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  toast.success('3D 文件已开始下载');
+  message.success('3D 文件已开始下载');
 }
 
 async function remove(item: Sensor3dFileItem) {
   const ok = await confirmDelete('删除 3D 文件', `确认删除“${item.title}”吗？`);
   if (!ok) return;
   const result = store.deleteSensor3dFile(item.id);
-  toastResult(result, '3D 文件已删除', {
+  notifyResult(result, '3D 文件已删除', {
     'in-use': '仍有型号关联该 3D 文件，请先取消关联后再删除',
   });
   if (preview.value?.id === item.id) preview.value = null;
@@ -110,88 +113,103 @@ async function remove(item: Sensor3dFileItem) {
   <div class="selection-panel">
     <!-- 一个文件都没有时没什么可搜的，搜索框只会占位 -->
     <div v-if="files.length > 0" class="selection-toolbar">
-      <ASearchField
-        v-model="query"
+      <a-input
+        v-model:value="query"
         class="selection-toolbar__filter"
         placeholder="搜索 3D 标题或文件名"
         aria-label="搜索 3D 文件"
-      />
-    </div>
-    <AFileDrop
-      v-if="writable"
-      :disabled="uploading"
-      :title="uploading ? UPLOADING_TITLE : undefined"
-      :accept="SENSOR_3D_FILE_RULES.accept"
-      :max-bytes="SENSOR_3D_FILE_RULES.maxBytes"
-      :extensions="[...SENSOR_3D_FILE_RULES.extensions]"
-      :mime-types="[...SENSOR_3D_FILE_RULES.mimeTypes]"
-      hint="仅支持 PDF，不超过 8 MB"
-      size-message="文件大小超出 8 MB 限制"
-      type-message="3D 文件暂仅支持 PDF"
-      @files="onFiles"
-    />
-    <ul v-if="visible.length" class="docs-list">
-      <li
-        v-for="item in visible"
-        :key="item.id"
-        :class="{ 'docs-list--focus': item.id === focusModel3dId }"
+        allow-clear
       >
-        <div>
-          <strong>{{ item.title }}</strong>
-          <p>
-            {{ item.fileName }} · {{ formatFileSize(item.size) }} ·
-            {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
-          </p>
-        </div>
-        <div class="table-actions">
-          <AIconButton
-            :icon="Eye"
-            label="预览"
-            size="small"
-            @click="openPreview(item)"
+        <template #prefix><Search :size="14" /></template>
+      </a-input>
+    </div>
+    <a-upload-dragger
+      v-if="writable"
+      :accept="SENSOR_3D_FILE_RULES.accept"
+      :before-upload="picker.beforeUpload"
+      :disabled="uploading"
+      :show-upload-list="false"
+      @reject="picker.onReject"
+    >
+      <p class="ant-upload-drag-icon"><Inbox :size="40" /></p>
+      <p class="ant-upload-text">
+        {{ uploading ? UPLOADING_TITLE : '点击或将文件拖到此处上传' }}
+      </p>
+      <p class="ant-upload-hint">仅支持 PDF，不超过 8 MB</p>
+    </a-upload-dragger>
+    <a-list
+      v-if="visible.length"
+      class="file-list"
+      :data-source="visible"
+      bordered
+    >
+      <template #renderItem="{ item }">
+        <a-list-item
+          :class="{ 'file-list__item--focus': item.id === focusModel3dId }"
+        >
+          <a-list-item-meta
+            :title="item.title"
+            :description="`${item.fileName} · ${formatFileSize(item.size)} · ${formatLocalDateTime(new Date(item.uploadedAt))}`"
           />
-          <AIconButton
-            :icon="Download"
-            label="下载"
-            size="small"
-            @click="download(item)"
-          />
-          <AIconButton
-            v-if="writable"
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            @click="remove(item)"
-          />
-        </div>
-      </li>
-    </ul>
+          <template #actions>
+            <a-tooltip title="预览">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="预览"
+                @click="openPreview(item)"
+              >
+                <template #icon><Eye :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="下载">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="下载"
+                @click="download(item)"
+              >
+                <template #icon><Download :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip v-if="writable" title="删除">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                aria-label="删除"
+                @click="remove(item)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </template>
+        </a-list-item>
+      </template>
+    </a-list>
     <!--
       可写用户看到的上传区本身就是空状态，再挂一句「拖入…上传」只是把同一
       句话说两遍。空状态只留给：搜不到匹配，或只读用户（没有上传区）。
     -->
-    <AEmptyState
+    <a-empty
       v-else-if="query.trim()"
-      title="没有匹配的 3D 文件"
-      description="换个关键词，或清空搜索框查看全部文件"
+      description="没有匹配的 3D 文件，换个关键词或清空搜索框查看全部文件"
     />
-    <AEmptyState v-else-if="!writable" title="暂无 3D 文件" />
-    <ASheet
+    <a-empty v-else-if="!writable" description="暂无 3D 文件" />
+    <a-modal
       :open="Boolean(preview)"
       :title="preview?.title || '预览 PDF'"
-      viewport
-      @update:open="
-        (open) => {
-          if (!open) preview = null;
-        }
-      "
+      width="calc(100vw - 48px)"
+      wrap-class-name="pdf-preview-modal"
+      :footer="null"
+      destroy-on-close
+      @cancel="preview = null"
     >
       <APdfViewer
         v-if="preview"
         class="a-pdf-viewer--large"
         :src="preview.dataUrl"
       />
-    </ASheet>
+    </a-modal>
   </div>
 </template>

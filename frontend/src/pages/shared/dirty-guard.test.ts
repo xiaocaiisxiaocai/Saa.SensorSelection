@@ -1,12 +1,12 @@
 import { reactive } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 
-import { alert } from '@/ui/alert';
+import { dialogs } from './confirm';
 import { useDirtyGuard } from './dirty-guard';
 
 describe('useDirtyGuard', () => {
   it('resolves true without prompting when the form has not changed', async () => {
-    const confirmSpy = vi.spyOn(alert, 'confirm');
+    const confirmSpy = vi.spyOn(dialogs, 'confirm');
     const form = reactive({ name: 'A' });
     const guard = useDirtyGuard(form);
 
@@ -22,7 +22,9 @@ describe('useDirtyGuard', () => {
     form.name = 'B';
     expect(guard.isDirty()).toBe(true);
 
-    const confirmSpy = vi.spyOn(alert, 'confirm').mockResolvedValueOnce(false);
+    const confirmSpy = vi
+      .spyOn(dialogs, 'confirm')
+      .mockResolvedValueOnce(false);
     await expect(guard.confirmClose()).resolves.toBe(false);
 
     confirmSpy.mockResolvedValueOnce(true);
@@ -45,7 +47,7 @@ describe('useDirtyGuard', () => {
   });
 
   it('confirmDiscard prompts with the given message only when dirty', async () => {
-    const confirmSpy = vi.spyOn(alert, 'confirm').mockResolvedValue(false);
+    const confirmSpy = vi.spyOn(dialogs, 'confirm').mockResolvedValue(false);
     const form = reactive({ name: 'A' });
     const guard = useDirtyGuard(form);
 
@@ -55,7 +57,7 @@ describe('useDirtyGuard', () => {
     form.name = 'B';
     await expect(guard.confirmDiscard('切换后丢失')).resolves.toBe(false);
     expect(confirmSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ message: '切换后丢失' }),
+      expect.objectContaining({ content: '切换后丢失' }),
     );
 
     confirmSpy.mockRestore();

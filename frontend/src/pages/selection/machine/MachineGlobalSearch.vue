@@ -1,15 +1,8 @@
 <script setup lang="ts">
+import type { SelectProps } from 'ant-design-vue';
 import { ArrowRight, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
-import {
-  AButton,
-  AEmptyState,
-  AFormRow,
-  ASearchField,
-  ATokenField,
-  type SelectOption,
-} from '@/ui';
 import {
   searchMachineStructures,
   type MachineStructureSearchDocument,
@@ -17,11 +10,11 @@ import {
 } from './machine-structure-search';
 
 const props = defineProps<{
-  boardCharacteristicOptions: SelectOption[];
+  boardCharacteristicOptions: NonNullable<SelectProps['options']>;
   documents: MachineStructureSearchDocument[];
-  machineModelOptions: SelectOption[];
-  processOptions: SelectOption[];
-  processStepOptions: SelectOption[];
+  machineModelOptions: NonNullable<SelectProps['options']>;
+  processOptions: NonNullable<SelectProps['options']>;
+  processStepOptions: NonNullable<SelectProps['options']>;
 }>();
 
 const emit = defineEmits<{
@@ -97,114 +90,159 @@ function resultTags(result: MachineStructureSearchResult): string[] {
 
 <template>
   <div class="machine-global-search">
-    <aside class="machine-global-search__filters" aria-label="全局查找结构">
-      <h2>全局查找结构</h2>
-      <AFormRow label="适用机型">
-        <ATokenField
-          v-model="machineModelIds"
-          :options="machineModelOptions"
-          placeholder="选择适用机型"
-          filterable
-          :max-visible-tokens="3"
-        />
-      </AFormRow>
-      <AFormRow label="工艺制程">
-        <ATokenField
-          v-model="processStepIds"
-          :options="processStepOptions"
-          placeholder="选择工艺制程"
-          filterable
-          :max-visible-tokens="3"
-        />
-      </AFormRow>
-      <AFormRow label="板件特性">
-        <ATokenField
-          v-model="boardCharacteristicIds"
-          :options="boardCharacteristicOptions"
-          placeholder="选择板件特性"
-          filterable
-          :max-visible-tokens="3"
-        />
-      </AFormRow>
-      <AFormRow label="上层制程">
-        <ATokenField
-          v-model="processIds"
-          :options="processOptions"
-          :placeholder="processScopeLabel"
-          filterable
-          :max-visible-tokens="3"
-        />
-      </AFormRow>
-      <AFormRow label="关键词">
-        <ASearchField
-          v-model="query"
-          placeholder="搜索结构名称、功能作用或传感器"
-          @keydown.enter="executeSearch"
-        />
-      </AFormRow>
-      <div class="machine-global-search__actions">
-        <AButton :disabled="!hasCriteria && !submitted" @click="reset">
-          重置
-        </AButton>
-        <AButton
-          variant="filled"
-          :disabled="!hasCriteria"
-          @click="executeSearch"
+    <a-card
+      class="machine-global-search__filters"
+      title="全局查找结构"
+      size="small"
+      aria-label="全局查找结构"
+    >
+      <a-form layout="vertical">
+        <a-form-item
+          html-for="machine-global-search-machine-model-ids"
+          label="适用机型"
         >
-          查找
-        </AButton>
-      </div>
-    </aside>
+          <a-select
+            id="machine-global-search-machine-model-ids"
+            v-model:value="machineModelIds"
+            mode="multiple"
+            :options="machineModelOptions"
+            placeholder="选择适用机型"
+            :max-tag-count="3"
+            allow-clear
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          html-for="machine-global-search-process-step-ids"
+          label="工艺制程"
+        >
+          <a-select
+            id="machine-global-search-process-step-ids"
+            v-model:value="processStepIds"
+            mode="multiple"
+            :options="processStepOptions"
+            placeholder="选择工艺制程"
+            :max-tag-count="3"
+            allow-clear
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          html-for="machine-global-search-board-characteristic-ids"
+          label="板件特性"
+        >
+          <a-select
+            id="machine-global-search-board-characteristic-ids"
+            v-model:value="boardCharacteristicIds"
+            mode="multiple"
+            :options="boardCharacteristicOptions"
+            placeholder="选择板件特性"
+            :max-tag-count="3"
+            allow-clear
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item
+          html-for="machine-global-search-process-ids"
+          label="上层制程"
+        >
+          <a-select
+            id="machine-global-search-process-ids"
+            v-model:value="processIds"
+            mode="multiple"
+            :options="processOptions"
+            :placeholder="processScopeLabel"
+            :max-tag-count="3"
+            allow-clear
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item html-for="machine-global-search-query" label="关键词">
+          <a-input
+            id="machine-global-search-query"
+            v-model:value="query"
+            placeholder="搜索结构名称、功能作用或传感器"
+            allow-clear
+            @keydown.enter="executeSearch"
+          >
+            <template #prefix><Search :size="14" /></template>
+          </a-input>
+        </a-form-item>
+        <a-space class="machine-global-search__actions">
+          <a-button :disabled="!hasCriteria && !submitted" @click="reset">
+            重置
+          </a-button>
+          <a-button
+            type="primary"
+            :disabled="!hasCriteria"
+            @click="executeSearch"
+          >
+            查找
+          </a-button>
+        </a-space>
+      </a-form>
+    </a-card>
 
     <section class="machine-global-search__results" aria-live="polite">
       <template v-if="submitted">
-        <header class="machine-global-search__heading">
-          <h2>找到 {{ resultCount }} 个结构</h2>
-          <span v-if="coveredProcesses">覆盖：{{ coveredProcesses }}</span>
-          <span v-else>全部上层制程均无匹配结果</span>
-        </header>
-        <div v-if="groups.length" class="machine-global-search__groups">
-          <section
+        <a-page-header
+          class="machine-global-search__heading"
+          :title="`找到 ${resultCount} 个结构`"
+          :sub-title="
+            coveredProcesses
+              ? `覆盖：${coveredProcesses}`
+              : '全部上层制程均无匹配结果'
+          "
+        />
+        <template v-if="groups.length">
+          <a-list
             v-for="group in groups"
             :key="group.processId"
             class="machine-global-search__group"
+            :data-source="group.results"
+            bordered
+            size="small"
           >
-            <h3>{{ group.processName }}（{{ group.results.length }}个结构）</h3>
-            <button
-              v-for="result in group.results"
-              :key="`${result.processId}:${result.category}:${result.configuration}:${result.machineName}:${result.sectionId}`"
-              class="machine-global-search__result"
-              type="button"
-              @click="emit('select', result)"
-            >
-              <span class="machine-global-search__result-body">
-                <strong>{{ path(result) }}</strong>
-                <span class="machine-global-search__meta">
-                  {{ result.sectionName }} · 匹配 {{ result.matchCount }} 条记录
-                </span>
-                <span class="machine-global-search__tags">
-                  <span v-for="tag in resultTags(result)" :key="tag">{{
-                    tag
-                  }}</span>
-                </span>
-              </span>
-              <span class="machine-global-search__open">
-                查看结构
-                <ArrowRight :size="16" />
-              </span>
-            </button>
-          </section>
-        </div>
-        <AEmptyState v-else title="没有找到符合条件的结构" />
+            <template #header>
+              <a-typography-text strong>
+                {{ group.processName }}（{{ group.results.length }}个结构）
+              </a-typography-text>
+            </template>
+            <template #renderItem="{ item: result }">
+              <a-list-item>
+                <a-list-item-meta>
+                  <template #title>{{ path(result) }}</template>
+                  <template #description>
+                    {{ result.sectionName }} · 匹配
+                    {{ result.matchCount }} 条记录
+                    <div class="machine-global-search__tags">
+                      <a-tag
+                        v-for="tag in resultTags(result)"
+                        :key="tag"
+                        color="blue"
+                      >
+                        {{ tag }}
+                      </a-tag>
+                    </div>
+                  </template>
+                </a-list-item-meta>
+                <template #actions>
+                  <a-button type="link" @click="emit('select', result)">
+                    查看结构
+                    <ArrowRight :size="14" />
+                  </a-button>
+                </template>
+              </a-list-item>
+            </template>
+          </a-list>
+        </template>
+        <a-empty v-else description="没有找到符合条件的结构" />
       </template>
-      <AEmptyState
-        v-else
-        title="按条件查找全部结构"
-      >
-        <template #icon>
+      <a-empty v-else description="按条件查找全部结构">
+        <template #image>
           <Search :size="36" />
         </template>
-      </AEmptyState>
+      </a-empty>
     </section>
   </div>
 </template>
@@ -212,188 +250,44 @@ function resultTags(result: MachineStructureSearchResult): string[] {
 <style scoped>
 .machine-global-search {
   display: grid;
-  grid-template-columns:
-    clamp(280px, var(--machine-source-width, 300px), 320px)
-    minmax(0, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-6);
   min-width: 0;
   min-height: 0;
   height: 100%;
 }
 
 .machine-global-search__filters {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-4);
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-lg);
-  background: var(--bg-content);
-}
-
-.machine-global-search__filters h2,
-.machine-global-search__heading h2,
-.machine-global-search__group h3 {
-  margin: 0;
-  color: var(--label);
-}
-
-.machine-global-search__filters h2,
-.machine-global-search__heading h2 {
-  font: var(--text-headline);
 }
 
 .machine-global-search__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin-top: auto;
-}
-
-.machine-global-search__actions :deep(.a-button) {
-  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .machine-global-search__results {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
   min-width: 0;
   min-height: 0;
   overflow: auto;
 }
 
 .machine-global-search__heading {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-}
-
-.machine-global-search__heading span,
-.machine-global-search__meta {
-  color: var(--label-2);
-  font: var(--text-caption);
-}
-
-.machine-global-search__groups,
-.machine-global-search__group {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.machine-global-search__group h3 {
-  padding: var(--space-2) var(--space-3);
-  font: var(--text-control-em);
-  border-left: 3px solid var(--sys-blue-solid);
-  background: var(--fill-4);
-}
-
-.machine-global-search__result {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  color: var(--label);
-  text-align: start;
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  background: var(--bg-content);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-1) var(--ease-out),
-    border-color var(--dur-1) var(--ease-out);
-}
-
-.machine-global-search__result:hover {
-  border-color: var(--sys-blue);
-  background: var(--fill-4);
-}
-
-.machine-global-search__result:focus-visible {
-  outline: 0;
-  box-shadow: var(--focus-ring);
-}
-
-.machine-global-search__result-body {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.machine-global-search__result-body strong {
-  overflow: hidden;
-  font: var(--text-control-em);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0;
 }
 
 .machine-global-search__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.machine-global-search__tags > span {
-  padding: 1px var(--space-2);
-  color: var(--sys-blue);
-  font: var(--text-caption);
-  border-radius: var(--radius-pill);
-  background: var(--sys-blue-fill);
-}
-
-.machine-global-search__open {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--sys-blue);
-  font: var(--text-control-em);
-}
-
-@media (48rem < width <= 60rem) {
-  .machine-global-search {
-    grid-template-columns:
-      clamp(200px, var(--machine-source-width, 220px), 220px)
-      minmax(0, 1fr);
-  }
+  margin-top: var(--space-2);
 }
 
 @media (width <= 48rem) {
   .machine-global-search {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(18rem, 1fr);
-  }
-
-  .machine-global-search__filters {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    max-height: 48vh;
-  }
-
-  .machine-global-search__filters h2,
-  .machine-global-search__actions {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (width < 36rem) {
-  .machine-global-search__filters {
-    grid-template-columns: 1fr;
-  }
-
-  .machine-global-search__filters h2,
-  .machine-global-search__actions {
-    grid-column: auto;
-  }
-
-  .machine-global-search__result {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 </style>

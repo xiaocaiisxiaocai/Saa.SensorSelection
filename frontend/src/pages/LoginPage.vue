@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { message } from 'ant-design-vue';
 import { Lock, User } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getStoredToken } from '@/api';
 import { safeRedirect } from '@/router/guards';
+import { fieldError } from '@/pages/shared/form';
 import BrandMark from '@/shell/BrandMark.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AButton, AField, AFormRow, toast } from '@/ui';
 
 const auth = useAuthStore();
 const selection = useSelectionStore();
@@ -32,8 +33,8 @@ const passwordError = computed(() =>
 // 只在下一次提交时清掉它（submit 开头），不用输入监听器清——那样会跟
 // “登录失败后自动清空密码框”这个动作打架，把刚设好的错误立刻冲掉。
 const loginError = ref<string | null>(null);
-const usernameField = ref<InstanceType<typeof AField> | null>(null);
-const passwordField = ref<InstanceType<typeof AField> | null>(null);
+const usernameField = ref<{ focus: () => void } | null>(null);
+const passwordField = ref<{ focus: () => void } | null>(null);
 let backendReady: null | Promise<void> = null;
 
 function targetPath() {
@@ -64,8 +65,7 @@ async function submit() {
   const password = form.password;
 
   // 字段级错误已经由用户名/密码输入框下方的红字说明，不再额外弹一条说法
-  // 不完全一样的 Toast；哪个字段没填、聚焦哪个字段，交给下面的
-  // AFormRow 统一处理。
+  // 不完全一样的提示。
   if (!username || !password) {
     return;
   }
@@ -87,7 +87,7 @@ async function submit() {
     }
     await prepareBackend();
     await enter();
-    toast.success('登录成功');
+    message.success('登录成功');
   } finally {
     loading.value = false;
   }
@@ -97,8 +97,7 @@ onMounted(async () => {
   const ready = prepareBackend();
   if (!getStoredToken()) {
     loginError.value = null;
-    // macOS/HIG 的登录窗口会直接把光标放进第一个字段；这里没有已登录态
-    // 需要静默跳转时，才把焦点交给用户名框，避免抢在跳转前抖一下。
+    // 没有已登录态需要静默跳转时，才把焦点交给用户名框，避免抢在跳转前抖一下。
     usernameField.value?.focus();
     return;
   }
@@ -112,7 +111,8 @@ onMounted(async () => {
   // 账号被停用/删除、或 token 过期。不说明原因的话，用户只会看到自己突然
   // 回到了登录页，完全不知道发生了什么。
   if (auth.sessionExpired) {
-    loginError.value = '登录已失效，请重新登录（账号可能已被停用或长时间未操作）';
+    loginError.value =
+      '登录已失效，请重新登录（账号可能已被停用或长时间未操作）';
   }
   usernameField.value?.focus();
 });
@@ -121,198 +121,136 @@ onMounted(async () => {
 <template>
   <div class="login-layout">
     <main class="login-layout__main">
-      <section class="login__card">
+      <a-card class="login__card" :bordered="false">
         <div class="login__brand">
           <BrandMark size="login" />
-          <div class="login__headings">
-            <h1 class="login__title">感应器选型系统</h1>
-            <p class="login__subtitle">Symtek Automation China</p>
-          </div>
+          <h1 class="login__title">感应器选型系统</h1>
+          <a-typography-text type="secondary">
+            Symtek Automation China
+          </a-typography-text>
         </div>
 
-        <p v-if="loginError" class="login__error" role="alert">
-          {{ loginError }}
-        </p>
+        <a-alert
+          v-if="loginError"
+          class="login__error"
+          type="error"
+          show-icon
+          :message="loginError"
+        />
 
-        <form class="login__form" @submit.prevent="submit">
-          <AFormRow label="用户名" required :error="usernameError">
-            <AField
+        <a-form layout="vertical" @submit="submit">
+          <a-form-item
+            html-for="login-username"
+            label="用户名"
+            required
+            v-bind="fieldError(usernameError)"
+          >
+            <a-input
+              id="login-username"
               ref="usernameField"
-              v-model="form.username"
-              :prefix-icon="User"
+              v-model:value="form.username"
+              size="large"
               autocomplete="username"
               :maxlength="64"
-              :clearable="false"
               :disabled="loading"
               placeholder="请输入用户名"
-            />
-          </AFormRow>
-          <AFormRow label="密码" required :error="passwordError">
-            <AField
+            >
+              <template #prefix><User :size="16" /></template>
+            </a-input>
+          </a-form-item>
+          <a-form-item
+            html-for="login-password"
+            label="密码"
+            required
+            v-bind="fieldError(passwordError)"
+          >
+            <a-input-password
+              id="login-password"
               ref="passwordField"
-              v-model="form.password"
-              :prefix-icon="Lock"
-              type="password"
+              v-model:value="form.password"
+              size="large"
               autocomplete="current-password"
-              :clearable="false"
               :disabled="loading"
               placeholder="请输入密码"
-            />
-          </AFormRow>
+            >
+              <template #prefix><Lock :size="16" /></template>
+            </a-input-password>
+          </a-form-item>
+          <a-form-item>
+            <a-button
+              type="primary"
+              size="large"
+              block
+              html-type="submit"
+              :loading="loading"
+            >
+              登录
+            </a-button>
+          </a-form-item>
+        </a-form>
 
-          <AButton
-            class="login__submit"
-            variant="filled"
-            size="xlarge"
-            block
-            type="submit"
-            :loading="loading"
-          >
-            登录
-          </AButton>
-        </form>
-
-        <p class="login__guest">
-          没有账号？
-          <button
-            class="login__guest-link"
-            type="button"
-            :disabled="loading"
-            @click="enterAsGuest"
-          >
+        <div class="login__guest">
+          <a-typography-text type="secondary">没有账号？</a-typography-text>
+          <a-button type="link" :disabled="loading" @click="enterAsGuest">
             以游客身份预览（只读）
-          </button>
-        </p>
-      </section>
+          </a-button>
+        </div>
+      </a-card>
     </main>
 
     <footer class="login-layout__footer">
-      <p>© 2026 Symtek Automation China. 保留所有权利。</p>
+      © 2026 Symtek Automation China. 保留所有权利。
     </footer>
   </div>
 </template>
 
 <style scoped>
 .login-layout {
-  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   min-height: 100dvh;
   padding: var(--space-5);
-  background:
-    radial-gradient(
-      1200px 400px at 20% -10%,
-      var(--sys-blue-fill),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 360px at 90% 110%,
-      var(--sys-teal-fill),
-      transparent 55%
-    ),
-    var(--bg-window);
+  background: var(--color-bg-layout);
 }
 
 .login-layout__main {
   display: grid;
   flex: 1;
   place-items: center;
-  padding: var(--space-4) 0;
 }
 
 .login__card {
-  display: grid;
-  gap: var(--space-5);
   width: min(100%, 400px);
-  padding: var(--space-7) var(--space-6);
-  background: var(--bg-elevated);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--box-shadow-tertiary);
 }
 
 .login__brand {
   display: grid;
   gap: var(--space-3);
   justify-items: center;
+  margin-bottom: var(--space-7);
   text-align: center;
-}
-
-.login__headings {
-  display: grid;
-  gap: var(--space-1);
 }
 
 .login__title {
   margin: 0;
-  font: var(--text-title-2);
-  font-weight: 700;
-  color: var(--label);
-  letter-spacing: var(--tracking-title-2);
-}
-
-.login__subtitle {
-  margin: 0;
-  font: var(--text-caption);
-  color: var(--label-2);
-  letter-spacing: var(--tracking-caption);
-}
-
-.login__form {
-  display: grid;
-  gap: var(--space-3);
-}
-
-/* 视觉上给“登录”两个字留出呼吸感，用字距而不是中间塞一个空格——
-   空格会被屏幕阅读器读成两个词。 */
-.login__submit {
-  letter-spacing: 4px;
+  font: var(--font-heading-4);
+  color: var(--color-text);
 }
 
 .login__error {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  font: var(--text-control);
-  color: var(--sys-red);
-  background: var(--sys-red-fill);
-  border-radius: var(--radius-md);
+  margin-bottom: var(--space-7);
 }
 
 .login__guest {
-  margin: 0;
-  font: var(--text-control);
-  color: var(--label-2);
-  text-align: center;
-}
-
-.login__guest-link {
-  padding: 0;
-  font: inherit;
-  color: var(--sys-blue);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  transition: opacity var(--dur-1) var(--ease-out);
-}
-
-.login__guest-link:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.login__guest-link:hover:not(:disabled) {
-  text-decoration: underline;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .login-layout__footer {
-  padding: var(--space-2) 0;
-  font: var(--text-caption);
-  color: var(--label-3);
+  font: var(--font-sm);
+  color: var(--color-text-tertiary);
   text-align: center;
-}
-
-.login-layout__footer p {
-  margin: 0;
 }
 </style>

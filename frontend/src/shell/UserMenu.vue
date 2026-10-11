@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { KeyRound, LogOut } from 'lucide-vue-next';
+import { message } from 'ant-design-vue';
+import { ChevronDown, KeyRound, LogOut } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { api } from '@/api';
+import { fieldError } from '@/pages/shared/form';
 import { useAuthStore } from '@/stores/auth';
-import { AButton, AField, AFormRow, AMenu, ASheet } from '@/ui';
-import { toast } from '@/ui/toast';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -20,11 +20,7 @@ const form = reactive({
   newPassword: '',
 });
 
-const menuItems = [
-  { id: 'password', label: '修改密码', icon: KeyRound },
-  { type: 'separator' as const },
-  { id: 'logout', label: '退出登录', icon: LogOut, destructive: true },
-];
+const avatarText = computed(() => auth.displayName.trim().slice(0, 1) || '?');
 
 const description = computed(() => {
   const roles =
@@ -50,34 +46,34 @@ function openPassword() {
 async function savePassword() {
   validationAttempted.value = true;
   if (!form.currentPassword || !form.newPassword) {
-    toast.warning('请输入当前密码和新密码');
+    message.warning('请输入当前密码和新密码');
     return;
   }
   if (form.newPassword.length < 4) {
-    toast.warning('新密码至少 4 位');
+    message.warning('新密码至少 4 位');
     return;
   }
   if (form.newPassword !== form.confirmPassword) {
-    toast.warning('两次输入的新密码不一致');
+    message.warning('两次输入的新密码不一致');
     return;
   }
   if (form.newPassword === form.currentPassword) {
-    toast.warning('新密码不能与当前密码相同');
+    message.warning('新密码不能与当前密码相同');
     return;
   }
   saving.value = true;
   try {
     await api.changePassword(form.currentPassword, form.newPassword);
-    toast.success('密码已修改');
+    message.success('密码已修改');
     passwordOpen.value = false;
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '修改失败');
+    message.error(error instanceof Error ? error.message : '修改失败');
   } finally {
     saving.value = false;
   }
 }
 
-async function onSelect(id: string) {
+async function onMenuClick({ key: id }: { key: string | number }) {
   if (id === 'password') {
     openPassword();
     return;
@@ -89,129 +85,150 @@ async function onSelect(id: string) {
 </script>
 
 <template>
-  <AMenu
+  <a-dropdown
     v-if="auth.isAuthenticated"
-    :items="menuItems"
-    side="bottom"
-    align="end"
-    @select="onSelect"
+    placement="bottomRight"
+    :trigger="['click']"
   >
-    <template #trigger>
-      <button
-        class="user-chip user-chip--menu"
-        type="button"
-        :title="description"
-      >
-        {{ auth.displayName }}
-      </button>
+    <a-button class="user-menu__trigger" type="text" :title="description">
+      <a-avatar class="user-menu__avatar" size="small">
+        {{ avatarText }}
+      </a-avatar>
+      <span class="user-menu__name">{{ auth.displayName }}</span>
+      <ChevronDown :size="14" />
+    </a-button>
+    <template #overlay>
+      <a-menu @click="onMenuClick">
+        <a-menu-item key="profile" disabled class="user-menu__profile">
+          {{ description }}
+        </a-menu-item>
+        <a-menu-divider />
+        <a-menu-item key="password">
+          <template #icon><KeyRound :size="14" /></template>
+          修改密码
+        </a-menu-item>
+        <a-menu-item key="logout" danger>
+          <template #icon><LogOut :size="14" /></template>
+          退出登录
+        </a-menu-item>
+      </a-menu>
     </template>
-  </AMenu>
-  <AButton v-else size="small" variant="tinted" @click="goLogin">登录</AButton>
-  <ASheet v-model:open="passwordOpen" title="修改密码" :width="420">
-    <div class="password-form">
-      <AFormRow
+  </a-dropdown>
+  <a-button v-else type="primary" @click="goLogin">登录</a-button>
+  <a-modal
+    :open="passwordOpen"
+    title="修改密码"
+    :width="420"
+    destroy-on-close
+    @cancel="passwordOpen = false"
+  >
+    <a-form layout="vertical">
+      <a-form-item
+        html-for="user-menu-current-password"
         label="当前密码"
         required
-        :error="
-          validationAttempted && !form.currentPassword
-            ? '请输入当前密码'
-            : undefined
+        v-bind="
+          fieldError(
+            validationAttempted && !form.currentPassword
+              ? '请输入当前密码'
+              : undefined,
+          )
         "
       >
-        <AField
-          v-model="form.currentPassword"
-          type="password"
+        <a-input-password
+          id="user-menu-current-password"
+          v-model:value="form.currentPassword"
           autocomplete="current-password"
           :maxlength="64"
-          :show-count="false"
           placeholder="请输入当前密码"
+          allow-clear
         />
-      </AFormRow>
-      <AFormRow
+      </a-form-item>
+      <a-form-item
+        html-for="user-menu-new-password"
         label="新密码"
         required
-        :error="
-          validationAttempted && form.newPassword.length < 4
-            ? '新密码至少 4 位'
-            : validationAttempted &&
-              form.newPassword === form.currentPassword &&
-              form.newPassword
-              ? '新密码不能与当前密码相同'
-              : undefined
+        v-bind="
+          fieldError(
+            validationAttempted && form.newPassword.length < 4
+              ? '新密码至少 4 位'
+              : validationAttempted &&
+                form.newPassword === form.currentPassword &&
+                form.newPassword
+                ? '新密码不能与当前密码相同'
+                : undefined,
+          )
         "
       >
-        <AField
-          v-model="form.newPassword"
-          type="password"
+        <a-input-password
+          id="user-menu-new-password"
+          v-model:value="form.newPassword"
           autocomplete="new-password"
           :maxlength="64"
           placeholder="至少 4 位"
+          allow-clear
         />
-      </AFormRow>
-      <AFormRow
+      </a-form-item>
+      <a-form-item
+        html-for="user-menu-confirm-password"
         label="确认新密码"
         required
-        :error="
-          validationAttempted && form.confirmPassword !== form.newPassword
-            ? '两次输入的新密码不一致'
-            : undefined
+        v-bind="
+          fieldError(
+            validationAttempted && form.confirmPassword !== form.newPassword
+              ? '两次输入的新密码不一致'
+              : undefined,
+          )
         "
       >
-        <AField
-          v-model="form.confirmPassword"
-          type="password"
+        <a-input-password
+          id="user-menu-confirm-password"
+          v-model:value="form.confirmPassword"
           autocomplete="new-password"
           :maxlength="64"
           placeholder="再次输入新密码"
+          allow-clear
         />
-      </AFormRow>
-    </div>
+      </a-form-item>
+    </a-form>
     <template #footer>
-      <AButton @click="passwordOpen = false">取消</AButton>
-      <AButton variant="filled" :loading="saving" @click="savePassword">
+      <a-button @click="passwordOpen = false">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="savePassword">
         保存
-      </AButton>
+      </a-button>
     </template>
-  </ASheet>
+  </a-modal>
 </template>
 
 <style scoped>
-.user-chip {
+.user-menu__trigger {
   display: inline-flex;
+  gap: var(--space-3);
   align-items: center;
-  min-height: var(--control-height-sm);
-  padding: var(--space-1) var(--space-3);
-  font: var(--text-caption);
-  color: var(--label);
-  background: var(--fill-3);
-  border: 0;
-  border-radius: var(--radius-pill);
-  max-width: 10rem;
+  max-width: 14rem;
+}
+
+.user-menu__avatar {
+  flex-shrink: 0;
+  color: var(--color-text-light-solid);
+  background: var(--color-primary);
+}
+
+.user-menu__name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.user-menu__profile {
+  max-width: 18rem;
+  white-space: normal;
+}
+
 @media (width < 560px) {
-  .user-chip {
-    max-width: 4rem;
+  .user-menu__name {
+    display: none;
   }
-}
-
-.user-chip--menu {
-  cursor: pointer;
-}
-
-.user-chip--menu:hover {
-  background: var(--fill-4);
-}
-
-.password-form {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.password-form :deep(.a-form-row) {
-  gap: var(--space-3);
 }
 </style>

@@ -1,25 +1,15 @@
 <script setup lang="ts">
+import type { TableColumnType } from 'ant-design-vue';
 import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { api, ApiError, type PermissionInfo, type RbacRole } from '@/api';
+import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
+import { cellText, rowClick, scrollX, sortBy } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
-import { toast } from '@/ui/toast';
-import {
-  ABadge,
-  AButton,
-  ACheckbox,
-  AField,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  ASheet,
-  ATable,
-  ATextArea,
-  type TableColumn,
-} from '@/ui';
+import { message } from 'ant-design-vue';
 
 import '../shared/selection-page.css';
 
@@ -50,16 +40,29 @@ const permissionGroups = computed(() => {
   }
   return [...groups.entries()];
 });
-const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [
-    { key: 'code', label: '标识', width: 140, fixed: 'start', sortable: true },
-    { key: 'name', label: '名称', width: 160, sortable: true },
-    { key: 'description', label: '描述', minWidth: 180 },
-    { key: 'permissions', label: '权限', minWidth: 240 },
-    { key: 'kind', label: '类型', width: 100 },
+const columns = computed<TableColumnType[]>(() => {
+  const cols: TableColumnType[] = [
+    {
+      key: 'code',
+      dataIndex: 'code',
+      title: '标识',
+      width: 140,
+      fixed: 'left',
+      sorter: sortBy('code'),
+    },
+    {
+      key: 'name',
+      dataIndex: 'name',
+      title: '名称',
+      width: 160,
+      sorter: sortBy('name'),
+    },
+    { key: 'description', dataIndex: 'description', title: '描述', width: 180 },
+    { key: 'permissions', dataIndex: 'permissions', title: '权限', width: 240 },
+    { key: 'kind', dataIndex: 'kind', title: '类型', width: 100 },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
+    cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
   }
   return cols;
 });
@@ -76,7 +79,9 @@ async function loadData() {
     roles.value = roleList;
     permissions.value = permissionList;
   } catch (error) {
-    toast.error(error instanceof ApiError ? error.message : '加载角色列表失败');
+    message.error(
+      error instanceof ApiError ? error.message : '加载角色列表失败',
+    );
   } finally {
     loading.value = false;
   }
@@ -140,6 +145,10 @@ async function cancelDialog() {
   }
 }
 
+function activateRole(role: RbacRole) {
+  if (writable.value && !isProtected(role)) openEdit(role);
+}
+
 function togglePermission(id: number, checked: boolean) {
   if (checked) {
     if (!form.permissionIds.includes(id)) form.permissionIds.push(id);
@@ -167,19 +176,19 @@ async function saveRole() {
         name: form.name.trim(),
         permissionIds: form.permissionIds,
       });
-      toast.success('角色已创建');
+      message.success('角色已创建');
     } else {
       await api.updateRole(editing.value.id, {
         description: form.description.trim() || null,
         name: form.name.trim(),
         permissionIds: form.permissionIds,
       });
-      toast.success('角色已更新');
+      message.success('角色已更新');
     }
     dialogOpen.value = false;
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '保存失败');
+    message.error(error instanceof Error ? error.message : '保存失败');
   } finally {
     saving.value = false;
   }
@@ -193,10 +202,10 @@ async function removeRole(role: RbacRole) {
   if (!ok) return;
   try {
     await api.deleteRole(role.id);
-    toast.success('角色已删除');
+    message.success('角色已删除');
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '删除失败');
+    message.error(error instanceof Error ? error.message : '删除失败');
   }
 }
 </script>
@@ -205,157 +214,177 @@ async function removeRole(role: RbacRole) {
   <section class="selection-page">
     <div class="selection-toolbar role-toolbar">
       <h1 class="visually-hidden">角色管理</h1>
-      <AButton v-if="writable" variant="filled" @click="openCreate">
+      <a-button v-if="writable" type="primary" @click="openCreate">
         新增角色
-      </AButton>
+      </a-button>
     </div>
-    <ATable
-      storage-key="system-roles"
+    <a-table
       :columns="columns"
-      :rows="roles"
+      :data-source="roles"
       row-key="id"
-      empty-text="暂无角色"
       :loading="loading"
-      @activate="writable && !isProtected($event) && openEdit($event)"
+      :pagination="false"
+      :scroll="{ x: scrollX(columns) }"
+      :locale="{ emptyText: '暂无角色' }"
+      :custom-row="rowClick(activateRole)"
     >
-      <template #cell-description="{ value }">{{ value || '—' }}</template>
-      <template #cell-permissions="{ row }">
-        <div class="badge-wrap">
-          <ABadge
-            v-for="permission in row.permissions"
-            :key="permission.code"
-            :label="permission.name"
-          />
-          <span v-if="row.permissions.length === 0">无权限</span>
-        </div>
+      <template #bodyCell="{ column, record: row, text: value }">
+        <template v-if="column.key === 'description'">
+          {{ value || '—' }}
+        </template>
+        <template v-else-if="column.key === 'permissions'">
+          <a-space :size="[4, 4]" wrap>
+            <a-tag v-for="permission in row.permissions" :key="permission.code">
+              {{ permission.name }}
+            </a-tag>
+            <span v-if="row.permissions.length === 0">无权限</span>
+          </a-space>
+        </template>
+        <template v-else-if="column.key === 'kind'">
+          <a-tag :color="row.isSystem ? 'purple' : 'default'">
+            {{ row.isSystem ? '系统内置' : '自定义' }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'actions'">
+          <a-space :size="4">
+            <a-tooltip :title="protectedReason(row) ?? '编辑'">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="编辑"
+                :disabled="isProtected(row)"
+                @click="openEdit(row)"
+              >
+                <template #icon><Pencil :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip :title="protectedReason(row) ?? '删除'">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                aria-label="删除"
+                :disabled="isProtected(row)"
+                @click="removeRole(row)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </a-space>
+        </template>
+        <template v-else>{{ cellText(value) }}</template>
       </template>
-      <template #cell-kind="{ row }">
-        <ABadge
-          :label="row.isSystem ? '系统内置' : '自定义'"
-          :tone="row.isSystem ? 'indigo' : 'neutral'"
-        />
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="table-actions">
-          <AIconButton
-            :icon="Pencil"
-            label="编辑"
-            size="small"
-            :disabled="isProtected(row)"
-            :disabled-reason="protectedReason(row)"
-            @click="openEdit(row)"
-          />
-          <AIconButton
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            :disabled="isProtected(row)"
-            :disabled-reason="protectedReason(row)"
-            @click="removeRole(row)"
-          />
-        </div>
-      </template>
-    </ATable>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-table>
+    <a-modal
+      :open="dialogOpen"
       :title="editing ? '编辑角色' : '新建角色'"
       :width="560"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelDialog"
     >
-      <AFormGrid>
-        <AFormRow
-          label="角色标识"
-          required
-          :error="
-            validationAttempted && !form.code.trim()
-              ? '请输入角色标识'
-              : validationAttempted &&
-                editing === null &&
-                !/^[a-z][\w:-]*$/i.test(form.code.trim())
-                ? '字母开头，可含字母、数字、冒号、下划线和短横线'
-                : undefined
-          "
-        >
-          <AField
-            v-model="form.code"
-            :maxlength="64"
-            placeholder="如：sensor_admin"
-            :disabled="Boolean(editing)"
-          />
-        </AFormRow>
-        <AFormRow
-          label="角色名称"
-          required
-          :error="
-            validationAttempted && !form.name.trim()
-              ? '请输入角色名称'
-              : undefined
-          "
-        >
-          <AField
-            v-model="form.name"
-            :maxlength="64"
-            placeholder="如：Sensor 管理员"
-          />
-        </AFormRow>
-        <AFormRow label="描述" wide>
-          <ATextArea
-            v-model="form.description"
-            :rows="2"
-            :maxlength="200"
-            placeholder="角色用途说明（可选）"
-          />
-        </AFormRow>
-        <div class="permission-panel">
-          <div class="permission-panel__header">
-            <span class="permission-panel__label">权限</span>
-            <span class="permission-panel__count">
-              已选 {{ form.permissionIds.length }} / {{ permissions.length }}
-            </span>
-          </div>
-          <section
-            v-for="[module, items] in permissionGroups"
-            :key="module"
-            class="permission-group"
-          >
-            <label class="permission-group__head checkbox-field">
-              <ACheckbox
-                :model-value="groupState(items)"
-                @update:model-value="toggleGroup(items, $event === true)"
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item
+              html-for="role-code"
+              label="角色标识"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.code.trim()
+                    ? '请输入角色标识'
+                    : validationAttempted &&
+                      editing === null &&
+                      !/^[a-z][\w:-]*$/i.test(form.code.trim())
+                      ? '字母开头，可含字母、数字、冒号、下划线和短横线'
+                      : undefined,
+                )
+              "
+            >
+              <a-input
+                id="role-code"
+                v-model:value="form.code"
+                :maxlength="64"
+                placeholder="如：sensor_admin"
+                :disabled="Boolean(editing)"
+                allow-clear
+                show-count
               />
-              {{ module }}
-            </label>
-            <div class="permission-group__items">
-              <label
-                v-for="item in items"
-                :key="item.id"
-                class="permission-item"
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item
+              html-for="role-name"
+              label="角色名称"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.name.trim()
+                    ? '请输入角色名称'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="role-name"
+                v-model:value="form.name"
+                :maxlength="64"
+                placeholder="如：Sensor 管理员"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="role-description" label="描述">
+              <a-textarea
+                id="role-description"
+                v-model:value="form.description"
+                :rows="2"
+                :maxlength="200"
+                placeholder="角色用途说明（可选）"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item
+              :label="`权限（已选 ${form.permissionIds.length} / ${permissions.length}）`"
+            >
+              <div
+                v-for="[module, items] in permissionGroups"
+                :key="module"
+                class="permission-group"
               >
-                <ACheckbox
-                  :model-value="form.permissionIds.includes(item.id)"
-                  @update:model-value="
-                    togglePermission(item.id, $event === true)
-                  "
-                />
-                {{ item.name }}
-              </label>
-            </div>
-          </section>
-        </div>
-      </AFormGrid>
+                <a-checkbox
+                  class="permission-group__head"
+                  :checked="groupState(items) === true"
+                  :indeterminate="groupState(items) === 'indeterminate'"
+                  @change="toggleGroup(items, $event.target.checked)"
+                >
+                  {{ module }}
+                </a-checkbox>
+                <a-row :gutter="[16, 4]">
+                  <a-col v-for="item in items" :key="item.id" :xs="24" :sm="12">
+                    <a-checkbox
+                      :checked="form.permissionIds.includes(item.id)"
+                      @change="togglePermission(item.id, $event.target.checked)"
+                    >
+                      {{ item.name }}
+                    </a-checkbox>
+                  </a-col>
+                </a-row>
+              </div>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelDialog">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveRole">
+        <a-button @click="cancelDialog">取消</a-button>
+        <a-button type="primary" :loading="saving" @click="saveRole">
           保存
-        </AButton>
+        </a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>
-
-<style scoped>
-.role-toolbar .a-button {
-  margin-left: auto;
-}
-</style>

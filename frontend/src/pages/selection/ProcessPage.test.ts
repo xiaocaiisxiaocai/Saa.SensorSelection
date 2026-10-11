@@ -2,11 +2,16 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { useSelectionStore } from '@/stores/selection';
 import { useAuthStore } from '@/stores/auth';
-import { ASelect } from '@/ui';
+import {
+  chooseSelect,
+  clickTab,
+  columnWidths,
+  findSelect,
+} from '@/test-helpers';
 
 import ProcessPage from './ProcessPage.vue';
 
@@ -61,8 +66,7 @@ describe('ProcessPage', () => {
 
   it('explains what the intro tab is for before anything is uploaded', async () => {
     const wrapper = await mountPage(true);
-    expect(wrapper.find('.process-intro-hint').exists()).toBe(true);
-    expect(wrapper.text()).toContain('还没有制程介绍资料');
+    expect(wrapper.find('.ant-alert').text()).toContain('还没有制程介绍资料');
 
     useSelectionStore().saveProcessIntroFile({
       fileName: '工艺规范.pdf',
@@ -72,7 +76,7 @@ describe('ProcessPage', () => {
       uploadedAt: '2024-01-01T00:00:00.000Z',
     });
     await nextTick();
-    expect(wrapper.find('.process-intro-hint').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('还没有制程介绍资料');
     wrapper.unmount();
   });
 
@@ -106,8 +110,9 @@ describe('ProcessPage', () => {
     await wrapper.get('[aria-label="预览"]').trigger('click');
     await nextTick();
 
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-    expect(dialog?.classList.contains('a-sheet--viewport')).toBe(true);
+    await vi.waitFor(() =>
+      expect(document.querySelector('.pdf-preview-modal')).not.toBeNull(),
+    );
     expect(document.querySelector('.a-pdf-viewer--large')).not.toBeNull();
 
     wrapper.unmount();
@@ -115,33 +120,33 @@ describe('ProcessPage', () => {
 
   it('keeps the process layer column compact', async () => {
     const wrapper = await mountPage();
-    await wrapper.findAll('.ant-segmented-item')[1]?.get('input').trigger('change');
-    await nextTick();
+    await clickTab(wrapper, '工艺制程');
 
-    expect(wrapper.find('thead th').attributes('style')).toContain(
-      'width: 64px',
-    );
+    expect(columnWidths(wrapper)['制程']).toBe(64);
 
     wrapper.unmount();
   });
 
   it('resets the process layer and keyword filters together', async () => {
     const wrapper = await mountPage();
-    await wrapper.findAll('.ant-segmented-item')[1]?.get('input').trigger('change');
-    await nextTick();
+    await clickTab(wrapper, '工艺制程');
 
-    const layer = wrapper.getComponent(ASelect);
-    layer.vm.$emit('update:modelValue', layer.props('options')[0]?.value);
-    await wrapper.get('input[type="search"]').setValue('不存在的工艺');
+    const layerOptions = findSelect(wrapper, '制程分层').props(
+      'options',
+    ) as Array<{
+      value: string;
+    }>;
+    await chooseSelect(wrapper, '制程分层', layerOptions[0]?.value);
+    const search = () =>
+      wrapper.get<HTMLInputElement>('input[aria-label="搜索制程"]');
+    await search().setValue('不存在的工艺');
     await nextTick();
 
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await nextTick();
 
-    expect(layer.props('modelValue')).toBeNull();
-    expect(
-      wrapper.get<HTMLInputElement>('input[type="search"]').element.value,
-    ).toBe('');
+    expect(findSelect(wrapper, '制程分层').props('value')).toBeNull();
+    expect(search().element.value).toBe('');
     wrapper.unmount();
   });
 });

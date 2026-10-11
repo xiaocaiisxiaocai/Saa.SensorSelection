@@ -1,5 +1,5 @@
 import { ApiError, api } from '@/api';
-import { toast } from '@/ui/toast';
+import { message } from 'ant-design-vue';
 
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—';
@@ -17,7 +17,7 @@ export async function uploadFile(file: File): Promise<null | string> {
   try {
     return (await api.uploadFile(file)).dataUrl;
   } catch (error) {
-    toast.error(
+    message.error(
       error instanceof ApiError && error.message
         ? `“${file.name}”上传失败：${error.message}`
         : `“${file.name}”上传失败，请重试`,

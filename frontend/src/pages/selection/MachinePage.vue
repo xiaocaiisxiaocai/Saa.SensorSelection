@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { message } from 'ant-design-vue';
 import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -25,30 +26,10 @@ import type {
   MachineStructureSearchResult,
 } from '@/pages/selection/machine/machine-structure-search';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { fieldError } from '@/pages/shared/form';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess, useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { toast } from '@/ui/toast';
-import {
-  AButton,
-  AEmptyState,
-  AField,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  ASelect,
-  ASheet,
-  AStepper,
-  ATabBar,
-  ATooltip,
-  type TabItem,
-} from '@/ui';
-import {
-  clampSourceListWidth,
-  MACHINE_SOURCE_LIST_DEFAULT_WIDTH,
-  MACHINE_SOURCE_LIST_MAX_WIDTH,
-  MACHINE_SOURCE_LIST_MIN_WIDTH,
-} from '@/ui/source-list';
 
 import '../shared/selection-page.css';
 
@@ -79,28 +60,6 @@ const processDirtyGuard = useDirtyGuard(processForm);
 const activeSection = ref('');
 const checkedMachineKeys = ref<string[]>([]);
 const reportGenerating = ref(false);
-const machineSourceStorageKey = 'selection:source-list-width:machine:v5';
-
-function restoredMachineSourceWidth() {
-  try {
-    const stored = Number(localStorage.getItem(machineSourceStorageKey));
-    if (Number.isFinite(stored) && stored > 0) {
-      return clampSourceListWidth(
-        stored,
-        MACHINE_SOURCE_LIST_MIN_WIDTH,
-        MACHINE_SOURCE_LIST_MAX_WIDTH,
-      );
-    }
-  } catch {
-    // Keep the shared default when browser storage is unavailable.
-  }
-  return MACHINE_SOURCE_LIST_DEFAULT_WIDTH;
-}
-
-const machineSourceWidth = ref(restoredMachineSourceWidth());
-const machineSourceStyle = computed(() => ({
-  '--machine-source-width': `${machineSourceWidth.value}px`,
-}));
 
 const groups = computed(() => store.entityGroups('machine'));
 const processes = computed(() => store.machineProcesses);
@@ -129,11 +88,11 @@ const activeMachineType = computed<MachineCatalogKind>(() => {
   );
   return legacyGroup ? machineCatalogKind(legacyGroup) : 'mechanism';
 });
-const machineCatalogTabs: TabItem[] = [
+const machineCatalogTabs = [
   { label: '结构', value: 'mechanism' },
   { label: '专案机型', value: 'project' },
 ];
-const machineViewTabs: TabItem[] = [
+const machineViewTabs = [
   { label: '目录浏览', value: 'browse' },
   { label: '条件查找', value: 'find' },
 ];
@@ -233,7 +192,9 @@ function buildGlobalSearchDocuments(): MachineStructureSearchDocument[] {
   const boardCharacteristicById = new Map(
     boardCharacteristicItems.value.map((item) => [item.id, item]),
   );
-  const sensorById = new Map(store.sensors.map((sensor) => [sensor.id, sensor]));
+  const sensorById = new Map(
+    store.sensors.map((sensor) => [sensor.id, sensor]),
+  );
   const treeItems = listEntityTreeItems(
     filterMachineGroups(groups.value, 'mechanism'),
   );
@@ -306,12 +267,10 @@ const displaySections = computed(() => {
     .resolvedMachineSections(selection.value.item, activeProcessId.value)
     .map((section) => ({ ...section, displayName: section.name }));
 });
-const tabs = computed<TabItem[]>(() =>
+const tabs = computed(() =>
   displaySections.value.map((section) => ({
     label: section.displayName,
     value: String(section.id),
-    closable: writable.value,
-    renamable: writable.value,
   })),
 );
 const activeSectionItem = computed(() =>
@@ -538,11 +497,18 @@ function selectEntity(payload: {
   void router.replace({ path: route.path, query });
 }
 
+function onTabEdit(target: unknown, action: 'add' | 'remove') {
+  if (action === 'add') openAddTab();
+  else void closeTab(String(target));
+}
+
 function onTabChange(sectionId: string) {
   activeSection.value = sectionId;
   void router.replace({
     path: route.path,
-    query: addMachineContextQuery(currentSelectionQuery({ section: sectionId })),
+    query: addMachineContextQuery(
+      currentSelectionQuery({ section: sectionId }),
+    ),
   });
 }
 
@@ -590,14 +556,6 @@ function selectMachineView(value: string) {
     value,
   );
   void router.replace({ path: route.path, query });
-}
-
-function syncMachineSourceWidth(width: number) {
-  machineSourceWidth.value = clampSourceListWidth(
-    width,
-    MACHINE_SOURCE_LIST_MIN_WIDTH,
-    MACHINE_SOURCE_LIST_MAX_WIDTH,
-  );
 }
 
 function openGlobalSearchResult(result: MachineStructureSearchResult) {
@@ -659,7 +617,7 @@ function saveProcess() {
     processEditId.value,
   );
   if (
-    toastResult(result, processEditId.value ? '制程已更新' : '制程已新增', {
+    notifyResult(result, processEditId.value ? '制程已更新' : '制程已新增', {
       duplicate: '该制程名称已存在',
       stale: '该制程已被删除，请刷新后重试',
     })
@@ -677,7 +635,7 @@ async function removeProcess(item: MachineProcessItem) {
   if (!ok) return;
   const wasActive = activeProcessId.value === item.id;
   const result = store.deleteMachineProcess(item.id);
-  const deleted = toastResult(result, '制程已删除', {
+  const deleted = notifyResult(result, '制程已删除', {
     validation: '默认制程不能删除',
     'not-empty': '请先清空该制程下全部机型的 Tab、内容和示意图',
     stale: '该制程已被删除，请刷新后重试',
@@ -717,13 +675,13 @@ function onToggleCheck(payload: {
 
 function ensureSelected() {
   if (selectedMachineNames.value.length > 0) return true;
-  toast.warning('请先在左侧勾选至少一个机型');
+  message.warning('请先在左侧勾选至少一个机型');
   return false;
 }
 
 function ensureReportContent() {
   if (hasReportContent.value) return true;
-  toast.warning('所选机型暂无可生成的内容');
+  message.warning('所选机型暂无可生成的内容');
   return false;
 }
 
@@ -736,7 +694,7 @@ function previewReport() {
     reportSections.value,
   );
   if (!opened) {
-    toast.warning('报告窗口被浏览器拦截，请允许弹窗后重试');
+    message.warning('报告窗口被浏览器拦截，请允许弹窗后重试');
   }
 }
 
@@ -758,9 +716,9 @@ async function generateReport() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast.success('后端报告已生成并下载，可打开后打印为 PDF');
+    message.success('后端报告已生成并下载，可打开后打印为 PDF');
   } catch (error) {
-    toast.error(
+    message.error(
       error instanceof ApiError ? error.message : '报告生成失败，请稍后重试',
     );
   } finally {
@@ -813,7 +771,7 @@ function saveTab() {
     activeProcessId.value,
   );
   if (
-    toastResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
+    notifyResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
       duplicate: '该 Tab 名称已存在',
       'not-empty': '请先清空该 Tab 的数据和示意图后再修改类型',
       stale: '该 Tab 已被删除，请刷新后重试',
@@ -833,7 +791,7 @@ async function closeTab(value: string) {
     `确认删除“${section.name}”吗？请先清空该 Tab 下的全部数据。`,
   );
   if (!ok) return;
-  toastResult(
+  notifyResult(
     store.deleteExtraMachineSection(
       selection.value.item,
       section.id,
@@ -853,7 +811,6 @@ async function closeTab(value: string) {
     <h1 class="visually-hidden">机型结构</h1>
     <div
       class="selection-split"
-      :style="machineSourceStyle"
       :class="{
         'selection-split--machine': activeMachineView === 'browse',
         'selection-split--global-search': activeMachineView === 'find',
@@ -861,43 +818,41 @@ async function closeTab(value: string) {
     >
       <div class="machine-source-stack">
         <div class="machine-process-context" aria-label="当前浏览制程">
-          <ASelect
-            v-model="processSelection"
+          <a-select
+            v-model:value="processSelection"
             class="machine-process-context__select"
             :options="processOptions"
             placeholder="选择制程"
             aria-label="当前浏览制程"
             size="small"
           />
-          <AButton
+          <a-button
             v-if="writable"
+            type="text"
             class="machine-process-context__manage"
-            variant="borderless"
             size="small"
             @click="openProcessManager"
           >
             管理制程
-          </AButton>
+          </a-button>
         </div>
-        <ATabBar
+        <a-segmented
           class="machine-catalog-tabs"
+          block
           aria-label="机型目录"
-          :model-value="activeMachineType"
-          :tabs="machineCatalogTabs"
-          @update:model-value="selectMachineCatalog"
+          :value="activeMachineType"
+          :options="machineCatalogTabs"
+          @change="selectMachineCatalog(String($event))"
         />
-        <div
+        <a-segmented
           v-if="activeMachineType === 'mechanism'"
-          class="machine-view-context"
-        >
-          <ATabBar
-            class="machine-view-tabs"
-            aria-label="机型浏览方式"
-            :model-value="activeMachineView"
-            :tabs="machineViewTabs"
-            @update:model-value="selectMachineView"
-          />
-        </div>
+          class="machine-view-tabs"
+          block
+          aria-label="机型浏览方式"
+          :value="activeMachineView"
+          :options="machineViewTabs"
+          @change="selectMachineView(String($event))"
+        />
         <EntitySource
           v-if="activeMachineView === 'browse'"
           kind="machine"
@@ -906,7 +861,6 @@ async function closeTab(value: string) {
           :selected-key="selectedMachineKey"
           :checked-items="auth.isAuthenticated ? checkedMachineKeys : undefined"
           @select="selectEntity"
-          @resize="syncMachineSourceWidth"
           @toggle-check="onToggleCheck"
         />
       </div>
@@ -921,217 +875,275 @@ async function closeTab(value: string) {
         @select="openGlobalSearchResult"
       />
       <div v-else-if="selection.item" class="selection-panel">
-        <div class="machine-panel-header">
-          <ATabBar
-            id="machine-section-tabs"
-            class="machine-section-tabs"
-            aria-label="机型内容分区"
-            :model-value="activeSection"
-            :tabs="tabs"
-            :addable="writable"
-            add-label="新增 Tab"
-            @update:model-value="onTabChange"
-            @add="openAddTab"
-            @rename="openRenameTab"
-            @close="closeTab"
-          />
-          <div v-if="auth.isAuthenticated" class="machine-report">
-            <span class="selection-toolbar__count">
-              已选 {{ selectedMachineItems.length }} /
-              {{ availableMachineItems.length }} 个机型
-            </span>
-            <AButton
-              variant="borderless"
-              size="small"
-              @click="checkedMachineKeys = [...availableMachineKeys]"
-            >
-              全选机型
-            </AButton>
-            <AButton
-              variant="borderless"
-              size="small"
-              :disabled="selectedMachineItems.length === 0"
-              @click="checkedMachineKeys = []"
-            >
-              清空
-            </AButton>
-            <ATooltip
-              :content="
-                selectedMachineItems.length === 0
-                  ? '请先在左侧勾选至少一个机型'
-                  : ''
-              "
-              :disabled="selectedMachineItems.length > 0"
-            >
-              <template #trigger>
-                <span class="inline-flex">
-                  <AButton
-                    variant="filled"
+        <a-tabs
+          v-if="tabs.length"
+          class="machine-section-tabs"
+          type="editable-card"
+          size="small"
+          :active-key="activeSection"
+          :hide-add="!writable"
+          destroy-inactive-tab-pane
+          @change="onTabChange(String($event))"
+          @edit="onTabEdit"
+        >
+          <a-tab-pane v-for="tab in tabs" :key="tab.value" :closable="writable">
+            <template #tab>
+              <span class="machine-section-tabs__label">
+                {{ tab.label }}
+                <a-tooltip
+                  v-if="writable && tab.value === activeSection"
+                  title="重命名 Tab"
+                >
+                  <a-button
+                    type="text"
                     size="small"
+                    aria-label="重命名 Tab"
+                    @click.stop="openRenameTab(tab.value)"
+                  >
+                    <template #icon><Pencil :size="12" /></template>
+                  </a-button>
+                </a-tooltip>
+              </span>
+            </template>
+            <MachineSectionPanel
+              v-if="activeSectionItem"
+              :machine-name="selection.item"
+              :process-id="activeProcessId"
+              :section="activeSectionItem"
+              :focus-row-id="Number(route.query.focusRow) || undefined"
+            />
+          </a-tab-pane>
+          <template v-if="auth.isAuthenticated" #rightExtra>
+            <div class="machine-report">
+              <span class="selection-toolbar__count">
+                已选 {{ selectedMachineItems.length }} /
+                {{ availableMachineItems.length }} 个机型
+              </span>
+              <a-button
+                type="text"
+                size="small"
+                @click="checkedMachineKeys = [...availableMachineKeys]"
+              >
+                全选机型
+              </a-button>
+              <a-button
+                type="text"
+                :disabled="selectedMachineItems.length === 0"
+                size="small"
+                @click="checkedMachineKeys = []"
+              >
+                清空
+              </a-button>
+              <a-tooltip
+                :title="
+                  selectedMachineItems.length === 0
+                    ? '请先在左侧勾选至少一个机型'
+                    : ''
+                "
+              >
+                <span class="inline-flex">
+                  <a-button
+                    type="primary"
                     :disabled="selectedMachineItems.length === 0"
                     :loading="reportGenerating"
+                    size="small"
                     @click="generateReport"
                   >
                     生成并下载报告
-                  </AButton>
+                  </a-button>
                 </span>
-              </template>
-            </ATooltip>
-            <ATooltip
-              :content="
-                selectedMachineItems.length === 0
-                  ? '请先在左侧勾选至少一个机型'
-                  : ''
-              "
-              :disabled="selectedMachineItems.length > 0"
-            >
-              <template #trigger>
+              </a-tooltip>
+              <a-tooltip
+                :title="
+                  selectedMachineItems.length === 0
+                    ? '请先在左侧勾选至少一个机型'
+                    : ''
+                "
+              >
                 <span class="inline-flex">
-                  <AButton
-                    variant="tinted"
-                    size="small"
+                  <a-button
                     :disabled="selectedMachineItems.length === 0"
+                    size="small"
                     @click="previewReport"
                   >
                     预览 / 打印 PDF
-                  </AButton>
+                  </a-button>
                 </span>
-              </template>
-            </ATooltip>
-          </div>
-        </div>
-        <div
-          :id="`machine-section-tabs-panel-${activeSection}`"
-          role="tabpanel"
-          :aria-labelledby="`machine-section-tabs-tab-${activeSection}`"
-          tabindex="0"
-          class="selection-tabpanel"
-        >
-          <MachineSectionPanel
-            v-if="activeSectionItem"
-            :machine-name="selection.item"
-            :process-id="activeProcessId"
-            :section="activeSectionItem"
-            :focus-row-id="Number(route.query.focusRow) || undefined"
-          />
-          <AEmptyState
-            v-else
-            title="暂无 Tab"
-            description="请新增“结构”或“机型注意事项”Tab"
-          >
-            <template v-if="writable" #action>
-              <AButton variant="filled" @click="openAddTab">新增 Tab</AButton>
-            </template>
-          </AEmptyState>
-        </div>
+              </a-tooltip>
+            </div>
+          </template>
+        </a-tabs>
+        <a-empty v-else>
+          <template #description>
+            <div>暂无 Tab</div>
+            <div class="empty-hint">请新增“结构”或“机型注意事项”Tab</div>
+          </template>
+          <template v-if="writable" #default>
+            <a-button type="primary" @click="openAddTab">新增 Tab</a-button>
+          </template>
+        </a-empty>
       </div>
-      <AEmptyState v-else title="暂无机型，请在左侧新建分类和机型" />
+      <a-empty v-else description="暂无机型，请在左侧新建分类和机型" />
     </div>
-    <ASheet
-      v-model:open="processDialogOpen"
+    <a-modal
+      :open="processDialogOpen"
       title="管理制程"
       :width="520"
-      :confirm-close="processDirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="closeProcessManager"
     >
-      <div class="machine-process-list">
-        <div
-          v-for="item in processes"
-          :key="item.id"
-          class="machine-process-list__item"
-        >
-          <div class="machine-process-list__name">
-            <strong>{{ item.name }}</strong>
-            <span v-if="!item.locked">排序 {{ item.sort }}</span>
-          </div>
-          <div class="machine-process-list__actions">
-            <AIconButton
-              :icon="Pencil"
-              label="编辑制程"
-              size="small"
-              @click="editProcess(item)"
+      <a-list
+        class="machine-process-list"
+        :data-source="processes"
+        size="small"
+        bordered
+      >
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <a-list-item-meta
+              :title="item.name"
+              :description="item.locked ? undefined : `排序 ${item.sort}`"
             />
-            <AIconButton
-              v-if="!item.locked"
-              :icon="Trash2"
-              label="删除制程"
-              size="small"
-              variant="destructive"
-              @click="removeProcess(item)"
-            />
-          </div>
-        </div>
-      </div>
+            <template #actions>
+              <a-tooltip title="编辑制程">
+                <a-button
+                  type="text"
+                  size="small"
+                  aria-label="编辑制程"
+                  @click="editProcess(item)"
+                >
+                  <template #icon><Pencil :size="14" /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-if="!item.locked" title="删除制程">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除制程"
+                  @click="removeProcess(item)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </a-tooltip>
+            </template>
+          </a-list-item>
+        </template>
+      </a-list>
       <div class="machine-process-form">
-        <h3>{{ processEditId ? '编辑制程' : '新增制程' }}</h3>
-        <AFormGrid :columns="2">
-          <AFormRow
-            label="制程名称"
-            required
-            :error="
-              processValidationAttempted && !processForm.name.trim()
-                ? '请输入制程名称'
-                : undefined
-            "
-          >
-            <AField
-              v-model="processForm.name"
-              :maxlength="40"
-              placeholder="例如：制程2"
-            />
-          </AFormRow>
-          <AFormRow label="排序">
-            <AStepper v-model="processForm.sort" :min="1" />
-          </AFormRow>
-        </AFormGrid>
+        <a-divider orientation="left">
+          {{ processEditId ? '编辑制程' : '新增制程' }}
+        </a-divider>
+        <a-form layout="vertical">
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item
+                html-for="machine-name"
+                label="制程名称"
+                required
+                v-bind="
+                  fieldError(
+                    processValidationAttempted && !processForm.name.trim()
+                      ? '请输入制程名称'
+                      : undefined,
+                  )
+                "
+              >
+                <a-input
+                  id="machine-name"
+                  v-model:value="processForm.name"
+                  :maxlength="40"
+                  placeholder="例如：制程2"
+                  allow-clear
+                  show-count
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item html-for="machine-sort" label="排序">
+                <a-input-number
+                  id="machine-sort"
+                  v-model:value="processForm.sort"
+                  :min="1"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </a-form>
         <div class="machine-process-form__actions">
-          <AButton v-if="processEditId" @click="resetProcessForm">
+          <a-button v-if="processEditId" @click="resetProcessForm">
             取消编辑
-          </AButton>
-          <AButton variant="filled" @click="saveProcess">
+          </a-button>
+          <a-button type="primary" @click="saveProcess">
             {{ processEditId ? '保存修改' : '新增制程' }}
-          </AButton>
+          </a-button>
         </div>
       </div>
       <template #footer>
-        <AButton @click="closeProcessManager">完成</AButton>
+        <a-button @click="closeProcessManager">完成</a-button>
       </template>
-    </ASheet>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-modal>
+    <a-modal
+      :open="dialogOpen"
       :title="editId ? '编辑 Tab' : '新增 Tab'"
       :width="420"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelTabDialog"
     >
-      <AFormGrid :columns="1">
-        <AFormRow
-          label="Tab 名称"
-          required
-          :error="
-            tabValidationAttempted && !form.name.trim()
-              ? '请输入 Tab 名称'
-              : undefined
-          "
-        >
-          <AField v-model="form.name" :maxlength="40" />
-        </AFormRow>
-        <AFormRow label="Tab 类型" required>
-          <ASelect
-            v-model="form.kind"
-            :options="[
-              { label: '结构', value: 'structure' },
-              { label: '机型注意事项', value: 'notes' },
-            ]"
-          />
-        </AFormRow>
-        <AFormRow label="排序">
-          <AStepper v-model="form.sort" :min="1" />
-        </AFormRow>
-      </AFormGrid>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item
+              html-for="machine-name-2"
+              label="Tab 名称"
+              required
+              v-bind="
+                fieldError(
+                  tabValidationAttempted && !form.name.trim()
+                    ? '请输入 Tab 名称'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="machine-name-2"
+                v-model:value="form.name"
+                :maxlength="40"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="machine-kind" label="Tab 类型" required>
+              <a-select
+                id="machine-kind"
+                v-model:value="form.kind"
+                :options="[
+                  { label: '结构', value: 'structure' },
+                  { label: '机型注意事项', value: 'notes' },
+                ]"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="machine-sort-2" label="排序">
+              <a-input-number
+                id="machine-sort-2"
+                v-model:value="form.sort"
+                :min="1"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelTabDialog">取消</AButton>
-        <AButton variant="filled" @click="saveTab">保存</AButton>
+        <a-button @click="cancelTabDialog">取消</a-button>
+        <a-button type="primary" @click="saveTab">保存</a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>
 
@@ -1139,45 +1151,27 @@ async function closeTab(value: string) {
 .machine-source-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  width: var(--machine-source-width, 240px);
-  max-width: 100%;
-  min-width: 0;
+  gap: var(--space-4);
+  width: 280px;
   min-height: 0;
-}
-
-.selection-split--machine > .machine-source-stack {
-  box-shadow: inset -1px 0 0 var(--separator);
 }
 
 .machine-source-stack > .entity-source {
   flex: 1;
-  width: 100%;
-  height: auto;
 }
 
 .selection-split--global-search {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.selection-split--global-search > .machine-source-stack {
-  height: auto;
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .machine-global-search {
-  grid-column: 1 / -1;
-  min-width: 0;
   min-height: 0;
 }
 
 .machine-process-context {
   display: flex;
+  gap: var(--space-3);
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  width: 100%;
-  padding: 0 var(--space-1);
-  white-space: nowrap;
 }
 
 .machine-process-context__select {
@@ -1185,242 +1179,27 @@ async function closeTab(value: string) {
   min-width: 0;
 }
 
-.machine-process-context__manage {
-  flex: none;
-}
-
-.machine-catalog-tabs {
-  width: 100%;
-  padding: 0 var(--space-1);
-}
-
-.machine-catalog-tabs :deep(.a-tab-bar__tab) {
-  flex: 1;
-  justify-content: center;
-  height: var(--control-height-md);
-  font: var(--text-control);
-}
-
-.machine-catalog-tabs :deep(.a-tab-bar__item),
-.machine-view-tabs :deep(.a-tab-bar__item) {
-  flex: 1;
-}
-
-.machine-catalog-tabs :deep(.a-tab-bar__tab--selected) {
-  font-weight: 600;
-}
-
-.machine-view-context {
-  display: grid;
-  gap: var(--space-1);
-  width: 100%;
-  padding: 0 var(--space-1);
-}
-
-.machine-view-tabs {
-  width: 100%;
-  padding: 2px;
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  background: var(--fill-4);
-}
-
-.machine-view-tabs :deep(.a-tab-bar__scroller) {
-  gap: 2px;
-}
-
-.machine-view-tabs :deep(.a-tab-bar__tab) {
-  flex: 1;
-  justify-content: center;
-  min-height: var(--control-height-md);
-  border-radius: var(--radius-sm);
-  font: var(--text-control);
-  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-}
-
-.machine-view-tabs :deep(.a-tab-bar__tab--selected) {
-  background: var(--bg-content);
-  box-shadow: var(--shadow-1);
-  font-weight: 600;
-  color: var(--label);
-}
-
-.machine-view-tabs :deep(.a-tab-bar__indicator) {
-  display: none;
-}
-
-.machine-panel-header {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--space-3);
-  align-items: center;
-  min-width: 0;
-  min-height: var(--control-height-lg);
-  border-bottom: 1px solid var(--separator);
-}
-
-.machine-section-tabs {
-  flex: 1 1 auto;
-  min-width: 12rem;
-}
-
-.machine-section-tabs :deep(.a-tab-bar__tab) {
-  min-height: var(--control-height-md);
-}
-
-.machine-panel-header .machine-report {
-  flex: 0 0 auto;
+.machine-section-tabs__label {
+  display: inline-flex;
   gap: var(--space-2);
-  padding: 0;
-  margin-left: auto;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-}
-
-.machine-panel-header .machine-report .selection-toolbar__count {
-  margin-right: auto;
-  font: var(--text-toolbar);
-}
-
-.machine-panel-header .machine-report :deep(.a-button) {
-  white-space: nowrap;
+  align-items: center;
 }
 
 .machine-process-list {
-  display: grid;
-  gap: var(--space-3);
+  margin-bottom: var(--space-5);
 }
 
-.machine-process-list__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  min-height: var(--row-height-loose);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--separator);
-  border-radius: 10px;
-  background: var(--fill-4);
-}
-
-.machine-process-list__name {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.machine-process-list__name strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.machine-process-list__name span {
-  color: var(--label-2);
-  font: var(--text-caption);
-}
-
-.machine-process-list__actions,
 .machine-process-form__actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
   gap: var(--space-3);
-}
-
-.machine-process-form {
-  display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--separator);
-}
-
-.machine-process-form h3 {
-  margin: 0;
-  font: var(--text-control-em);
+  justify-content: flex-end;
 }
 
 @media (width <= 60rem) {
-  .machine-source-stack {
-    width: 100%;
-    height: 100%;
-  }
-
-  .machine-process-context {
-    gap: var(--space-1);
-    padding: 0;
-  }
-
-  .machine-process-context__select {
-    width: auto;
-    min-width: 0;
-  }
-
-  .machine-process-context__manage {
-    padding-inline: var(--space-2);
-  }
-
+  .machine-source-stack,
   .selection-split--global-search {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .machine-report {
-    display: grid;
-    grid-template-columns: auto auto minmax(9rem, 1fr) minmax(8rem, 1fr);
-    gap: var(--space-2);
-  }
-
-  .machine-report .selection-toolbar__count {
-    grid-column: 1 / -1;
-    margin-right: 0;
-  }
-
-  .machine-report :deep(.a-button) {
     width: 100%;
-  }
-}
-
-@media (width <= 70rem) {
-  .machine-panel-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: var(--space-1);
-    padding-bottom: var(--space-2);
-  }
-
-  .machine-panel-header .machine-report {
-    width: 100%;
-    margin-left: 0;
-  }
-}
-
-@media (width <= 40rem) {
-  .machine-report {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (48rem < width <= 60rem) {
-  .selection-split--machine {
-    grid-template-columns:
-      clamp(200px, var(--machine-source-width, 220px), 220px)
-      minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-  }
-
-  .selection-split--machine > .machine-source-stack {
-    width: clamp(200px, var(--machine-source-width, 220px), 220px);
-  }
-
-  .selection-split--machine .entity-source {
-    height: 100%;
-  }
-
-  .selection-split--machine :deep(.entity-source > .machine-source) {
-    width: 100% !important;
-    max-width: none !important;
+    grid-template-columns: 1fr;
   }
 }
 </style>

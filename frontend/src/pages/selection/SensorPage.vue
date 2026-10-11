@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { message, type TableColumnType } from 'ant-design-vue';
 import {
   Columns3,
   Download,
   Eye,
   Pencil,
   Replace,
+  RotateCcw,
+  Search,
   Trash2,
 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
@@ -17,42 +20,27 @@ import {
   type SensorFileItem,
   type SensorItem,
 } from '@/domain';
+import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
-import { confirmDelete, toastResult } from '@/pages/shared/save-feedback';
+import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import SensorSopPanel from '@/pages/selection/sensor/SensorSopPanel.vue';
 import SensorSopFilePanel from '@/pages/selection/sensor/SensorSopFilePanel.vue';
 import Sensor3dPanel from '@/pages/selection/sensor/Sensor3dPanel.vue';
 import { downloadSensorExcel } from '@/pages/selection/sensor/sensor-excel';
+import {
+  cellText,
+  PAGE_SIZE_OPTIONS,
+  rowClick,
+  scrollX,
+  sortFromChange,
+  sortOrderOf,
+  sortRows,
+  type TableSortState,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { toast } from '@/ui/toast';
-import {
-  ABadge,
-  ACheckbox,
-  AButton,
-  AField,
-  AFilterResetButton,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  APagination,
-  APdfViewer,
-  APopover,
-  ASearchField,
-  ASegmentedControl,
-  ASelect,
-  ASheet,
-  ATable,
-  ATextArea,
-  ATokenField,
-  sortRows,
-  type BadgeTone,
-  type SegmentOption,
-  type SelectOption,
-  type TableColumn,
-  type TableSortState,
-} from '@/ui';
+import { APdfViewer } from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -94,7 +82,8 @@ const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: 'sop', label: '关联型录' },
   { key: 'model3d', label: '关联 3D' },
 ];
-const COLUMN_VISIBILITY_STORAGE_KEY = 'selection:sensor-table:hidden-columns:v1';
+const COLUMN_VISIBILITY_STORAGE_KEY =
+  'selection:sensor-table:hidden-columns:v1';
 const hiddenColumnKeys = ref<Set<string>>(restoreHiddenColumns());
 const columnMenuOpen = ref(false);
 
@@ -160,17 +149,18 @@ const statusNames = computed(() => {
     return sensorStatusRank(left) - sensorStatusRank(right);
   });
 });
-const typeOptions = computed<SelectOption[]>(() =>
+const typeOptions = computed(() =>
   store
     .dictionaryNames('sensor-type')
     .map((name) => ({ label: name, value: name })),
 );
-const TYPE_ACCENT_VARS = [
-  '--sys-teal',
-  '--sys-indigo',
-  '--sys-purple',
-  '--sys-pink',
-  '--sys-yellow',
+// 感应器类型圆点：按类型名稳定地映射到 antd 的预设色
+const TYPE_ACCENT_COLORS = [
+  'cyan',
+  'geekblue',
+  'purple',
+  'magenta',
+  'gold',
 ] as const;
 function typeAccent(label: string): string {
   let hash = 0x811c9dc5;
@@ -178,28 +168,22 @@ function typeAccent(label: string): string {
     hash ^= label.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
-  return `var(${TYPE_ACCENT_VARS[(hash >>> 0) % TYPE_ACCENT_VARS.length]})`;
+  return TYPE_ACCENT_COLORS[(hash >>> 0) % TYPE_ACCENT_COLORS.length]!;
 }
-const statusOptions = computed<SelectOption[]>(() =>
+const statusOptions = computed(() =>
   statusNames.value.map((name) => ({ label: name, value: name })),
 );
-const statusFilterOptions = computed<SelectOption[]>(() => [
+const statusFilterOptions = computed(() => [
   { label: '全部', value: '全部' },
   ...statusOptions.value,
 ]);
-const sopOptions = computed<SelectOption[]>(() =>
+const sopOptions = computed(() =>
   store.sensorSops.map((item) => ({ label: item.title, value: item.id })),
 );
-const model3dOptions = computed<SelectOption[]>(() =>
+const model3dOptions = computed(() =>
   store.sensor3dFiles.map((item) => ({ label: item.title, value: item.id })),
 );
 const resourceTabs = ['sop-library', 'sop', '3d'];
-const tabs = computed<SegmentOption[]>(() => [
-  { label: '型号', value: 'models' },
-  { label: 'SOP', value: 'sop-library' },
-  { label: '型录', value: 'sop' },
-  { label: '3D', value: '3d' },
-]);
 const lastStatusTab = ref(
   resourceTabs.includes(mainTab.value)
     ? findSensorStatusName(statusNames.value, 'current') || '全部'
@@ -282,52 +266,85 @@ const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return sortedItems.value.slice(start, start + pageSize.value);
 });
-const columns = computed<TableColumn[]>(() => {
-  const baseColumns: TableColumn[] = [
-    { key: 'status', label: '状态', width: 88, fixed: 'start', sortable: true },
+const columns = computed<TableColumnType[]>(() => {
+  const baseColumns: TableColumnType[] = [
+    {
+      key: 'status',
+      dataIndex: 'status',
+      title: '状态',
+      width: 88,
+      fixed: 'left',
+      sorter: true,
+      sortOrder: sortOrderOf(sort.value, 'status'),
+    },
     {
       key: 'partNumber',
-      label: '料号',
+      dataIndex: 'partNumber',
+      title: '料号',
       width: 120,
-      mono: true,
-      sortable: true,
+      sorter: true,
+      sortOrder: sortOrderOf(sort.value, 'partNumber'),
     },
-    { key: 'sensorType', label: '感应器类型', width: 120, sortable: true },
-    { key: 'brand', label: '品牌', width: 88, sortable: true },
-    { key: 'model', label: '型号', width: 140, mono: true, sortable: true },
+    {
+      key: 'sensorType',
+      dataIndex: 'sensorType',
+      title: '感应器类型',
+      width: 120,
+      sorter: true,
+      sortOrder: sortOrderOf(sort.value, 'sensorType'),
+    },
+    {
+      key: 'brand',
+      dataIndex: 'brand',
+      title: '品牌',
+      width: 88,
+      sorter: true,
+      sortOrder: sortOrderOf(sort.value, 'brand'),
+    },
+    {
+      key: 'model',
+      dataIndex: 'model',
+      title: '型号',
+      width: 140,
+      sorter: true,
+      sortOrder: sortOrderOf(sort.value, 'model'),
+    },
     ...(showDisabledDetails.value
       ? [
           {
             key: 'replacedAt',
-            label: '停用时间',
+            dataIndex: 'replacedAt',
+            title: '停用时间',
             width: 112,
-            sortable: true,
+            sorter: true,
+            sortOrder: sortOrderOf(sort.value, 'replacedAt'),
           },
           {
             key: 'problemNote',
-            label: '停用原因',
-            minWidth: 180,
+            dataIndex: 'problemNote',
+            title: '停用原因',
+            width: 180,
           },
         ]
       : []),
     // 以下三列内容都很短（多数是「—」或一个文件名），固定宽度，别让它们
     // 按比例分走多余空间——那些空间应该留给规格参数/特性与注意。
-    { key: 'relation', label: '替换关系', width: 180 },
-    { key: 'spec', label: '规格参数', minWidth: 180 },
-    { key: 'feature', label: '特性与注意', minWidth: 200 },
-    { key: 'scene', label: '适用场景', minWidth: 160 },
-    { key: 'sop', label: '关联型录', width: 140 },
-    { key: 'model3d', label: '关联 3D', width: 140 },
+    { key: 'relation', dataIndex: 'relation', title: '替换关系', width: 180 },
+    { key: 'spec', dataIndex: 'spec', title: '规格参数', width: 180 },
+    { key: 'feature', dataIndex: 'feature', title: '特性与注意', width: 200 },
+    { key: 'scene', dataIndex: 'scene', title: '适用场景', width: 160 },
+    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 140 },
+    { key: 'model3d', dataIndex: 'model3d', title: '关联 3D', width: 140 },
   ];
   const cols = baseColumns.filter(
-    (column) => !hiddenColumnKeys.value.has(column.key),
+    (column) => !hiddenColumnKeys.value.has(String(column.key)),
   );
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 96, fixed: 'end' });
+    cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
   }
   return cols;
 });
-const replaceCandidates = computed<SelectOption[]>(() => {
+const replaceCandidates = computed(() => {
   const source = replaceSource.value;
   if (!source) return [];
   const currents = store.sensors.filter(
@@ -491,11 +508,12 @@ function relationText(item: SensorItem) {
   return '';
 }
 
-function statusTone(status: string): BadgeTone {
+/** 型号状态对应的 a-tag 预设色 */
+function statusColor(status: string): string {
   if (isSensorStatus(status, 'current')) return 'green';
-  if (isSensorStatus(status, 'alternate')) return 'yellow';
+  if (isSensorStatus(status, 'alternate')) return 'gold';
   if (isSensorStatus(status, 'disabled')) return 'red';
-  return 'neutral';
+  return 'default';
 }
 
 function resetForm() {
@@ -560,7 +578,7 @@ function exportExcel() {
   // 导出当前筛选条件下的全部型号（不只当前页），顺序与表格排序一致。
   const rows = sortedItems.value;
   if (rows.length === 0) {
-    toast.error('当前条件下没有可导出的型号');
+    message.error('当前条件下没有可导出的型号');
     return;
   }
   const exportColumns = columns.value.filter(
@@ -568,12 +586,12 @@ function exportExcel() {
   );
   downloadSensorExcel({
     pageName: mainTab.value,
-    headers: exportColumns.map((column) => column.label),
+    headers: exportColumns.map((column) => String(column.title)),
     rows: rows.map((item) =>
-      exportColumns.map((column) => exportCell(item, column.key)),
+      exportColumns.map((column) => exportCell(item, String(column.key))),
     ),
   });
-  toast.success(`已导出 ${rows.length} 条 Sensor 型号`);
+  message.success(`已导出 ${rows.length} 条 Sensor 型号`);
 }
 
 function addItem() {
@@ -624,7 +642,7 @@ function saveItem() {
     editId.value,
   );
   if (
-    toastResult(result, editId.value ? '型号已更新' : '型号已新增', {
+    notifyResult(result, editId.value ? '型号已更新' : '型号已新增', {
       duplicate: '该型号已存在，请使用不同的型号名称',
       stale: '该型号已被其他页面删除',
     })
@@ -636,52 +654,14 @@ function saveItem() {
 async function deleteItem(item: SensorItem) {
   const ok = await confirmDelete('删除型号', `确认删除“${item.model}”吗？`);
   if (!ok) return;
-  toastResult(store.deleteSensor(item.id), '型号已删除');
-}
-
-function copyWithSelection(value: string) {
-  const input = document.createElement('textarea');
-  input.value = value;
-  input.setAttribute('readonly', '');
-  input.style.position = 'fixed';
-  input.style.inset = '0 auto auto -9999px';
-  document.body.append(input);
-  input.select();
-
-  try {
-    return document.execCommand?.('copy') ?? false;
-  } finally {
-    input.remove();
-  }
-}
-
-async function copyPartNumber(value: unknown) {
-  const partNumber = String(value ?? '').trim();
-  if (!partNumber) return;
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(partNumber);
-      } catch {
-        if (!copyWithSelection(partNumber))
-          throw new Error('clipboard unavailable');
-      }
-    } else if (!copyWithSelection(partNumber)) {
-      throw new Error('clipboard unavailable');
-    }
-
-    toast.success(`料号已复制：${partNumber}`);
-  } catch {
-    toast.error('复制失败，请手动选择料号复制');
-  }
+  notifyResult(store.deleteSensor(item.id), '型号已删除');
 }
 
 function openLinkedSop(sopId: null | number) {
   if (!sopId) return;
   const file = store.sensorSops.find((item) => item.id === sopId);
   if (!file) {
-    toast.error('关联型录不存在或已被删除');
+    message.error('关联型录不存在或已被删除');
     return;
   }
   linkedPreview.value = { file, kind: '型录' };
@@ -691,7 +671,7 @@ function openLinkedModel3d(model3dId: null | number) {
   if (!model3dId) return;
   const file = store.sensor3dFiles.find((item) => item.id === model3dId);
   if (!file) {
-    toast.error('关联 3D 文件不存在或已被删除');
+    message.error('关联 3D 文件不存在或已被删除');
     return;
   }
   linkedPreview.value = { file, kind: '3D' };
@@ -730,7 +710,7 @@ function saveReplace() {
     replaceForm.targetId,
     replaceForm.note,
   );
-  if (toastResult(result, '已替换现用型号，原型号已停用')) {
+  if (notifyResult(result, '已替换现用型号，原型号已停用')) {
     replaceOpen.value = false;
     mainTab.value =
       findSensorStatusName(statusNames.value, 'current') || '全部';
@@ -741,377 +721,501 @@ function saveReplace() {
 <template>
   <section class="selection-page">
     <h1 class="visually-hidden">Sensor型号</h1>
-    <ASegmentedControl
-      id="sensor-tabs"
-      v-model="sectionTab"
-      aria-label="Sensor 资料分类"
-      :segments="tabs"
-    />
-    <SensorSopFilePanel
-      v-if="mainTab === 'sop-library'"
-      id="sensor-tabs-panel-sop-library"
-      role="tabpanel"
-      aria-labelledby="sensor-tabs-tab-sop-library"
-      tabindex="0"
-    />
-    <SensorSopPanel
-      v-else-if="mainTab === 'sop'"
-      id="sensor-tabs-panel-sop"
-      role="tabpanel"
-      aria-labelledby="sensor-tabs-tab-sop"
-      tabindex="0"
-      :focus-sop-id="focusSopId"
-      @previewed="focusSopId = $event"
-    />
-    <Sensor3dPanel
-      v-else-if="mainTab === '3d'"
-      id="sensor-tabs-panel-3d"
-      role="tabpanel"
-      aria-labelledby="sensor-tabs-tab-3d"
-      tabindex="0"
-      :focus-model3d-id="focusModel3dId"
-      @previewed="focusModel3dId = $event"
-    />
-    <div
-      v-else
-      id="sensor-tabs-panel-models"
-      role="tabpanel"
-      aria-labelledby="sensor-tabs-tab-models"
-      tabindex="0"
-      class="selection-panel"
+    <a-tabs
+      v-model:active-key="sectionTab"
+      class="entity-tabs"
+      destroy-inactive-tab-pane
     >
-      <div class="selection-toolbar">
-        <ASelect
-          v-model="statusFilter"
-          class="selection-toolbar__filter"
-          :options="statusFilterOptions"
-          aria-label="状态筛选"
-        />
-        <ATokenField
-          v-model="sensorTypeFilters"
-          class="selection-toolbar__filter"
-          :options="typeOptions"
-          placeholder="感应器类型"
-          aria-label="感应器类型筛选"
-          :max-visible-tokens="1"
-        />
-        <ASearchField
-          v-model="query"
-          class="selection-toolbar__filter"
-          placeholder="搜索类型、品牌、型号、料号、停用或问题点"
-          aria-label="搜索 Sensor 型号"
-        />
-        <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
-        <APopover v-model:open="columnMenuOpen" align="end">
-          <template #trigger>
-            <AButton
-              :aria-label="
-                hiddenColumnCount > 0
-                  ? `显示的列（已隐藏 ${hiddenColumnCount} 列）`
-                  : '显示的列'
-              "
+      <a-tab-pane key="models" tab="型号">
+        <div class="selection-panel">
+          <div class="selection-toolbar">
+            <a-select
+              v-model:value="statusFilter"
+              class="selection-toolbar__filter"
+              :options="statusFilterOptions"
+              aria-label="状态筛选"
+            />
+            <a-select
+              v-model:value="sensorTypeFilters"
+              mode="multiple"
+              class="selection-toolbar__filter"
+              :options="typeOptions"
+              placeholder="感应器类型"
+              aria-label="感应器类型筛选"
+              :max-tag-count="1"
+              allow-clear
+              option-filter-prop="label"
+            />
+            <a-input
+              v-model:value="query"
+              class="selection-toolbar__filter"
+              placeholder="搜索类型、品牌、型号、料号、停用或问题点"
+              aria-label="搜索 Sensor 型号"
+              allow-clear
             >
-              <Columns3 :size="14" :stroke-width="1.5" aria-hidden="true" />
-              列
-              <span v-if="hiddenColumnCount > 0" class="sensor-column-menu__badge">
-                {{ hiddenColumnCount }}
-              </span>
-            </AButton>
-          </template>
-          <div class="sensor-column-menu" role="group" aria-label="显示的列">
-            <label
-              v-for="column in HIDEABLE_COLUMNS"
-              :key="column.key"
-              class="sensor-column-menu__item"
+              <template #prefix><Search :size="14" /></template>
+            </a-input>
+            <a-button
+              type="text"
+              :disabled="!hasActiveFilters"
+              aria-label="重置筛选"
+              @click="resetFilters"
             >
-              <ACheckbox
-                :model-value="!hiddenColumnKeys.has(column.key)"
-                @update:model-value="
-                  toggleColumnVisible(column.key, $event === true)
-                "
-              />
-              {{ column.label }}
-            </label>
+              <template #icon><RotateCcw :size="14" /></template>
+              重置
+            </a-button>
+            <a-popover
+              v-model:open="columnMenuOpen"
+              trigger="click"
+              placement="bottomRight"
+              title="显示的列"
+            >
+              <a-badge :count="hiddenColumnCount" size="small">
+                <a-button
+                  :aria-label="
+                    hiddenColumnCount > 0
+                      ? `显示的列（已隐藏 ${hiddenColumnCount} 列）`
+                      : '显示的列'
+                  "
+                >
+                  <template #icon><Columns3 :size="14" /></template>
+                  列
+                </a-button>
+              </a-badge>
+              <template #content>
+                <a-space
+                  direction="vertical"
+                  role="group"
+                  aria-label="显示的列"
+                >
+                  <a-checkbox
+                    v-for="column in HIDEABLE_COLUMNS"
+                    :key="column.key"
+                    :checked="!hiddenColumnKeys.has(column.key)"
+                    @change="
+                      toggleColumnVisible(column.key, $event.target.checked)
+                    "
+                  >
+                    {{ column.label }}
+                  </a-checkbox>
+                </a-space>
+              </template>
+            </a-popover>
+            <a-button aria-label="导出 Excel" @click="exportExcel">
+              <Download :size="14" :stroke-width="1.5" aria-hidden="true" />
+              导出 Excel
+            </a-button>
+            <a-button v-if="writable" type="primary" @click="addItem">
+              新增型号
+            </a-button>
           </div>
-        </APopover>
-        <AButton aria-label="导出 Excel" @click="exportExcel">
-          <Download :size="14" :stroke-width="1.5" aria-hidden="true" />
-          导出 Excel
-        </AButton>
-        <AButton v-if="writable" variant="filled" @click="addItem">
-          新增型号
-        </AButton>
-      </div>
-      <ATable
-        v-model:sort="sort"
-        storage-key="sensor-models"
-        :columns="columns"
-        :rows="tableData"
-        row-key="id"
-        empty-text="没有符合当前条件的型号"
-        @activate="writable && editItem($event)"
-      >
-        <template #cell-status="{ row }">
-          <ABadge :label="row.status" :tone="statusTone(row.status)" />
-        </template>
-        <template #cell-sensorType="{ row }">
-          <span v-if="row.sensorType" class="sensor-type-chip">
-            <span
-              class="sensor-type-chip__dot"
-              :style="{ background: typeAccent(row.sensorType) }"
-              aria-hidden="true"
-            />
-            {{ row.sensorType }}
-          </span>
-          <span v-else class="a-table__placeholder">—</span>
-        </template>
-        <template #cell-partNumber="{ value }">
-          <span
-            v-if="value"
-            class="sensor-part-number"
-            role="button"
-            tabindex="0"
-            :aria-label="`复制料号 ${value}`"
-            title="双击复制料号"
-            @dblclick.stop="copyPartNumber(value)"
-            @keydown.enter.prevent.stop="copyPartNumber(value)"
+          <a-table
+            :columns="columns"
+            :data-source="tableData"
+            row-key="id"
+            :pagination="false"
+            :scroll="{ x: scrollX(columns) }"
+            :locale="{ emptyText: '没有符合当前条件的型号' }"
+            :custom-row="writable ? rowClick(editItem) : undefined"
+            @change="
+              (_p: unknown, _f: unknown, sorter: unknown) =>
+                (sort = sortFromChange(sorter))
+            "
           >
-            {{ value }}
-          </span>
-          <span v-else class="a-table__placeholder">—</span>
-        </template>
-        <template #cell-sop="{ row }">
-          <button
-            v-if="row.sopId"
-            class="sensor-file-link"
-            type="button"
-            :aria-label="`预览型录：${sopTitle(row.sopId)}`"
-            :title="`预览型录：${sopTitle(row.sopId)}`"
-            @click="openLinkedSop(row.sopId)"
-          >
-            <Eye :size="14" :stroke-width="1.5" aria-hidden="true" />
-            <span class="sensor-file-link__text">{{
-              sopTitle(row.sopId)
-            }}</span>
-          </button>
-          <span v-else>未关联</span>
-        </template>
-        <template #cell-model3d="{ row }">
-          <button
-            v-if="row.model3dId"
-            class="sensor-file-link"
-            type="button"
-            :aria-label="`预览 3D：${model3dTitle(row.model3dId)}`"
-            :title="`预览 3D：${model3dTitle(row.model3dId)}`"
-            @click="openLinkedModel3d(row.model3dId)"
-          >
-            <Eye :size="14" :stroke-width="1.5" aria-hidden="true" />
-            <span class="sensor-file-link__text">
-              {{ model3dTitle(row.model3dId) }}
-            </span>
-          </button>
-          <span v-else>未关联</span>
-        </template>
-        <template #cell-replacedAt="{ value }">{{ value || '—' }}</template>
-        <template #cell-problemNote="{ value }">{{ value || '—' }}</template>
-        <template #cell-relation="{ row }">
-          <button
-            v-if="relationText(row)"
-            class="link-button"
-            type="button"
-            @click="openRelatedSensor(row)"
-          >
-            {{ relationText(row) }}
-          </button>
-          <span v-else class="a-table__placeholder">—</span>
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="table-actions">
-            <AIconButton
-              :icon="Pencil"
-              label="编辑"
-              size="small"
-              @click="editItem(row)"
-            />
-            <AIconButton
-              v-if="isSensorStatus(row.status, 'alternate')"
-              :icon="Replace"
-              label="替换现用"
-              size="small"
-              @click="openReplace(row)"
-            />
-            <AIconButton
-              :icon="Trash2"
-              label="删除"
-              size="small"
-              variant="destructive"
-              @click="deleteItem(row)"
-            />
-          </div>
-        </template>
-      </ATable>
-      <APagination
-        v-model:page="page"
-        v-model:page-size="pageSize"
-        :total="items.length"
-      />
-    </div>
-    <ASheet
+            <template #bodyCell="{ column, record: row, text: value }">
+              <template v-if="column.key === 'status'">
+                <a-tag :color="statusColor(row.status)">{{ row.status }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'sensorType'">
+                <a-badge
+                  v-if="row.sensorType"
+                  :color="typeAccent(row.sensorType)"
+                  :text="row.sensorType"
+                />
+                <template v-else>—</template>
+              </template>
+              <template v-else-if="column.key === 'partNumber'">
+                <a-typography-text
+                  v-if="value"
+                  :copyable="{
+                    text: String(value),
+                    tooltips: ['复制料号', '已复制'],
+                  }"
+                >
+                  {{ value }}
+                </a-typography-text>
+                <template v-else>—</template>
+              </template>
+              <template v-else-if="column.key === 'sop'">
+                <a-button
+                  v-if="row.sopId"
+                  class="sensor-file-link"
+                  type="link"
+                  size="small"
+                  :title="`预览型录：${sopTitle(row.sopId)}`"
+                  @click="openLinkedSop(row.sopId)"
+                >
+                  <template #icon><Eye :size="14" /></template>
+                  {{ sopTitle(row.sopId) }}
+                </a-button>
+                <span v-else>未关联</span>
+              </template>
+              <template v-else-if="column.key === 'model3d'">
+                <a-button
+                  v-if="row.model3dId"
+                  class="sensor-file-link"
+                  type="link"
+                  size="small"
+                  :title="`预览 3D：${model3dTitle(row.model3dId)}`"
+                  @click="openLinkedModel3d(row.model3dId)"
+                >
+                  <template #icon><Eye :size="14" /></template>
+                  {{ model3dTitle(row.model3dId) }}
+                </a-button>
+                <span v-else>未关联</span>
+              </template>
+              <template v-else-if="column.key === 'replacedAt'">
+                {{ value || '—' }}
+              </template>
+              <template v-else-if="column.key === 'problemNote'">
+                {{ value || '—' }}
+              </template>
+              <template v-else-if="column.key === 'relation'">
+                <a-button
+                  v-if="relationText(row)"
+                  type="link"
+                  size="small"
+                  @click="openRelatedSensor(row)"
+                >
+                  {{ relationText(row) }}
+                </a-button>
+                <template v-else>—</template>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <a-space :size="4">
+                  <a-tooltip title="编辑">
+                    <a-button
+                      type="text"
+                      size="small"
+                      aria-label="编辑"
+                      @click="editItem(row)"
+                    >
+                      <template #icon><Pencil :size="14" /></template>
+                    </a-button>
+                  </a-tooltip>
+                  <a-tooltip
+                    v-if="isSensorStatus(row.status, 'alternate')"
+                    title="替换现用"
+                  >
+                    <a-button
+                      type="text"
+                      size="small"
+                      aria-label="替换现用"
+                      @click="openReplace(row)"
+                    >
+                      <template #icon><Replace :size="14" /></template>
+                    </a-button>
+                  </a-tooltip>
+                  <a-tooltip title="删除">
+                    <a-button
+                      type="text"
+                      size="small"
+                      danger
+                      aria-label="删除"
+                      @click="deleteItem(row)"
+                    >
+                      <template #icon><Trash2 :size="14" /></template>
+                    </a-button>
+                  </a-tooltip>
+                </a-space>
+              </template>
+              <template v-else>{{ cellText(value) }}</template>
+            </template>
+          </a-table>
+          <a-pagination
+            v-model:current="page"
+            v-model:page-size="pageSize"
+            class="table-pagination"
+            :total="items.length"
+            :page-size-options="PAGE_SIZE_OPTIONS"
+            show-size-changer
+            hide-on-single-page
+            :show-total="(count: number) => `共 ${count} 条`"
+          />
+        </div>
+      </a-tab-pane>
+      <a-tab-pane key="sop-library" tab="SOP">
+        <SensorSopFilePanel />
+      </a-tab-pane>
+      <a-tab-pane key="sop" tab="型录">
+        <SensorSopPanel
+          :focus-sop-id="focusSopId"
+          @previewed="focusSopId = $event"
+        />
+      </a-tab-pane>
+      <a-tab-pane key="3d" tab="3D">
+        <Sensor3dPanel
+          :focus-model3d-id="focusModel3dId"
+          @previewed="focusModel3dId = $event"
+        />
+      </a-tab-pane>
+    </a-tabs>
+    <a-modal
       :open="Boolean(linkedPreview)"
       :title="
         linkedPreview
           ? `${linkedPreview.kind} · ${linkedPreview.file.title}`
           : '预览 PDF'
       "
-      viewport
-      @update:open="
-        (open) => {
-          if (!open) linkedPreview = null;
-        }
-      "
+      width="calc(100vw - 48px)"
+      wrap-class-name="pdf-preview-modal"
+      :footer="null"
+      destroy-on-close
+      @cancel="linkedPreview = null"
     >
       <APdfViewer
         v-if="linkedPreview"
         class="a-pdf-viewer--large"
         :src="linkedPreview.file.dataUrl"
       />
-    </ASheet>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-modal>
+    <a-modal
+      :open="dialogOpen"
       :title="editId ? '编辑 Sensor 型号' : '新增 Sensor 型号'"
       :width="680"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelDialog"
     >
       <!--
         状态/类型、关联型录/3D 用 2 列；品牌/型号/料号这组识别字段用 3 列，
         让 7 个短字段排满、不留半行空格。列数只允许 2 和 3 两种：再多一种，
         字段左边界会落到更多位置（曾实测 468/688/798/908 四条），看不出栅格。
       -->
-      <AFormGrid>
-        <AFormRow
-          label="状态"
-          required
-          :error="
-            validationAttempted && !form.status ? '请选择状态' : undefined
-          "
-        >
-          <ASelect v-model="form.status" :options="statusOptions" />
-        </AFormRow>
-        <AFormRow
-          label="感应器类型"
-          required
-          :error="
-            validationAttempted && !form.sensorType
-              ? '请选择感应器类型'
-              : undefined
-          "
-        >
-          <ASelect v-model="form.sensorType" :options="typeOptions" />
-        </AFormRow>
-      </AFormGrid>
-      <AFormGrid :columns="3">
-        <AFormRow label="品牌">
-          <AField v-model="form.brand" :maxlength="60" />
-        </AFormRow>
-        <AFormRow
-          label="型号"
-          required
-          :error="
-            validationAttempted && !form.model.trim() ? '请输入型号' : undefined
-          "
-        >
-          <AField v-model="form.model" :maxlength="100" />
-        </AFormRow>
-        <AFormRow label="料号">
-          <AField
-            v-model="form.partNumber"
-            :maxlength="80"
-            placeholder="可选"
-          />
-        </AFormRow>
-      </AFormGrid>
-      <AFormGrid>
-        <AFormRow label="关联型录">
-          <ASelect
-            v-model="form.sopId"
-            :options="sopOptions"
-            placeholder="可选，关联一份 PDF 型录"
-            clearable
-          />
-        </AFormRow>
-        <AFormRow label="关联 3D">
-          <ASelect
-            v-model="form.model3dId"
-            :options="model3dOptions"
-            placeholder="可选，关联一个 3D 文件"
-            clearable
-          />
-        </AFormRow>
-      </AFormGrid>
-      <AFormGrid :columns="1">
-        <AFormRow label="规格参数">
-          <ATextArea v-model="form.spec" :rows="2" :maxlength="500" />
-        </AFormRow>
-        <AFormRow label="特性与注意">
-          <ATextArea v-model="form.feature" :rows="2" :maxlength="500" />
-        </AFormRow>
-        <!-- 和上面两个描述性字段同为多行：同类内容给成一行输入会显得轻重不一 -->
-        <AFormRow label="适用场景">
-          <ATextArea v-model="form.scene" :rows="2" :maxlength="300" />
-        </AFormRow>
-      </AFormGrid>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item
+              html-for="sensor-status"
+              label="状态"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.status
+                    ? '请选择状态'
+                    : undefined,
+                )
+              "
+            >
+              <a-select
+                id="sensor-status"
+                v-model:value="form.status"
+                :options="statusOptions"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item
+              html-for="sensor-sensor-type"
+              label="感应器类型"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.sensorType
+                    ? '请选择感应器类型'
+                    : undefined,
+                )
+              "
+            >
+              <a-select
+                id="sensor-sensor-type"
+                v-model:value="form.sensorType"
+                :options="typeOptions"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item html-for="sensor-brand" label="品牌">
+              <a-input
+                id="sensor-brand"
+                v-model:value="form.brand"
+                :maxlength="60"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item
+              html-for="sensor-model"
+              label="型号"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.model.trim()
+                    ? '请输入型号'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="sensor-model"
+                v-model:value="form.model"
+                :maxlength="100"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item html-for="sensor-part-number" label="料号">
+              <a-input
+                id="sensor-part-number"
+                v-model:value="form.partNumber"
+                :maxlength="80"
+                placeholder="可选"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item html-for="sensor-sop-id" label="关联型录">
+              <a-select
+                id="sensor-sop-id"
+                v-model:value="form.sopId"
+                :options="sopOptions"
+                placeholder="可选，关联一份 PDF 型录"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item html-for="sensor-model3d-id" label="关联 3D">
+              <a-select
+                id="sensor-model3d-id"
+                v-model:value="form.model3dId"
+                :options="model3dOptions"
+                placeholder="可选，关联一个 3D 文件"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item html-for="sensor-spec" label="规格参数">
+              <a-textarea
+                id="sensor-spec"
+                v-model:value="form.spec"
+                :rows="2"
+                :maxlength="500"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="sensor-feature" label="特性与注意">
+              <a-textarea
+                id="sensor-feature"
+                v-model:value="form.feature"
+                :rows="2"
+                :maxlength="500"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <!-- 和上面两个描述性字段同为多行：同类内容给成一行输入会显得轻重不一 -->
+          <a-col :span="24">
+            <a-form-item html-for="sensor-scene" label="适用场景">
+              <a-textarea
+                id="sensor-scene"
+                v-model:value="form.scene"
+                :rows="2"
+                :maxlength="300"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelDialog">取消</AButton>
-        <AButton variant="filled" @click="saveItem">保存</AButton>
+        <a-button @click="cancelDialog">取消</a-button>
+        <a-button type="primary" @click="saveItem">保存</a-button>
       </template>
-    </ASheet>
-    <ASheet
-      v-model:open="replaceOpen"
+    </a-modal>
+    <a-modal
+      :open="replaceOpen"
       title="用备选替换现用型号"
       :width="560"
-      :confirm-close="replaceDirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelReplaceDialog"
     >
       <p>
         备选：{{ replaceSource?.sensorType }} · {{ replaceSource?.brand }} ·
         {{ replaceSource?.model }}
       </p>
-      <AFormGrid :columns="1">
-        <AFormRow
-          label="要替换的现用型号"
-          required
-          :error="
-            replaceValidationAttempted && !replaceForm.targetId
-              ? '请选择要替换的现用型号'
-              : undefined
-          "
-        >
-          <ASelect
-            v-model="replaceForm.targetId"
-            :options="replaceCandidates"
-            placeholder="请选择现用型号"
-          />
-        </AFormRow>
-        <AFormRow
-          label="问题点"
-          required
-          :error="
-            replaceValidationAttempted && !replaceForm.note.trim()
-              ? '请填写问题点'
-              : undefined
-          "
-        >
-          <ATextArea
-            v-model="replaceForm.note"
-            :rows="3"
-            :maxlength="500"
-            placeholder="说明因什么问题被替换"
-          />
-        </AFormRow>
-      </AFormGrid>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item
+              html-for="sensor-target-id"
+              label="要替换的现用型号"
+              required
+              v-bind="
+                fieldError(
+                  replaceValidationAttempted && !replaceForm.targetId
+                    ? '请选择要替换的现用型号'
+                    : undefined,
+                )
+              "
+            >
+              <a-select
+                id="sensor-target-id"
+                v-model:value="replaceForm.targetId"
+                :options="replaceCandidates"
+                placeholder="请选择现用型号"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item
+              html-for="sensor-note"
+              label="问题点"
+              required
+              v-bind="
+                fieldError(
+                  replaceValidationAttempted && !replaceForm.note.trim()
+                    ? '请填写问题点'
+                    : undefined,
+                )
+              "
+            >
+              <a-textarea
+                id="sensor-note"
+                v-model:value="replaceForm.note"
+                :rows="3"
+                :maxlength="500"
+                placeholder="说明因什么问题被替换"
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelReplaceDialog">取消</AButton>
-        <AButton variant="filled" @click="saveReplace">替换</AButton>
+        <a-button @click="cancelReplaceDialog">取消</a-button>
+        <a-button type="primary" @click="saveReplace">替换</a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与自建 `A*` 组件库（主要封装 ant-design-vue 4，少数组件仍用 Reka UI 无样式底座；不使用 Element Plus / Tailwind）。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
+这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与 **ant-design-vue 4（默认主题，业务页直接用 `a-*` 组件）**；不遵循 Apple 规范，不使用 Element Plus / Tailwind / Reka UI。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
 
 ## 开发命令
 
@@ -18,7 +18,7 @@ cd ..
 dotnet run --launch-profile http --project backend/Saa.SensorSelection.Api   # 后端 API，默认 http://localhost:5080，Swagger 仅 Development 下 /swagger
 
 pnpm run test:selection        # 领域合同回归（scripts/selection-contract-test.cjs），修改持久化/路由/搜索前必须先扩展这里
-pnpm run test:unit             # 等价于 pnpm run test，vitest run（frontend/src/**/*.test.ts，happy-dom，单 worker；`src/test-setup.ts` 全局注册 Antd 并 stub `matchMedia`）
+pnpm run test:unit             # 等价于 pnpm run test，vitest run（frontend/src/**/*.test.ts，happy-dom，单 worker；`src/test-setup.ts` 全局注册 Antd、stub `matchMedia`，并向 **`ant-design-vue/lib/`** 的 `configProviderKey` 注入配置——vitest 用 Node 加载的是 CJS 的 lib 构建，从 `es/` 取键会对不上；操作 antd 组件的测试写法见 `src/test-helpers.ts`）
 pnpm run check:type            # vue-tsc --noEmit
 pnpm run lint                  # eslint src && stylelint "src/**/*.{css,vue}"
 pnpm --dir frontend format     # prettier --write .（未挂到根目录）
@@ -74,11 +74,12 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
   - `schematic-report.ts`：机型示意图报告生成（后端 `POST /api/reports/machine-schematic` 对应 `MachineSchematicReportService`）。
 - `stores/`（Pinia）：`selection.ts` 包裹领域仓库供页面消费，负责创建 `BackendStorage` 和断线重连；`auth.ts` 持有 JWT 与当前用户权限（token 键 `symtek_token`），并提供 `useAccess()`。
 - `router/guards.ts`：路由级权限守卫，按页面所需权限码放行/拦截。生产构建用 hash 路由（`.env.production` 中 `VITE_ROUTER_HISTORY=hash`）。
-- `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）；`pages/shared` 放跨页复用逻辑（如文件上传）。
+- `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）。客户和机型左侧目录共用 `EntityTree.vue`（基于 `a-tree`：勾选、同级拖拽排序、行内「更多」菜单）。
+- `pages/shared`：跨页复用的非组件工具——`table.ts`（受控排序、`rowClick` 整行点击、`scrollX`、分页档位）、`form.ts`（`fieldError`）、`confirm.ts`（`dialogs.confirm`，`Modal.confirm` 的 Promise 版）、`dirty-guard.ts`、`file-rules.ts`（`createFilePicker` 给 `a-upload-dragger` 做校验与合批）、`save-feedback.ts`、`selection-page.css`（页面骨架布局）。
 - `pages/system`：用户、角色、组织、操作日志系统管理页（`/system/user|role|org|audit-log`，各自对应下方权限码）。
-- `ui/`：自建组件库（`A*` 前缀组件），无业务逻辑。多数组件（按钮、表格、选择器、日期、分页、提示、alert/toast 等）是 ant-design-vue 的封装，`AMenu` / `APopover` / `AImageViewer` 仍基于 Reka UI；业务页只用 `A*`，不直接用 `a-*`（目前只有 `shell/AppShell.vue` 直接用 antd 的 menu/button/input）。`main.ts` 全局 `app.use(Antd)`，`App.vue` 用 `a-config-provider` 统一 zh_CN 语言、主题 token 与 `auto-insert-space-in-button=false`；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格。设计规范见 `frontend/docs/01-design-system.md`、`02-component-library.md`，但这两份仍按旧的 Apple 规范 + Reka UI + 深色模式撰写。**项目已不再遵循 Apple 规范**，界面以 ant-design-vue 的风格和 `tokens.css` 为准，与这两份文档冲突时以代码和本文件为准。
-- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方。**只有浅色模式**（`tokens.test.ts` 断言不含深色），旧的主题切换已移除，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
-- `shell/AppShell.vue`：整体布局（52px 工具栏 + 侧栏 + 内容区，无多标签页，⌘K / Ctrl+K 聚焦全局搜索）。
+- 组件：业务页**直接使用 `a-*`**（`main.ts` 全局 `app.use(Antd)`）。`ui/` 只保留 antd 没有的两个组件：`APdfViewer`（pdf.js 预览）与 `AHighlightText`（搜索高亮），不要再新增 `A*` 包装组件。`App.vue` 的 `a-config-provider` 只设 zh_CN 与 `auto-insert-space-in-button=false`，**不传 `:theme`**；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格。用法与约定见 `frontend/docs/01-design-system.md`、`02-component-library.md`（`00` / `05` / `06` 是早期 Apple 方案的历史文档）。
+- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方，取值与 antd 默认主题一致、命名对应 antd token（`--color-primary`、`--color-text-secondary`、`--radius-md`…）；`tokens.test.ts` 用 `theme.defaultAlgorithm(theme.defaultSeed)` 逐项比对，并断言没有 Apple 式材质/发丝线/负字距、`ui/` 只含上述两个组件。**只有浅色模式**，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
+- `shell/AppShell.vue`：antd `a-layout`（暗色 `a-layout-sider` 可折叠，960px 以下导航改为 `a-drawer`；导航菜单在 `AppNav.vue`）+ 56px `a-layout-header`，无多标签页，⌘K / Ctrl+K 聚焦全局搜索。
 
 ### 后端（`backend/Saa.SensorSelection.Api`）
 
@@ -98,7 +99,9 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - 不恢复 Next.js、iframe、`public/index.html` 旧入口，也不恢复 Vben / Element Plus 前端。
 - 新业务代码放在 `frontend/src/pages`、`frontend/src/domain` 或 `frontend/src/ui` 内。
 - 未登录允许只读预览业务数据；写入需要 JWT 与 `selection:write`。页面用 `useAccess().canWrite()` **隐藏**写入入口，而不是禁用。
-- 操作按钮使用 Lucide 图标和 tooltip；表单、表格、弹窗使用自建 `A*` 组件。表格分页档位 20 / 50 / 100。
+- 操作按钮使用 Lucide 图标（放在 `a-button` 的 `#icon` 插槽）+ `a-tooltip` + `aria-label`；被禁用的操作保留按钮并 `disabled`，原因写进 tooltip。表格分页档位 20 / 50 / 100。
+- 表单：业务校验在领域层，**不用 antd 表单校验**——`a-form` 不传 `:model`、`a-form-item` 不写 `name`（否则 `required` 会触发 antd 自带校验）；标签关联用 `a-form-item html-for="x"` + 控件 `id="x"`，错误用 `v-bind="fieldError(msg)"`。
+- 长文本截断用 CSS `text-overflow` + `title`，不要用 `a-typography` 的 `ellipsis`（会把 DOM 文字截短，影响读屏、页内查找和 e2e 定位）。
 - stylelint 禁止在 `tokens.css` 以外硬编码颜色、`font-size`、过渡/动画时长，一律用 `var(--*)`；class 选择器必须是 kebab-case（允许 BEM 的 `__` / `--`）。
 - 修改持久化、路由或搜索行为时，先扩展 `test:selection` 回归，再实现变更。
 - 后端接口、权限码、数据库结构变更需要同步更新 `RbacDefaults.cs` 与对应的 `Api.Tests`，不要绕开 `DbSeeder` 手改数据。

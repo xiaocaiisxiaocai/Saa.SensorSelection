@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type RbacRole, type RbacUser } from '@/api';
 import { useAuthStore } from '@/stores/auth';
-import ASelect from '@/ui/ASelect.vue';
+import { columnWidths } from '@/test-helpers';
+
 import UserPage from './UserPage.vue';
 
 const roles: RbacRole[] = [
@@ -85,16 +86,16 @@ describe('UserPage', () => {
     await wrapper.get('[aria-label="编辑"]').trigger('click');
     await nextTick();
 
-    const roleSelect = wrapper.findComponent(ASelect);
+    const roleSelect = wrapper.findComponent({ name: 'ASelect' });
     expect(roleSelect.exists()).toBe(true);
-    expect(roleSelect.props('modelValue')).toBe(3);
+    expect(roleSelect.props('value')).toBe(3);
     expect(roleSelect.props('placeholder')).toBe('请选择一个角色');
 
     const editorRole = roleSelect
       .props('options')
-      .find((option) => option.label.includes('业务维护员'));
+      .find((option: { label: string }) => option.label.includes('业务维护员'));
     expect(editorRole?.value).toBe(2);
-    roleSelect.vm.$emit('update:modelValue', editorRole?.value);
+    roleSelect.vm.$emit('update:value', editorRole?.value);
     await nextTick();
 
     const saveButton = [...document.querySelectorAll('button')].find(
@@ -139,16 +140,18 @@ describe('UserPage', () => {
     });
     await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
 
-    const selfDeleteButton = document.querySelector(
-      '[aria-label="删除（不能删除当前登录账号）"]',
-    );
-    expect(selfDeleteButton).toBeTruthy();
-    // 保持可聚焦、可悬停，tooltip 才能说明原因；点击由组件拦截
-    expect(selfDeleteButton?.getAttribute('aria-disabled')).toBe('true');
-    expect(selfDeleteButton?.hasAttribute('disabled')).toBe(false);
-
-    const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
-    expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
+    // 第一行被保护：删除按钮禁用，原因写在 tooltip 里；第二行可删除
+    const deleteButtons = wrapper.findAll('button[aria-label="删除"]');
+    expect(
+      deleteButtons.map(
+        (button) => button.attributes('disabled') !== undefined,
+      ),
+    ).toEqual([true, false]);
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ATooltip' })
+        .map((tooltip) => tooltip.props('title')),
+    ).toContain('不能删除当前登录账号');
 
     wrapper.unmount();
   });
@@ -182,16 +185,18 @@ describe('UserPage', () => {
     });
     await vi.waitFor(() => expect(wrapper.text()).toContain('zhangsan'));
 
-    const blockedButton = document.querySelector(
-      '[aria-label="删除（至少保留一个启用的系统管理员）"]',
-    );
-    expect(blockedButton).toBeTruthy();
-    // 保持可聚焦、可悬停，tooltip 才能说明原因；点击由组件拦截
-    expect(blockedButton?.getAttribute('aria-disabled')).toBe('true');
-    expect(blockedButton?.hasAttribute('disabled')).toBe(false);
-
-    const viewerDeleteButton = document.querySelector('[aria-label="删除"]');
-    expect(viewerDeleteButton?.hasAttribute('disabled')).toBe(false);
+    // 第一行被保护：删除按钮禁用，原因写在 tooltip 里；第二行可删除
+    const deleteButtons = wrapper.findAll('button[aria-label="删除"]');
+    expect(
+      deleteButtons.map(
+        (button) => button.attributes('disabled') !== undefined,
+      ),
+    ).toEqual([true, false]);
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ATooltip' })
+        .map((tooltip) => tooltip.props('title')),
+    ).toContain('至少保留一个启用的系统管理员');
 
     wrapper.unmount();
   });
@@ -208,8 +213,8 @@ describe('UserPage', () => {
     await nextTick();
 
     expect(
-      [...document.querySelectorAll('.a-form-row__error')].map((item) =>
-        item.textContent?.trim(),
+      [...document.querySelectorAll('.ant-form-item-explain-error')].map(
+        (item) => item.textContent?.trim(),
       ),
     ).toEqual(['请输入用户名', '密码至少 4 位', '请输入显示名']);
     wrapper.unmount();
@@ -217,10 +222,11 @@ describe('UserPage', () => {
 
   it('keeps the creation time on one line like the audit log', async () => {
     const wrapper = await mountPage();
-    await vi.waitFor(() => expect(wrapper.find('.user-created-at').exists()).toBe(true));
+    await vi.waitFor(() =>
+      expect(wrapper.find('.user-created-at').exists()).toBe(true),
+    );
 
-    const header = [...wrapper.findAll('th')].find((th) => th.text().includes('创建时间'));
-    expect(header?.attributes('style')).toMatch(/width:\s*192px/);
+    expect(columnWidths(wrapper)['创建时间']).toBe(192);
     wrapper.unmount();
   });
 
@@ -236,8 +242,8 @@ describe('UserPage', () => {
 
     await page.get('[aria-label="编辑"]').trigger('click');
     await nextTick();
-    const roleSelect = page.findComponent(ASelect);
-    expect(roleSelect.props('modelValue')).toBeNull();
+    const roleSelect = page.findComponent({ name: 'ASelect' });
+    expect(roleSelect.props('value')).toBeNull();
     expect(roleSelect.props('placeholder')).toBe('保留原有角色');
     expect(document.body.textContent).toContain('不选择则保存时保留原角色');
 

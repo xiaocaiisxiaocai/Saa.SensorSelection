@@ -30,8 +30,9 @@ const failures = []
 const serverErrors = []
 const pageErrors = []
 
-const sheet = () => page.locator('.a-sheet')
-const alertBox = () => page.locator('.a-alert')
+// 编辑弹窗（a-modal）与确认框（Modal.confirm）
+const sheet = () => page.locator('.ant-modal:not(.ant-modal-confirm):visible').last()
+const alertBox = () => page.locator('.ant-modal-confirm:visible').last()
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -50,11 +51,11 @@ async function check(name, fn) {
 }
 
 async function controlFor(scope, labelText) {
-  const id = await scope.locator('label.a-form-row__label').evaluateAll(
+  const id = await scope.locator('.ant-form-item-label > label').evaluateAll(
     (labels, text) =>
       labels
         .map((label) => ({
-          own: (label.childNodes[0]?.textContent ?? '').trim(),
+          own: (label.textContent ?? '').trim(),
           id: label.getAttribute('for'),
         }))
         .find((entry) => entry.own === text)?.id ?? null,
@@ -68,23 +69,31 @@ async function fillField(scope, labelText, value) {
   await (await controlFor(scope, labelText)).fill(value)
 }
 
+/** a-select 的 id 在内部只读的搜索 input 上，点击要落在外层的选择框。 */
+function selectBox(control) {
+  return control.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " ant-select-selector ")][1]')
+}
+
 async function pickSelect(scope, labelText, optionText) {
-  await (await controlFor(scope, labelText)).click()
-  const panel = page.locator('.a-select__panel:visible')
+  const control = await controlFor(scope, labelText)
+  await selectBox(control).click()
+  if ((await control.getAttribute('readonly')) === null) await control.pressSequentially(optionText)
+  const panel = page.locator('.ant-select-dropdown:visible')
   await panel.waitFor({ state: 'visible' })
-  await panel.locator('.a-menu-item__label', { hasText: optionText }).first().click()
+  await panel.locator('.ant-select-item-option-content', { hasText: optionText }).first().click()
   await panel.waitFor({ state: 'hidden' })
 }
 
 async function pickFirstToken(scope, labelText) {
-  await (await controlFor(scope, labelText)).click()
-  const panel = page.locator('.a-select__panel:visible')
+  await selectBox(await controlFor(scope, labelText)).click()
+  const panel = page.locator('.ant-select-dropdown:visible')
   await panel.waitFor({ state: 'visible' })
-  const option = panel.locator('.a-menu-item').first()
+  const option = panel.locator('.ant-select-item-option').first()
   const label = (await option.innerText()).trim()
   assert(label, `no option available for "${labelText}"`)
   await option.click()
-  await page.keyboard.press('Escape')
+  // 多选下拉点选后不会自动收起；按 Esc 会冒泡到 a-modal 触发关闭确认，改为点弹窗标题收起
+  await scope.locator('.ant-modal-title').click()
   await panel.waitFor({ state: 'hidden' })
 }
 
@@ -94,7 +103,7 @@ async function saveSheet() {
 }
 
 async function expectToast(text) {
-  await page.locator('.a-toast', { hasText: text }).first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.locator('.ant-message-notice', { hasText: text }).first().waitFor({ state: 'visible', timeout: 10000 })
 }
 
 async function confirmDelete() {
@@ -105,19 +114,24 @@ async function confirmDelete() {
 
 async function navTo(label) {
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: label, exact: true }).click()
-  await page.locator('.content__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+  await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
 }
 
 async function upload(path) {
-  const input = page.locator('.a-file-drop input[type="file"]:visible').first()
-  // The input is visually hidden by design; Playwright can still drive the
-  // same change event used by the native file picker.
-  const hiddenInput = (await input.count()) > 0 ? input : page.locator('.a-file-drop input[type="file"]').first()
-  await hiddenInput.setInputFiles(path)
+  // a-upload-dragger 里的 file input 是隐藏的；Playwright 仍可直接触发与原生选择框相同的 change 事件
+  await page.locator('.ant-upload-drag input[type="file"]').first().setInputFiles(path)
 }
 
 function documentRow(fileName) {
-  return page.locator('.docs-list li', { hasText: fileName }).first()
+  return page.locator('.file-list .ant-list-item', { hasText: fileName }).first()
+}
+
+/** 左侧目录树（a-tree）的行操作在每行的「更多」下拉菜单里。 */
+async function treeAction(text, actionLabel) {
+  const row = page.locator('.ant-tree-treenode', { hasText: text }).first()
+  await row.hover()
+  await row.getByRole('button', { name: `${text} 的更多操作`, exact: true }).click()
+  await page.getByRole('menuitem', { name: actionLabel, exact: true }).click()
 }
 
 async function previewPdf(fileName) {
@@ -125,9 +139,10 @@ async function previewPdf(fileName) {
   await row.waitFor({ state: 'visible', timeout: 15000 })
   await row.getByRole('button', { name: '预览', exact: true }).click()
   await sheet().waitFor({ state: 'visible' })
-  await page.locator('.a-pdf-viewer__count', { hasText: /共\s*\d+\s*页/ }).waitFor({ state: 'visible', timeout: 20000 })
-  assert(await page.locator('.a-pdf-viewer__page canvas').first().isVisible(), `${fileName} rendered no PDF canvas`)
-  assert((await page.locator('.a-pdf-viewer__status--error').count()) === 0, `${fileName} preview reports an error`)
+  const viewer = page.locator('.pdf-preview-modal .a-pdf-viewer')
+  await viewer.getByText(/共\s*\d+\s*页/).waitFor({ state: 'visible', timeout: 20000 })
+  assert(await viewer.locator('.a-pdf-viewer__page canvas').first().isVisible(), `${fileName} rendered no PDF canvas`)
+  assert((await viewer.locator('.ant-typography-danger').count()) === 0, `${fileName} preview reports an error`)
   await page.keyboard.press('Escape')
   await sheet().waitFor({ state: 'hidden' })
 }
@@ -172,8 +187,8 @@ async function runCustomerFile() {
   await pickSelect(sheet(), '区域', region)
   await fillField(sheet(), '客户名称', customer)
   await saveSheet()
-  await page.locator('.a-source-list__item', { hasText: customer }).first().click()
-  await page.getByRole('tab', { name: '感应器选用标准', exact: true }).click()
+  await page.locator('.ant-tree-node-content-wrapper', { hasText: customer }).first().click()
+  await page.getByRole('tab', { name: '感应器选用标准' }).click()
 
   await check('客户感应器选用标准: upload, preview and delete a real PDF', async () => {
     await upload(PDF_PATH)
@@ -182,13 +197,9 @@ async function runCustomerFile() {
     await deleteDocument(PDF_NAME, '文件已删除')
   })
 
-  const customerRow = page.locator('.a-source-list__row--item', { hasText: customer }).first()
-  await customerRow.hover()
-  await customerRow.getByRole('button', { name: '删除客户', exact: true }).click()
+  await treeAction(customer, '删除客户')
   await confirmDelete()
-  const regionRow = page.locator('.a-source-list__row--group', { hasText: region }).first()
-  await regionRow.hover()
-  await regionRow.getByRole('button', { name: '删除区域', exact: true }).click()
+  await treeAction(region, '删除区域')
   await confirmDelete()
 }
 
@@ -208,7 +219,7 @@ async function runSensorFiles() {
       const pathBefore = new URL(page.url()).pathname
       await previewPdf(PDF_NAME)
       assert(new URL(page.url()).pathname === pathBefore, `${item.tab} preview navigated away from the Sensor page`)
-      const selectedTab = page.locator('[role="tab"][aria-selected="true"]')
+      const selectedTab = page.locator('.ant-tabs-tab-active [role="tab"]')
       assert((await selectedTab.innerText()).trim() === item.tab, `${item.tab} preview switched to a different Tab`)
       await deleteDocument(PDF_NAME, item.deleteToast)
     })
@@ -222,25 +233,24 @@ async function runMachineImage() {
   const tab = `${TAG}机构`
   const role = `${TAG}内容`
 
-  await page.getByRole('button', { name: '分类', exact: true }).click()
+  await page.getByRole('button', { name: '新建分类', exact: true }).click()
   await fillField(sheet(), '分类名称', category)
   await saveSheet()
-  await page.getByRole('button', { name: '机型', exact: true }).click()
+  await page.getByRole('button', { name: '新建机型', exact: true }).click()
   await pickSelect(sheet(), '分类', category)
   await fillField(sheet(), '机型名称', machine)
   await saveSheet()
-  await page.getByPlaceholder('搜索分类、配置或机型…').fill(machine)
-  const machineRow = page.locator('.machine-tree-row--item', { hasText: machine }).first()
-  await machineRow.click()
+  await page.getByPlaceholder('搜索分类或机型…').fill(machine)
+  await page.locator('.ant-tree-node-content-wrapper', { hasText: machine }).first().click()
 
-  await page.getByRole('button', { name: '新增 Tab', exact: true }).first().click()
+  await page.locator('.ant-tabs-nav-add, button:has-text("新增 Tab")').first().click()
   await fillField(sheet(), 'Tab 名称', tab)
   await pickSelect(sheet(), 'Tab 类型', '结构')
   await saveSheet()
   await page.getByRole('tab', { name: tab }).click()
 
   await check('机型结构: image upload stays hidden until the Tab has content', async () => {
-    assert((await page.locator('.a-file-drop input[type="file"]').count()) === 0, 'image upload is visible before the Tab has content')
+    assert((await page.locator('.machine-images .ant-upload-drag').count()) === 0, 'image upload is visible before the Tab has content')
     await page.getByText('请先新增内容后再添加图片', { exact: true }).waitFor({ state: 'visible' })
   })
 
@@ -248,7 +258,7 @@ async function runMachineImage() {
   await fillField(sheet(), '功能作用', role)
   await pickFirstToken(sheet(), '关联传感器')
   await saveSheet()
-  await page.locator('.a-table tbody tr', { hasText: role }).first().waitFor({ state: 'visible' })
+  await page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first().waitFor({ state: 'visible' })
 
   await check('机型结构: upload, preview and delete a real image', async () => {
     await upload(IMAGE_PATH)
@@ -259,29 +269,29 @@ async function runMachineImage() {
     assert(await image.isVisible(), 'uploaded image is not visible')
     const box = await image.boundingBox()
     assert(box && box.width >= 160, `uploaded image is still too narrow (${box?.width ?? 0}px)`)
-    await card.click()
-    await page.locator('.a-image-viewer').waitFor({ state: 'visible' })
-    await page.keyboard.press('Escape')
-    await page.locator('.a-image-viewer').waitFor({ state: 'detached' })
+    // a-image 自带的点击放大预览（悬停时的遮罩层接收点击）
+    await card.locator('.ant-image').click()
+    await page.locator('.ant-image-preview-img').waitFor({ state: 'visible' })
+    // 预览工具栏的第一个按钮是关闭
+    await page.locator('.ant-image-preview-operations-operation').first().click()
+    await page.locator('.ant-image-preview-img').waitFor({ state: 'hidden' })
     await card.getByRole('button', { name: `删除 ${IMAGE_NAME}`, exact: true }).click()
     await confirmDelete()
     await expectToast('示意图已删除')
     await card.waitFor({ state: 'detached' })
   })
 
-  const contentRow = page.locator('.a-table tbody tr', { hasText: role }).first()
+  const contentRow = page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first()
   await contentRow.getByRole('button', { name: '删除', exact: true }).click()
   await confirmDelete()
-  await page.getByRole('button', { name: `删除${tab}`, exact: true }).click()
+  // a-tabs editable-card 每个标签自带关闭按钮
+  await page.locator('.ant-tabs-tab', { hasText: tab }).locator('.ant-tabs-tab-remove').click()
   await confirmDelete()
 
-  await machineRow.hover()
-  await machineRow.getByRole('button', { name: `删除机型 ${machine}`, exact: true }).click()
+  await treeAction(machine, '删除机型')
   await confirmDelete()
-  await page.getByPlaceholder('搜索分类、配置或机型…').fill('')
-  const categoryRow = page.locator('.machine-tree-row--group', { hasText: category }).first()
-  await categoryRow.hover()
-  await categoryRow.getByRole('button', { name: `删除分类 ${category}`, exact: true }).click()
+  await page.getByPlaceholder('搜索分类或机型…').fill('')
+  await treeAction(category, '删除分类')
   await confirmDelete()
 }
 

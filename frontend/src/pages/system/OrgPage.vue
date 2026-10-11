@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TableColumnType } from 'ant-design-vue';
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -11,23 +12,12 @@ import {
   flattenOrgTree,
   ORG_LEVEL_INVERTED_MESSAGE,
 } from '@/pages/system/org-tree';
+import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
+import { cellText, rowClick, scrollX } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
-import { toast } from '@/ui/toast';
-import {
-  ABadge,
-  AButton,
-  AField,
-  AFormGrid,
-  AFormRow,
-  AIconButton,
-  ASelect,
-  ASheet,
-  AStepper,
-  ATable,
-  type TableColumn,
-} from '@/ui';
+import { message } from 'ant-design-vue';
 
 import '../shared/selection-page.css';
 
@@ -52,16 +42,35 @@ const tree = computed(() => buildOrgTree(nodes.value));
 const tableRows = computed(() =>
   flattenOrgTree(tree.value).map(({ node, depth }) => ({ ...node, depth })),
 );
-const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [
-    { key: 'name', label: '名称', minWidth: 220, align: 'start', fixed: 'start' },
-    { key: 'level', label: '层级', width: 100 },
+const columns = computed<TableColumnType[]>(() => {
+  const cols: TableColumnType[] = [
+    {
+      key: 'name',
+      dataIndex: 'name',
+      title: '名称',
+      width: 220,
+      align: 'left',
+      fixed: 'left',
+    },
+    { key: 'level', dataIndex: 'level', title: '层级', width: 100 },
     // 计数列右对齐：表格已启用等宽数字，右对齐才能逐位比较大小。
-    { key: 'childCount', label: '子节点', width: 88, align: 'center' },
-    { key: 'userCount', label: '人数', width: 72, align: 'center' },
+    {
+      key: 'childCount',
+      dataIndex: 'childCount',
+      title: '子节点',
+      width: 88,
+      align: 'center',
+    },
+    {
+      key: 'userCount',
+      dataIndex: 'userCount',
+      title: '人数',
+      width: 72,
+      align: 'center',
+    },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', label: '操作', width: 128, fixed: 'end' });
+    cols.push({ key: 'actions', title: '操作', width: 128, fixed: 'right' });
   }
   return cols;
 });
@@ -102,7 +111,9 @@ async function loadData() {
       selectedId.value = null;
     }
   } catch (error) {
-    toast.error(error instanceof ApiError ? error.message : '加载组织架构失败');
+    message.error(
+      error instanceof ApiError ? error.message : '加载组织架构失败',
+    );
   } finally {
     loading.value = false;
   }
@@ -115,6 +126,11 @@ function openCreate(parentId: null | number) {
   Object.assign(form, { level: null, name: '', sortOrder: 0 });
   dirtyGuard.markClean();
   dialogOpen.value = true;
+}
+
+function activateOrg(node: OrgUnitNode) {
+  selectedId.value = node.id;
+  if (writable.value) openEdit(node);
 }
 
 function openEdit(node: OrgUnitNode) {
@@ -139,14 +155,14 @@ async function cancelDialog() {
 async function saveOrg() {
   validationAttempted.value = true;
   if (!form.name.trim()) {
-    toast.warning('请输入组织名称');
+    message.warning('请输入组织名称');
     return;
   }
   if (
     !canPlaceOrgLevel(parentNode.value?.level, form.level) ||
     descendantLevels.value.some((level) => !canPlaceOrgLevel(form.level, level))
   ) {
-    toast.warning(ORG_LEVEL_INVERTED_MESSAGE);
+    message.warning(ORG_LEVEL_INVERTED_MESSAGE);
     return;
   }
   saving.value = true;
@@ -158,7 +174,7 @@ async function saveOrg() {
         parentId: dialogParent.value,
         sortOrder: form.sortOrder,
       });
-      toast.success('组织已创建');
+      message.success('组织已创建');
     } else {
       await api.updateOrgUnit(editingNode.value.id, {
         level: form.level || null,
@@ -166,12 +182,12 @@ async function saveOrg() {
         parentId: editingNode.value.parentId,
         sortOrder: form.sortOrder,
       });
-      toast.success('组织已更新');
+      message.success('组织已更新');
     }
     dialogOpen.value = false;
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '保存失败');
+    message.error(error instanceof Error ? error.message : '保存失败');
   } finally {
     saving.value = false;
   }
@@ -182,10 +198,10 @@ async function removeOrg(node: OrgUnitNode) {
   if (!ok) return;
   try {
     await api.deleteOrgUnit(node.id);
-    toast.success('组织已删除');
+    message.success('组织已删除');
     await loadData();
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '删除失败');
+    message.error(error instanceof Error ? error.message : '删除失败');
   }
 }
 </script>
@@ -194,115 +210,155 @@ async function removeOrg(node: OrgUnitNode) {
   <section class="selection-page">
     <div class="selection-toolbar org-toolbar">
       <h1 class="visually-hidden">组织架构</h1>
-      <AButton v-if="writable" variant="filled" @click="openCreate(null)">
+      <a-button v-if="writable" type="primary" @click="openCreate(null)">
         新建组织
-      </AButton>
+      </a-button>
     </div>
-    <ATable
-      v-model:selected-key="selectedId"
-      storage-key="system-org"
+    <a-table
       :columns="columns"
-      :rows="tableRows"
+      :data-source="tableRows"
+      :row-class-name="
+        (row: OrgUnitNode) =>
+          row.id === selectedId ? 'ant-table-row-selected' : ''
+      "
       row-key="id"
-      empty-text="暂无组织"
       :loading="loading"
-      @activate="writable && openEdit($event)"
+      :pagination="false"
+      :scroll="{ x: scrollX(columns) }"
+      :locale="{ emptyText: '暂无组织' }"
+      :custom-row="rowClick(activateOrg)"
     >
-      <template #cell-name="{ row }">
-        <span
-          class="org-tree__name"
-          :style="{ paddingInlineStart: `calc(${row.depth} * var(--space-5))` }"
-        >
-          {{ row.name }}
-        </span>
+      <template #bodyCell="{ column, record: row, text: value }">
+        <template v-if="column.key === 'name'">
+          <span
+            class="org-tree__name"
+            :style="{
+              paddingInlineStart: `calc(${row.depth} * var(--space-5))`,
+            }"
+          >
+            {{ row.name }}
+          </span>
+        </template>
+        <template v-else-if="column.key === 'level'">
+          <a-tag v-if="row.level">{{ row.level }}</a-tag>
+          <span v-else>—</span>
+        </template>
+        <template v-else-if="column.key === 'actions'">
+          <a-space :size="4">
+            <a-tooltip title="新建子节点">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="新建子节点"
+                @click.stop="openCreate(row.id)"
+              >
+                <template #icon><Plus :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="编辑">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="编辑"
+                @click.stop="openEdit(row)"
+              >
+                <template #icon><Pencil :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="删除">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                aria-label="删除"
+                @click.stop="removeOrg(row)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+          </a-space>
+        </template>
+        <template v-else>{{ cellText(value) }}</template>
       </template>
-      <template #cell-level="{ row }">
-        <ABadge v-if="row.level" :label="row.level" />
-        <span v-else>—</span>
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="table-actions">
-          <AIconButton
-            :icon="Plus"
-            label="新建子节点"
-            size="small"
-            @click.stop="openCreate(row.id)"
-          />
-          <AIconButton
-            :icon="Pencil"
-            label="编辑"
-            size="small"
-            @click.stop="openEdit(row)"
-          />
-          <AIconButton
-            :icon="Trash2"
-            label="删除"
-            size="small"
-            variant="destructive"
-            @click.stop="removeOrg(row)"
-          />
-        </div>
-      </template>
-    </ATable>
-    <ASheet
-      v-model:open="dialogOpen"
+    </a-table>
+    <a-modal
+      :open="dialogOpen"
       :title="editingNode ? '编辑组织' : '新建组织'"
       :width="480"
-      :confirm-close="dirtyGuard.confirmClose"
+      destroy-on-close
+      @cancel="cancelDialog"
     >
-      <AFormGrid :columns="1">
-        <AFormRow
-          label="组织名称"
-          required
-          :error="
-            validationAttempted && !form.name.trim()
-              ? '请输入组织名称'
-              : undefined
-          "
-        >
-          <AField
-            v-model="form.name"
-            :maxlength="64"
-            placeholder="如：电控事业部"
-          />
-        </AFormRow>
-        <AFormRow
-          label="层级"
-          hint="事业部 > 部门 > 课别，允许跳级"
-          :error="
-            validationAttempted &&
-              (!canPlaceOrgLevel(parentNode?.level, form.level) ||
-                descendantLevels.some(
-                  (level) => !canPlaceOrgLevel(form.level, level),
-                ))
-              ? ORG_LEVEL_INVERTED_MESSAGE
-              : undefined
-          "
-        >
-          <ASelect
-            v-model="form.level"
-            :options="levelOptions"
-            filterable
-            clearable
-            placeholder="选择层级"
-          />
-        </AFormRow>
-        <AFormRow label="同级排序">
-          <AStepper v-model="form.sortOrder" :min="0" />
-        </AFormRow>
-      </AFormGrid>
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item
+              html-for="org-name"
+              label="组织名称"
+              required
+              v-bind="
+                fieldError(
+                  validationAttempted && !form.name.trim()
+                    ? '请输入组织名称'
+                    : undefined,
+                )
+              "
+            >
+              <a-input
+                id="org-name"
+                v-model:value="form.name"
+                :maxlength="64"
+                placeholder="如：电控事业部"
+                allow-clear
+                show-count
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item
+              html-for="org-level"
+              label="层级"
+              v-bind="
+                fieldError(
+                  validationAttempted &&
+                    (!canPlaceOrgLevel(parentNode?.level, form.level) ||
+                      descendantLevels.some(
+                        (level) => !canPlaceOrgLevel(form.level, level),
+                      ))
+                    ? ORG_LEVEL_INVERTED_MESSAGE
+                    : undefined,
+                )
+              "
+              extra="事业部 > 部门 > 课别，允许跳级"
+            >
+              <a-select
+                id="org-level"
+                v-model:value="form.level"
+                :options="levelOptions"
+                placeholder="选择层级"
+                show-search
+                option-filter-prop="label"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item html-for="org-sort-order" label="同级排序">
+              <a-input-number
+                id="org-sort-order"
+                v-model:value="form.sortOrder"
+                :min="0"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
       <template #footer>
-        <AButton @click="cancelDialog">取消</AButton>
-        <AButton variant="filled" :loading="saving" @click="saveOrg">
+        <a-button @click="cancelDialog">取消</a-button>
+        <a-button type="primary" :loading="saving" @click="saveOrg">
           保存
-        </AButton>
+        </a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>
-
-<style scoped>
-.org-toolbar .a-button {
-  margin-left: auto;
-}
-</style>

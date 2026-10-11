@@ -1,129 +1,90 @@
 /*
- * 这 2px 内缩是留给焦点环的（--focus-ring 是 2px 外扩，overflow:hidden 会把
- * 贴边控件的环裁掉）。它必须挂在 .selection-page 上，因为选型页和系统管理页
- * 都用这一层：以前挂在 .selection-panel 上，只有带面板的选型页被内缩，导致
- * 两类页面的内容左边界差 2px（170 vs 168），来回切换时内容会轻微跳动。
+ * 选型页与系统管理页共用的布局。界面元素本身全部是 ant-design-vue 组件，
+ * 这里只负责「页面卡片 → 左右分栏 → 工具栏 + 表格」的骨架和 antd 组件之间的间距。
  */
 .selection-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
+  height: 100%;
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  padding: var(--space-4);
+  padding: var(--space-6);
   overflow: hidden;
-  background: var(--bg-content);
-  border: 1px solid var(--separator-opaque);
-  border-radius: var(--radius-md);
+  background: var(--color-bg-container);
+  border-radius: var(--radius-lg);
 }
 
 .selection-panel {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/*
- * 分段控件/Tab 切换出的内容区包装层：只在需要挂 role="tabpanel" 时才
- * 插入这层 div，透明转发原本直接由 flex 父级给子面板的尺寸约束
- * （flex:1 + min-height:0），不然子面板内部依赖“撑满剩余高度”的表格
- * 会失去这个约束而溢出。
- */
-.selection-tabpanel {
-  display: flex;
   flex: 1;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.selection-tabpanel:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.machine-body {
-  display: grid;
-  flex: 1;
-  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
-.selection-page > .selection-panel,
-.selection-page > .a-table {
-  flex: 1;
-  min-height: 0;
-}
-
-/*
- * flex-wrap 不能省：分段控件和按钮默认都是 flex-shrink:0，谁都不肯让位。
- * 字典有 10 个 Tab、内在宽 770px，768px 视口下它吃满整行，把「新增」压成
- * 20px 宽并推到页面右边界之外——而 .selection-page 的 overflow-x 是 hidden，
- * 滚都滚不到。下面让分段控件先让位（它自己有横向滚动，Tab 仍然够得到），
- * 主操作按钮则永不压缩；实在放不下时整行折行，按钮落到第二行。
- */
-.dictionary-header {
-  display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
-  min-width: 0;
-  width: 100%;
-}
-
-.dictionary-header .a-segmented {
-  min-width: 0;
-  flex-shrink: 1;
-}
-
-.dictionary-header .a-button {
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
+/* 左侧目录树 + 右侧内容 */
 .selection-split {
   display: grid;
   flex: 1;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-6);
   min-height: 0;
-  align-items: stretch;
 }
 
 .entity-source {
   display: flex;
-  width: max-content;
-  max-width: 100%;
   min-width: 0;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
 }
 
-.entity-source .a-source-list {
-  flex: 0 0 auto;
-  min-width: 0;
-  background: var(--bg-content);
-  border-right: 1px solid var(--separator-opaque);
-  box-shadow: none;
+.entity-source--machine {
+  --source-list-width: 280px;
 }
 
-.selection-panel > .selection-panel,
-.selection-panel > .machine-body,
-.selection-panel > .a-table {
+/* a-tabs 撑满剩余高度，内容区内部的表格自己滚动 */
+.entity-tabs {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
 
+.entity-tabs > .ant-tabs-content-holder {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.entity-tabs > .ant-tabs-content-holder > .ant-tabs-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.entity-tabs
+  > .ant-tabs-content-holder
+  > .ant-tabs-content
+  > .ant-tabs-tabpane-active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+}
+
+.dictionary-header {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 筛选工具栏：筛选控件在左，主操作按钮在右 */
 .selection-toolbar {
   display: flex;
   flex-shrink: 0;
@@ -133,185 +94,117 @@
   min-width: 0;
 }
 
-.selection-toolbar__count {
-  flex: 0 0 auto;
-  margin-right: auto;
-  font: var(--text-control);
-  color: var(--label-2);
-  white-space: nowrap;
+.selection-toolbar__filter {
+  width: 11rem;
 }
 
-.selection-toolbar .a-select.selection-toolbar__filter {
-  flex: 0 1 10rem;
-  width: 10rem;
-  min-width: 7.5rem;
-}
-
-.selection-toolbar .a-token-field.selection-toolbar__filter {
-  flex: 0 1 10rem;
-  width: 10rem;
-  min-width: 7.5rem;
-}
-
-.selection-toolbar .a-search-field.selection-toolbar__filter {
+.selection-toolbar > .ant-input-affix-wrapper.selection-toolbar__filter {
   flex: 1 1 16rem;
   width: auto;
-  min-width: 12rem;
+  max-width: 24rem;
 }
 
-.table-actions {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: flex-start;
+.selection-toolbar > .ant-btn-primary {
+  margin-left: auto;
 }
 
-.badge-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  align-items: center;
-  justify-content: flex-start;
-  overflow: visible;
-}
-
-.spec-lines {
-  overflow: visible;
-  font: var(--text-caption);
-  color: var(--label);
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-  line-height: 1.45;
-}
-
-.link-button {
-  padding: 0;
-  font: inherit;
-  color: var(--sys-blue);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.sensor-part-number {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  min-height: 1.5rem;
-  padding: 0 var(--space-1);
-  margin: 0 calc(var(--space-1) * -1);
-  overflow: hidden;
-  color: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: copy;
-  border-radius: var(--radius-sm);
-  user-select: all;
-  transition:
-    color var(--dur-1) var(--ease-out),
-    background-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out);
-}
-
-.sensor-part-number:hover {
-  color: var(--sys-blue);
-  background: var(--sys-blue-fill);
-}
-
-.sensor-part-number:focus-visible {
-  outline: 0;
-  box-shadow: var(--focus-ring);
-}
-
-.sensor-file-link {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
-  max-width: 100%;
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-2);
-  font: var(--text-caption);
-  color: var(--sys-blue);
-  cursor: pointer;
-  background: var(--sys-blue-fill);
-  border: 0;
-  border-radius: var(--radius-pill);
-  transition:
-    color var(--dur-1) var(--ease-out),
-    background-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out);
-}
-
-.sensor-file-link:hover {
-  background: var(--sys-blue-fill-strong);
-}
-
-.sensor-file-link:focus-visible {
-  outline: 0;
-  box-shadow: var(--focus-ring);
-}
-
-.sensor-file-link svg {
-  flex: 0 0 auto;
-}
-
-.sensor-file-link__text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.selection-toolbar__count {
+  margin-right: auto;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
-.sensor-type-chip {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
+/* 表格占满剩余高度并在内部滚动，筛选栏和分页条始终可见 */
+.selection-page .ant-table-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
-.sensor-type-chip__dot {
-  width: 8px;
-  height: 8px;
+.table-pagination {
   flex-shrink: 0;
-  border-radius: var(--radius-pill);
+  align-self: flex-end;
 }
 
-.sensor-column-menu__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 var(--space-1);
-  font: var(--text-caption);
-  font-weight: 600;
-  color: var(--label-on-color);
-  background: var(--sys-blue-solid);
-  border-radius: var(--radius-pill);
+.empty-hint {
+  color: var(--color-text-tertiary);
 }
 
-.sensor-column-menu {
+/* 文件列表：从别处跳转来定位的文件高亮一下 */
+.file-list__item--focus {
+  background: var(--color-primary-bg);
+}
+
+/* 全屏 PDF 预览弹窗 */
+.pdf-preview-modal .ant-modal {
+  top: var(--space-7);
+  max-width: none;
+  padding-bottom: 0;
+}
+
+.pdf-preview-modal .ant-modal-body .a-pdf-viewer--large {
+  height: calc(100dvh - 160px);
+}
+
+/* 机型结构：表格 + 右侧示意图 */
+.machine-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 0;
+}
+
+.machine-body--with-images {
+  grid-template-columns: minmax(0, 1fr) clamp(11rem, 14vw, 14rem);
+}
+
+.machine-body--images-collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.machine-images {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.machine-images:not(.machine-images--collapsed) {
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border-secondary);
+}
+
+.machine-images__header {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  width: 200px;
-  padding: var(--space-2);
-}
-
-.sensor-column-menu__item {
-  display: flex;
-  gap: var(--space-2);
+  gap: var(--space-3);
   align-items: center;
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-2);
-  color: var(--label);
-  font: var(--text-control);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background-color var(--dur-1) var(--ease-out);
+  justify-content: space-between;
 }
 
-.sensor-column-menu__item:hover {
-  background: var(--fill-4);
+.machine-images h3 {
+  margin: 0;
+  font: var(--font-heading-5);
+}
+
+.machine-images__empty {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.image-card__media img {
+  height: 120px;
+  object-fit: contain;
+  background: var(--color-fill-alter);
+}
+
+.image-card__name {
+  display: block;
+  max-width: 100%;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .machine-report {
@@ -319,374 +212,67 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
-  padding: var(--space-2) var(--space-3);
-  background: var(--fill-4);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-lg);
 }
 
-.machine-body--with-images {
-  grid-template-columns: minmax(0, 1fr) clamp(11rem, 12vw, 13rem);
+.spec-lines {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
-.machine-body--images-collapsed {
-  grid-template-columns: minmax(0, 1fr) var(--control-height-sm);
-  gap: var(--space-2);
-}
-
-.machine-images {
-  display: grid;
-  gap: var(--space-2);
-  align-content: start;
-}
-
-.machine-images:not(.machine-images--collapsed) {
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--separator);
-}
-
-.machine-images__header {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.machine-images--collapsed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.machine-images--collapsed .machine-images__header {
-  width: 100%;
-  height: auto;
-  justify-content: center;
-}
-
-.machine-images h3 {
-  margin: 0;
-  font: var(--text-control-em);
-}
-
-.machine-images p {
-  margin: 0;
-  font: var(--text-caption);
-  color: var(--label-2);
-}
-
-.machine-images .machine-images__empty {
-  padding: var(--space-3);
-  text-align: center;
-  background: var(--fill-2);
-  border-radius: var(--radius-md);
-}
-
-.machine-images .a-file-drop {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: center;
-  min-height: calc(var(--control-height-lg) + var(--space-2) * 2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-}
-
-.machine-images .a-file-drop > svg {
-  flex-shrink: 0;
-  width: var(--space-4);
-  height: var(--space-4);
-}
-
-.machine-images .a-file-drop__title {
-  white-space: nowrap;
-}
-
-.image-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-  background: var(--bg-content);
-  border: 1px solid var(--separator-opaque);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-1);
+.sensor-file-link {
+  max-width: 100%;
   overflow: hidden;
-  text-align: left;
-  transition:
-    transform var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-1) var(--ease-out),
-    border-color var(--dur-1) var(--ease-out);
-}
-
-.image-card__preview {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.image-card__media {
-  display: grid;
-  width: 100%;
-  min-height: 126px;
-  padding: var(--space-2);
-  background: var(--fill-3);
-  place-items: center;
-}
-
-.image-card__preview:focus-visible {
-  outline: 0;
-  box-shadow: inset var(--focus-ring);
-}
-
-.image-card__footer {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-  padding: var(--space-2);
-  background: var(--bg-content);
-  border-top: 1px solid var(--separator);
-}
-
-.image-card__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font: var(--text-caption);
-  color: var(--label);
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.image-card__actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-1);
-  align-items: center;
-}
-
-.image-card:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-2);
-  border-color: var(--sys-blue);
-}
-
-.machine-images .image-card {
-  justify-self: end;
-  width: calc(100% + var(--space-4));
-}
-
-.image-card img {
-  width: 100%;
-  height: 110px;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-  background: var(--fill-4);
-}
-
-.docs-list {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.docs-list li {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-
-  /* 白底描边卡片：原来的 --fill-2 灰底在白色内容区上像整行被禁用 */
-  background: var(--bg-content);
-  border: 1px solid var(--separator-opaque);
-  border-radius: var(--radius-md);
-  transition: background-color var(--dur-1) var(--ease-out);
-}
-
-.docs-list li:hover {
-  background: var(--fill-4);
-}
-
-.docs-list li.docs-list--focus {
-  box-shadow: inset 0 0 0 1px var(--sys-blue);
-}
-
-.docs-list p {
-  margin: 0;
-  font: var(--text-caption);
-  color: var(--label-2);
-}
-
-.docs-list strong {
-  font: var(--text-control-em);
-}
-
-.checkbox-field {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  font: var(--text-control);
-}
-
-.permission-panel {
-  display: grid;
-  gap: var(--space-4);
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-
-.permission-panel__header {
-  display: flex;
-  gap: var(--space-3);
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.permission-panel__label {
-  font: var(--text-control-em);
-  color: var(--label);
-}
-
-.permission-panel__count {
-  font: var(--text-caption);
-  color: var(--label-2);
-  letter-spacing: var(--tracking-caption);
-}
-
-.permission-group {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.permission-group__head {
-  font: var(--text-caption);
-  color: var(--label-2);
-  letter-spacing: var(--tracking-caption);
-}
-
-.permission-group__items {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-1) var(--space-4);
-}
-
-.permission-item {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-  min-height: var(--control-height-md);
-  padding: 0 var(--space-2);
-  margin: 0 calc(var(--space-2) * -1);
-  font: var(--text-control);
-  color: var(--label);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-}
-
-.permission-item:hover {
-  background: var(--fill-3);
 }
 
 .org-tree__name {
   display: block;
   overflow: hidden;
-  font: var(--text-control-em);
-  text-align: start;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.permission-group + .permission-group {
+  margin-top: var(--space-5);
+}
+
+.permission-group__head {
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+}
+
 @media (width <= 60rem) {
+  .selection-page {
+    padding: var(--space-5);
+  }
+
   .selection-split {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(12rem, 42vh) minmax(0, 1fr);
   }
 
-  /* 示意图叠到表格下方：表格行给保底高度，整个页签改为纵向滚动，
-     否则隐式行高把表格压成几像素，示意图反过来盖在筛选栏上。 */
+  .entity-source,
+  .entity-source--machine {
+    --source-list-width: 100%;
+  }
+
   .machine-body--with-images {
-    flex: 1 0 auto;
     grid-template-rows: minmax(24rem, 1fr) auto;
     grid-template-columns: 1fr;
   }
 
-  .selection-tabpanel {
-    overflow: hidden auto;
+  .machine-images:not(.machine-images--collapsed) {
+    padding-top: var(--space-5);
+    padding-left: 0;
+    border-top: 1px solid var(--color-border-secondary);
+    border-left: 0;
   }
 
-  .entity-source {
-    width: 100%;
-    height: 100%;
-  }
-
-  .machine-source-stack {
-    width: 100%;
-    height: 100%;
-  }
-
-  .entity-source > .a-source-list,
-  .entity-source > .machine-source {
-    width: 100% !important;
-    max-width: none !important;
-  }
-
-  .machine-images .image-card {
-    width: 100%;
-  }
-
-  .selection-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .selection-toolbar .a-select.selection-toolbar__filter,
-  .selection-toolbar .a-token-field.selection-toolbar__filter,
-  .selection-toolbar .a-search-field.selection-toolbar__filter {
+  .selection-toolbar__filter,
+  .selection-toolbar > .ant-input-affix-wrapper.selection-toolbar__filter {
     flex: 1 1 12rem;
     width: auto;
-    min-width: min(100%, 12rem);
+    max-width: none;
   }
-
-  .permission-group__items {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (width <= 48rem) {
-  .selection-split--machine > .selection-panel {
-    overflow: hidden auto;
-  }
-
-  .selection-split--machine > .selection-panel > .machine-body {
-    flex: 0 0 auto;
-    min-height: 36rem;
-  }
-}
-
-/* 当前客户和区域已经在左侧列表标明，右侧只放资料分类页签。 */
-.entity-header {
-  display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-4);
-  align-items: center;
-  min-width: 0;
-}
-
-.entity-header .entity-header__tabs.a-segmented {
-  align-self: center;
 }

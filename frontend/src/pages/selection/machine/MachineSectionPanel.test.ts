@@ -1,11 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { message } from 'ant-design-vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { AFileDrop, ASearchField } from '@/ui';
-import { toast } from '@/ui/toast';
 import MachineSectionPanel from './MachineSectionPanel.vue';
 
 const uploadFileMock = vi.hoisted(() => vi.fn());
@@ -54,7 +53,7 @@ function addNoteRows(
 
 function visibleRowIds(wrapper: ReturnType<typeof mount>) {
   return (
-    wrapper.getComponent({ name: 'ATable' }).props('rows') as Array<{
+    wrapper.getComponent({ name: 'ATable' }).props('dataSource') as Array<{
       source: { id: number };
     }>
   ).map((row) => row.source.id);
@@ -65,7 +64,7 @@ describe('MachineSectionPanel', () => {
     uploadFileMock.mockReset();
   });
   afterEach(() => {
-    toast.clear();
+    message.destroy();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -88,7 +87,8 @@ describe('MachineSectionPanel', () => {
     await flushPromises();
 
     expect(visibleRowIds(wrapper)).toContain(target.id);
-    expect(wrapper.getComponent({ name: 'ATable' }).props('selectedKey')).not.toBeNull();
+    // 定位到的行用 antd 的选中行样式高亮
+    expect(wrapper.find('tr.ant-table-row-selected').exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -109,13 +109,13 @@ describe('MachineSectionPanel', () => {
     });
     await flushPromises();
 
-    const search = wrapper.getComponent(ASearchField);
-    search.vm.$emit('update:modelValue', '事项');
+    const search = () => wrapper.getComponent({ name: 'AInput' });
+    search().vm.$emit('update:value', '事项');
     await flushPromises();
     addNoteRows(store, section.id, 1);
     await flushPromises();
 
-    expect(wrapper.getComponent(ASearchField).props('modelValue')).toBe('事项');
+    expect(search().props('value')).toBe('事项');
     wrapper.unmount();
   });
 
@@ -184,15 +184,19 @@ describe('MachineSectionPanel', () => {
     });
     await flushPromises();
 
-    const drop = wrapper.getComponent(AFileDrop);
+    const dragger = () => wrapper.getComponent({ name: 'AUploadDragger' });
     const file = new File(['x'], 'a.png', { type: 'image/png' });
-    drop.vm.$emit('files', [file]);
-    await flushPromises();
-    expect(wrapper.getComponent(AFileDrop).props('disabled')).toBe(true);
+    const pick = async () => {
+      (dragger().props('beforeUpload') as (file: File) => boolean)(file);
+      // createFilePicker 用 setTimeout 把同一次选择的文件合成一批
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
+    };
+    await pick();
+    expect(dragger().props('disabled')).toBe(true);
 
     // 上传中的第二次拖放直接被锁拒绝，不会再发起上传。
-    wrapper.getComponent(AFileDrop).vm.$emit('files', [file]);
-    await flushPromises();
+    await pick();
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
 
     // 上传途中切到别的制程，图片仍要写进发起上传时的分区。

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { TableColumnType } from 'ant-design-vue';
+import { RotateCcw } from 'lucide-vue-next';
 import {
   computed,
   nextTick,
@@ -11,22 +13,17 @@ import {
 
 import { api, ApiError, type AuditLogItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
-import { toast } from '@/ui/toast';
+import { message } from 'ant-design-vue';
 import { formatAuditTarget } from './audit-target';
 import {
-  ABadge,
-  AButton,
-  ADatePicker,
-  AField,
-  AFilterResetButton,
-  APagination,
-  ASelect,
-  ASheet,
-  ATable,
-  type SelectOption,
-  type TableColumn,
+  cellText,
+  PAGE_SIZE_OPTIONS,
+  rowClick,
+  scrollX,
+  sortFromChange,
+  sortOrderOf,
   type TableSortState,
-} from '@/ui';
+} from '@/pages/shared/table';
 
 import '../shared/selection-page.css';
 
@@ -51,11 +48,11 @@ const ACTION_LABELS: Record<string, string> = {
   'user.update': '更新用户',
 };
 
-const actionOptions: SelectOption[] = [
+const actionOptions = [
   { label: '全部操作', value: '' },
   ...Object.entries(ACTION_LABELS).map(([value, label]) => ({ label, value })),
 ];
-const resultOptions: SelectOption[] = [
+const resultOptions = [
   { label: '全部结果', value: '' },
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
@@ -72,7 +69,7 @@ const selectedLog = ref<AuditLogItem | null>(null);
 const sort = ref<TableSortState | null>(null);
 const filters = reactive({
   action: '' as string | null,
-  dateRange: null as [string | null, string | null] | null,
+  dateRange: null as [string, string] | null,
   result: '' as string | null,
   username: '',
 });
@@ -84,24 +81,47 @@ const hasActiveFilters = computed(
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
-const columns: TableColumn[] = [
+const columns: TableColumnType[] = [
   // 192 而非 180：完整时间戳实测要 168px 文字宽 + 16px 内边距，180 会被截成
   // 「2026-08-17 20:00:…」，而审计日志里精确到秒是有意义的。
-  { key: 'timestamp', label: '时间', width: 192, fixed: 'start', sortable: true },
-  { key: 'username', label: '用户', width: 120, sortable: true },
+  {
+    key: 'timestamp',
+    dataIndex: 'timestamp',
+    title: '时间',
+    width: 192,
+    fixed: 'left',
+    sorter: true,
+    sortOrder: sortOrderOf(sort.value, 'timestamp'),
+  },
+  {
+    key: 'username',
+    dataIndex: 'username',
+    title: '用户',
+    width: 120,
+    sorter: true,
+    sortOrder: sortOrderOf(sort.value, 'username'),
+  },
   // 「操作」列显示的是中文标签、排序依据却是底层操作码，排出来看着像乱序，
   // 且已有专门的操作类型筛选，这里不提供排序。
-  { key: 'action', label: '操作', width: 120 },
+  { key: 'action', dataIndex: 'action', title: '操作', width: 120 },
   // 失败原因不再单独占一列（绝大多数行是空的），失败时显示在目标下方
   {
     key: 'target',
-    label: '目标',
-    minWidth: 240,
-    align: 'start',
+    dataIndex: 'target',
+    title: '目标',
+    width: 240,
+    align: 'left',
   },
-  { key: 'detail', label: '详情', width: 96 },
-  { key: 'result', label: '结果', width: 88, sortable: true },
-  { key: 'ip', label: 'IP', width: 120 },
+  { key: 'detail', dataIndex: 'detail', title: '详情', width: 96 },
+  {
+    key: 'result',
+    dataIndex: 'result',
+    title: '结果',
+    width: 88,
+    sorter: true,
+    sortOrder: sortOrderOf(sort.value, 'result'),
+  },
+  { key: 'ip', dataIndex: 'ip', title: 'IP', width: 120 },
 ];
 
 watch([page, pageSize], loadData);
@@ -168,7 +188,10 @@ const parsedDetail = computed(() => {
     const value = text.slice(at + 1).trim();
     if (!label) return null;
     const items = value.includes('、')
-      ? value.split('、').map((item) => item.trim()).filter(Boolean)
+      ? value
+          .split('、')
+          .map((item) => item.trim())
+          .filter(Boolean)
       : undefined;
     pairs.push({ label, value: value || '—', items });
   }
@@ -208,7 +231,7 @@ async function loadData() {
     const pageData = await api.listAuditLogs({
       action: filters.action || undefined,
       direction: sort.value
-        ? sort.value.direction === 'ascending'
+        ? sort.value.order === 'ascend'
           ? 'asc'
           : 'desc'
         : undefined,
@@ -225,7 +248,9 @@ async function loadData() {
     total.value = pageData.total;
   } catch (error) {
     if (seq !== loadSeq) return;
-    toast.error(error instanceof ApiError ? error.message : '加载操作日志失败');
+    message.error(
+      error instanceof ApiError ? error.message : '加载操作日志失败',
+    );
   } finally {
     if (seq === loadSeq) loading.value = false;
   }
@@ -253,171 +278,189 @@ async function resetFilters() {
   <section class="selection-page">
     <div class="selection-toolbar audit-toolbar">
       <h1 class="visually-hidden">操作日志</h1>
-      <AField
-        v-model="filters.username"
+      <a-input
+        v-model:value="filters.username"
         class="selection-toolbar__filter audit-toolbar__user"
         placeholder="操作用户"
         aria-label="操作用户"
+        allow-clear
       />
-      <ASelect
-        v-model="filters.action"
+      <a-select
+        v-model:value="filters.action"
         class="selection-toolbar__filter audit-toolbar__action"
         :options="actionOptions"
         placeholder="全部操作"
         aria-label="操作类型筛选"
       />
-      <ASelect
-        v-model="filters.result"
+      <a-select
+        v-model:value="filters.result"
         class="selection-toolbar__filter audit-toolbar__result"
         :options="resultOptions"
         placeholder="全部结果"
         aria-label="操作结果筛选"
       />
-      <ADatePicker
-        v-model="filters.dateRange"
+      <a-range-picker
+        v-model:value="filters.dateRange"
         class="audit-toolbar__date"
-        range
+        value-format="YYYY-MM-DD"
         :placeholder="['开始时间', '结束时间']"
       />
-      <AFilterResetButton :active="hasActiveFilters" @reset="resetFilters" />
+      <a-button
+        type="text"
+        :disabled="!hasActiveFilters"
+        aria-label="重置筛选"
+        @click="resetFilters"
+      >
+        <template #icon><RotateCcw :size="14" /></template>
+        重置
+      </a-button>
     </div>
-    <ATable
-      v-model:sort="sort"
-      storage-key="audit-log"
+    <a-table
       :columns="columns"
-      :rows="items"
+      :data-source="items"
       row-key="id"
-      empty-text="暂无日志"
       :loading="loading"
-      @activate="openDetail"
+      :pagination="false"
+      :scroll="{ x: scrollX(columns) }"
+      :locale="{ emptyText: '暂无日志' }"
+      :custom-row="rowClick(openDetail)"
+      @change="
+        (_p: unknown, _f: unknown, sorter: unknown) =>
+          (sort = sortFromChange(sorter))
+      "
     >
-      <template #cell-timestamp="{ row }">
-        {{ formatLocalDateTime(new Date(row.timestamp)) }}
+      <template #bodyCell="{ column, record: row, text: value }">
+        <template v-if="column.key === 'timestamp'">
+          {{ formatLocalDateTime(new Date(row.timestamp)) }}
+        </template>
+        <template v-else-if="column.key === 'username'">
+          {{ value || '—' }}
+        </template>
+        <template v-else-if="column.key === 'action'">
+          {{ actionLabel(row.action) }}
+        </template>
+        <template v-else-if="column.key === 'target'">
+          <span class="audit-target" :title="row.target || undefined">
+            {{ formatAuditTarget(row.target) || '—' }}
+          </span>
+          <span v-if="!row.result && row.error" class="audit-target__error">
+            {{ row.error }}
+          </span>
+        </template>
+        <template v-else-if="column.key === 'detail'">
+          <a-button type="link" size="small" @click.stop="openDetail(row)">
+            查看
+          </a-button>
+        </template>
+        <template v-else-if="column.key === 'result'">
+          <a-tag :color="row.result ? 'green' : 'red'">
+            {{ row.result ? '成功' : '失败' }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'ip'">{{ value || '—' }}</template>
+        <template v-else>{{ cellText(value) }}</template>
       </template>
-      <template #cell-username="{ value }">{{ value || '—' }}</template>
-      <template #cell-action="{ row }">{{ actionLabel(row.action) }}</template>
-      <template #cell-target="{ row }">
-        <span class="audit-target" :title="row.target || undefined">
-          {{ formatAuditTarget(row.target) || '—' }}
-        </span>
-        <span v-if="!row.result && row.error" class="audit-target__error">
-          {{ row.error }}
-        </span>
-      </template>
-      <template #cell-detail="{ row }">
-        <AButton
-          size="small"
-          variant="borderless"
-          @click.stop="openDetail(row)"
-        >
-          查看
-        </AButton>
-      </template>
-      <template #cell-result="{ row }">
-        <ABadge
-          :label="row.result ? '成功' : '失败'"
-          :tone="row.result ? 'green' : 'red'"
-        />
-      </template>
-      <template #cell-ip="{ value }">{{ value || '—' }}</template>
-    </ATable>
-    <APagination
-      v-model:page="page"
+    </a-table>
+    <a-pagination
+      v-model:current="page"
       v-model:page-size="pageSize"
+      class="table-pagination"
       :total="total"
+      :page-size-options="PAGE_SIZE_OPTIONS"
+      show-size-changer
+      hide-on-single-page
+      :show-total="(count: number) => `共 ${count} 条`"
     />
-    <ASheet v-model:open="detailOpen" title="操作详情" :width="640">
-      <dl v-if="selectedLog" class="audit-detail">
-        <div class="audit-detail__row">
-          <dt>日志编号</dt>
-          <dd>#{{ selectedLog.id }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>时间</dt>
-          <dd>{{ formatLocalDateTime(new Date(selectedLog.timestamp)) }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>用户</dt>
-          <dd>{{ selectedLog.username || '—' }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>操作</dt>
-          <dd>{{ actionLabel(selectedLog.action) }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>操作编码</dt>
-          <dd>{{ selectedLog.action }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>目标</dt>
-          <dd>{{ formatAuditTarget(selectedLog.target) || '—' }}</dd>
-        </div>
-        <div
+    <a-modal
+      :open="detailOpen"
+      title="操作详情"
+      :width="640"
+      destroy-on-close
+      @cancel="detailOpen = false"
+    >
+      <a-descriptions
+        v-if="selectedLog"
+        bordered
+        size="small"
+        :column="1"
+        :label-style="{ width: '96px' }"
+      >
+        <a-descriptions-item label="日志编号">
+          #{{ selectedLog.id }}
+        </a-descriptions-item>
+        <a-descriptions-item label="时间">
+          {{ formatLocalDateTime(new Date(selectedLog.timestamp)) }}
+        </a-descriptions-item>
+        <a-descriptions-item label="用户">
+          {{ selectedLog.username || '—' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="操作">
+          {{ actionLabel(selectedLog.action) }}
+        </a-descriptions-item>
+        <a-descriptions-item label="操作编码">
+          {{ selectedLog.action }}
+        </a-descriptions-item>
+        <a-descriptions-item label="目标">
+          {{ formatAuditTarget(selectedLog.target) || '—' }}
+        </a-descriptions-item>
+        <a-descriptions-item
           v-if="
             selectedLog.target &&
               formatAuditTarget(selectedLog.target) !== selectedLog.target
           "
-          class="audit-detail__row"
+          label="目标键"
         >
-          <dt>目标键</dt>
-          <dd class="audit-detail__mono">{{ selectedLog.target }}</dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>结果</dt>
-          <dd>
-            <ABadge
-              :label="selectedLog.result ? '成功' : '失败'"
-              :tone="selectedLog.result ? 'green' : 'red'"
-            />
-          </dd>
-        </div>
-        <div class="audit-detail__row">
-          <dt>IP</dt>
-          <dd>{{ selectedLog.ip || '—' }}</dd>
-        </div>
-        <div class="audit-detail__row audit-detail__row--wide">
-          <dt>业务详情</dt>
-          <dd>
-            <template v-if="parsedDetail">
-              <p v-if="parsedDetail.summary" class="audit-detail__summary">
-                {{ parsedDetail.summary }}
-              </p>
-              <dl class="audit-detail__pairs">
-                <div
-                  v-for="pair in parsedDetail.pairs"
-                  :key="pair.label"
-                  class="audit-detail__pair"
-                >
-                  <dt>{{ pair.label }}</dt>
-                  <dd>
-                    <!-- 权限/角色这类是顿号分隔的长列表，排成标签块比挤成
-                         一行好读；单值仍然按普通文本显示。 -->
-                    <span v-if="pair.items" class="audit-detail__tags">
-                      <span
-                        v-for="item in pair.items"
-                        :key="item"
-                        class="audit-detail__tag"
-                      >
-                        {{ item }}
-                      </span>
-                    </span>
-                    <template v-else>{{ pair.value }}</template>
-                  </dd>
-                </div>
-              </dl>
-            </template>
-            <template v-else>{{ selectedLog.detail || '—' }}</template>
-          </dd>
-        </div>
-        <div class="audit-detail__row audit-detail__row--wide">
-          <dt>说明</dt>
-          <dd>{{ selectedLog.error || '—' }}</dd>
-        </div>
-      </dl>
+          <a-typography-text code>{{ selectedLog.target }}</a-typography-text>
+        </a-descriptions-item>
+        <a-descriptions-item label="结果">
+          <a-tag :color="selectedLog.result ? 'green' : 'red'">
+            {{ selectedLog.result ? '成功' : '失败' }}
+          </a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="IP">
+          {{ selectedLog.ip || '—' }}
+        </a-descriptions-item>
+        <a-descriptions-item label="业务详情">
+          <template v-if="parsedDetail">
+            <a-typography-paragraph
+              v-if="parsedDetail.summary"
+              class="audit-detail__summary"
+            >
+              {{ parsedDetail.summary }}
+            </a-typography-paragraph>
+            <a-descriptions
+              class="audit-detail__pairs"
+              size="small"
+              :column="1"
+            >
+              <a-descriptions-item
+                v-for="pair in parsedDetail.pairs"
+                :key="pair.label"
+                :label="pair.label"
+              >
+                <!-- 权限/角色这类是顿号分隔的长列表，排成标签块比挤成
+                     一行好读；单值仍然按普通文本显示。 -->
+                <a-space v-if="pair.items" :size="[4, 4]" wrap>
+                  <a-tag v-for="item in pair.items" :key="item">
+                    {{ item }}
+                  </a-tag>
+                </a-space>
+                <template v-else>{{ pair.value }}</template>
+              </a-descriptions-item>
+            </a-descriptions>
+          </template>
+          <span v-else class="audit-detail__text">{{
+            selectedLog.detail || '—'
+          }}</span>
+        </a-descriptions-item>
+        <a-descriptions-item label="说明">
+          <span class="audit-detail__text">{{ selectedLog.error || '—' }}</span>
+        </a-descriptions-item>
+      </a-descriptions>
       <template #footer>
-        <AButton @click="detailOpen = false">关闭</AButton>
+        <a-button @click="detailOpen = false">关闭</a-button>
       </template>
-    </ASheet>
+    </a-modal>
   </section>
 </template>
 
@@ -457,90 +500,12 @@ async function resetFilters() {
 
 .audit-target__error {
   margin-top: var(--space-1);
-  font: var(--text-caption);
-  color: var(--sys-red);
+  font: var(--font-sm);
+  color: var(--color-error);
 }
 
-.audit-detail__mono {
-  font-family: var(--font-mono);
-}
-
-.audit-detail {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.audit-detail__row {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
-  min-height: var(--control-height-md);
-  padding-bottom: var(--space-3);
-  border-bottom: 0.5px solid var(--separator);
-}
-
-.audit-detail__row--wide {
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-}
-
-.audit-detail dt {
-  color: var(--label-2);
-  font: var(--text-control-em);
-}
-
-.audit-detail dd {
-  min-width: 0;
-  margin: 0;
+.audit-detail__text {
   overflow-wrap: anywhere;
-  color: var(--label);
-  font: var(--text-control);
-  line-height: 1.5;
   white-space: pre-wrap;
-}
-
-/* 业务详情里解析出来的键值对：沿用外层的标签列宽，视觉上连成一套 */
-.audit-detail__summary {
-  margin: 0 0 var(--space-3);
-}
-
-.audit-detail__pairs {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-}
-
-.audit-detail__pair {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: baseline;
-}
-
-.audit-detail__pair dt {
-  font: var(--text-caption);
-  color: var(--label-2);
-}
-
-.audit-detail__pair dd {
-  font: var(--text-caption);
-  white-space: normal;
-}
-
-.audit-detail__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.audit-detail__tag {
-  padding: 1px var(--space-2);
-  font: var(--text-caption);
-  color: var(--label-2);
-  background: var(--fill-3);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
 }
 </style>

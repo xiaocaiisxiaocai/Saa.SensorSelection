@@ -29,7 +29,7 @@ import {
   type SensorSopItem,
   type TimelineItem,
 } from '@/domain';
-import { toast } from '@/ui/toast';
+import { message } from 'ant-design-vue';
 
 type Repository = ReturnType<typeof createSelectionRepository>;
 
@@ -301,15 +301,15 @@ export const useSelectionStore = defineStore('selection', () => {
             clearReconnectTimer();
           }
         },
-        onWriteFailure: (message) => {
+        onWriteFailure: (reason) => {
           if (bridge !== activeBridge) return;
           // bridge 已把失败的 key 回滚到后端确认值；仓库持有自己的一份内存 store，
           // 必须按回滚后的缓存重建，否则页面会继续显示这次并未保存成功的数据。
           repository.replaceFromStorage(bridge.readStoreJson());
           touch();
           lastFailure.value = 'storage';
-          backendMessage.value = `写入后端失败：${message}`;
-          toast.error(`写入后端失败：${message}`);
+          backendMessage.value = `写入后端失败：${reason}`;
+          message.error(`写入后端失败：${reason}`);
         },
       });
       activeBridge = bridge;

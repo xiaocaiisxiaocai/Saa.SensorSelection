@@ -54,7 +54,7 @@ const parts = computed<TextPart[]>(() => {
   padding: 0 var(--space-1);
   margin: 0 calc(var(--space-1) * -0.5);
   color: inherit;
-  background: var(--sys-yellow-fill);
+  background: var(--color-highlight-bg);
   border-radius: var(--radius-xs);
 }
 </style>

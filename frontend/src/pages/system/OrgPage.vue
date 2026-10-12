@@ -15,7 +15,12 @@ import {
 import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
-import { cellText, rowClick, scrollX } from '@/pages/shared/table';
+import {
+  cellText,
+  rowClick,
+  scrollX,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { message } from 'ant-design-vue';
 
@@ -204,6 +209,11 @@ async function removeOrg(node: OrgUnitNode) {
     message.error(error instanceof Error ? error.message : '删除失败');
   }
 }
+
+// 分页条始终显示
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => tableRows.value.length,
+);
 </script>
 
 <template>
@@ -223,10 +233,11 @@ async function removeOrg(node: OrgUnitNode) {
       "
       row-key="id"
       :loading="loading"
-      :pagination="false"
+      :pagination="pagination"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无组织' }"
       :custom-row="rowClick(activateOrg)"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'name'">

@@ -1,3 +1,4 @@
+import { h, nextTick, ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -6,7 +7,9 @@ import {
   scrollX,
   sortFromChange,
   sortOrderOf,
+  PAGINATION_PROPS,
   sortRows,
+  useTablePagination,
 } from './table';
 
 describe('table helpers', () => {
@@ -87,5 +90,79 @@ describe('table helpers', () => {
 
     handlers.onClick({ target: cell } as unknown as MouseEvent);
     expect(onActivate).toHaveBeenCalledWith({ id: 1 });
+  });
+});
+
+describe('useTablePagination', () => {
+  it('always shows the pagination bar, even for a single page', () => {
+    const { pagination } = useTablePagination(() => 3);
+
+    expect(pagination.value).toMatchObject({
+      current: 1,
+      pageSize: 20,
+      total: 3,
+      showSizeChanger: true,
+    });
+    expect(pagination.value.showTotal?.(3, [1, 3])).toBe('共 3 条');
+  });
+
+  it('returns to the first page when a filter changes', async () => {
+    const query = ref('');
+    const { page, onChange } = useTablePagination(() => 100, [query]);
+
+    onChange({ current: 3 });
+    expect(page.value).toBe(3);
+    query.value = 'E3Z';
+    await nextTick();
+    expect(page.value).toBe(1);
+  });
+
+  it('goes back to page 1 when the page size changes', () => {
+    const { page, pageSize, onChange } = useTablePagination(() => 100);
+
+    onChange({ current: 4 });
+    onChange({ current: 4, pageSize: 50 });
+    expect(pageSize.value).toBe(50);
+    expect(page.value).toBe(1);
+  });
+
+  it('pulls the page back when rows disappear', async () => {
+    const total = ref(45);
+    const { page, onChange } = useTablePagination(() => total.value);
+
+    onChange({ current: 3 });
+    total.value = 25;
+    await nextTick();
+    expect(page.value).toBe(2);
+  });
+
+  it('jumps to the page holding a focused row', () => {
+    const { page, showIndex } = useTablePagination(() => 100);
+
+    showIndex(45);
+    expect(page.value).toBe(3);
+    showIndex(-1);
+    expect(page.value).toBe(3);
+  });
+
+  it('gives the icon-only pager buttons an accessible name', () => {
+    const button = h('button', { class: 'ant-pagination-item-link' });
+    const render = (type: string) =>
+      PAGINATION_PROPS.itemRender({ type, originalElement: button }).props?.[
+        'aria-label'
+      ];
+
+    expect(render('prev')).toBe('上一页');
+    expect(render('next')).toBe('下一页');
+    expect(render('page')).toBeUndefined();
+  });
+
+  it('drives a-list paging through the config callback', () => {
+    const { page, pageSize, listPagination } = useTablePagination(() => 100);
+
+    listPagination.value.onChange(2, 20);
+    expect(page.value).toBe(2);
+    listPagination.value.onChange(2, 50);
+    expect([page.value, pageSize.value]).toEqual([1, 50]);
   });
 });

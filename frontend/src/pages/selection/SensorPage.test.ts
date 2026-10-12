@@ -185,10 +185,16 @@ describe('SensorPage', () => {
       width?: number;
     }>;
 
-    expect(columns.find((column) => column.key === 'spec')?.width).toBe(180);
-    expect(columns.find((column) => column.key === 'feature')?.width).toBe(200);
-    expect(columns.find((column) => column.key === 'scene')?.width).toBe(160);
-    expect(columns.find((column) => column.key === 'actions')?.width).toBe(96);
+    const width = (key: string) =>
+      columns.find((column) => column.key === key)?.width ?? 0;
+    expect(width('spec')).toBe(220);
+    expect(width('feature')).toBe(260);
+    expect(width('scene')).toBe(200);
+    expect(width('actions')).toBe(96);
+    // 长描述列完整显示不截断，宽度要从内容很短的列里匀过来
+    for (const short of ['relation', 'sop', 'model3d']) {
+      expect(width(short)).toBeLessThan(width('scene'));
+    }
     wrapper.unmount();
   });
 

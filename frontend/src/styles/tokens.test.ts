@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { theme } from 'ant-design-vue';
 import { describe, expect, it } from 'vitest';
 
+import { appTheme, compactAppAlgorithm } from './theme';
+
 const here = dirname(fileURLToPath(import.meta.url));
 const src = join(here, '..');
 const read = (...parts: string[]) => readFileSync(join(src, ...parts), 'utf8');
@@ -23,6 +25,12 @@ const declared = Object.fromEntries(
 
 /** antd 默认主题（defaultAlgorithm + defaultSeed）算出的 Map Token */
 const antd = theme.defaultAlgorithm(theme.defaultSeed) as unknown as Record<
+  string,
+  string | number
+>;
+
+/** 应用实际使用的紧凑主题算出的 Map Token */
+const app = compactAppAlgorithm(theme.defaultSeed) as unknown as Record<
   string,
   string | number
 >;
@@ -127,7 +135,7 @@ describe('tokens.css', () => {
       ),
     ).toEqual(
       ['controlHeightSM', 'controlHeight', 'controlHeightLG'].map(
-        (name) => `${antd[name]}px`,
+        (name) => `${app[name]}px`,
       ),
     );
     const ms = (value: string) =>
@@ -155,9 +163,28 @@ describe('tokens.css', () => {
 });
 
 describe('ant-design-vue styling', () => {
-  it('renders the app with the stock ant-design-vue theme', () => {
+  it('renders the app and static APIs with the compact theme', () => {
     expect(appVue).toContain('<a-config-provider');
-    expect(appVue).not.toMatch(/:theme=/);
+    expect(appVue).toMatch(/:theme="appTheme"/);
+    expect(read('main.ts')).toMatch(/theme: appTheme/);
+    expect(appTheme.algorithm).toBe(compactAppAlgorithm);
+  });
+
+  it('tightens sizes like compactAlgorithm but keeps default typography', () => {
+    const compact = theme.compactAlgorithm(
+      theme.defaultSeed,
+      theme.defaultAlgorithm(theme.defaultSeed),
+    ) as unknown as Record<string, string | number>;
+    expect(app.controlHeight).toBe(compact.controlHeight);
+    expect(app.size).toBe(compact.size);
+    expect(app.sizeLG).toBe(compact.sizeLG);
+    for (const key of Object.keys(antd).filter((k) =>
+      /^(fontSize|lineHeight)/.test(k),
+    )) {
+      expect(app[key], key).toBe(antd[key]);
+    }
+    // test:ui 要求可点控件不低于 24px
+    expect(app.controlHeightSM).toBeGreaterThanOrEqual(24);
   });
 
   it('does not load extra web fonts on top of the antd font stack', () => {

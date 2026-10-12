@@ -284,10 +284,11 @@ describe('MachinePage', () => {
     );
 
     const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    // 已选条件全部显示，不折叠成「+N」
     expect(
       globalSearch
         .findAllComponents({ name: 'ASelect' })
-        .every((field) => field.props('maxTagCount') === 3),
+        .every((field) => field.props('maxTagCount') === undefined),
     ).toBe(true);
     const machineField = globalSearch
       .findAllComponents({ name: 'ASelect' })
@@ -391,7 +392,7 @@ describe('MachinePage', () => {
     const typeSelect = wrapper
       .findAllComponents({ name: 'ASelect' })
       .find((component) =>
-        (component.props('options') as Array<{ value: string }>).some(
+        ((component.props('options') ?? []) as Array<{ value: string }>).some(
           (item) => item.value === 'notes',
         ),
       );

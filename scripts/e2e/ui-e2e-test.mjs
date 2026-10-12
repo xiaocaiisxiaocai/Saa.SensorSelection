@@ -375,6 +375,33 @@ async function runLogin() {
     assertEqual(await page.locator('[aria-controls="app-sidebar"]').count(), 0, 'desktop shell should have no sidebar toggle')
     assertEqual(await sider.locator('.ant-menu-item svg, .ant-menu-item-icon').count(), 0, 'nav items should have no icons')
     assertEqual(await page.locator('.app-shell__header kbd').count(), 0, 'search should show no shortcut hint')
+    // 品牌与分组标题左对齐，菜单项比分组标题缩进一级；分组标题与菜单项同字号、加粗，不重复品牌名
+    const nav = await page.evaluate(() => {
+      const textX = (el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return Math.round(range.getBoundingClientRect().x)
+      }
+      const titles = [...document.querySelectorAll('.app-shell__sider .ant-menu-item-group-title')]
+      return {
+        brand: Math.round(document.querySelector('.app-shell__sider .app-nav__brand > *').getBoundingClientRect().x),
+        titles: titles.map(textX),
+        items: [...document.querySelectorAll('.app-shell__sider .ant-menu-title-content > a')].map(textX),
+        titleFont: titles.map((t) => [getComputedStyle(t).fontSize, getComputedStyle(t).fontWeight]),
+        itemWeights: [...document.querySelectorAll('.app-shell__sider .ant-menu-title-content > a')].map((a) => getComputedStyle(a).fontWeight),
+        itemSize: getComputedStyle(document.querySelector('.app-shell__sider .ant-menu-item')).fontSize,
+        labels: titles.map((t) => t.textContent.trim()),
+      }
+    })
+    assertEqual(new Set([nav.brand, ...nav.titles]).size, 1, `brand and group headings are not aligned: ${JSON.stringify(nav)}`)
+    assertEqual(new Set(nav.items).size, 1, `menu items are not aligned: ${JSON.stringify(nav)}`)
+    assert(nav.items[0] - nav.brand >= 12, `menu items should be indented under the group headings: ${JSON.stringify(nav)}`)
+    assert(!nav.labels.includes('感应器选型'), 'group heading repeats the brand name')
+    assert(
+      nav.titleFont.every(([size, weight]) => size === nav.itemSize && Number(weight) >= 600),
+      `group headings should match the item size and be bold: ${JSON.stringify(nav)}`,
+    )
+    assert(nav.itemWeights.every((w) => Number(w) < 600), `only group headings should be bold: ${JSON.stringify(nav)}`)
     await page.keyboard.press('Control+k')
     assert(
       (await page.evaluate(() => document.activeElement?.id)) !== 'global-search-input',
@@ -1299,6 +1326,70 @@ async function runUiAudit() {
       if (m && (m.h > 0 || m.v > 0)) bad.push(`${path} 横${m.h}px 纵${m.v}px`)
     }
     assertEqual(bad.length, 0, `.selection-page 出现了自己的滚动条: ${bad.join(' | ')}`)
+  })
+
+  await check('Every table and list keeps its pagination pinned to the card bottom and its header fixed', async () => {
+    const pages = [
+      '/selection/customer', '/selection/process', '/selection/machine', '/selection/sensor',
+      '/selection/dictionary', '/selection/search?q=0', '/system/user', '/system/role', '/system/org',
+      '/system/audit-log',
+    ]
+    const bad = []
+    let checked = 0
+    for (const width of [1440, 1024]) {
+      await page.setViewportSize({ width, height: 768 })
+      for (const path of pages) {
+        await goto(path)
+        await settle()
+        const tabs = page.locator('.app-shell__content .ant-tabs-tab')
+        const tabCount = Math.max(1, await tabs.count())
+        for (let i = 0; i < tabCount; i++) {
+          if ((await tabs.count()) > 0) {
+            await tabs.nth(i).locator('[role="tab"]').dispatchEvent('click')
+            await settle()
+          }
+          const result = await page.evaluate(() => {
+            const out = { count: 0, problems: [] }
+            const card = document.querySelector('.selection-page')
+            if (!card) return out
+            const cardBottom = card.getBoundingClientRect().bottom
+            const lists = [...card.querySelectorAll('.ant-table-wrapper, .ant-list.file-list, .ant-list.search-list')]
+              .filter((el) => el.getClientRects().length && !el.closest('.ant-modal'))
+            for (const list of lists) {
+              out.count += 1
+              let bar = list.querySelector('.ant-pagination')
+              for (let n = list.nextElementSibling; !bar && n; n = n.nextElementSibling) {
+                if (n.classList.contains('ant-pagination')) bar = n
+              }
+              if (!bar || !bar.getClientRects().length) {
+                out.problems.push('no pagination bar')
+                continue
+              }
+              const gap = Math.round(cardBottom - bar.getBoundingClientRect().bottom)
+              if (gap < 0 || gap > 40) out.problems.push(`pagination ${gap}px above the card bottom`)
+              const scroller = list.querySelector('.ant-table-content') || list.querySelector(':scope > .ant-spin-nested-loading')
+              const th = list.querySelector('thead th')
+              if (scroller && th && scroller.scrollHeight > scroller.clientHeight) {
+                scroller.scrollTop = 200
+                const drift = Math.abs(th.getBoundingClientRect().top - scroller.getBoundingClientRect().top)
+                scroller.scrollTop = 0
+                if (drift > 2) out.problems.push('table header scrolled away')
+              }
+            }
+            if (document.documentElement.scrollHeight > document.documentElement.clientHeight) {
+              out.problems.push('document scrolls')
+            }
+            return out
+          })
+          checked += result.count
+          for (const problem of result.problems) bad.push(`${width}px ${path} tab ${i}: ${problem}`)
+        }
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await settle()
+    assert(checked > 0, 'no tables or lists were found to check')
+    assertEqual(bad.length, 0, `pagination/header problems: ${[...new Set(bad)].slice(0, 8).join(' | ')}`)
   })
 
   await check('Table headers and short labels never wrap onto a second line', async () => {

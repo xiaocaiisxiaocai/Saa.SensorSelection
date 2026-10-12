@@ -20,6 +20,13 @@ export function findSelect(wrapper: AnyWrapper, placeholder: string) {
   return select;
 }
 
+/** 页面上的 a-select，排除分页条里的「每页条数」下拉。 */
+export function formSelects(wrapper: AnyWrapper) {
+  return wrapper
+    .findAllComponents({ name: 'ASelect' })
+    .filter((item) => !item.element.closest?.('.ant-pagination'));
+}
+
 /** 等价于用户在 a-select 里选中（多选时传数组）。 */
 export async function chooseSelect(
   wrapper: AnyWrapper,

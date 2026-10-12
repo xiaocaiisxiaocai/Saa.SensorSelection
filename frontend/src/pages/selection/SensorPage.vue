@@ -30,7 +30,7 @@ import Sensor3dPanel from '@/pages/selection/sensor/Sensor3dPanel.vue';
 import { downloadSensorExcel } from '@/pages/selection/sensor/sensor-excel';
 import {
   cellText,
-  PAGE_SIZE_OPTIONS,
+  PAGINATION_PROPS,
   rowClick,
   scrollX,
   sortFromChange,
@@ -327,14 +327,15 @@ const columns = computed<TableColumnType[]>(() => {
           },
         ]
       : []),
-    // 以下三列内容都很短（多数是「—」或一个文件名），固定宽度，别让它们
-    // 按比例分走多余空间——那些空间应该留给规格参数/特性与注意。
-    { key: 'relation', dataIndex: 'relation', title: '替换关系', width: 180 },
-    { key: 'spec', dataIndex: 'spec', title: '规格参数', width: 180 },
-    { key: 'feature', dataIndex: 'feature', title: '特性与注意', width: 200 },
-    { key: 'scene', dataIndex: 'scene', title: '适用场景', width: 160 },
-    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 140 },
-    { key: 'model3d', dataIndex: 'model3d', title: '关联 3D', width: 140 },
+    // 替换关系/关联型录/关联 3D 内容都很短（多数是「—」或一个文件名），给窄宽度；
+    // 宽度留给规格参数/特性与注意/适用场景：这三列完整显示不截断，
+    // 列越宽折行越少，紧凑主题下行高才压得下来。
+    { key: 'relation', dataIndex: 'relation', title: '替换关系', width: 120 },
+    { key: 'spec', dataIndex: 'spec', title: '规格参数', width: 220 },
+    { key: 'feature', dataIndex: 'feature', title: '特性与注意', width: 260 },
+    { key: 'scene', dataIndex: 'scene', title: '适用场景', width: 200 },
+    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 96 },
+    { key: 'model3d', dataIndex: 'model3d', title: '关联 3D', width: 96 },
   ];
   const cols = baseColumns.filter(
     (column) => !hiddenColumnKeys.value.has(String(column.key)),
@@ -770,18 +771,26 @@ function saveReplace() {
               placement="bottomRight"
               title="显示的列"
             >
-              <a-badge :count="hiddenColumnCount" size="small">
-                <a-button
-                  :aria-label="
-                    hiddenColumnCount > 0
-                      ? `显示的列（已隐藏 ${hiddenColumnCount} 列）`
-                      : '显示的列'
-                  "
-                >
-                  <template #icon><Columns3 :size="14" /></template>
-                  列
-                </a-button>
-              </a-badge>
+              <!--
+                隐藏列数放在按钮内：角标会伸出按钮上沿，而工具栏贴着
+                .selection-panel 的 overflow: hidden 边界，上半截会被裁掉。
+              -->
+              <a-button
+                :aria-label="
+                  hiddenColumnCount > 0
+                    ? `显示的列（已隐藏 ${hiddenColumnCount} 列）`
+                    : '显示的列'
+                "
+              >
+                <template #icon><Columns3 :size="14" /></template>
+                列
+                <a-badge
+                  v-if="hiddenColumnCount > 0"
+                  class="column-menu-count"
+                  :count="hiddenColumnCount"
+                  size="small"
+                />
+              </a-button>
               <template #content>
                 <a-space
                   direction="vertical"
@@ -939,10 +948,7 @@ function saveReplace() {
             v-model:page-size="pageSize"
             class="table-pagination"
             :total="items.length"
-            :page-size-options="PAGE_SIZE_OPTIONS"
-            show-size-changer
-            hide-on-single-page
-            :show-total="(count: number) => `共 ${count} 条`"
+            v-bind="PAGINATION_PROPS"
           />
         </div>
       </a-tab-pane>
@@ -1223,16 +1229,19 @@ function saveReplace() {
 </template>
 
 <style scoped>
-/* 类型名不换行：列宽放不下时省略，完整名称见 title */
+.column-menu-count {
+  margin-inline-start: var(--space-2);
+  vertical-align: text-top;
+}
+
+/* 类型名完整显示：列宽放不下时折行，圆点对齐第一行 */
 .sensor-type {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   max-width: 100%;
-  white-space: nowrap;
 }
 
 .sensor-type :deep(.ant-badge-status-text) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 </style>

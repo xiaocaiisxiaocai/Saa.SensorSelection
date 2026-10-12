@@ -12,10 +12,4 @@ describe('BrandMark', () => {
     expect(wrapper.classes()).toContain('brand-mark--toolbar');
     expect(wrapper.attributes('aria-hidden')).toBe('true');
   });
-
-  it('scales up for the login card', () => {
-    const wrapper = mount(BrandMark, { props: { size: 'login' } });
-
-    expect(wrapper.classes()).toContain('brand-mark--login');
-  });
 });

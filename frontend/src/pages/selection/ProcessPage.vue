@@ -12,7 +12,7 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import {
   cellText,
-  PAGE_SIZE_OPTIONS,
+  PAGINATION_PROPS,
   rowClick,
   scrollX,
   sortFromChange,
@@ -308,10 +308,7 @@ async function deleteItem(item: ProcessStepItem) {
             v-model:page-size="pageSize"
             class="table-pagination"
             :total="filteredItems.length"
-            :page-size-options="PAGE_SIZE_OPTIONS"
-            show-size-changer
-            hide-on-single-page
-            :show-total="(count: number) => `共 ${count} 条`"
+            v-bind="PAGINATION_PROPS"
           />
         </div>
       </a-tab-pane>

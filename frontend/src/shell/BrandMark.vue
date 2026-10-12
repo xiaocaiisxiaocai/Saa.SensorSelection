@@ -1,7 +1,7 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    size?: 'toolbar' | 'login';
+    size?: 'toolbar';
   }>(),
   { size: 'toolbar' },
 );
@@ -29,9 +29,5 @@ withDefaults(
 
 .brand-mark--toolbar {
   height: var(--space-7);
-}
-
-.brand-mark--login {
-  height: var(--space-8);
 }
 </style>

@@ -7,7 +7,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { getStoredToken } from '@/api';
 import { safeRedirect } from '@/router/guards';
 import { fieldError } from '@/pages/shared/form';
-import BrandMark from '@/shell/BrandMark.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -122,13 +121,7 @@ onMounted(async () => {
   <div class="login-layout">
     <main class="login-layout__main">
       <a-card class="login__card" :bordered="false">
-        <div class="login__brand">
-          <BrandMark size="login" />
-          <h1 class="login__title">感应器选型系统</h1>
-          <a-typography-text type="secondary">
-            Symtek Automation China
-          </a-typography-text>
-        </div>
+        <h1 class="visually-hidden">登录感应器选型系统</h1>
 
         <a-alert
           v-if="loginError"
@@ -222,20 +215,6 @@ onMounted(async () => {
 .login__card {
   width: min(100%, 400px);
   box-shadow: var(--box-shadow-tertiary);
-}
-
-.login__brand {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: center;
-  margin-bottom: var(--space-7);
-  text-align: center;
-}
-
-.login__title {
-  margin: 0;
-  font: var(--font-heading-4);
-  color: var(--color-text);
 }
 
 .login__error {

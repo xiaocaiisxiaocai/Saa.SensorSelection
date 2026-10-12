@@ -877,7 +877,7 @@ async function closeTab(value: string) {
       <div v-else-if="selection.item" class="selection-panel">
         <a-tabs
           v-if="tabs.length"
-          class="machine-section-tabs"
+          class="machine-section-tabs entity-tabs"
           type="editable-card"
           size="small"
           :active-key="activeSection"

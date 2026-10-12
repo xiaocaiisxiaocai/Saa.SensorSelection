@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
+import { formSelects } from '@/test-helpers';
 import OrgPage from './OrgPage.vue';
 
 async function mountPage() {
@@ -74,8 +75,7 @@ describe('OrgPage', () => {
     await addChild[1]?.trigger('click');
     await nextTick();
 
-    const levels = wrapper
-      .findAllComponents({ name: 'ASelect' })[0]
+    const levels = formSelects(wrapper)[0]
       ?.props('options')
       .map((option: { value: unknown }) => String(option.value));
     expect(levels).toEqual(['课别']);

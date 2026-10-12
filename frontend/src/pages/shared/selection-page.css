@@ -5,11 +5,11 @@
 .selection-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-6);
+  padding: var(--space-5);
   overflow: hidden;
   background: var(--color-bg-container);
   border-radius: var(--radius-lg);
@@ -19,7 +19,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -30,7 +30,7 @@
   display: grid;
   flex: 1;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-6);
+  gap: var(--space-5);
   min-height: 0;
 }
 
@@ -75,6 +75,13 @@
   overflow: auto;
 }
 
+/* 标签页标题里「文字 + 数量徽标」垂直居中对齐（徽标默认按基线对齐会偏低约 2px） */
+.selection-page .ant-tabs-tab-btn {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
 .dictionary-header {
   display: flex;
   flex-shrink: 0;
@@ -114,16 +121,81 @@
   white-space: nowrap;
 }
 
-/* 表格占满剩余高度并在内部滚动，筛选栏和分页条始终可见 */
-.selection-page .ant-table-wrapper {
+/*
+ * 表格占满卡片剩余高度：表头固定，表体在 .ant-table-content 里横竖滚动；
+ * 分页条固定在卡片最下面（行少时中间留白，行多时表体内部滚动），始终可见。
+ */
+.selection-page .ant-table-wrapper,
+.selection-page .ant-table-wrapper .ant-spin-nested-loading,
+.selection-page .ant-table-wrapper .ant-spin-container,
+.selection-page .ant-table-wrapper .ant-table {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.selection-page .ant-table-wrapper .ant-table-container {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 表格内置分页条与表格之间的间距（外置分页条由 .selection-panel 的 gap 负责） */
+.selection-page .ant-table-wrapper .ant-spin-container {
+  gap: var(--space-3);
+}
+
+/*
+ * 传了 scroll.x 时 antd 会在 .ant-table-content 上写内联 `overflow: auto hidden`，
+ * 把纵向滚动关掉，超出卡片的行直接被裁掉、无法滚动；只能用 !important 盖过内联样式。
+ */
+.selection-page .ant-table-wrapper .ant-table-content {
+  min-height: 0;
+  overflow: auto !important;
+}
+
+.selection-page .ant-table-thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* 固定列的表头压在普通表头上面（横向滚动时普通表头从它下面滑过） */
+.selection-page .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.selection-page .ant-table-thead > tr > th.ant-table-cell-fix-right {
+  z-index: 4;
+}
+
+.selection-page .ant-table-wrapper .ant-table-pagination,
+.table-pagination {
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin: 0;
+}
+
+/* 文件列表、搜索结果同表格：列表占满剩余高度并在内部滚动，分页条固定在最下面 */
+.selection-page .ant-list.file-list,
+.selection-page .ant-list.search-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.selection-page .ant-list.file-list > .ant-spin-nested-loading,
+.selection-page .ant-list.search-list > .ant-spin-nested-loading {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
 
-.table-pagination {
+.selection-page .ant-list.file-list > .ant-list-pagination,
+.selection-page .ant-list.search-list > .ant-list-pagination {
   flex-shrink: 0;
-  align-self: flex-end;
 }
 
 .empty-hint {
@@ -150,6 +222,7 @@
 .machine-body {
   display: grid;
   flex: 1;
+  grid-template-rows: minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   min-width: 0;
@@ -168,6 +241,8 @@
   display: grid;
   gap: var(--space-3);
   align-content: start;
+  min-height: 0;
+  overflow: auto;
 }
 
 .machine-images:not(.machine-images--collapsed) {
@@ -198,13 +273,10 @@
   background: var(--color-fill-alter);
 }
 
+/* 文件名放在卡片正文（图片下方）占满整宽，完整显示 */
 .image-card__name {
-  display: block;
-  max-width: 100%;
-  padding: 0 var(--space-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
 }
 
 .machine-report {
@@ -219,18 +291,20 @@
   white-space: pre-line;
 }
 
-.sensor-file-link {
+/* 文件名完整显示：链接按钮默认不折行，这里放开 */
+.sensor-file-link.ant-btn {
+  height: auto;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding-inline: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: start;
 }
 
 .org-tree__name {
   display: block;
-  overflow: hidden;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .permission-group + .permission-group {

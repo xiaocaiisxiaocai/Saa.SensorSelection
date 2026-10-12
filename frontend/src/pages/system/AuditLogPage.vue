@@ -17,7 +17,7 @@ import { message } from 'ant-design-vue';
 import { formatAuditTarget } from './audit-target';
 import {
   cellText,
-  PAGE_SIZE_OPTIONS,
+  PAGINATION_PROPS,
   rowClick,
   scrollX,
   sortFromChange,
@@ -366,10 +366,7 @@ async function resetFilters() {
       v-model:page-size="pageSize"
       class="table-pagination"
       :total="total"
-      :page-size-options="PAGE_SIZE_OPTIONS"
-      show-size-changer
-      hide-on-single-page
-      :show-total="(count: number) => `共 ${count} 条`"
+      v-bind="PAGINATION_PROPS"
     />
     <a-modal
       :open="detailOpen"

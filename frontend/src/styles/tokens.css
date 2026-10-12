@@ -1,5 +1,6 @@
 /*
- * 设计令牌：数值全部取自 ant-design-vue 4 的默认主题（theme.defaultAlgorithm），
+ * 设计令牌：颜色/字号/圆角/动效取自 ant-design-vue 4 的默认主题，控件高度取自
+ * 应用的紧凑主题（styles/theme.ts 的 compactAppAlgorithm），
  * 命名对应 antd 的 token 名（colorPrimary → --color-primary）。
  * 自写样式只在需要 antd 组件以外的布局/装饰时才用到这些变量，
  * 能用 antd 组件表达的地方不要再手写样式。
@@ -93,7 +94,7 @@
   --sidebar-width: 200px;
   --sidebar-collapsed-width: 80px;
   --source-list-width: 240px;
-  --header-height: 56px;
+  --header-height: 48px;
 
   /* 圆角：borderRadiusXS / SM / 默认 / LG */
   --radius-xs: 2px;
@@ -118,8 +119,8 @@
   --motion-ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
   --motion-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
 
-  /* 控件高度：controlHeightSM / controlHeight / controlHeightLG */
+  /* 控件高度：紧凑主题的 controlHeightSM / controlHeight / controlHeightLG */
   --control-height-sm: 24px;
-  --control-height: 32px;
-  --control-height-lg: 40px;
+  --control-height: 28px;
+  --control-height-lg: 36px;
 }

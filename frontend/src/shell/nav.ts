@@ -14,7 +14,7 @@ export interface NavGroup {
 
 export const selectionNav: NavGroup = {
   id: 'selection',
-  label: '感应器选型',
+  label: '选型数据',
   items: [
     { to: '/selection/customer', label: '客户管理' },
     { to: '/selection/process', label: '制程管理' },

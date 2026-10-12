@@ -107,7 +107,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
             mode="multiple"
             :options="machineModelOptions"
             placeholder="选择适用机型"
-            :max-tag-count="3"
             allow-clear
             option-filter-prop="label"
           />
@@ -122,7 +121,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
             mode="multiple"
             :options="processStepOptions"
             placeholder="选择工艺制程"
-            :max-tag-count="3"
             allow-clear
             option-filter-prop="label"
           />
@@ -137,7 +135,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
             mode="multiple"
             :options="boardCharacteristicOptions"
             placeholder="选择板件特性"
-            :max-tag-count="3"
             allow-clear
             option-filter-prop="label"
           />
@@ -152,7 +149,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
             mode="multiple"
             :options="processOptions"
             :placeholder="processScopeLabel"
-            :max-tag-count="3"
             allow-clear
             option-filter-prop="label"
           />

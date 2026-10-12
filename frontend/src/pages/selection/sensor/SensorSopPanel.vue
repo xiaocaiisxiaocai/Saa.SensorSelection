@@ -14,6 +14,7 @@ import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { APdfViewer } from '@/ui';
+import { useTablePagination } from '@/pages/shared/table';
 
 const props = defineProps<{ focusSopId?: null | number }>();
 const emit = defineEmits<{ previewed: [id: number] }>();
@@ -37,12 +38,20 @@ const visible = computed(() => {
   );
 });
 
+// 列表分页：分页条固定在底部、始终显示；筛选变化回到第一页
+const { listPagination, showIndex } = useTablePagination(
+  () => visible.value.length,
+  [query],
+);
+
 watch(
   () => props.focusSopId,
   (id) => {
     if (!id) return;
     const file = files.value.find((item) => item.id === id);
     if (file) openPreview(file);
+    // 被定位的文件可能不在当前页
+    showIndex(visible.value.findIndex((item) => item.id === id));
   },
   { immediate: true },
 );
@@ -129,6 +138,7 @@ async function remove(item: SensorSopItem) {
       v-if="visible.length"
       class="file-list"
       :data-source="visible"
+      :pagination="listPagination"
       bordered
     >
       <template #renderItem="{ item }">

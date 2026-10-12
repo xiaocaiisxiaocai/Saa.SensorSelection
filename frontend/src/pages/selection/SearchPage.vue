@@ -8,6 +8,7 @@ import { useSelectionStore } from '@/stores/selection';
 import { AHighlightText } from '@/ui';
 
 import '../shared/selection-page.css';
+import { useTablePagination } from '@/pages/shared/table';
 
 const route = useRoute();
 const router = useRouter();
@@ -79,6 +80,12 @@ watch(
 function openResult(item: SearchItem) {
   void router.push({ path: item.path, query: item.query });
 }
+
+// 列表分页：分页条固定在底部、始终显示；筛选变化回到第一页
+const { listPagination } = useTablePagination(
+  () => results.value.length,
+  [query, activeType],
+);
 </script>
 
 <template>
@@ -103,6 +110,7 @@ function openResult(item: SearchItem) {
           v-if="tab.value === activeType"
           class="search-list"
           :data-source="results"
+          :pagination="listPagination"
           item-layout="vertical"
           :locale="{
             emptyText:
@@ -172,15 +180,10 @@ function openResult(item: SearchItem) {
   text-align: start;
 }
 
-/* 正文行长控制在 ~70 字符，最多两行。高亮片段是子节点，不能用 antd 的
-   ellipsis（它只支持纯文本 content），所以用 CSS 截断。 */
+/* 正文行长控制在 ~70 字符，完整显示不截断 */
 .search-list__sub {
-  display: -webkit-box;
   max-width: 70ch;
   margin-bottom: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 </style>

@@ -14,6 +14,7 @@ import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { APdfViewer } from '@/ui';
+import { useTablePagination } from '@/pages/shared/table';
 
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -75,6 +76,12 @@ async function remove(item: SensorSopFileItem) {
   notifyResult(result, 'SOP 已删除');
   if (preview.value?.id === item.id) preview.value = null;
 }
+
+// 列表分页：分页条固定在底部、始终显示；筛选变化回到第一页
+const { listPagination } = useTablePagination(
+  () => visible.value.length,
+  [query],
+);
 </script>
 
 <template>
@@ -109,6 +116,7 @@ async function remove(item: SensorSopFileItem) {
       v-if="visible.length"
       class="file-list"
       :data-source="visible"
+      :pagination="listPagination"
       bordered
     >
       <template #renderItem="{ item }">

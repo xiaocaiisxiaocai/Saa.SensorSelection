@@ -7,7 +7,13 @@ import { api, ApiError, type PermissionInfo, type RbacRole } from '@/api';
 import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
-import { cellText, rowClick, scrollX, sortBy } from '@/pages/shared/table';
+import {
+  cellText,
+  rowClick,
+  scrollX,
+  sortBy,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { message } from 'ant-design-vue';
 
@@ -208,6 +214,11 @@ async function removeRole(role: RbacRole) {
     message.error(error instanceof Error ? error.message : '删除失败');
   }
 }
+
+// 分页条始终显示
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => roles.value.length,
+);
 </script>
 
 <template>
@@ -223,10 +234,11 @@ async function removeRole(role: RbacRole) {
       :data-source="roles"
       row-key="id"
       :loading="loading"
-      :pagination="false"
+      :pagination="pagination"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无角色' }"
       :custom-row="rowClick(activateRole)"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'description'">

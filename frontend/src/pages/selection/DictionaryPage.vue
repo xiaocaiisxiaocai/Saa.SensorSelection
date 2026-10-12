@@ -6,7 +6,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
-import { rowClick, sortBy } from '@/pages/shared/table';
+import { rowClick, sortBy, useTablePagination } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -137,6 +137,12 @@ async function deleteItem(item: DictionaryItem) {
     }
   }
 }
+
+// 分页条始终显示；筛选变化回到第一页
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => items.value.length,
+  [activeCode],
+);
 </script>
 
 <template>
@@ -151,10 +157,11 @@ async function deleteItem(item: DictionaryItem) {
         :columns="columns"
         :data-source="items"
         row-key="id"
-        :pagination="false"
+        :pagination="pagination"
         :custom-row="customRow"
         :scroll="{ x: 'max-content' }"
         :locale="{ emptyText: '暂无字典项' }"
+        @change="onPageChange"
       >
         <template #bodyCell="{ column, record }">
           <a-space v-if="column.key === 'actions'" :size="4">

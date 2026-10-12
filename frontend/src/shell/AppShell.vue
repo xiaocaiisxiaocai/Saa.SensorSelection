@@ -259,7 +259,7 @@ watch(
 .app-shell__content {
   min-width: 0;
   min-height: 0;
-  padding: var(--space-5);
+  padding: var(--space-4);
   overflow: auto;
 }
 

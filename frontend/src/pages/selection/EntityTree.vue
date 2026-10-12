@@ -588,14 +588,11 @@ function runAction(node: EntityNode, key: string | number) {
   min-width: 0;
 }
 
-/* 用 CSS 截断而不是 a-typography 的 ellipsis：后者会把 DOM 里的文字
-   直接截短，读屏和页内查找都拿不到完整名称。 */
+/* 名称完整显示，过长时折行（不截断） */
 .entity-tree__label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .entity-tree__label--group {

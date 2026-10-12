@@ -17,27 +17,47 @@ const groups = computed(() => navGroupsFor(auth.permissions));
       <BrandMark />
       <span class="app-nav__name">感应器选型</span>
     </RouterLink>
-    <a-menu theme="dark" mode="inline" :selected-keys="[route.path]">
-      <a-menu-item-group
-        v-for="group in groups"
-        :key="group.id"
-        :title="group.label"
-      >
-        <a-menu-item v-for="item in group.items" :key="item.to">
+    <a-menu
+      theme="dark"
+      mode="inline"
+      :class="{ 'app-nav__menu--grouped': groups.length > 1 }"
+      :selected-keys="[route.path]"
+    >
+      <!-- 只有一个分组（未登录/无系统权限）时不显示分组标题，免得和品牌名重复 -->
+      <template v-if="groups.length === 1">
+        <a-menu-item v-for="item in groups[0].items" :key="item.to">
           <RouterLink :to="item.to">{{ item.label }}</RouterLink>
         </a-menu-item>
-      </a-menu-item-group>
+      </template>
+      <template v-else>
+        <a-menu-item-group
+          v-for="group in groups"
+          :key="group.id"
+          :title="group.label"
+        >
+          <a-menu-item v-for="item in group.items" :key="item.to">
+            <RouterLink :to="item.to">{{ item.label }}</RouterLink>
+          </a-menu-item>
+        </a-menu-item-group>
+      </template>
     </a-menu>
   </nav>
 </template>
 
 <style scoped>
+/* 品牌与分组标题共用一条左边缘（菜单项外边距 4px + 内边距 24px）；
+   分组内的菜单项再缩进 16px，看得出从属关系 */
+.app-nav {
+  --nav-inset: calc(var(--space-2) + var(--space-7));
+  --nav-indent: var(--space-5);
+}
+
 .app-nav__brand {
   display: flex;
   gap: var(--space-4);
   align-items: center;
   height: var(--header-height);
-  padding: 0 var(--space-6);
+  padding: 0 var(--nav-inset);
   overflow: hidden;
   color: var(--layout-sider-text-active);
   text-decoration: none;
@@ -60,5 +80,31 @@ const groups = computed(() => navGroupsFor(auth.permissions));
 
 .app-nav__name {
   font: var(--font-heading-5);
+}
+
+.app-nav :deep(.ant-menu) {
+  padding-top: var(--space-2);
+}
+
+/* 分组标题与菜单项同字号，加粗并用与品牌名相同的实色，和普通菜单项拉开层级；
+   后续分组上方留出间隔 */
+.app-nav :deep(.ant-menu-item-group-title) {
+  padding: var(--space-3) var(--nav-inset);
+  font: var(--font-body-strong);
+  color: var(--layout-sider-text-active);
+}
+
+.app-nav :deep(.ant-menu-item-group + .ant-menu-item-group) {
+  margin-top: var(--space-5);
+}
+
+/* 菜单项缩进由这里统一控制（覆盖 antd 按层级写的行内缩进）：
+   只有一个分组时不显示分组标题，菜单项与品牌对齐；有分组时比分组标题多缩进一级 */
+.app-nav :deep(.ant-menu-item) {
+  padding-inline-start: var(--space-7) !important;
+}
+
+.app-nav :deep(.app-nav__menu--grouped .ant-menu-item) {
+  padding-inline-start: calc(var(--space-7) + var(--nav-indent)) !important;
 }
 </style>

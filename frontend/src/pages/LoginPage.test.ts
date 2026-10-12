@@ -44,12 +44,14 @@ describe('LoginPage', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders brand headings and footer', async () => {
+  it('shows no brand block, only a screen-reader heading and the footer', async () => {
     const wrapper = await mountLogin();
-    expect(wrapper.find('.login__title').text()).toBe('感应器选型系统');
-    expect(wrapper.find('.login__brand').text()).toContain(
+    expect(wrapper.find('.brand-mark').exists()).toBe(false);
+    expect(wrapper.find('.login__card').text()).not.toContain(
       'Symtek Automation China',
     );
+    expect(wrapper.get('h1').classes()).toContain('visually-hidden');
+    expect(wrapper.get('h1').text()).toBe('登录感应器选型系统');
     expect(wrapper.find('.login-layout__footer').text()).toContain(
       'Symtek Automation China',
     );

@@ -6,7 +6,12 @@ import { computed, reactive, ref, watch } from 'vue';
 import type { CustomerReqItem } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
-import { rowClick, scrollX, sortBy } from '@/pages/shared/table';
+import {
+  rowClick,
+  scrollX,
+  sortBy,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -198,6 +203,12 @@ async function deleteItem(item: CustomerReqItem) {
     { stale: '该要求已被其他页面删除' },
   );
 }
+
+// 分页条始终显示；筛选变化回到第一页
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => filtered.value.length,
+  [query, typeFilters, sourceFilters, () => props.entityName],
+);
 </script>
 
 <template>
@@ -249,12 +260,13 @@ async function deleteItem(item: CustomerReqItem) {
       :columns="columns"
       :data-source="filtered"
       row-key="id"
-      :pagination="false"
+      :pagination="pagination"
       :custom-row="customRow"
       :scroll="{ x: scrollX(columns) }"
       :locale="{
         emptyText: hasActiveFilters ? '没有匹配的要求记录' : '暂无要求记录',
       }"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record, text }">
         <a-space v-if="column.key === 'actions'" :size="4">

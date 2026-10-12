@@ -7,7 +7,13 @@ import type { TimelineItem } from '@/domain';
 import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
-import { cellText, rowClick, scrollX, sortBy } from '@/pages/shared/table';
+import {
+  cellText,
+  rowClick,
+  scrollX,
+  sortBy,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -230,6 +236,12 @@ async function deleteItem(item: TimelineItem) {
     '反馈已删除',
   );
 }
+
+// 分页条始终显示；筛选变化回到第一页
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => filtered.value.length,
+  [query, typeFilters, statusFilters, () => props.entityName],
+);
 </script>
 
 <template>
@@ -281,7 +293,7 @@ async function deleteItem(item: TimelineItem) {
       :columns="columns"
       :data-source="filtered"
       row-key="id"
-      :pagination="false"
+      :pagination="pagination"
       :scroll="{ x: scrollX(columns) }"
       :locale="{
         emptyText:
@@ -290,6 +302,7 @@ async function deleteItem(item: TimelineItem) {
             : '暂无反馈记录',
       }"
       :custom-row="rowClick(activateRow)"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'status'">

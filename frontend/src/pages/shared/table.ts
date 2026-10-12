@@ -1,5 +1,12 @@
 import type { TablePaginationConfig } from 'ant-design-vue';
-import { computed, ref, type Ref } from 'vue';
+import {
+  cloneVNode,
+  computed,
+  ref,
+  watch,
+  type VNode,
+  type WatchSource,
+} from 'vue';
 
 const collator = new Intl.Collator('zh', {
   numeric: true,
@@ -34,41 +41,90 @@ export function cellText(value: unknown): string {
 export const PAGE_SIZE_OPTIONS = ['20', '50', '100'];
 
 /**
- * 受控分页：筛选条件变化时页面调用 `reset()` 回到第一页。
- * 只有一页时整条分页隐藏（与 hideOnSinglePage 一致）。
+ * 所有列表分页条的共用属性：`<a-pagination v-bind="PAGINATION_PROPS">`。
+ * 不隐藏单页分页条——数据只有一页时也显示「共 N 条」和每页条数，
+ * 分页条位置固定，用户一眼能看出列表是否完整。
  */
-export function useTablePagination(total: Ref<number>, defaultPageSize = 20) {
-  const page = ref(1);
-  const pageSize = ref(defaultPageSize);
+// antd 的翻页按钮只有图标，提示文字写在外层 li 的 title 上；按钮本身补上可读名称
+const PAGER_LABELS: Record<string, string> = {
+  prev: '上一页',
+  next: '下一页',
+  'jump-prev': '向前 5 页',
+  'jump-next': '向后 5 页',
+};
 
-  const pagination = computed<TablePaginationConfig | false>(() =>
-    total.value > pageSize.value
-      ? {
-          current: page.value,
-          pageSize: pageSize.value,
-          total: total.value,
-          pageSizeOptions: PAGE_SIZE_OPTIONS,
-          showSizeChanger: true,
-          showTotal: (count: number) => `共 ${count} 条`,
-        }
-      : false,
-  );
+function labelPagerItem({
+  type,
+  originalElement,
+}: {
+  type: string;
+  originalElement: VNode;
+}) {
+  const label = PAGER_LABELS[type];
+  return label
+    ? cloneVNode(originalElement, { 'aria-label': label })
+    : originalElement;
+}
+
+export const PAGINATION_PROPS = {
+  pageSizeOptions: PAGE_SIZE_OPTIONS,
+  showSizeChanger: true,
+  showTotal: (count: number) => `共 ${count} 条`,
+  itemRender: labelPagerItem,
+} as const;
+
+/**
+ * a-table / a-list 内置分页（排序交给 antd 的表格用这个，排序和分页都作用于整个数据集）。
+ * 分页条始终显示；`resetOn` 里的筛选条件变化时回到第一页，数据变少时收回越界页。
+ */
+export function useTablePagination(
+  total: () => number,
+  resetOn: WatchSource[] = [],
+) {
+  const page = ref(1);
+  const pageSize = ref(20);
+
+  const pagination = computed<TablePaginationConfig>(() => ({
+    ...PAGINATION_PROPS,
+    current: page.value,
+    pageSize: pageSize.value,
+    total: total(),
+  }));
 
   function onChange(next: TablePaginationConfig) {
     if (next.pageSize && next.pageSize !== pageSize.value) {
       pageSize.value = next.pageSize;
-      const last = Math.max(1, Math.ceil(total.value / next.pageSize));
-      page.value = Math.min(next.current ?? 1, last);
+      page.value = 1;
       return;
     }
     page.value = next.current ?? 1;
   }
 
-  function reset() {
-    page.value = 1;
+  if (resetOn.length > 0) {
+    watch(resetOn, () => {
+      page.value = 1;
+    });
+  }
+  watch(
+    () => Math.max(1, Math.ceil(total() / pageSize.value)),
+    (last) => {
+      if (page.value > last) page.value = last;
+    },
+  );
+
+  /** a-list 的分页配置：a-list 不发 change 事件，翻页回调写在配置里。 */
+  const listPagination = computed(() => ({
+    ...pagination.value,
+    onChange: (current: number, size: number) =>
+      onChange({ current, pageSize: size }),
+  }));
+
+  /** 翻到第 index 条（从 0 数）所在的页，用于从别处跳转定位到某一条。 */
+  function showIndex(index: number) {
+    if (index >= 0) page.value = Math.floor(index / pageSize.value) + 1;
   }
 
-  return { page, pageSize, pagination, onChange, reset };
+  return { page, pageSize, pagination, listPagination, onChange, showIndex };
 }
 
 const INTERACTIVE =

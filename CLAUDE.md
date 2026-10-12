@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与 **ant-design-vue 4（默认主题，业务页直接用 `a-*` 组件）**；不遵循 Apple 规范，不使用 Element Plus / Tailwind / Reka UI。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
+这是 Symtek Automation China 的感应器选型软件。前端在 `frontend/`，采用 Vue 3、Vite、TypeScript、Pinia 与 **ant-design-vue 4（紧凑主题，业务页直接用 `a-*` 组件）**；不遵循 Apple 规范，不使用 Element Plus / Tailwind / Reka UI。后端是 ASP.NET Core 8 + EF Core + SQLite（`backend/Saa.SensorSelection.slnx`），提供 JWT 登录、RBAC、审计日志和选型数据仓库。
 
 ## 开发命令
 
@@ -75,11 +75,11 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - `stores/`（Pinia）：`selection.ts` 包裹领域仓库供页面消费，负责创建 `BackendStorage` 和断线重连；`auth.ts` 持有 JWT 与当前用户权限（token 键 `symtek_token`），并提供 `useAccess()`。
 - `router/guards.ts`：路由级权限守卫，按页面所需权限码放行/拦截。生产构建用 hash 路由（`.env.production` 中 `VITE_ROUTER_HISTORY=hash`）。
 - `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）。客户和机型左侧目录共用 `EntityTree.vue`（基于 `a-tree`：勾选、同级拖拽排序、行内「更多」菜单）。
-- `pages/shared`：跨页复用的非组件工具——`table.ts`（受控排序、`rowClick` 整行点击、`scrollX`、分页档位）、`form.ts`（`fieldError`）、`confirm.ts`（`dialogs.confirm`，`Modal.confirm` 的 Promise 版）、`dirty-guard.ts`、`file-rules.ts`（`createFilePicker` 给 `a-upload-dragger` 做校验与合批）、`save-feedback.ts`、`selection-page.css`（页面骨架布局）。
+- `pages/shared`：跨页复用的非组件工具——`table.ts`（受控排序、`rowClick` 整行点击、`scrollX`、`PAGINATION_PROPS` 与 `useTablePagination` 分页）、`form.ts`（`fieldError`）、`confirm.ts`（`dialogs.confirm`，`Modal.confirm` 的 Promise 版）、`dirty-guard.ts`、`file-rules.ts`（`createFilePicker` 给 `a-upload-dragger` 做校验与合批）、`save-feedback.ts`、`selection-page.css`（页面骨架布局）。
 - `pages/system`：用户、角色、组织、操作日志系统管理页（`/system/user|role|org|audit-log`，各自对应下方权限码）。
-- 组件：业务页**直接使用 `a-*`**（`main.ts` 全局 `app.use(Antd)`）。`ui/` 只保留 antd 没有的两个组件：`APdfViewer`（pdf.js 预览）与 `AHighlightText`（搜索高亮），不要再新增 `A*` 包装组件。`App.vue` 的 `a-config-provider` 只设 zh_CN 与 `auto-insert-space-in-button=false`，**不传 `:theme`**；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格。用法与约定见 `frontend/docs/01-design-system.md`、`02-component-library.md`（`00` / `05` / `06` 是早期 Apple 方案的历史文档）。
-- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方，取值与 antd 默认主题一致、命名对应 antd token（`--color-primary`、`--color-text-secondary`、`--radius-md`…）；`tokens.test.ts` 用 `theme.defaultAlgorithm(theme.defaultSeed)` 逐项比对，并断言没有 Apple 式材质/发丝线/负字距、`ui/` 只含上述两个组件。**只有浅色模式**，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
-- `shell/AppShell.vue`：antd `a-layout`（宽屏常驻 200px 暗色 `a-layout-sider`，**不可折叠**；960px 以下导航改为 `a-drawer`；导航菜单在 `AppNav.vue`，菜单项**不带图标**）+ 56px `a-layout-header`，无多标签页，**不设全局搜索快捷键**。
+- 组件：业务页**直接使用 `a-*`**（`main.ts` 全局 `app.use(Antd)`）。`ui/` 只保留 antd 没有的两个组件：`APdfViewer`（pdf.js 预览）与 `AHighlightText`（搜索高亮），不要再新增 `A*` 包装组件。`App.vue` 的 `a-config-provider` 设 zh_CN、`auto-insert-space-in-button=false` 与 `:theme="appTheme"`（`styles/theme.ts`：`compactAppAlgorithm` = antd `compactAlgorithm` 收紧控件高度/间距，但**字号/行高沿用默认主题（正文 14px）**、`controlHeightSM` 保持 24px 热区）；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格并套同一主题。用法与约定见 `frontend/docs/01-design-system.md`、`02-component-library.md`（`00` / `05` / `06` 是早期 Apple 方案的历史文档）。
+- `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方，颜色/字号/圆角/动效取值与 antd 默认主题一致、控件高度与紧凑主题一致（24/28/36），命名对应 antd token（`--color-primary`、`--color-text-secondary`、`--radius-md`…）；`tokens.test.ts` 分别用 `theme.defaultAlgorithm` 与 `compactAppAlgorithm` 逐项比对，并断言没有 Apple 式材质/发丝线/负字距、`ui/` 只含上述两个组件。**只有浅色模式**，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
+- `shell/AppShell.vue`：antd `a-layout`（宽屏常驻 200px 暗色 `a-layout-sider`，**不可折叠**；960px 以下导航改为 `a-drawer`；导航菜单在 `AppNav.vue`，菜单项**不带图标**）+ 48px `a-layout-header`，无多标签页，**不设全局搜索快捷键**。
 
 ### 后端（`backend/Saa.SensorSelection.Api`）
 
@@ -99,10 +99,11 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - 不恢复 Next.js、iframe、`public/index.html` 旧入口，也不恢复 Vben / Element Plus 前端。
 - 新业务代码放在 `frontend/src/pages`、`frontend/src/domain` 或 `frontend/src/ui` 内。
 - 未登录允许只读预览业务数据；写入需要 JWT 与 `selection:write`。页面用 `useAccess().canWrite()` **隐藏**写入入口，而不是禁用。
-- 操作按钮使用 Lucide 图标（放在 `a-button` 的 `#icon` 插槽）+ `a-tooltip` + `aria-label`；被禁用的操作保留按钮并 `disabled`，原因写进 tooltip。表格分页档位 20 / 50 / 100。
+- 操作按钮使用 Lucide 图标（放在 `a-button` 的 `#icon` 插槽）+ `a-tooltip` + `aria-label`；被禁用的操作保留按钮并 `disabled`，原因写进 tooltip。
+- 分页：**所有表格和列表（含文件列表、搜索结果）都要分页**，档位 20 / 50 / 100，分页条**始终显示**（单页也显示「共 N 条」，不要 `hide-on-single-page`）并固定在卡片最下面，表头固定、表体在内部滚动（`selection-page.css` 负责布局，`test:ui` 逐页检查）。antd 自己排序的表格/`a-list` 用 `useTablePagination` 的内置分页（排序作用于整个数据集），自己切片的页面用独立 `a-pagination v-bind="PAGINATION_PROPS"`。新增带 tab 的区域要给 `a-tabs` 加 `entity-tabs` 类，否则内容不会撑满高度。
 - 表单：业务校验在领域层，**不用 antd 表单校验**——`a-form` 不传 `:model`、`a-form-item` 不写 `name`（否则 `required` 会触发 antd 自带校验）；标签关联用 `a-form-item html-for="x"` + 控件 `id="x"`，错误用 `v-bind="fieldError(msg)"`。
 - 表头、按钮、标签页、标签等短文字不能换行：列宽要容得下标题 + 排序图标（`test:ui` 在 1440/1024px 下逐页检查）。
-- 长文本截断用 CSS `text-overflow` + `title`，不要用 `a-typography` 的 `ellipsis`（会把 DOM 文字截短，影响读屏、页内查找和 e2e 定位）。
+- **紧凑但完整显示**：表格单元格、目录树名称、文件名、搜索结果等内容一律完整显示，过长就折行（`overflow-wrap: anywhere`），不用 `text-overflow` / `line-clamp` / `a-typography` 的 `ellipsis` 截断，表单里的多选也不设 `max-tag-count`（只有工具栏筛选框允许 `:max-tag-count="1"`）。紧凑靠紧凑主题和列宽分配（短内容列窄、长描述列宽）来实现。
 - stylelint 禁止在 `tokens.css` 以外硬编码颜色、`font-size`、过渡/动画时长，一律用 `var(--*)`；class 选择器必须是 kebab-case（允许 BEM 的 `__` / `--`）。
 - 修改持久化、路由或搜索行为时，先扩展 `test:selection` 回归，再实现变更。
 - 后端接口、权限码、数据库结构变更需要同步更新 `RbacDefaults.cs` 与对应的 `Api.Tests`，不要绕开 `DbSeeder` 手改数据。

@@ -18,7 +18,7 @@
 ```
 
 - 顶栏：`a-layout-header`，白底 + 底部 1px 分割线；左侧全局搜索（960px 以下前面多一个打开导航抽屉的按钮）、右侧用户菜单（`a-dropdown`）。
-- 导航侧栏：暗色 `a-layout-sider` + `a-menu`（分组，菜单项只有文字、不带图标），宽屏常驻 200px、不可折叠；960px 以下改为 `a-drawer`。
+- 导航侧栏：暗色 `a-layout-sider` + `a-menu`（菜单项只有文字、不带图标；有多个分组时才显示分组标题「选型数据」「系统管理」，14px 加粗、白色实色（侧栏里只有分组标题加粗）、与品牌左对齐，组内菜单项再缩进 16px；只有一个分组时菜单项与品牌对齐），宽屏常驻 200px、不可折叠；960px 以下改为 `a-drawer`。
 - 后端状态横幅（`a-alert`）在工具栏下方，仅 `offline` / `unauthorized` 时出现。
 - **移除 Vben 的多标签页（tabbar）**。导航靠侧栏，不用浏览器式标签页。
 
@@ -54,8 +54,8 @@ const { canWrite } = useAccess()      // canWrite('selection:write')
 
 ## 2. 登录页 `/login`
 
-- 居中 `a-card`（宽 400px），浅灰布局底色；品牌、`a-alert` 登录错误、竖排 `a-form`、游客入口用 `a-button type="link"`。
-- 品牌区：56×56 圆角方形 logo（`SAA`，渐变底）+ 标题「感应器选型软件」+ 副标题「Symtek Automation China · Sensor Selection」。
+- 居中 `a-card`（宽 400px），浅灰布局底色；`a-alert` 登录错误、竖排 `a-form`、游客入口用 `a-button type="link"`。
+- 卡片内**不放品牌区**（无 logo、标题、副标题），只保留一个读屏可见的 `h1.visually-hidden`「登录感应器选型系统」；版权信息在页脚。
 - 表单：用户名（`a-input`，`maxlength=64`，`autocomplete="username"`）、密码（`a-input type="password"`，`autocomplete="current-password"`，回车提交）。
 - 主按钮「登 录」（`filled` `xlarge` `block`，带 loading）。
 - 底部「以游客身份预览（只读）」文字按钮：点击**清除残留 token** 后跳转。
@@ -224,9 +224,9 @@ URL 同步 `?tab=sop-library`、`?tab=sop&sopId=`、`?tab=3d&model3dId=`、`?mod
 | 关联 3D | 有则显示可点链接（外链图标 + 3D 标题），点击切到 3D tab 并定位；无则「未关联」 |
 | 问题点 | **仅「停用」tab 显示**，空显示 `—` |
 | 替换关系 | 可点文字：`替换了 {品牌 型号} · {问题点}` 或 `被 {品牌 型号} 替换 · {问题点}`；点击跳到关联型号（切「全部」+ 填搜索词）；无则 `—` |
-| 规格参数 | `spec`，溢出省略 |
-| 特性与注意 | `feature`，溢出省略 |
-| 适用场景 | `scene`，溢出省略 |
+| 规格参数 | `spec`，完整显示（220px，折行） |
+| 特性与注意 | `feature`，完整显示（260px，折行） |
+| 适用场景 | `scene`，完整显示（200px，折行） |
 | 操作 | 编辑；`备选` 状态额外显示「替换现用」按钮；删除 |
 
 分页 20/50/100。空状态「没有符合当前条件的型号」。

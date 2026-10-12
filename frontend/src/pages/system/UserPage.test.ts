@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type RbacRole, type RbacUser } from '@/api';
 import { useAuthStore } from '@/stores/auth';
-import { columnWidths } from '@/test-helpers';
+import { columnWidths, formSelects } from '@/test-helpers';
 
 import UserPage from './UserPage.vue';
 
@@ -86,7 +86,7 @@ describe('UserPage', () => {
     await wrapper.get('[aria-label="编辑"]').trigger('click');
     await nextTick();
 
-    const roleSelect = wrapper.findComponent({ name: 'ASelect' });
+    const roleSelect = formSelects(wrapper)[0]!;
     expect(roleSelect.exists()).toBe(true);
     expect(roleSelect.props('value')).toBe(3);
     expect(roleSelect.props('placeholder')).toBe('请选择一个角色');
@@ -242,7 +242,7 @@ describe('UserPage', () => {
 
     await page.get('[aria-label="编辑"]').trigger('click');
     await nextTick();
-    const roleSelect = page.findComponent({ name: 'ASelect' });
+    const roleSelect = formSelects(page)[0]!;
     expect(roleSelect.props('value')).toBeNull();
     expect(roleSelect.props('placeholder')).toBe('保留原有角色');
     expect(document.body.textContent).toContain('不选择则保存时保留原角色');

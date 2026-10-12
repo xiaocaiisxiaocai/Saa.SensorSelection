@@ -34,7 +34,7 @@ import { uploadFile } from '@/pages/shared/files';
 import { fieldError } from '@/pages/shared/form';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
-  PAGE_SIZE_OPTIONS,
+  PAGINATION_PROPS,
   cellText,
   rowClick,
   scrollX,
@@ -857,10 +857,7 @@ async function removeImage(index: number) {
         v-model:page-size="pageSize"
         class="table-pagination"
         :total="filtered.length"
-        :page-size-options="PAGE_SIZE_OPTIONS"
-        show-size-changer
-        hide-on-single-page
-        :show-total="(count: number) => `共 ${count} 条`"
+        v-bind="PAGINATION_PROPS"
       />
     </div>
     <aside
@@ -924,11 +921,9 @@ async function removeImage(index: number) {
             :alt="image.fileName"
             width="100%"
           />
-          <template #actions>
-            <span class="image-card__name" :title="image.fileName">
-              {{ image.fileName }}
-            </span>
-            <a-tooltip v-if="writable" :title="`删除 ${image.fileName}`">
+          <div class="image-card__name">{{ image.fileName }}</div>
+          <template v-if="writable" #actions>
+            <a-tooltip :title="`删除 ${image.fileName}`">
               <a-button
                 type="text"
                 size="small"
@@ -1046,7 +1041,6 @@ async function removeImage(index: number) {
               mode="multiple"
               :options="sensorOptions"
               placeholder="按类型、品牌或型号搜索"
-              :max-tag-count="2"
               allow-clear
               option-filter-prop="label"
             />

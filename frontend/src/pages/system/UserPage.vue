@@ -15,7 +15,13 @@ import { toTreeSelectNodes } from '@/pages/system/org-tree';
 import { fieldError } from '@/pages/shared/form';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
-import { cellText, rowClick, scrollX, sortBy } from '@/pages/shared/table';
+import {
+  cellText,
+  rowClick,
+  scrollX,
+  sortBy,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess, useAuthStore } from '@/stores/auth';
 import { message } from 'ant-design-vue';
 
@@ -278,6 +284,11 @@ async function removeUser(user: RbacUser) {
 function orgPath(user: RbacUser) {
   return user.orgUnit?.path || '—';
 }
+
+// 分页条始终显示
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => users.value.length,
+);
 </script>
 
 <template>
@@ -293,10 +304,11 @@ function orgPath(user: RbacUser) {
       :data-source="users"
       row-key="id"
       :loading="loading"
-      :pagination="false"
+      :pagination="pagination"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无用户' }"
       :custom-row="writable ? rowClick(openEdit) : undefined"
+      @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'roles'">

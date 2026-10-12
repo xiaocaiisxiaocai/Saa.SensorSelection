@@ -225,7 +225,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
             id="dictionary-sort"
             v-model:value="form.sort"
             :min="1"
-            style="width: 100%"
+            class="full-width"
           />
         </a-form-item>
       </a-form>
@@ -236,3 +236,5 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     </a-modal>
   </section>
 </template>
+
+<style scoped src="./DictionaryPage.css"></style>

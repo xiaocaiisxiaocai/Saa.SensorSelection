@@ -8,13 +8,8 @@ import { describe, expect, it } from 'vitest';
 
 import DictionaryPage from './DictionaryPage.vue';
 
-const selectionPageCss = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    'shared',
-    'selection-page.css',
-  ),
+const dictionaryCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'DictionaryPage.css'),
   'utf8',
 );
 
@@ -38,7 +33,7 @@ describe('DictionaryPage', () => {
   });
 
   it('keeps the add action on the right and lets the header wrap', () => {
-    expect(selectionPageCss).toMatch(
+    expect(dictionaryCss).toMatch(
       /\.dictionary-header\s*\{[^}]*flex-wrap:\s*wrap;[^}]*justify-content:\s*space-between;/,
     );
   });

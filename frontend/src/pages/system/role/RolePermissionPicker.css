@@ -1,0 +1,8 @@
+.permission-group + .permission-group {
+  margin-top: var(--space-5);
+}
+
+.permission-group__head {
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+}

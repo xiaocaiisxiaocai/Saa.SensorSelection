@@ -1,0 +1,10 @@
+.machine-process-context {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.machine-process-context__select {
+  flex: 1;
+  min-width: 0;
+}

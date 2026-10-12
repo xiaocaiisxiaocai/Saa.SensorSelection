@@ -1,0 +1,6 @@
+.missing {
+  height: 100%;
+  overflow: auto;
+  background: var(--color-bg-container);
+  border-radius: var(--radius-lg);
+}

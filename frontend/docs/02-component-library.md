@@ -44,6 +44,14 @@
 | `save-feedback.ts` | `notifyResult`（按领域层结果提示成功/失败）、`confirmDelete` |
 | `tabs.ts` | `TAB_COUNT_STYLE`（标签计数的中性徽标样式） |
 
+## 组件与样式的拆分
+
+- 页面文件只负责页签、地址栏同步和把子组件拼起来；业务区的子组件和纯逻辑放在同名子目录（`pages/selection/{customer,process,machine,sensor,entity}/`、`pages/system/{user,role,org,audit}/`）。
+- 对话框独立成组件：表单、`useDirtyGuard`、校验和保存都在对话框里，对外 `defineExpose({ open })`，父组件 `ref` 调用 `dialog.value?.open(row)`；只读详情用 `v-model` 绑定当前条目、置空即关闭（关闭动画期间保留上一条内容）。
+- 列定义、筛选、URL 解析等纯函数放进同目录 `.ts` 并写单测，组件里只调用。
+- 样式：`.vue` 不写 `<style>` 内容，用 `<style scoped src="./同名.css"></style>`；模板不写静态 `style="…"`，撑满一行用全局 `.full-width`，动态值用 CSS 变量传入。`src/styles/tokens.test.ts` 会检查。
+- 多个页面共用的骨架留在 `pages/shared/selection-page.css`；只有一个组件用的规则放回该组件的 `.css`。
+
 ## 表单约定
 
 - 业务校验在领域层完成，**不要用 antd 的表单校验**：`a-form` 不传 `:model`，`a-form-item` 不写 `name`

@@ -1,0 +1,20 @@
+/* 类型名完整显示：列宽放不下时折行，圆点对齐第一行 */
+.sensor-type {
+  display: flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+.sensor-type :deep(.ant-badge-status-text) {
+  overflow-wrap: anywhere;
+}
+
+/* 文件名完整显示：链接按钮默认不折行，这里放开 */
+.sensor-file-link.ant-btn {
+  height: auto;
+  max-width: 100%;
+  padding-inline: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: start;
+}

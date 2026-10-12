@@ -18,16 +18,4 @@ withDefaults(
   >
 </template>
 
-<style scoped>
-.brand-mark {
-  display: block;
-  flex-shrink: 0;
-  width: auto;
-  object-fit: contain;
-  user-select: none;
-}
-
-.brand-mark--toolbar {
-  height: var(--space-7);
-}
-</style>
+<style scoped src="./BrandMark.css"></style>

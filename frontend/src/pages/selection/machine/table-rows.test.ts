@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { MachineSectionRow, ProcessStepItem, SensorItem } from '@/domain';
 
-import { buildMachineTableRows } from './table-rows';
+import {
+  buildMachineTableRows,
+  filterSectionRows,
+  sectionColumns,
+} from './table-rows';
 
 const row: MachineSectionRow = {
   id: 7,
@@ -156,5 +160,67 @@ describe('buildMachineTableRows', () => {
     expect(
       (noteRows[0] as unknown as { processStepName: string }).processStepName,
     ).toBe('—');
+  });
+});
+
+describe('filterSectionRows', () => {
+  const lookup = {
+    sensorById: new Map(sensors.map((sensor) => [sensor.id, sensor])),
+    processSteps,
+    machineModels,
+    boardCharacteristics,
+  };
+  const none = {
+    query: '',
+    sensorTypes: [],
+    machineModelId: null,
+    processStepId: null,
+    boardCharacteristicId: null,
+  };
+  const other = { ...row, id: 8, sensorIds: [], processStepId: null };
+
+  it('filters structure rows by linked sensor type and dictionary ids', () => {
+    const rows = [row, other];
+    expect(
+      filterSectionRows(rows, true, { ...none, sensorTypes: ['对射'] }, lookup),
+    ).toEqual([row]);
+    expect(
+      filterSectionRows(rows, true, { ...none, processStepId: 21 }, lookup),
+    ).toEqual([row]);
+    // 下拉筛选只对结构分区生效
+    expect(
+      filterSectionRows(rows, false, { ...none, processStepId: 21 }, lookup),
+    ).toEqual(rows);
+  });
+
+  it('matches keywords against step names and linked sensor models', () => {
+    const rows = [row, other];
+    expect(
+      filterSectionRows(rows, true, { ...none, query: 'des 显影' }, lookup),
+    ).toEqual([row]);
+    expect(
+      filterSectionRows(rows, true, { ...none, query: 'e2k-c25' }, lookup),
+    ).toEqual([row]);
+  });
+});
+
+describe('sectionColumns', () => {
+  it('only offers sorting on note sections and adds actions when writable', () => {
+    const structure = sectionColumns({
+      structure: true,
+      sort: null,
+      writable: true,
+    });
+    const notes = sectionColumns({
+      structure: false,
+      sort: null,
+      writable: false,
+    });
+    expect(structure.some((column) => column.sorter)).toBe(false);
+    expect(structure.at(-1)?.key).toBe('actions');
+    expect(
+      notes.filter((column) => column.sorter).map((column) => column.key),
+    ).toEqual(['role', 'name']);
+    expect(notes.some((column) => column.key === 'actions')).toBe(false);
   });
 });

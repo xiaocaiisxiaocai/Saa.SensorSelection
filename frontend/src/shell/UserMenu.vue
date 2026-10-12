@@ -200,35 +200,4 @@ async function onMenuClick({ key: id }: { key: string | number }) {
   </a-modal>
 </template>
 
-<style scoped>
-.user-menu__trigger {
-  display: inline-flex;
-  gap: var(--space-3);
-  align-items: center;
-  max-width: 14rem;
-}
-
-.user-menu__avatar {
-  flex-shrink: 0;
-  color: var(--color-text-light-solid);
-  background: var(--color-primary);
-}
-
-.user-menu__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-menu__profile {
-  max-width: 18rem;
-  white-space: normal;
-}
-
-@media (width < 560px) {
-  .user-menu__name {
-    display: none;
-  }
-}
-</style>
+<style scoped src="./UserMenu.css"></style>

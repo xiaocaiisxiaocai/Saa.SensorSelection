@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 import { RotateCcw } from 'lucide-vue-next';
 import {
   computed,
@@ -13,8 +14,6 @@ import {
 
 import { api, ApiError, type AuditLogItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
-import { message } from 'ant-design-vue';
-import { formatAuditTarget } from './audit-target';
 import {
   cellText,
   PAGINATION_PROPS,
@@ -24,29 +23,11 @@ import {
   sortOrderOf,
   type TableSortState,
 } from '@/pages/shared/table';
+import AuditDetailDialog from '@/pages/system/audit/AuditDetailDialog.vue';
+import { ACTION_LABELS, actionLabel } from '@/pages/system/audit/audit-actions';
+import { formatAuditTarget } from '@/pages/system/audit-target';
 
 import '../shared/selection-page.css';
-
-const ACTION_LABELS: Record<string, string> = {
-  'auth.change-password': '修改密码',
-  'auth.login': '登录',
-  'org.create': '创建组织',
-  'org.delete': '删除组织',
-  'org.update': '更新组织',
-  'role.create': '创建角色',
-  'role.delete': '删除角色',
-  'role.update': '更新角色',
-  'store.delete': '删除数据',
-  // 缺了这条时表格会直接显示原始操作码 store.entity-groups.reorder，
-  // 又长又要折行，和其他行的中文标签也对不齐。
-  'store.entity-groups.reorder': '调整分类顺序',
-  'store.replace-all': '整体导入',
-  'store.upsert': '写入数据',
-  'user.create': '创建用户',
-  'user.delete': '删除用户',
-  'user.reset-password': '重置密码',
-  'user.update': '更新用户',
-};
 
 const actionOptions = [
   { label: '全部操作', value: '' },
@@ -63,7 +44,6 @@ const items = ref<AuditLogItem[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
-const detailOpen = ref(false);
 const selectedLog = ref<AuditLogItem | null>(null);
 // 日志是服务端分页的，排序必须下推给后端，否则只排到当前这 20 条。
 const sort = ref<TableSortState | null>(null);
@@ -81,7 +61,8 @@ const hasActiveFilters = computed(
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
-const columns: TableColumnType[] = [
+// 受控排序：sortOrder 要跟着 sort 变，所以列定义必须是 computed
+const columns = computed<TableColumnType[]>(() => [
   // 192 而非 180：完整时间戳实测要 168px 文字宽 + 16px 内边距，180 会被截成
   // 「2026-08-17 20:00:…」，而审计日志里精确到秒是有意义的。
   {
@@ -122,7 +103,7 @@ const columns: TableColumnType[] = [
     sortOrder: sortOrderOf(sort.value, 'result'),
   },
   { key: 'ip', dataIndex: 'ip', title: 'IP', width: 120 },
-];
+]);
 
 watch([page, pageSize], loadData);
 watch(sort, () => {
@@ -151,55 +132,9 @@ watch(
 );
 onBeforeUnmount(() => clearTimeout(filterTimer));
 
-function actionLabel(action: string) {
-  return ACTION_LABELS[action] ?? action;
-}
-
 function openDetail(log: AuditLogItem) {
   selectedLog.value = log;
-  detailOpen.value = true;
 }
-
-/*
- * 业务详情是后端拼出来的「键：值；键：值」串，直接原样显示就是一大坨，
- * 和上面那些整齐的标签-值行格格不入。这里把它还原成结构化的行。
- *
- * 格式不是登录独有的：用户增改、组织、角色、数据写入都用同一套拼法，
- * 所以按通用规则解析；任何一条对不上格式的，整体退回纯文本显示，
- * 避免把没见过的写法解析得七零八落。
- */
-const parsedDetail = computed(() => {
-  const raw = selectedLog.value?.detail?.trim();
-  if (!raw) return null;
-
-  const summary: string[] = [];
-  const pairs: { label: string; value: string; items?: string[] }[] = [];
-  for (const segment of raw.split('；')) {
-    const text = segment.trim();
-    if (!text) continue;
-    const at = text.indexOf('：');
-    if (at <= 0) {
-      // 没有「：」的段是「登录成功」这类独立短语，留作开头一句话
-      if (pairs.length > 0) return null;
-      summary.push(text);
-      continue;
-    }
-    const label = text.slice(0, at).trim();
-    const value = text.slice(at + 1).trim();
-    if (!label) return null;
-    const items = value.includes('、')
-      ? value
-          .split('、')
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : undefined;
-    pairs.push({ label, value: value || '—', items });
-  }
-
-  // 一个键值对都没有说明这就是一句普通话，按原文显示即可
-  if (pairs.length === 0) return null;
-  return { summary: summary.join('；'), pairs };
-});
 
 function resultFilter(): boolean | undefined {
   if (filters.result === 'true') return true;
@@ -368,141 +303,8 @@ async function resetFilters() {
       :total="total"
       v-bind="PAGINATION_PROPS"
     />
-    <a-modal
-      :open="detailOpen"
-      title="操作详情"
-      :width="640"
-      destroy-on-close
-      @cancel="detailOpen = false"
-    >
-      <a-descriptions
-        v-if="selectedLog"
-        bordered
-        size="small"
-        :column="1"
-        :label-style="{ width: '96px' }"
-      >
-        <a-descriptions-item label="日志编号">
-          #{{ selectedLog.id }}
-        </a-descriptions-item>
-        <a-descriptions-item label="时间">
-          {{ formatLocalDateTime(new Date(selectedLog.timestamp)) }}
-        </a-descriptions-item>
-        <a-descriptions-item label="用户">
-          {{ selectedLog.username || '—' }}
-        </a-descriptions-item>
-        <a-descriptions-item label="操作">
-          {{ actionLabel(selectedLog.action) }}
-        </a-descriptions-item>
-        <a-descriptions-item label="操作编码">
-          {{ selectedLog.action }}
-        </a-descriptions-item>
-        <a-descriptions-item label="目标">
-          {{ formatAuditTarget(selectedLog.target) || '—' }}
-        </a-descriptions-item>
-        <a-descriptions-item
-          v-if="
-            selectedLog.target &&
-              formatAuditTarget(selectedLog.target) !== selectedLog.target
-          "
-          label="目标键"
-        >
-          <a-typography-text code>{{ selectedLog.target }}</a-typography-text>
-        </a-descriptions-item>
-        <a-descriptions-item label="结果">
-          <a-tag :color="selectedLog.result ? 'green' : 'red'">
-            {{ selectedLog.result ? '成功' : '失败' }}
-          </a-tag>
-        </a-descriptions-item>
-        <a-descriptions-item label="IP">
-          {{ selectedLog.ip || '—' }}
-        </a-descriptions-item>
-        <a-descriptions-item label="业务详情">
-          <template v-if="parsedDetail">
-            <a-typography-paragraph
-              v-if="parsedDetail.summary"
-              class="audit-detail__summary"
-            >
-              {{ parsedDetail.summary }}
-            </a-typography-paragraph>
-            <a-descriptions
-              class="audit-detail__pairs"
-              size="small"
-              :column="1"
-            >
-              <a-descriptions-item
-                v-for="pair in parsedDetail.pairs"
-                :key="pair.label"
-                :label="pair.label"
-              >
-                <!-- 权限/角色这类是顿号分隔的长列表，排成标签块比挤成
-                     一行好读；单值仍然按普通文本显示。 -->
-                <a-space v-if="pair.items" :size="[4, 4]" wrap>
-                  <a-tag v-for="item in pair.items" :key="item">
-                    {{ item }}
-                  </a-tag>
-                </a-space>
-                <template v-else>{{ pair.value }}</template>
-              </a-descriptions-item>
-            </a-descriptions>
-          </template>
-          <span v-else class="audit-detail__text">{{
-            selectedLog.detail || '—'
-          }}</span>
-        </a-descriptions-item>
-        <a-descriptions-item label="说明">
-          <span class="audit-detail__text">{{ selectedLog.error || '—' }}</span>
-        </a-descriptions-item>
-      </a-descriptions>
-      <template #footer>
-        <a-button @click="detailOpen = false">关闭</a-button>
-      </template>
-    </a-modal>
+    <AuditDetailDialog v-model="selectedLog" />
   </section>
 </template>
 
-<style scoped>
-.audit-toolbar {
-  display: grid;
-
-  /* h1 现在是 visually-hidden（绝对定位，不参与网格布局），
-     所以这里少了一列——直接从筛选字段开始。 */
-  grid-template-columns:
-    minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
-    minmax(17rem, 1.5fr) auto;
-  gap: var(--space-2);
-}
-
-.audit-toolbar .selection-toolbar__filter,
-.audit-toolbar__date {
-  width: 100%;
-  min-width: 0;
-}
-
-@media (width <= 60rem) {
-  .audit-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .audit-toolbar__user,
-  .audit-toolbar__date {
-    grid-column: 1 / -1;
-  }
-}
-
-.audit-target,
-.audit-target__error {
-  display: block;
-}
-
-.audit-target__error {
-  margin-top: var(--space-1);
-  font: var(--font-sm);
-  color: var(--color-error);
-}
-
-.audit-detail__text {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-</style>
+<style scoped src="./AuditLogPage.css"></style>

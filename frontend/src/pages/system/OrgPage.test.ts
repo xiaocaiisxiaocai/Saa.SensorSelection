@@ -65,7 +65,10 @@ describe('OrgPage', () => {
     const names = wrapper.findAll('.org-tree__name');
     expect(names[0]?.text()).toBe('制造事业部');
     expect(names[1]?.text()).toBe('选型课');
-    expect(names[1]?.attributes('style')).toContain('padding-inline-start');
+    expect(names[0]?.attributes('style')).toContain('--org-depth: 0');
+    expect(names[1]?.attributes('style')).toContain('--org-depth: 1');
+    // 已展平成缩进行，不能再出现树形表格的展开按钮
+    expect(wrapper.find('.ant-table-row-expand-icon').exists()).toBe(false);
     wrapper.unmount();
   });
 

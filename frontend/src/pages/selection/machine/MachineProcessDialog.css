@@ -1,0 +1,9 @@
+.machine-process-list {
+  margin-bottom: var(--space-5);
+}
+
+.machine-process-form__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}

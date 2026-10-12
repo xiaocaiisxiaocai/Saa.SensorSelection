@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
 import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import type { CustomerProcItem } from '@/domain';
-import { fieldError } from '@/pages/shared/form';
-import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -17,24 +15,16 @@ import {
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
+import ProcFormDialog from './ProcFormDialog.vue';
+
 const props = defineProps<{ entityName: string }>();
 const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
-const dialogOpen = ref(false);
-const editId = ref<number>();
-const validationAttempted = ref(false);
+const formDialog = ref<InstanceType<typeof ProcFormDialog>>();
 const query = ref('');
 const typeFilters = ref<Array<string | number>>([]);
-const form = reactive({
-  feature: '',
-  note: '',
-  role: '',
-  sensorNote: '',
-  type: '',
-});
-const dirtyGuard = useDirtyGuard(form);
 
 const typeOptions = computed(() =>
   store
@@ -97,62 +87,13 @@ watch(
   },
 );
 
-function resetForm() {
-  validationAttempted.value = false;
-  editId.value = undefined;
-  Object.assign(form, {
-    feature: '',
-    note: '',
-    role: '',
-    sensorNote: '',
-    type: typeOptions.value[0]?.value ?? '',
-  });
-}
-
 function resetFilters() {
   query.value = '';
   typeFilters.value = [];
 }
 
-function addItem() {
-  resetForm();
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
 function editItem(item: CustomerProcItem) {
-  validationAttempted.value = false;
-  editId.value = item.id;
-  Object.assign(form, {
-    feature: item.feature,
-    note: item.note,
-    role: item.role,
-    sensorNote: item.sensorNote,
-    type: item.type,
-  });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
-function saveItem() {
-  validationAttempted.value = true;
-  const result = store.saveCrud(
-    'customer-proc',
-    props.entityName,
-    { ...form },
-    editId.value,
-  );
-  if (
-    notifyResult(result, editId.value ? '注意事项已更新' : '注意事项已新增')
-  ) {
-    dialogOpen.value = false;
-  }
-}
-
-async function cancelDialog() {
-  if (await dirtyGuard.confirmClose()) {
-    dialogOpen.value = false;
-  }
+  formDialog.value?.open(item);
 }
 
 async function deleteItem(item: CustomerProcItem) {
@@ -203,7 +144,9 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <a-button v-if="writable" type="primary" @click="addItem">新增</a-button>
+      <a-button v-if="writable" type="primary" @click="formDialog?.open()">
+        新增
+      </a-button>
     </div>
     <a-table
       :columns="columns"
@@ -249,110 +192,6 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-else>{{ cellText(value) }}</template>
       </template>
     </a-table>
-    <a-modal
-      :open="dialogOpen"
-      :title="editId ? '编辑注意事项' : '新增注意事项'"
-      :width="560"
-      destroy-on-close
-      @cancel="cancelDialog"
-    >
-      <a-form layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-proc-type"
-              label="制程分类"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.type
-                    ? '请选择制程分类'
-                    : undefined,
-                )
-              "
-            >
-              <a-select
-                id="customer-proc-type"
-                v-model:value="form.type"
-                :options="typeOptions"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-proc-role"
-              label="制程作用"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.role.trim()
-                    ? '请输入制程作用'
-                    : undefined,
-                )
-              "
-            >
-              <a-input
-                id="customer-proc-role"
-                v-model:value="form.role"
-                :maxlength="80"
-                allow-clear
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-proc-feature"
-              label="制程特性"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.feature.trim()
-                    ? '请输入制程特性'
-                    : undefined,
-                )
-              "
-            >
-              <a-textarea
-                id="customer-proc-feature"
-                v-model:value="form.feature"
-                :rows="2"
-                :maxlength="500"
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-proc-sensor-note"
-              label="sensor使用注意事项"
-            >
-              <a-textarea
-                id="customer-proc-sensor-note"
-                v-model:value="form.sensorNote"
-                :rows="2"
-                :maxlength="500"
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item html-for="customer-proc-note" label="备注">
-              <a-input
-                id="customer-proc-note"
-                v-model:value="form.note"
-                :maxlength="200"
-                allow-clear
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-      <template #footer>
-        <a-button @click="cancelDialog">取消</a-button>
-        <a-button type="primary" @click="saveItem">保存</a-button>
-      </template>
-    </a-modal>
+    <ProcFormDialog ref="formDialog" :entity-name="entityName" />
   </div>
 </template>

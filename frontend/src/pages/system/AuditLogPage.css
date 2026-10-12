@@ -1,0 +1,38 @@
+.audit-toolbar {
+  display: grid;
+
+  /* h1 现在是 visually-hidden（绝对定位，不参与网格布局），
+     所以这里少了一列——直接从筛选字段开始。 */
+  grid-template-columns:
+    minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
+    minmax(17rem, 1.5fr) auto;
+  gap: var(--space-2);
+}
+
+.audit-toolbar .selection-toolbar__filter,
+.audit-toolbar__date {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (width <= 60rem) {
+  .audit-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-toolbar__user,
+  .audit-toolbar__date {
+    grid-column: 1 / -1;
+  }
+}
+
+.audit-target,
+.audit-target__error {
+  display: block;
+}
+
+.audit-target__error {
+  margin-top: var(--space-1);
+  font: var(--font-sm);
+  color: var(--color-error);
+}

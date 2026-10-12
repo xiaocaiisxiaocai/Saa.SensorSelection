@@ -19,11 +19,4 @@ const router = useRouter();
   </a-result>
 </template>
 
-<style scoped>
-.missing {
-  height: 100%;
-  overflow: auto;
-  background: var(--color-bg-container);
-  border-radius: var(--radius-lg);
-}
-</style>
+<style scoped src="./NotFoundPage.css"></style>

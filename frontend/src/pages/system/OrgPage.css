@@ -1,0 +1,8 @@
+.org-tree__name {
+  display: block;
+
+  /* 按层级缩进：模板只传 --org-depth */
+  padding-inline-start: calc(var(--org-depth, 0) * var(--space-5));
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

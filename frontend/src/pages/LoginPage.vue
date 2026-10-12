@@ -197,39 +197,4 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped>
-.login-layout {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-  padding: var(--space-5);
-  background: var(--color-bg-layout);
-}
-
-.login-layout__main {
-  display: grid;
-  flex: 1;
-  place-items: center;
-}
-
-.login__card {
-  width: min(100%, 400px);
-  box-shadow: var(--box-shadow-tertiary);
-}
-
-.login__error {
-  margin-bottom: var(--space-7);
-}
-
-.login__guest {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-layout__footer {
-  font: var(--font-sm);
-  color: var(--color-text-tertiary);
-  text-align: center;
-}
-</style>
+<style scoped src="./LoginPage.css"></style>

@@ -49,12 +49,4 @@ const parts = computed<TextPart[]>(() => {
   </template>
 </template>
 
-<style scoped>
-.a-highlight-text {
-  padding: 0 var(--space-1);
-  margin: 0 calc(var(--space-1) * -0.5);
-  color: inherit;
-  background: var(--color-highlight-bg);
-  border-radius: var(--radius-xs);
-}
-</style>
+<style scoped src="./AHighlightText.css"></style>

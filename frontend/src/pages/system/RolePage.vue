@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 import { Pencil, Trash2 } from 'lucide-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import { api, ApiError, type PermissionInfo, type RbacRole } from '@/api';
-import { fieldError } from '@/pages/shared/form';
-import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -14,8 +13,8 @@ import {
   sortBy,
   useTablePagination,
 } from '@/pages/shared/table';
+import RoleFormDialog from '@/pages/system/role/RoleFormDialog.vue';
 import { useAccess } from '@/stores/auth';
-import { message } from 'ant-design-vue';
 
 import '../shared/selection-page.css';
 
@@ -24,28 +23,8 @@ const writable = computed(() => canWrite('rbac:role:write'));
 const loading = ref(false);
 const roles = ref<RbacRole[]>([]);
 const permissions = ref<PermissionInfo[]>([]);
-const dialogOpen = ref(false);
-const editing = ref<null | RbacRole>(null);
-const saving = ref(false);
-const validationAttempted = ref(false);
-const form = reactive({
-  code: '',
-  description: '',
-  name: '',
-  permissionIds: [] as number[],
-});
-const dirtyGuard = useDirtyGuard(form);
+const formDialog = ref<InstanceType<typeof RoleFormDialog>>();
 
-const permissionGroups = computed(() => {
-  const groups = new Map<string, PermissionInfo[]>();
-  for (const permission of permissions.value) {
-    const module = permission.module || '其他';
-    const list = groups.get(module) ?? [];
-    list.push(permission);
-    groups.set(module, list);
-  }
-  return [...groups.entries()];
-});
 const columns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
@@ -101,103 +80,12 @@ function protectedReason(role: RbacRole) {
   return isProtected(role) ? '系统内置角色，不可修改或删除' : undefined;
 }
 
-function groupState(items: PermissionInfo[]) {
-  const selected = items.filter((item) =>
-    form.permissionIds.includes(item.id),
-  ).length;
-  if (selected === 0) return false;
-  if (selected === items.length) return true;
-  return 'indeterminate' as const;
-}
-
-function toggleGroup(items: PermissionInfo[], checked: boolean) {
-  const ids = new Set(form.permissionIds);
-  for (const item of items) {
-    if (checked) ids.add(item.id);
-    else ids.delete(item.id);
-  }
-  form.permissionIds = [...ids];
-}
-
-function openCreate() {
-  validationAttempted.value = false;
-  editing.value = null;
-  Object.assign(form, {
-    code: '',
-    description: '',
-    name: '',
-    permissionIds: [],
-  });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
 function openEdit(role: RbacRole) {
-  validationAttempted.value = false;
-  editing.value = role;
-  Object.assign(form, {
-    code: role.code,
-    description: role.description ?? '',
-    name: role.name,
-    permissionIds: role.permissions.map((item) => item.id),
-  });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
-async function cancelDialog() {
-  if (await dirtyGuard.confirmClose()) {
-    dialogOpen.value = false;
-  }
+  formDialog.value?.openEdit(role);
 }
 
 function activateRole(role: RbacRole) {
   if (writable.value && !isProtected(role)) openEdit(role);
-}
-
-function togglePermission(id: number, checked: boolean) {
-  if (checked) {
-    if (!form.permissionIds.includes(id)) form.permissionIds.push(id);
-    return;
-  }
-  form.permissionIds = form.permissionIds.filter((item) => item !== id);
-}
-
-async function saveRole() {
-  validationAttempted.value = true;
-  // 字段级错误已经由角色标识/名称输入框下方的红字分别说明，不再用一条
-  // 合并的 Toast 复述——两处措辞不一致时，用户不知道该信哪个。
-  if (!form.code.trim() || !form.name.trim()) {
-    return;
-  }
-  if (editing.value === null && !/^[a-z][\w:-]*$/i.test(form.code.trim())) {
-    return;
-  }
-  saving.value = true;
-  try {
-    if (editing.value === null) {
-      await api.createRole({
-        code: form.code.trim(),
-        description: form.description.trim() || null,
-        name: form.name.trim(),
-        permissionIds: form.permissionIds,
-      });
-      message.success('角色已创建');
-    } else {
-      await api.updateRole(editing.value.id, {
-        description: form.description.trim() || null,
-        name: form.name.trim(),
-        permissionIds: form.permissionIds,
-      });
-      message.success('角色已更新');
-    }
-    dialogOpen.value = false;
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '保存失败');
-  } finally {
-    saving.value = false;
-  }
 }
 
 async function removeRole(role: RbacRole) {
@@ -225,7 +113,11 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   <section class="selection-page">
     <div class="selection-toolbar role-toolbar">
       <h1 class="visually-hidden">角色管理</h1>
-      <a-button v-if="writable" type="primary" @click="openCreate">
+      <a-button
+        v-if="writable"
+        type="primary"
+        @click="formDialog?.openCreate()"
+      >
         新增角色
       </a-button>
     </div>
@@ -287,116 +179,10 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-else>{{ cellText(value) }}</template>
       </template>
     </a-table>
-    <a-modal
-      :open="dialogOpen"
-      :title="editing ? '编辑角色' : '新建角色'"
-      :width="560"
-      destroy-on-close
-      @cancel="cancelDialog"
-    >
-      <a-form layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item
-              html-for="role-code"
-              label="角色标识"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.code.trim()
-                    ? '请输入角色标识'
-                    : validationAttempted &&
-                      editing === null &&
-                      !/^[a-z][\w:-]*$/i.test(form.code.trim())
-                      ? '字母开头，可含字母、数字、冒号、下划线和短横线'
-                      : undefined,
-                )
-              "
-            >
-              <a-input
-                id="role-code"
-                v-model:value="form.code"
-                :maxlength="64"
-                placeholder="如：sensor_admin"
-                :disabled="Boolean(editing)"
-                allow-clear
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              html-for="role-name"
-              label="角色名称"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.name.trim()
-                    ? '请输入角色名称'
-                    : undefined,
-                )
-              "
-            >
-              <a-input
-                id="role-name"
-                v-model:value="form.name"
-                :maxlength="64"
-                placeholder="如：Sensor 管理员"
-                allow-clear
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item html-for="role-description" label="描述">
-              <a-textarea
-                id="role-description"
-                v-model:value="form.description"
-                :rows="2"
-                :maxlength="200"
-                placeholder="角色用途说明（可选）"
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item
-              :label="`权限（已选 ${form.permissionIds.length} / ${permissions.length}）`"
-            >
-              <div
-                v-for="[module, items] in permissionGroups"
-                :key="module"
-                class="permission-group"
-              >
-                <a-checkbox
-                  class="permission-group__head"
-                  :checked="groupState(items) === true"
-                  :indeterminate="groupState(items) === 'indeterminate'"
-                  @change="toggleGroup(items, $event.target.checked)"
-                >
-                  {{ module }}
-                </a-checkbox>
-                <a-row :gutter="[16, 4]">
-                  <a-col v-for="item in items" :key="item.id" :xs="24" :sm="12">
-                    <a-checkbox
-                      :checked="form.permissionIds.includes(item.id)"
-                      @change="togglePermission(item.id, $event.target.checked)"
-                    >
-                      {{ item.name }}
-                    </a-checkbox>
-                  </a-col>
-                </a-row>
-              </div>
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-      <template #footer>
-        <a-button @click="cancelDialog">取消</a-button>
-        <a-button type="primary" :loading="saving" @click="saveRole">
-          保存
-        </a-button>
-      </template>
-    </a-modal>
+    <RoleFormDialog
+      ref="formDialog"
+      :permissions="permissions"
+      @saved="loadData"
+    />
   </section>
 </template>

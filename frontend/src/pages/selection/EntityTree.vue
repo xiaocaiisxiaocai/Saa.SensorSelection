@@ -3,42 +3,30 @@ import type { TreeProps } from 'ant-design-vue';
 import {
   ChevronsDownUp,
   ChevronsUpDown,
-  Ellipsis,
   FolderPlus,
   Plus,
   Search,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
-import { entityTreeItemKey, type EntityGroup } from '@/domain';
+import type { EntityGroup } from '@/domain';
+import EntityTreeNode from '@/pages/selection/entity/EntityTreeNode.vue';
+import {
+  branchKeys,
+  buildEntityTree,
+  dropMove,
+  findItemKey,
+  payloadOf,
+  sameParent,
+  type EntityNode,
+  type ItemPayload,
+} from '@/pages/selection/entity/entity-tree-data';
 
 /**
- * 客户（区域 → 客户）与机型（分类 → 配置 → 机型）共用的左侧目录树，
+ * 客户（客户 → 区域）与机型（分类 → 配置 → 机型）共用的左侧目录树，
  * 直接基于 a-tree：展开/选中/勾选/拖拽排序都是 antd 自带交互，
- * 节点的编辑删除放在每行的「更多」下拉菜单里。
+ * 节点的编辑删除放在每行的「更多」下拉菜单里（EntityTreeNode）。
  */
-type NodeKind = 'group' | 'configuration' | 'item';
-
-interface EntityNode {
-  key: string;
-  title: string;
-  kind: NodeKind;
-  category: string;
-  configuration: string | null;
-  item?: string;
-  count?: number;
-  selectable: boolean;
-  checkable: boolean;
-  isLeaf?: boolean;
-  children?: EntityNode[];
-}
-
-type ItemPayload = {
-  category: string;
-  configuration: string | null;
-  item: string;
-};
-
 const props = withDefaults(
   defineProps<{
     groups: EntityGroup[];
@@ -92,96 +80,7 @@ const canSort = computed(
   () => props.sortable && props.editable && keyword.value === '',
 );
 
-const groupKey = (category: string) => `group:${category}`;
-const configurationKey = (category: string, configuration: string) =>
-  `configuration:${JSON.stringify([category, configuration])}`;
-const itemKey = (
-  category: string,
-  configuration: string | null,
-  item: string,
-) => entityTreeItemKey({ category, configuration, name: item });
-
-const matches = (text: string) =>
-  !keyword.value || text.toLocaleLowerCase('zh-CN').includes(keyword.value);
-
-function itemNode(
-  category: string,
-  configuration: string | null,
-  item: string,
-): EntityNode {
-  return {
-    key: itemKey(category, configuration, item),
-    title: item,
-    kind: 'item',
-    category,
-    configuration,
-    item,
-    selectable: true,
-    checkable: true,
-    isLeaf: true,
-  };
-}
-
-const treeData = computed<EntityNode[]>(() =>
-  props.groups.flatMap((group) => {
-    const groupHit = matches(group.name);
-    const configurations = (group.configurations ?? []).flatMap(
-      (configuration) => {
-        const configurationHit = groupHit || matches(configuration.name);
-        const items = configuration.items.filter(
-          (item) => configurationHit || matches(item),
-        );
-        if (!configurationHit && items.length === 0) return [];
-        return [
-          {
-            key: configurationKey(group.name, configuration.name),
-            title: configuration.name,
-            kind: 'configuration' as const,
-            category: group.name,
-            configuration: configuration.name,
-            count: configuration.items.length,
-            selectable: false,
-            checkable: false,
-            children: items.map((item) =>
-              itemNode(group.name, configuration.name, item),
-            ),
-          },
-        ];
-      },
-    );
-    const items = group.items.filter((item) => groupHit || matches(item));
-    if (!groupHit && configurations.length === 0 && items.length === 0) {
-      return [];
-    }
-    return [
-      {
-        key: groupKey(group.name),
-        title: group.name,
-        kind: 'group' as const,
-        category: group.name,
-        configuration: null,
-        count:
-          group.items.length +
-          (group.configurations ?? []).reduce(
-            (sum, configuration) => sum + configuration.items.length,
-            0,
-          ),
-        selectable: false,
-        checkable: false,
-        children: [
-          ...configurations,
-          ...items.map((item) => itemNode(group.name, null, item)),
-        ],
-      },
-    ];
-  }),
-);
-
-function branchKeys(nodes: EntityNode[]): string[] {
-  return nodes.flatMap((node) =>
-    node.children ? [node.key, ...branchKeys(node.children)] : [],
-  );
-}
+const treeData = computed(() => buildEntityTree(props.groups, keyword.value));
 
 // 默认全部展开；之后新增的分组/配置也自动展开，用户手动收起的保持收起。
 const expandedKeys = ref<string[]>(branchKeys(treeData.value));
@@ -217,17 +116,8 @@ function toggleBranch(key: string) {
     : [...expandedKeys.value, key];
 }
 
-function findItemKey(nodes: EntityNode[]): string | undefined {
-  for (const node of nodes) {
-    if (node.kind === 'item' && node.item === props.selected) return node.key;
-    const child = node.children && findItemKey(node.children);
-    if (child) return child;
-  }
-  return undefined;
-}
-
 const selectedKeys = computed(() => {
-  const key = props.selectedKey || findItemKey(treeData.value);
+  const key = props.selectedKey || findItemKey(treeData.value, props.selected);
   return key ? [key] : [];
 });
 
@@ -235,14 +125,6 @@ const checkedKeys = computed(() => ({
   checked: props.checkedItems ?? [],
   halfChecked: [],
 }));
-
-function payloadOf(node: EntityNode): ItemPayload {
-  return {
-    category: node.category,
-    configuration: node.configuration,
-    item: node.item ?? '',
-  };
-}
 
 const nodeOf = (node: unknown) =>
   ((node as { dataRef?: EntityNode }).dataRef ?? node) as EntityNode;
@@ -258,34 +140,6 @@ const onCheck: TreeProps['onCheck'] = (_keys, info) => {
   emit('toggleCheck', { ...payloadOf(node), checked: Boolean(info.checked) });
 };
 
-function siblingsOf(node: EntityNode): string[] {
-  const group = props.groups.find((entry) => entry.name === node.category);
-  if (node.kind === 'group') return props.groups.map((entry) => entry.name);
-  if (node.kind === 'configuration') {
-    return (group?.configurations ?? []).map((entry) => entry.name);
-  }
-  if (node.configuration) {
-    return (
-      group?.configurations?.find((entry) => entry.name === node.configuration)
-        ?.items ?? []
-    );
-  }
-  return group?.items ?? [];
-}
-
-const nameOf = (node: EntityNode) =>
-  node.kind === 'group'
-    ? node.category
-    : node.kind === 'configuration'
-      ? (node.configuration ?? '')
-      : (node.item ?? '');
-
-const sameParent = (a: EntityNode, b: EntityNode) =>
-  a.kind === b.kind &&
-  (a.kind === 'group' ||
-    (a.category === b.category &&
-      (a.kind === 'configuration' || a.configuration === b.configuration)));
-
 // 只允许同一父节点下的同级排序（拖到兄弟节点的前/后），不允许改挂父级。
 const allowDrop: TreeProps['allowDrop'] = ({
   dragNode,
@@ -297,30 +151,22 @@ const draggable = (node: unknown) => canSort.value && Boolean(nodeOf(node));
 
 const onDrop: TreeProps['onDrop'] = (info) => {
   const drag = nodeOf(info.dragNode);
-  const target = nodeOf(info.node);
-  if (!sameParent(drag, target)) return;
-  const siblings = siblingsOf(drag);
-  const oldIndex = siblings.indexOf(nameOf(drag));
-  const targetIndex = siblings.indexOf(nameOf(target));
-  if (oldIndex < 0 || targetIndex < 0) return;
-  const pos = String(info.node.pos ?? '').split('-');
-  const relative = info.dropPosition - Number(pos[pos.length - 1]);
-  let newIndex = relative < 0 ? targetIndex : targetIndex + 1;
-  if (oldIndex < newIndex) newIndex -= 1;
-  if (newIndex === oldIndex) return;
-  if (drag.kind === 'group') emit('reorderGroups', { oldIndex, newIndex });
+  const move = dropMove(
+    props.groups,
+    drag,
+    nodeOf(info.node),
+    String(info.node.pos ?? ''),
+    info.dropPosition,
+  );
+  if (!move) return;
+  if (drag.kind === 'group') emit('reorderGroups', move);
   else if (drag.kind === 'configuration') {
-    emit('reorderConfigurations', {
-      category: drag.category,
-      oldIndex,
-      newIndex,
-    });
+    emit('reorderConfigurations', { category: drag.category, ...move });
   } else {
     emit('reorderItems', {
       category: drag.category,
       configuration: drag.configuration,
-      oldIndex,
-      newIndex,
+      ...move,
     });
   }
 };
@@ -406,7 +252,7 @@ function actionsFor(node: EntityNode): MenuAction[] {
   ];
 }
 
-function runAction(node: EntityNode, key: string | number) {
+function runAction(node: EntityNode, key: string) {
   actionsFor(node)
     .find((action) => action.key === key)
     ?.run();
@@ -489,61 +335,13 @@ function runAction(node: EntityNode, key: string | number) {
         @drop="onDrop"
       >
         <template #title="{ dataRef }">
-          <div
-            class="entity-tree__node"
-            :data-node-kind="(dataRef as EntityNode).kind"
-            :data-category="(dataRef as EntityNode).category"
-            :data-configuration="
-              (dataRef as EntityNode).configuration ?? undefined
-            "
-            :data-item="(dataRef as EntityNode).item"
-            @click="
-              (dataRef as EntityNode).kind !== 'item' &&
-                toggleBranch((dataRef as EntityNode).key)
-            "
-          >
-            <span
-              class="entity-tree__label"
-              :class="{ 'entity-tree__label--group': (dataRef as EntityNode).kind === 'group' }"
-              :title="(dataRef as EntityNode).title"
-            >
-              {{ (dataRef as EntityNode).title }}
-            </span>
-            <a-typography-text
-              v-if="(dataRef as EntityNode).count !== undefined"
-              type="secondary"
-              class="entity-tree__count"
-            >
-              {{ (dataRef as EntityNode).count }}
-            </a-typography-text>
-            <a-dropdown v-if="editable" :trigger="['click']">
-              <a-button
-                class="entity-tree__more"
-                type="text"
-                size="small"
-                :aria-label="`${(dataRef as EntityNode).title} 的更多操作`"
-                @click.stop
-              >
-                <template #icon><Ellipsis :size="14" /></template>
-              </a-button>
-              <template #overlay>
-                <a-menu
-                  @click="
-                    ({ key }: { key: string | number }) =>
-                      runAction(dataRef as EntityNode, key)
-                  "
-                >
-                  <a-menu-item
-                    v-for="action in actionsFor(dataRef as EntityNode)"
-                    :key="action.key"
-                    :danger="action.danger"
-                  >
-                    {{ action.label }}
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
+          <EntityTreeNode
+            :node="dataRef as EntityNode"
+            :editable="editable"
+            :actions="editable ? actionsFor(dataRef as EntityNode) : []"
+            @toggle="toggleBranch((dataRef as EntityNode).key)"
+            @action="runAction(dataRef as EntityNode, $event)"
+          />
         </template>
       </a-tree>
       <a-empty
@@ -554,71 +352,4 @@ function runAction(node: EntityNode, key: string | number) {
   </a-card>
 </template>
 
-<style scoped>
-.entity-tree {
-  display: flex;
-  flex-direction: column;
-  width: var(--source-list-width);
-  height: 100%;
-  min-height: 0;
-}
-
-.entity-tree :deep(.ant-card-body) {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.entity-tree__search {
-  padding: var(--space-3);
-}
-
-.entity-tree__body {
-  flex: 1;
-  min-height: 0;
-  padding: 0 var(--space-2) var(--space-3);
-  overflow: auto;
-}
-
-.entity-tree__node {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-}
-
-/* 名称完整显示，过长时折行（不截断） */
-.entity-tree__label {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.entity-tree__label--group {
-  font-weight: 600;
-}
-
-.entity-tree__count {
-  flex-shrink: 0;
-  font: var(--font-sm);
-}
-
-/* 「更多」按钮只在悬停/聚焦行时出现，避免每行都挂一个图标 */
-.entity-tree__more {
-  flex-shrink: 0;
-  opacity: 0;
-}
-
-.entity-tree__more:focus-visible,
-.entity-tree__more.ant-dropdown-open,
-.entity-tree__node:hover .entity-tree__more {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .entity-tree__more {
-    opacity: 1;
-  }
-}
-</style>
+<style scoped src="./EntityTree.css"></style>

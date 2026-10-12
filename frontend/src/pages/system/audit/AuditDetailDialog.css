@@ -1,0 +1,4 @@
+.audit-detail__text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

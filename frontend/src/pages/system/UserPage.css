@@ -1,0 +1,4 @@
+/* 日期和时间拆成两行很难扫读，与操作日志保持一行 */
+.user-created-at {
+  white-space: nowrap;
+}

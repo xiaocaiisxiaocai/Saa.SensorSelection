@@ -7,11 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
 import AuditLogPage from './AuditLogPage.vue';
+import { ACTION_LABELS } from './audit/audit-actions';
 
-const auditSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'AuditLogPage.vue'),
-  'utf8',
-);
+const here = dirname(fileURLToPath(import.meta.url));
+const auditCss = readFileSync(join(here, 'AuditLogPage.css'), 'utf8');
 
 const log: AuditLogItem = {
   action: 'auth.login',
@@ -103,10 +102,10 @@ describe('AuditLogPage', () => {
   });
 
   it('uses a compact deterministic desktop toolbar and a narrow-screen layout', () => {
-    expect(auditSource).toMatch(
+    expect(auditCss).toMatch(
       /\.audit-toolbar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/s,
     );
-    expect(auditSource).toMatch(
+    expect(auditCss).toMatch(
       /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
     );
   });
@@ -133,7 +132,7 @@ describe('AuditLogPage', () => {
       'user.update',
     ];
     const missing = backendActions.filter(
-      (action) => !auditSource.includes(`'${action}': '`),
+      (action) => !(action in ACTION_LABELS),
     );
     expect(missing).toEqual([]);
   });

@@ -163,27 +163,4 @@ const { listPagination } = useTablePagination(
   </section>
 </template>
 
-<style scoped>
-.selection-page {
-  overflow: auto;
-}
-
-.search-heading {
-  padding: 0;
-}
-
-.search-list__title {
-  height: auto;
-  padding: 0;
-  font: var(--font-heading-5);
-  white-space: normal;
-  text-align: start;
-}
-
-/* 正文行长控制在 ~70 字符，完整显示不截断 */
-.search-list__sub {
-  max-width: 70ch;
-  margin-bottom: 0;
-  overflow-wrap: anywhere;
-}
-</style>
+<style scoped src="./SearchPage.css"></style>

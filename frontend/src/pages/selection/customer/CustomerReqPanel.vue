@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
 import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import type { CustomerReqItem } from '@/domain';
-import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   rowClick,
@@ -15,26 +14,17 @@ import {
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
+import ReqFormDialog from './ReqFormDialog.vue';
+
 const props = defineProps<{ entityName: string }>();
 const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
-const dialogOpen = ref(false);
-const editId = ref<number>();
-const validationAttempted = ref(false);
+const formDialog = ref<InstanceType<typeof ReqFormDialog>>();
 const query = ref('');
 const typeFilters = ref<string[]>([]);
 const sourceFilters = ref<string[]>([]);
-const form = reactive({
-  content: '',
-  machine: '',
-  note: '',
-  process: '',
-  source: '',
-  type: '',
-});
-const dirtyGuard = useDirtyGuard(form);
 
 const typeOptions = computed(() =>
   store
@@ -112,17 +102,6 @@ const customRow = computed(() =>
     if (writable.value) editItem(row);
   }),
 );
-const typeError = computed(() =>
-  validationAttempted.value && !form.type ? '请选择要求分类' : undefined,
-);
-const sourceError = computed(() =>
-  validationAttempted.value && !form.source ? '请选择来源' : undefined,
-);
-const contentError = computed(() =>
-  validationAttempted.value && !form.content.trim()
-    ? '请输入要求内容'
-    : undefined,
-);
 
 watch(
   () => props.entityName,
@@ -133,65 +112,14 @@ watch(
   },
 );
 
-function resetForm() {
-  validationAttempted.value = false;
-  editId.value = undefined;
-  Object.assign(form, {
-    content: '',
-    machine: '',
-    note: '',
-    process: '',
-    source: sourceOptions.value[0]?.value ?? '',
-    type: typeOptions.value[0]?.value ?? '',
-  });
-}
-
 function resetFilters() {
   query.value = '';
   typeFilters.value = [];
   sourceFilters.value = [];
 }
 
-function addItem() {
-  resetForm();
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
 function editItem(item: CustomerReqItem) {
-  validationAttempted.value = false;
-  editId.value = item.id;
-  Object.assign(form, {
-    content: item.content,
-    machine: item.machine,
-    note: item.note,
-    process: item.process,
-    source: item.source,
-    type: item.type,
-  });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
-function saveItem() {
-  validationAttempted.value = true;
-  const result = store.saveCrud(
-    'customer-req',
-    props.entityName,
-    { ...form },
-    editId.value,
-  );
-  if (
-    notifyResult(result, editId.value ? '要求已更新' : '要求已新增', {
-      stale: '该要求已被其他页面删除',
-    })
-  ) {
-    dialogOpen.value = false;
-  }
-}
-
-async function cancelDialog() {
-  if (await dirtyGuard.confirmClose()) dialogOpen.value = false;
+  formDialog.value?.open(item);
 }
 
 async function deleteItem(item: CustomerReqItem) {
@@ -252,7 +180,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <a-button v-if="writable" type="primary" @click="addItem">
+      <a-button v-if="writable" type="primary" @click="formDialog?.open()">
         新增要求
       </a-button>
     </div>
@@ -295,100 +223,6 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-else>{{ text || '—' }}</template>
       </template>
     </a-table>
-    <a-modal
-      :open="dialogOpen"
-      :title="editId ? '编辑要求' : '新增要求'"
-      :width="560"
-      destroy-on-close
-      @cancel="cancelDialog"
-    >
-      <a-form layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-req-type"
-              label="要求分类"
-              required
-              :validate-status="typeError ? 'error' : undefined"
-              :help="typeError"
-            >
-              <a-select
-                id="customer-req-type"
-                v-model:value="form.type"
-                :options="typeOptions"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              html-for="customer-req-source"
-              label="来源"
-              required
-              :validate-status="sourceError ? 'error' : undefined"
-              :help="sourceError"
-            >
-              <a-select
-                id="customer-req-source"
-                v-model:value="form.source"
-                :options="sourceOptions"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item html-for="customer-req-machine" label="适用机型">
-              <a-input
-                id="customer-req-machine"
-                v-model:value="form.machine"
-                :maxlength="100"
-                placeholder="如 ALL"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item html-for="customer-req-process" label="适用制程">
-              <a-input
-                id="customer-req-process"
-                v-model:value="form.process"
-                :maxlength="100"
-                placeholder="如 ALL"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item
-              html-for="customer-req-content"
-              label="要求内容"
-              required
-              :validate-status="contentError ? 'error' : undefined"
-              :help="contentError"
-            >
-              <a-textarea
-                id="customer-req-content"
-                v-model:value="form.content"
-                :rows="3"
-                :maxlength="600"
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item html-for="customer-req-note" label="备注">
-              <a-input
-                id="customer-req-note"
-                v-model:value="form.note"
-                :maxlength="200"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-      <template #footer>
-        <a-button @click="cancelDialog">取消</a-button>
-        <a-button type="primary" @click="saveItem">保存</a-button>
-      </template>
-    </a-modal>
+    <ReqFormDialog ref="formDialog" :entity-name="entityName" />
   </div>
 </template>

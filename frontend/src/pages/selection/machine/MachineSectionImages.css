@@ -1,0 +1,51 @@
+.machine-images {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+}
+
+.machine-images:not(.machine-images--collapsed) {
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border-secondary);
+}
+
+.machine-images__header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.machine-images h3 {
+  margin: 0;
+  font: var(--font-heading-5);
+}
+
+.machine-images__empty {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+/* antd 把 class 放在 <img> 本身上，而它不带本组件的 scoped 属性 */
+.image-card :deep(.image-card__media) {
+  height: 120px;
+  object-fit: contain;
+  background: var(--color-fill-alter);
+}
+
+/* 文件名放在卡片正文（图片下方）占满整宽，完整显示 */
+.image-card__name {
+  padding: var(--space-2) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 60rem) {
+  .machine-images:not(.machine-images--collapsed) {
+    padding-top: var(--space-5);
+    padding-left: 0;
+    border-top: 1px solid var(--color-border-secondary);
+    border-left: 0;
+  }
+}

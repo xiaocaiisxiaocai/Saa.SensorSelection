@@ -25,12 +25,13 @@ import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import MachinePage from './MachinePage.vue';
 
+const machineDir = join(dirname(fileURLToPath(import.meta.url)), 'machine');
 const machineSectionPanelSource = readFileSync(
-  join(
-    dirname(fileURLToPath(import.meta.url)),
-    'machine',
-    'MachineSectionPanel.vue',
-  ),
+  join(machineDir, 'MachineSectionPanel.vue'),
+  'utf8',
+);
+const machineSectionPanelCss = readFileSync(
+  join(machineDir, 'MachineSectionPanel.css'),
   'utf8',
 );
 
@@ -825,7 +826,7 @@ describe('MachinePage', () => {
     expect(machineSectionPanelSource).toContain(
       'class="machine-spec-cell machine-sensor-entry"',
     );
-    expect(machineSectionPanelSource).toMatch(
+    expect(machineSectionPanelCss).toMatch(
       /\.machine-sensor-entry--continued\s*\{[^}]*border-bottom:\s*1px solid var\(--color-split\);/s,
     );
   });
@@ -1007,6 +1008,39 @@ describe('MachinePage', () => {
         ?.textContent?.trim(),
     ).toBe('新增制程');
 
+    wrapper.unmount();
+  });
+
+  it('falls back to the default process when the process being browsed is deleted', async () => {
+    const wrapper = await mountPage(true, true);
+    const selectionStore = useSelectionStore();
+    const extra = selectionStore.saveMachineProcess({
+      name: '浏览中制程',
+      sort: 9,
+    });
+    if (!extra.ok) throw new Error('process fixture failed');
+    await flushPromises();
+    await wrapper.vm.$router.replace({
+      query: { ...wrapper.vm.$route.query, process: String(extra.item.id) },
+    });
+    await flushPromises();
+    expect(wrapper.vm.$route.query.process).toBe(String(extra.item.id));
+
+    await wrapper.get('.machine-process-context__manage').trigger('click');
+    await flushPromises();
+    vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
+    const row = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.machine-process-list .ant-list-item',
+      ),
+    ].find((item) => item.textContent?.includes('浏览中制程'));
+    row
+      ?.querySelector<HTMLButtonElement>('button[aria-label="删除制程"]')
+      ?.click();
+    await flushPromises();
+
+    expect(wrapper.vm.$route.query.process).toBeUndefined();
+    expect(wrapper.vm.$route.query.item).toBeTruthy();
     wrapper.unmount();
   });
 });

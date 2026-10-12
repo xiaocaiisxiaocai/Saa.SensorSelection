@@ -203,6 +203,20 @@ describe('ant-design-vue styling', () => {
     }
   });
 
+  it('keeps styles out of .vue files: each component links its own .css', () => {
+    for (const file of sourceFiles(src).filter((f) => f.endsWith('.vue'))) {
+      const text = readFileSync(file, 'utf8');
+      const name = file.slice(src.length);
+      // 样式写在同名 .css 里，组件只用 <style scoped src="./X.css"> 引入
+      for (const tag of text.match(/<style\b[^>]*>/g) ?? []) {
+        expect(tag, name).toMatch(/\ssrc="\.\/[\w-]+\.css"/);
+      }
+      expect(text, name).not.toMatch(/<style\b[^>]*>[^<\s]/);
+      // 模板里不写静态 style；动态值只通过 CSS 变量传入
+      expect(text, name).not.toMatch(/\sstyle="/);
+    }
+  });
+
   it('only keeps components in ui/ that ant-design-vue does not provide', () => {
     const components = readdirSync(join(src, 'ui')).filter((name) =>
       name.endsWith('.vue'),

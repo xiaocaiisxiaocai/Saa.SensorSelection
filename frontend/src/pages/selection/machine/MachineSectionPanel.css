@@ -1,0 +1,67 @@
+/* 机型结构：表格 + 右侧示意图 */
+.machine-body {
+  display: grid;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 0;
+}
+
+.machine-body--with-images {
+  grid-template-columns: minmax(0, 1fr) clamp(11rem, 14vw, 14rem);
+}
+
+.machine-body--images-collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.spec-lines {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.machine-spec-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* 一条记录展开成多行传感器时，行内用分隔线区分各传感器 */
+.machine-sensor-entry {
+  width: 100%;
+  padding-block: var(--space-2);
+}
+
+.machine-sensor-entry--continued {
+  border-bottom: 1px solid var(--color-split);
+}
+
+.machine-spec-cell__header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.machine-spec-cell__brand {
+  font-weight: 600;
+}
+
+.machine-spec-cell__model {
+  font-family: var(--font-family-code);
+  color: var(--color-primary);
+}
+
+.machine-spec-cell__spec {
+  font: var(--font-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 60rem) {
+  .machine-body--with-images {
+    grid-template-rows: minmax(24rem, 1fr) auto;
+    grid-template-columns: 1fr;
+  }
+}

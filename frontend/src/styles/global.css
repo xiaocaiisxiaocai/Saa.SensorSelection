@@ -44,6 +44,11 @@
   color: var(--color-primary);
 }
 
+/* 表单里需要撑满一行的 antd 控件（日期、数字输入框等默认不是块级） */
+.full-width {
+  width: 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

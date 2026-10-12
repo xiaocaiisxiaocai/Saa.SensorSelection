@@ -1,19 +1,10 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import { api, ApiError, type OrgUnitNode } from '@/api';
-import {
-  allowedOrgLevels,
-  buildOrgTree,
-  canPlaceOrgLevel,
-  collectDescendantLevels,
-  flattenOrgTree,
-  ORG_LEVEL_INVERTED_MESSAGE,
-} from '@/pages/system/org-tree';
-import { fieldError } from '@/pages/shared/form';
-import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -21,8 +12,9 @@ import {
   scrollX,
   useTablePagination,
 } from '@/pages/shared/table';
+import OrgFormDialog from '@/pages/system/org/OrgFormDialog.vue';
+import { buildOrgTree, flattenOrgTree } from '@/pages/system/org-tree';
 import { useAccess } from '@/stores/auth';
-import { message } from 'ant-design-vue';
 
 import '../shared/selection-page.css';
 
@@ -31,21 +23,18 @@ const writable = computed(() => canWrite('rbac:org:write'));
 const loading = ref(false);
 const nodes = ref<OrgUnitNode[]>([]);
 const selectedId = ref<number | null>(null);
-const dialogOpen = ref(false);
-const dialogParent = ref<null | number>(null);
-const editingNode = ref<null | OrgUnitNode>(null);
-const validationAttempted = ref(false);
-const saving = ref(false);
-const form = reactive({
-  level: '' as string | null,
-  name: '',
-  sortOrder: 0,
-});
-const dirtyGuard = useDirtyGuard(form);
+const formDialog = ref<InstanceType<typeof OrgFormDialog>>();
 
 const tree = computed(() => buildOrgTree(nodes.value));
+// 表格已按层级展平并用缩进表示上下级；行里不能带 children，
+// 否则 antd 会把它当成树形表格，每行都多出一个「+」展开按钮。
 const tableRows = computed(() =>
-  flattenOrgTree(tree.value).map(({ node, depth }) => ({ ...node, depth })),
+  flattenOrgTree(tree.value).map(
+    ({ node: { children: _, ...node }, depth }) => ({
+      ...node,
+      depth,
+    }),
+  ),
 );
 const columns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
@@ -79,29 +68,6 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
-const parentNode = computed(() =>
-  nodes.value.find((node) => node.id === dialogParent.value),
-);
-const descendantLevels = computed(() =>
-  editingNode.value
-    ? collectDescendantLevels(nodes.value, editingNode.value.id)
-    : [],
-);
-const levelOptions = computed(() => {
-  const parentLevel = parentNode.value?.level;
-  const names = new Set(allowedOrgLevels(parentLevel, descendantLevels.value));
-  for (const extra of nodes.value.map((node) => node.level)) {
-    if (
-      extra &&
-      canPlaceOrgLevel(parentLevel, extra) &&
-      descendantLevels.value.every((item) => canPlaceOrgLevel(extra, item))
-    ) {
-      names.add(extra);
-    }
-  }
-  if (form.level) names.add(form.level);
-  return [...names].map((name) => ({ label: name, value: name }));
-});
 
 onMounted(loadData);
 
@@ -124,78 +90,9 @@ async function loadData() {
   }
 }
 
-function openCreate(parentId: null | number) {
-  validationAttempted.value = false;
-  dialogParent.value = parentId;
-  editingNode.value = null;
-  Object.assign(form, { level: null, name: '', sortOrder: 0 });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
 function activateOrg(node: OrgUnitNode) {
   selectedId.value = node.id;
-  if (writable.value) openEdit(node);
-}
-
-function openEdit(node: OrgUnitNode) {
-  validationAttempted.value = false;
-  dialogParent.value = node.parentId;
-  editingNode.value = node;
-  Object.assign(form, {
-    level: node.level,
-    name: node.name,
-    sortOrder: node.sortOrder,
-  });
-  dirtyGuard.markClean();
-  dialogOpen.value = true;
-}
-
-async function cancelDialog() {
-  if (await dirtyGuard.confirmClose()) {
-    dialogOpen.value = false;
-  }
-}
-
-async function saveOrg() {
-  validationAttempted.value = true;
-  if (!form.name.trim()) {
-    message.warning('请输入组织名称');
-    return;
-  }
-  if (
-    !canPlaceOrgLevel(parentNode.value?.level, form.level) ||
-    descendantLevels.value.some((level) => !canPlaceOrgLevel(form.level, level))
-  ) {
-    message.warning(ORG_LEVEL_INVERTED_MESSAGE);
-    return;
-  }
-  saving.value = true;
-  try {
-    if (!editingNode.value) {
-      await api.createOrgUnit({
-        level: form.level || null,
-        name: form.name.trim(),
-        parentId: dialogParent.value,
-        sortOrder: form.sortOrder,
-      });
-      message.success('组织已创建');
-    } else {
-      await api.updateOrgUnit(editingNode.value.id, {
-        level: form.level || null,
-        name: form.name.trim(),
-        parentId: editingNode.value.parentId,
-        sortOrder: form.sortOrder,
-      });
-      message.success('组织已更新');
-    }
-    dialogOpen.value = false;
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '保存失败');
-  } finally {
-    saving.value = false;
-  }
+  if (writable.value) formDialog.value?.openEdit(node);
 }
 
 async function removeOrg(node: OrgUnitNode) {
@@ -220,7 +117,11 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   <section class="selection-page">
     <div class="selection-toolbar org-toolbar">
       <h1 class="visually-hidden">组织架构</h1>
-      <a-button v-if="writable" type="primary" @click="openCreate(null)">
+      <a-button
+        v-if="writable"
+        type="primary"
+        @click="formDialog?.openCreate(null)"
+      >
         新建组织
       </a-button>
     </div>
@@ -241,12 +142,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'name'">
-          <span
-            class="org-tree__name"
-            :style="{
-              paddingInlineStart: `calc(${row.depth} * var(--space-5))`,
-            }"
-          >
+          <span class="org-tree__name" :style="{ '--org-depth': row.depth }">
             {{ row.name }}
           </span>
         </template>
@@ -261,7 +157,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
                 type="text"
                 size="small"
                 aria-label="新建子节点"
-                @click.stop="openCreate(row.id)"
+                @click.stop="formDialog?.openCreate(row.id)"
               >
                 <template #icon><Plus :size="14" /></template>
               </a-button>
@@ -271,7 +167,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
                 type="text"
                 size="small"
                 aria-label="编辑"
-                @click.stop="openEdit(row)"
+                @click.stop="formDialog?.openEdit(row)"
               >
                 <template #icon><Pencil :size="14" /></template>
               </a-button>
@@ -292,84 +188,8 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-else>{{ cellText(value) }}</template>
       </template>
     </a-table>
-    <a-modal
-      :open="dialogOpen"
-      :title="editingNode ? '编辑组织' : '新建组织'"
-      :width="480"
-      destroy-on-close
-      @cancel="cancelDialog"
-    >
-      <a-form layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item
-              html-for="org-name"
-              label="组织名称"
-              required
-              v-bind="
-                fieldError(
-                  validationAttempted && !form.name.trim()
-                    ? '请输入组织名称'
-                    : undefined,
-                )
-              "
-            >
-              <a-input
-                id="org-name"
-                v-model:value="form.name"
-                :maxlength="64"
-                placeholder="如：电控事业部"
-                allow-clear
-                show-count
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item
-              html-for="org-level"
-              label="层级"
-              v-bind="
-                fieldError(
-                  validationAttempted &&
-                    (!canPlaceOrgLevel(parentNode?.level, form.level) ||
-                      descendantLevels.some(
-                        (level) => !canPlaceOrgLevel(form.level, level),
-                      ))
-                    ? ORG_LEVEL_INVERTED_MESSAGE
-                    : undefined,
-                )
-              "
-              extra="事业部 > 部门 > 课别，允许跳级"
-            >
-              <a-select
-                id="org-level"
-                v-model:value="form.level"
-                :options="levelOptions"
-                placeholder="选择层级"
-                show-search
-                option-filter-prop="label"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item html-for="org-sort-order" label="同级排序">
-              <a-input-number
-                id="org-sort-order"
-                v-model:value="form.sortOrder"
-                :min="0"
-                style="width: 100%"
-              />
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-      <template #footer>
-        <a-button @click="cancelDialog">取消</a-button>
-        <a-button type="primary" :loading="saving" @click="saveOrg">
-          保存
-        </a-button>
-      </template>
-    </a-modal>
+    <OrgFormDialog ref="formDialog" :nodes="nodes" @saved="loadData" />
   </section>
 </template>
+
+<style scoped src="./OrgPage.css"></style>

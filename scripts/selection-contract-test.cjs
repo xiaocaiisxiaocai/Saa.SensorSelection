@@ -1586,6 +1586,15 @@ async function run() {
   assert.equal(defaultStore['machine-global-sections:all'], undefined)
   assert.equal(defaultStore['general-structure-labels:all'], undefined)
   assert.equal(defaultStore['dict:machine-section'], undefined)
+  // 机型数据不再按「制程」分套：没有制程表，也没有 @process: 作用域的 key
+  assert.equal(defaultStore['machine-processes:all'], undefined)
+  assert.equal(
+    Object.keys(defaultStore).some((key) => key.includes('@process:')),
+    false,
+  )
+  assert.equal('getMachineProcesses' in repository, false)
+  assert.equal('saveMachineProcess' in repository, false)
+  assert.equal('deleteMachineProcess' in repository, false)
   assert.equal(defaultStore['sensor-catalog:all'].length > 0, true)
   assert.deepEqual(defaultStore['sensor-sop:all'], [])
   assert.deepEqual(defaultStore['sensor-sop-file:all'], [])

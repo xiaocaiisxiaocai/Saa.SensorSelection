@@ -29,7 +29,6 @@ import {
 const props = defineProps<{
   focusRowId?: number;
   machineName: string;
-  processId: number;
   section: MachineSectionItem;
 }>();
 
@@ -81,11 +80,7 @@ const sensorById = computed(
   () => new Map(store.sensors.map((sensor) => [sensor.id, sensor])),
 );
 const items = computed(() =>
-  store.machineSectionRows(
-    props.section.id,
-    props.machineName,
-    props.processId,
-  ),
+  store.machineSectionRows(props.section.id, props.machineName),
 );
 const hasTabContent = computed(() => items.value.length > 0);
 const hasActiveFilters = computed(
@@ -138,7 +133,7 @@ const columns = computed(() =>
 );
 
 watch(
-  () => [props.section.id, props.machineName, props.processId] as const,
+  () => [props.section.id, props.machineName] as const,
   () => {
     query.value = '';
     sensorTypeFilters.value = [];
@@ -189,13 +184,8 @@ function resetFilters() {
 // 会反复清空筛选、把页码拉回目标行。
 let handledFocusKey: null | string = null;
 
-function focusKey(
-  focusRowId: number,
-  sectionId: number,
-  machineName: string,
-  processId: number,
-) {
-  return JSON.stringify([sectionId, machineName, processId, focusRowId]);
+function focusKey(focusRowId: number, sectionId: number, machineName: string) {
+  return JSON.stringify([sectionId, machineName, focusRowId]);
 }
 
 watch(
@@ -204,16 +194,15 @@ watch(
       props.focusRowId,
       props.section.id,
       props.machineName,
-      props.processId,
       items.value.length,
     ] as const,
-  async ([focusRowId, sectionId, machineName, processId]) => {
+  async ([focusRowId, sectionId, machineName]) => {
     if (!focusRowId) {
       handledFocusKey = null;
       selectedTableRow.value = null;
       return;
     }
-    const key = focusKey(focusRowId, sectionId, machineName, processId);
+    const key = focusKey(focusRowId, sectionId, machineName);
     if (key === handledFocusKey) return;
     if (!items.value.some((item) => item.id === focusRowId)) {
       selectedTableRow.value = null;
@@ -256,12 +245,7 @@ async function deleteItem(item: MachineSectionRow) {
   const ok = await confirmDelete('删除记录', `确认删除“${label}”吗？`);
   if (!ok) return;
   notifyResult(
-    store.deleteMachineSectionRow(
-      props.section.id,
-      props.machineName,
-      item.id,
-      props.processId,
-    ),
+    store.deleteMachineSectionRow(props.section.id, props.machineName, item.id),
     '记录已删除',
   );
 }
@@ -481,7 +465,6 @@ const customRow = computed(() =>
       v-model:collapsed="imagesCollapsed"
       :section-id="section.id"
       :machine-name="machineName"
-      :process-id="processId"
       :has-content="hasTabContent"
     />
   </div>
@@ -489,7 +472,6 @@ const customRow = computed(() =>
     ref="rowDialog"
     :section-id="section.id"
     :machine-name="machineName"
-    :process-id="processId"
     :structure="isStructure"
   />
 </template>

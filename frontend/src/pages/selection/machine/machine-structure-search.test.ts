@@ -14,8 +14,6 @@ const documents: MachineStructureSearchDocument[] = [
     machineModelId: 11,
     machineModelName: '中间输送机',
     machineName: '01 单段输送段（搭配）',
-    processId: 1,
-    processName: '制程1',
     processStepId: 21,
     processStepName: '内层 · DES 显影',
     rowId: 101,
@@ -31,13 +29,11 @@ const documents: MachineStructureSearchDocument[] = [
     machineModelId: 11,
     machineModelName: '中间输送机',
     machineName: '01 单段输送段（搭配）',
-    processId: 2,
-    processName: '制程2',
     processStepId: 21,
     processStepName: '内层 · DES 显影',
-    rowId: 201,
+    rowId: 102,
     searchableText: '出料确认 SICK WL12',
-    sectionId: 2001,
+    sectionId: 1001,
     sectionName: '输送机构',
   },
   {
@@ -48,8 +44,6 @@ const documents: MachineStructureSearchDocument[] = [
     machineModelId: 12,
     machineModelName: '放板机',
     machineName: '02 出料输送（平板/BOX）',
-    processId: 2,
-    processName: '制程2',
     processStepId: 22,
     processStepName: '外层 · AOI 检查',
     rowId: 202,
@@ -60,44 +54,33 @@ const documents: MachineStructureSearchDocument[] = [
 ];
 
 describe('machine structure global search', () => {
-  it('searches every upper process by default and never merges equal paths across processes', () => {
-    const groups = searchMachineStructures(documents, {
+  it('merges hits on the same machine tab into one result', () => {
+    const results = searchMachineStructures(documents, {
       boardCharacteristicIds: [31],
       machineModelIds: [11],
-      processIds: [],
       processStepIds: [21],
       query: '',
     });
 
-    expect(groups.map((group) => group.processName)).toEqual([
-      '制程1',
-      '制程2',
+    expect(results).toEqual([
+      expect.objectContaining({
+        machineName: '01 单段输送段（搭配）',
+        matchCount: 2,
+        rowIds: [101, 102],
+        sectionId: 1001,
+      }),
     ]);
-    expect(groups.map((group) => group.results.length)).toEqual([1, 1]);
-    expect(groups[0]?.results[0]).toMatchObject({
-      matchCount: 1,
-      processId: 1,
-      rowIds: [101],
-    });
-    expect(groups[1]?.results[0]).toMatchObject({
-      matchCount: 1,
-      processId: 2,
-      rowIds: [201],
-    });
   });
 
-  it('uses AND between dimensions, OR inside one dimension, and filters upper processes only when selected', () => {
-    const groups = searchMachineStructures(documents, {
+  it('uses AND between dimensions and OR inside one dimension', () => {
+    const results = searchMachineStructures(documents, {
       boardCharacteristicIds: [31, 32],
       machineModelIds: [11, 12],
-      processIds: [2],
       processStepIds: [22],
       query: 'Keyence',
     });
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.processName).toBe('制程2');
-    expect(groups[0]?.results).toEqual([
+    expect(results).toEqual([
       expect.objectContaining({
         category: '拍板机构',
         configuration: '放板机配置',

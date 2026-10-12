@@ -962,9 +962,6 @@
   "machine-extra-sections:06 入料输送（平板%2FBOX）": [],
   "machine-extra-sections:06 特殊客户配置": [],
   "machine-extra-sections:07 入料输送（五点寻边）": [],
-  "machine-extra-sections:@process:2:01 单段输送段（搭配）": [],
-  "machine-extra-sections:@process:2:01 标准输送段配置": [],
-  "machine-extra-sections:@process:2:CSL(U)R-802（插框机）": [],
   "machine-extra-sections:CSL(U)R-802（插框机）": [],
   "machine-extra-sections:CSZR-102（ESG设备）": [],
   "machine-extra-sections:六轴机械手": [],
@@ -999,22 +996,8 @@
       "locked": true
     }
   ],
-  "machine-processes:all": [
-    {
-      "id": 1,
-      "name": "制程1",
-      "sort": 1,
-      "locked": true
-    },
-    {
-      "id": 2,
-      "name": "制程2",
-      "sort": 2
-    }
-  ],
   "machine-section-images:1001:01 单段输送段（搭配）": [],
   "machine-section-images:1001:07 入料输送（五点寻边）": [],
-  "machine-section-images:1001:@process:2:01 单段输送段（搭配）": [],
   "machine-section-images:1001:CSL(U)R-802（插框机）": [],
   "machine-section-images:1:01 手臂模组": [],
   "machine-section-images:1:01 标准输送段配置": [
@@ -1054,7 +1037,6 @@
   "machine-section-images:3:04 寻边输送配置": [],
   "machine-section-rows:1001:01 单段输送段（搭配）": [],
   "machine-section-rows:1001:07 入料输送（五点寻边）": [],
-  "machine-section-rows:1001:@process:2:01 单段输送段（搭配）": [],
   "machine-section-rows:1001:CSL(U)R-802（插框机）": [],
   "machine-section-rows:1:01 吸盘机构": [],
   "machine-section-rows:1:01 手臂模组": [],

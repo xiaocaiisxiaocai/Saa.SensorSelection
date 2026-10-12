@@ -3,6 +3,8 @@ import type { SelectProps } from 'ant-design-vue';
 import { ArrowRight, Search } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
+import { useTablePagination } from '@/pages/shared/table';
+
 import {
   searchMachineStructures,
   type MachineStructureSearchDocument,
@@ -13,7 +15,6 @@ const props = defineProps<{
   boardCharacteristicOptions: NonNullable<SelectProps['options']>;
   documents: MachineStructureSearchDocument[];
   machineModelOptions: NonNullable<SelectProps['options']>;
-  processOptions: NonNullable<SelectProps['options']>;
   processStepOptions: NonNullable<SelectProps['options']>;
 }>();
 
@@ -21,7 +22,6 @@ const emit = defineEmits<{
   select: [result: MachineStructureSearchResult];
 }>();
 
-const processIds = ref<Array<string | number>>([]);
 const machineModelIds = ref<Array<string | number>>([]);
 const processStepIds = ref<Array<string | number>>([]);
 const boardCharacteristicIds = ref<Array<string | number>>([]);
@@ -30,34 +30,25 @@ const submitted = ref(false);
 
 const hasCriteria = computed(
   () =>
-    processIds.value.length > 0 ||
     machineModelIds.value.length > 0 ||
     processStepIds.value.length > 0 ||
     boardCharacteristicIds.value.length > 0 ||
     Boolean(query.value.trim()),
 );
-const processScopeLabel = computed(() => {
-  if (processIds.value.length === 0) {
-    return `全部制程（${props.processOptions.map((item) => item.label).join('、')}）`;
-  }
-  return '选择上层制程';
-});
-const groups = computed(() =>
+const results = computed(() =>
   submitted.value && hasCriteria.value
     ? searchMachineStructures(props.documents, {
         boardCharacteristicIds: boardCharacteristicIds.value.map(Number),
         machineModelIds: machineModelIds.value.map(Number),
-        processIds: processIds.value.map(Number),
         processStepIds: processStepIds.value.map(Number),
         query: query.value,
       })
     : [],
 );
-const resultCount = computed(() =>
-  groups.value.reduce((total, group) => total + group.results.length, 0),
-);
-const coveredProcesses = computed(() =>
-  groups.value.map((group) => group.processName).join('、'),
+// 结果列表分页：分页条始终显示；重新查找回到第一页
+const { listPagination } = useTablePagination(
+  () => results.value.length,
+  [results],
 );
 
 function executeSearch() {
@@ -65,7 +56,6 @@ function executeSearch() {
 }
 
 function reset() {
-  processIds.value = [];
   machineModelIds.value = [];
   processStepIds.value = [];
   boardCharacteristicIds.value = [];
@@ -139,20 +129,6 @@ function resultTags(result: MachineStructureSearchResult): string[] {
             option-filter-prop="label"
           />
         </a-form-item>
-        <a-form-item
-          html-for="machine-global-search-process-ids"
-          label="上层制程"
-        >
-          <a-select
-            id="machine-global-search-process-ids"
-            v-model:value="processIds"
-            mode="multiple"
-            :options="processOptions"
-            :placeholder="processScopeLabel"
-            allow-clear
-            option-filter-prop="label"
-          />
-        </a-form-item>
         <a-form-item html-for="machine-global-search-query" label="关键词">
           <a-input
             id="machine-global-search-query"
@@ -183,56 +159,42 @@ function resultTags(result: MachineStructureSearchResult): string[] {
       <template v-if="submitted">
         <a-page-header
           class="machine-global-search__heading"
-          :title="`找到 ${resultCount} 个结构`"
-          :sub-title="
-            coveredProcesses
-              ? `覆盖：${coveredProcesses}`
-              : '全部上层制程均无匹配结果'
-          "
+          :title="`找到 ${results.length} 个结构`"
         />
-        <template v-if="groups.length">
-          <a-list
-            v-for="group in groups"
-            :key="group.processId"
-            class="machine-global-search__group"
-            :data-source="group.results"
-            bordered
-            size="small"
-          >
-            <template #header>
-              <a-typography-text strong>
-                {{ group.processName }}（{{ group.results.length }}个结构）
-              </a-typography-text>
-            </template>
-            <template #renderItem="{ item: result }">
-              <a-list-item>
-                <a-list-item-meta>
-                  <template #title>{{ path(result) }}</template>
-                  <template #description>
-                    {{ result.sectionName }} · 匹配
-                    {{ result.matchCount }} 条记录
-                    <div class="machine-global-search__tags">
-                      <a-tag
-                        v-for="tag in resultTags(result)"
-                        :key="tag"
-                        color="blue"
-                      >
-                        {{ tag }}
-                      </a-tag>
-                    </div>
-                  </template>
-                </a-list-item-meta>
-                <template #actions>
-                  <a-button type="link" @click="emit('select', result)">
-                    查看结构
-                    <ArrowRight :size="14" />
-                  </a-button>
+        <a-list
+          class="machine-global-search__list"
+          :data-source="results"
+          :pagination="listPagination"
+          :locale="{ emptyText: '没有找到符合条件的结构' }"
+          bordered
+          size="small"
+        >
+          <template #renderItem="{ item: result }">
+            <a-list-item>
+              <a-list-item-meta>
+                <template #title>{{ path(result) }}</template>
+                <template #description>
+                  {{ result.sectionName }} · 匹配 {{ result.matchCount }} 条记录
+                  <div class="machine-global-search__tags">
+                    <a-tag
+                      v-for="tag in resultTags(result)"
+                      :key="tag"
+                      color="blue"
+                    >
+                      {{ tag }}
+                    </a-tag>
+                  </div>
                 </template>
-              </a-list-item>
-            </template>
-          </a-list>
-        </template>
-        <a-empty v-else description="没有找到符合条件的结构" />
+              </a-list-item-meta>
+              <template #actions>
+                <a-button type="link" @click="emit('select', result)">
+                  查看结构
+                  <ArrowRight :size="14" />
+                </a-button>
+              </template>
+            </a-list-item>
+          </template>
+        </a-list>
       </template>
       <a-empty v-else description="按条件查找全部结构">
         <template #image>

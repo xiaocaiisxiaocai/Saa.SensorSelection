@@ -18,7 +18,6 @@ import {
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,
-  normalizeMachineProcesses,
   normalizeMachineRowImage,
   normalizeProcessSteps,
   normalizeSensorItems,
@@ -61,7 +60,6 @@ import type {
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
   MachineCatalogKind,
-  MachineProcessItem,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
@@ -371,128 +369,10 @@ export function createSelectionRepository({
     return store[key] as SensorItem[];
   }
 
-  const defaultMachineProcess: MachineProcessItem = {
-    id: 1,
-    name: '制程1',
-    sort: 1,
-    locked: true,
-  };
-
-  function normalizeProcessId(processId: number | undefined): number {
-    const value = Number(processId);
-    return Number.isSafeInteger(value) && value > 0 ? value : 1;
-  }
-
-  function scopedMachineName(machineName: string, processId = 1): string {
-    const normalizedId = normalizeProcessId(processId);
-    return normalizedId === 1
-      ? machineName
-      : `@process:${normalizedId}:${machineName}`;
-  }
-
-  function parseScopedMachineName(value: string): {
-    machineName: string;
-    processId: number;
-  } {
-    const match = /^@process:(\d+):(.+)$/.exec(value);
-    return match
-      ? {
-          processId: normalizeProcessId(Number(match[1])),
-          machineName: match[2] || '',
-        }
-      : { processId: 1, machineName: value };
-  }
-
-  function getMachineProcesses(): MachineProcessItem[] {
-    const key = keyFor('machine-processes', 'all');
-    const source = Array.isArray(store[key])
-      ? store[key]
-      : demoData
-        ? [defaultMachineProcess]
-        : [];
-    let items = normalizeMachineProcesses(source);
-    const defaultIndex = items.findIndex((item) => item.id === 1);
-    if (demoData && defaultIndex === -1) {
-      items = normalizeMachineProcesses([defaultMachineProcess, ...items]);
-    } else if (defaultIndex >= 0) {
-      items[defaultIndex] = { ...items[defaultIndex], locked: true };
-    }
-    store[key] = items;
-    return store[key] as MachineProcessItem[];
-  }
-
-  function saveMachineProcess(
-    payload: Partial<MachineProcessItem>,
-    editId?: number,
-  ): SaveResult<MachineProcessItem> {
-    const items = getMachineProcesses();
-    const name = storedText(payload.name).trim().slice(0, 40);
-    if (!name) return { ok: false, reason: 'validation' };
-    if (
-      items.some(
-        (item) => item.id !== editId && sameLocaleName(item.name, name),
-      )
-    ) {
-      return { ok: false, reason: 'duplicate' };
-    }
-
-    const snapshot = cloneStore(store);
-    const sort = Number(payload.sort);
-    const id = editId || nextAvailableId(items);
-    const index = items.findIndex((item) => item.id === id);
-    if (editId && index === -1) return { ok: false, reason: 'stale' };
-    const existing = index >= 0 ? items[index] : undefined;
-    const normalized = normalizeMachineProcesses([
-      {
-        id,
-        name,
-        sort: Number.isFinite(sort)
-          ? sort
-          : (existing?.sort ?? items.length + 1),
-        locked: existing?.locked === true || id === 1,
-      },
-    ])[0];
-    if (!normalized) return { ok: false, reason: 'validation' };
-    if (index >= 0) items.splice(index, 1, normalized);
-    else items.push(normalized);
-    store[keyFor('machine-processes', 'all')] =
-      normalizeMachineProcesses(items);
-    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
-    return { ok: true, item: normalized };
-  }
-
-  function deleteMachineProcess(id: number): DeleteResult {
-    const numericId = normalizeProcessId(id);
-    const items = getMachineProcesses();
-    const index = items.findIndex((item) => item.id === numericId);
-    if (index === -1) return { ok: false, reason: 'stale' };
-    if (numericId === 1 || items[index]?.locked) {
-      return { ok: false, reason: 'validation' };
-    }
-
-    const marker = `:@process:${numericId}:`;
-    const scopedKeys = Object.keys(store).filter((key) => key.includes(marker));
-    if (
-      scopedKeys.some(
-        (key) => Array.isArray(store[key]) && store[key].length > 0,
-      )
-    ) {
-      return { ok: false, reason: 'not-empty' };
-    }
-
-    const snapshot = cloneStore(store);
-    items.splice(index, 1);
-    store = omitStoreKeys(store, scopedKeys);
-    store[keyFor('machine-processes', 'all')] =
-      normalizeMachineProcesses(items);
-    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
-  }
-
   function listResolvedMachineSections(
     machineName: string,
-    processId = 1,
   ): MachineSectionItem[] {
-    return getExtraMachineSections(machineName, processId);
+    return getExtraMachineSections(machineName);
   }
 
   function forEachPersistedMachineStructureRows(
@@ -506,19 +386,18 @@ export function createSelectionRepository({
       if (separator <= 0) continue;
 
       const sectionId = Number(rest.slice(0, separator));
-      const scopedName = rest.slice(separator + 1);
-      const { machineName, processId } = parseScopedMachineName(scopedName);
+      const machineName = rest.slice(separator + 1);
       if (!Number.isSafeInteger(sectionId) || !machineName) continue;
-      if (!sectionAllowsImage(sectionId, machineName, processId)) continue;
+      if (!sectionAllowsImage(sectionId, machineName)) continue;
 
-      const rows = getMachineSectionRows(sectionId, machineName, processId);
+      const rows = getMachineSectionRows(sectionId, machineName);
       if (callback(rows)) {
-      store[key] = normalizeMachineSectionRows(rows, {
-        allowImage: true,
-        boardCharacteristicItems: getDictionaryItems('board-characteristic'),
-        machineModelItems: getDictionaryItems('machine-model'),
-        processStepItems: getProcessSteps(),
-        sensorItems: getSensors(),
+        store[key] = normalizeMachineSectionRows(rows, {
+          allowImage: true,
+          boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+          machineModelItems: getDictionaryItems('machine-model'),
+          processStepItems: getProcessSteps(),
+          sensorItems: getSensors(),
         });
       }
     }
@@ -1294,13 +1173,11 @@ export function createSelectionRepository({
         ...group.items,
         ...(group.configurations ?? []).flatMap((item) => item.items),
       ]) {
-        for (const process of getMachineProcesses()) {
-          if (
-            getMachineSectionRows(id, machineName, process.id).length > 0 ||
-            getMachineSectionImages(id, machineName, process.id).length > 0
-          ) {
-            return { ok: false, reason: 'not-empty' };
-          }
+        if (
+          getMachineSectionRows(id, machineName).length > 0 ||
+          getMachineSectionImages(id, machineName).length > 0
+        ) {
+          return { ok: false, reason: 'not-empty' };
         }
       }
     }
@@ -1314,14 +1191,8 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  function getExtraMachineSections(
-    machineName: string,
-    processId = 1,
-  ): MachineSectionItem[] {
-    const key = keyFor(
-      'machine-extra-sections',
-      scopedMachineName(machineName, processId),
-    );
+  function getExtraMachineSections(machineName: string): MachineSectionItem[] {
+    const key = keyFor('machine-extra-sections', machineName);
     if (!Array.isArray(store[key])) {
       store[key] = [];
     }
@@ -1331,12 +1202,9 @@ export function createSelectionRepository({
     return store[key] as MachineSectionItem[];
   }
 
-  function nextExtraMachineSectionId(
-    machineName: string,
-    processId = 1,
-  ): number {
+  function nextExtraMachineSectionId(machineName: string): number {
     const used = new Set([
-      ...getExtraMachineSections(machineName, processId).map((item) => item.id),
+      ...getExtraMachineSections(machineName).map((item) => item.id),
     ]);
     let id = 1001;
     while (used.has(id)) id += 1;
@@ -1347,13 +1215,12 @@ export function createSelectionRepository({
     machineName: string,
     payload: Partial<MachineSectionItem>,
     editId?: number,
-    processId = 1,
   ): SaveResult<MachineSectionItem> {
-    const items = getExtraMachineSections(machineName, processId);
+    const items = getExtraMachineSections(machineName);
     const name = storedText(payload.name).trim().slice(0, 40);
     if (!name) return { ok: false, reason: 'validation' };
 
-    const resolvedNames = listResolvedMachineSections(machineName, processId);
+    const resolvedNames = listResolvedMachineSections(machineName);
     const duplicate = resolvedNames.some(
       (item) =>
         item.id !== editId &&
@@ -1373,8 +1240,8 @@ export function createSelectionRepository({
       const kind = payload.kind === 'notes' ? 'notes' : 'structure';
       if (
         kind !== existing.kind &&
-        (getMachineSectionRows(editId, machineName, processId).length > 0 ||
-          getMachineSectionImages(editId, machineName, processId).length > 0)
+        (getMachineSectionRows(editId, machineName).length > 0 ||
+          getMachineSectionImages(editId, machineName).length > 0)
       ) {
         return { ok: false, reason: 'not-empty' };
       }
@@ -1396,7 +1263,7 @@ export function createSelectionRepository({
       const normalized = normalizeMachineSections(
         [
           {
-            id: nextExtraMachineSectionId(machineName, processId),
+            id: nextExtraMachineSectionId(machineName),
             name,
             sort: Number.isFinite(sort) ? sort : items.length + 1,
             kind: payload.kind === 'notes' ? 'notes' : 'structure',
@@ -1409,10 +1276,7 @@ export function createSelectionRepository({
       items.push({ ...normalized, scope: 'machine' });
     }
 
-    const key = keyFor(
-      'machine-extra-sections',
-      scopedMachineName(machineName, processId),
-    );
+    const key = keyFor('machine-extra-sections', machineName);
     store[key] = normalizeMachineSections(items, { allowNotes: true }).map(
       (item) => ({
         ...item,
@@ -1431,40 +1295,31 @@ export function createSelectionRepository({
   function deleteExtraMachineSection(
     machineName: string,
     id: number,
-    processId = 1,
   ): DeleteResult {
-    const items = getExtraMachineSections(machineName, processId);
+    const items = getExtraMachineSections(machineName);
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
     if (
-      getMachineSectionRows(id, machineName, processId).length > 0 ||
-      getMachineSectionImages(id, machineName, processId).length > 0
+      getMachineSectionRows(id, machineName).length > 0 ||
+      getMachineSectionImages(id, machineName).length > 0
     ) {
       return { ok: false, reason: 'not-empty' };
     }
 
     const snapshot = cloneStore(store);
     items.splice(index, 1);
-    store[
-      keyFor(
-        'machine-extra-sections',
-        scopedMachineName(machineName, processId),
-      )
-    ] = normalizeMachineSections(items, { allowNotes: true }).map((item) => ({
-      ...item,
-      locked: undefined,
-      scope: 'machine' as const,
-    }));
+    store[keyFor('machine-extra-sections', machineName)] =
+      normalizeMachineSections(items, { allowNotes: true }).map((item) => ({
+        ...item,
+        locked: undefined,
+        scope: 'machine' as const,
+      }));
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  function sectionAllowsImage(
-    sectionId: number,
-    machineName: string,
-    processId = 1,
-  ): boolean {
+  function sectionAllowsImage(sectionId: number, machineName: string): boolean {
     const numericId = Number(sectionId);
-    const localSection = getExtraMachineSections(machineName, processId).find(
+    const localSection = getExtraMachineSections(machineName).find(
       (item) => item.id === numericId,
     );
     if (localSection) return localSection.kind === 'structure';
@@ -1474,20 +1329,10 @@ export function createSelectionRepository({
     return legacySection?.kind !== 'notes';
   }
 
-  function migrateLegacyMachineRows(
-    sectionId: number,
-    machineName: string,
-    processId = 1,
-  ) {
+  function migrateLegacyMachineRows(sectionId: number, machineName: string) {
     const numericId = Number(sectionId);
-    const keyMachineName = scopedMachineName(machineName, processId);
-    const newKey = machineSectionRowsKey(numericId, keyMachineName);
+    const newKey = machineSectionRowsKey(numericId, machineName);
     if (Object.hasOwn(store, newKey)) return;
-
-    if (normalizeProcessId(processId) !== 1) {
-      store[newKey] = [];
-      return;
-    }
 
     const legacyListId = Object.entries(MACHINE_SECTION_LEGACY_MAP).find(
       ([, id]) => id === numericId,
@@ -1515,15 +1360,11 @@ export function createSelectionRepository({
   function getMachineSectionRows(
     sectionId: number,
     machineName: string,
-    processId = 1,
   ): MachineSectionRow[] {
     const numericId = Number(sectionId);
-    migrateLegacyMachineRows(numericId, machineName, processId);
-    const key = machineSectionRowsKey(
-      numericId,
-      scopedMachineName(machineName, processId),
-    );
-    const allowImage = sectionAllowsImage(numericId, machineName, processId);
+    migrateLegacyMachineRows(numericId, machineName);
+    const key = machineSectionRowsKey(numericId, machineName);
+    const allowImage = sectionAllowsImage(numericId, machineName);
     store[key] = normalizeMachineSectionRows(
       Array.isArray(store[key]) ? store[key] : [],
       {
@@ -1540,22 +1381,14 @@ export function createSelectionRepository({
   function getMachineSectionImages(
     sectionId: number,
     machineName: string,
-    processId = 1,
   ): MachineRowImage[] {
     const numericId = Number(sectionId);
-    if (!sectionAllowsImage(numericId, machineName, processId)) return [];
-    const key = machineSectionImagesKey(
-      numericId,
-      scopedMachineName(machineName, processId),
-    );
+    if (!sectionAllowsImage(numericId, machineName)) return [];
+    const key = machineSectionImagesKey(numericId, machineName);
     if (Object.hasOwn(store, key)) {
       store[key] = normalizeMachineSectionImages(store[key]);
     } else {
-      const legacyImages = getMachineSectionRows(
-        numericId,
-        machineName,
-        processId,
-      )
+      const legacyImages = getMachineSectionRows(numericId, machineName)
         .map((row) => row.image)
         .filter((image): image is MachineRowImage => Boolean(image));
       store[key] = normalizeMachineSectionImages(legacyImages);
@@ -1567,34 +1400,24 @@ export function createSelectionRepository({
     sectionId: number,
     machineName: string,
     images: MachineRowImage[],
-    processId = 1,
   ): SaveResult<{ items: MachineRowImage[] }> {
     const numericId = Number(sectionId);
-    if (!sectionAllowsImage(numericId, machineName, processId)) {
+    if (!sectionAllowsImage(numericId, machineName)) {
       return { ok: false, reason: 'validation' };
     }
     const normalized = normalizeMachineSectionImages(images);
     if (normalized.length !== (Array.isArray(images) ? images.length : 0)) {
       return { ok: false, reason: 'validation' };
     }
-    const currentCount = getMachineSectionImages(
-      numericId,
-      machineName,
-      processId,
-    ).length;
+    const currentCount = getMachineSectionImages(numericId, machineName).length;
     if (
       normalized.length > currentCount &&
-      getMachineSectionRows(numericId, machineName, processId).length === 0
+      getMachineSectionRows(numericId, machineName).length === 0
     ) {
       return { ok: false, reason: 'validation' };
     }
     const snapshot = cloneStore(store);
-    store[
-      machineSectionImagesKey(
-        numericId,
-        scopedMachineName(machineName, processId),
-      )
-    ] = normalized;
+    store[machineSectionImagesKey(numericId, machineName)] = normalized;
     return persist(snapshot)
       ? { ok: true, item: { items: normalized } }
       : { ok: false, reason: 'storage' };
@@ -1605,11 +1428,10 @@ export function createSelectionRepository({
     machineName: string,
     payload: Partial<MachineSectionRow> & Record<string, unknown>,
     editId?: number,
-    processId = 1,
   ): SaveResult<MachineSectionRow> {
     const numericId = Number(sectionId);
-    const items = getMachineSectionRows(numericId, machineName, processId);
-    const allowImage = sectionAllowsImage(numericId, machineName, processId);
+    const items = getMachineSectionRows(numericId, machineName);
+    const allowImage = sectionAllowsImage(numericId, machineName);
     const role = storedText(payload.role).trim();
     let nextPayload = payload;
     if (allowImage) {
@@ -1771,18 +1593,14 @@ export function createSelectionRepository({
       items.push(normalized);
     }
 
-    store[
-      machineSectionRowsKey(
-        numericId,
-        scopedMachineName(machineName, processId),
-      )
-    ] = normalizeMachineSectionRows(items, {
-      allowImage,
-      boardCharacteristicItems: getDictionaryItems('board-characteristic'),
-      machineModelItems: getDictionaryItems('machine-model'),
-      processStepItems: getProcessSteps(),
-      sensorItems: getSensors(),
-    });
+    store[machineSectionRowsKey(numericId, machineName)] =
+      normalizeMachineSectionRows(items, {
+        allowImage,
+        boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+        machineModelItems: getDictionaryItems('machine-model'),
+        processStepItems: getProcessSteps(),
+        sensorItems: getSensors(),
+      });
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: normalized };
   }
@@ -1791,26 +1609,21 @@ export function createSelectionRepository({
     sectionId: number,
     machineName: string,
     id: number,
-    processId = 1,
   ): DeleteResult {
     const numericId = Number(sectionId);
-    const items = getMachineSectionRows(numericId, machineName, processId);
+    const items = getMachineSectionRows(numericId, machineName);
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
     const snapshot = cloneStore(store);
     items.splice(index, 1);
-    store[
-      machineSectionRowsKey(
-        numericId,
-        scopedMachineName(machineName, processId),
-      )
-    ] = normalizeMachineSectionRows(items, {
-      allowImage: sectionAllowsImage(numericId, machineName, processId),
-      boardCharacteristicItems: getDictionaryItems('board-characteristic'),
-      machineModelItems: getDictionaryItems('machine-model'),
-      processStepItems: getProcessSteps(),
-      sensorItems: getSensors(),
-    });
+    store[machineSectionRowsKey(numericId, machineName)] =
+      normalizeMachineSectionRows(items, {
+        allowImage: sectionAllowsImage(numericId, machineName),
+        boardCharacteristicItems: getDictionaryItems('board-characteristic'),
+        machineModelItems: getDictionaryItems('machine-model'),
+        processStepItems: getProcessSteps(),
+        sensorItems: getSensors(),
+      });
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -2183,21 +1996,15 @@ export function createSelectionRepository({
     const definition = entityKindDefinition(kind);
     if (!definition) return [];
     if (kind === 'machine') {
-      const keys: string[] = [];
-      for (const process of getMachineProcesses()) {
-        const keyMachineName = scopedMachineName(entityName, process.id);
-        keys.push(keyFor('machine-extra-sections', keyMachineName));
-        const sectionIds = new Set(
-          listResolvedMachineSections(entityName, process.id).map(
-            (item) => item.id,
-          ),
+      const keys: string[] = [keyFor('machine-extra-sections', entityName)];
+      const sectionIds = new Set(
+        listResolvedMachineSections(entityName).map((item) => item.id),
+      );
+      for (const sectionId of sectionIds) {
+        keys.push(
+          machineSectionRowsKey(sectionId, entityName),
+          machineSectionImagesKey(sectionId, entityName),
         );
-        for (const sectionId of sectionIds) {
-          keys.push(
-            machineSectionRowsKey(sectionId, keyMachineName),
-            machineSectionImagesKey(sectionId, keyMachineName),
-          );
-        }
       }
       const rowSuffix = `:${entityName}`;
       for (const key of Object.keys(store)) {
@@ -2232,18 +2039,12 @@ export function createSelectionRepository({
 
   function entityHasData(kind: EntityKind, entityName: string): boolean {
     if (kind === 'machine') {
-      return getMachineProcesses().some((process) => {
-        if (getExtraMachineSections(entityName, process.id).length > 0) {
-          return true;
-        }
-        return listResolvedMachineSections(entityName, process.id).some(
-          (section) =>
-            getMachineSectionRows(section.id, entityName, process.id).length >
-              0 ||
-            getMachineSectionImages(section.id, entityName, process.id).length >
-              0,
-        );
-      });
+      if (getExtraMachineSections(entityName).length > 0) return true;
+      return listResolvedMachineSections(entityName).some(
+        (section) =>
+          getMachineSectionRows(section.id, entityName).length > 0 ||
+          getMachineSectionImages(section.id, entityName).length > 0,
+      );
     }
     return entityDataKeys(kind, entityName).some(
       (key) => Array.isArray(store[key]) && store[key].length > 0,
@@ -2257,19 +2058,11 @@ export function createSelectionRepository({
   ) {
     if (kind === 'machine') {
       const removals: string[] = [];
-      for (const process of getMachineProcesses()) {
-        const extraFrom = keyFor(
-          'machine-extra-sections',
-          scopedMachineName(fromName, process.id),
-        );
-        const extraTo = keyFor(
-          'machine-extra-sections',
-          scopedMachineName(toName, process.id),
-        );
-        if (Object.hasOwn(store, extraFrom)) {
-          store[extraTo] = store[extraFrom];
-          removals.push(extraFrom);
-        }
+      const extraFrom = keyFor('machine-extra-sections', fromName);
+      const extraTo = keyFor('machine-extra-sections', toName);
+      if (Object.hasOwn(store, extraFrom)) {
+        store[extraTo] = store[extraFrom];
+        removals.push(extraFrom);
       }
 
       const fromSuffix = `:${fromName}`;
@@ -2597,7 +2390,10 @@ export function createSelectionRepository({
       group.configurations.splice(targetIndex, 0, { name, items: [] });
     }
 
-    store[entityGroupsKey('machine')] = normalizeEntityGroups(groups, 'machine');
+    store[entityGroupsKey('machine')] = normalizeEntityGroups(
+      groups,
+      'machine',
+    );
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: { category, name } };
   }
@@ -2618,7 +2414,10 @@ export function createSelectionRepository({
     }
     const snapshot = cloneStore(store);
     group.configurations.splice(index, 1);
-    store[entityGroupsKey('machine')] = normalizeEntityGroups(groups, 'machine');
+    store[entityGroupsKey('machine')] = normalizeEntityGroups(
+      groups,
+      'machine',
+    );
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
@@ -2761,16 +2560,11 @@ export function createSelectionRepository({
           ...(group.configurations ?? []).flatMap((item) => item.items),
         ]) {
           if (machineName === name) continue;
-          for (const process of getMachineProcesses()) {
-            if (
-              getMachineSectionRows(
-                generalBinding.section.id,
-                machineName,
-                process.id,
-              ).length > 0
-            ) {
-              return { ok: false, reason: 'not-empty' };
-            }
+          if (
+            getMachineSectionRows(generalBinding.section.id, machineName)
+              .length > 0
+          ) {
+            return { ok: false, reason: 'not-empty' };
           }
         }
       }
@@ -2814,7 +2608,6 @@ export function createSelectionRepository({
     deleteExtraMachineSection,
     deleteFeedbackType,
     deleteGlobalMachineSection,
-    deleteMachineProcess,
     deleteMachineSectionRow,
     deleteProcessIntroFile,
     deleteProcessStep,
@@ -2834,7 +2627,6 @@ export function createSelectionRepository({
     getFeedbackTypes,
     getGeneralStructureLabelMap,
     getGlobalMachineSections,
-    getMachineProcesses,
     getMachineSectionImages,
     getMachineSectionRows,
     getProcessIntroFiles,
@@ -2856,7 +2648,6 @@ export function createSelectionRepository({
     saveExtraMachineSection,
     saveFeedbackType,
     saveGlobalMachineSection,
-    saveMachineProcess,
     saveMachineSectionRow,
     saveMachineSectionImages,
     saveProcessIntroFile,
@@ -2898,7 +2689,6 @@ export function buildDefaultStore({
   }
   repo.getProcessSteps();
   repo.getProcessIntroFiles();
-  repo.getMachineProcesses();
   repo.getSensors();
   repo.getSensor3dFiles();
   repo.getSensorSopFiles();

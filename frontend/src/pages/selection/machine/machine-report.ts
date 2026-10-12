@@ -7,18 +7,17 @@ const sectionKey = (section: { kind: string; name: string }) =>
   `${section.kind}:${section.name.toLocaleLowerCase('zh-CN')}`;
 
 /**
- * 示意图报告的分区：把所选机型在当前制程下的 Tab 按「类型 + 名称」合并，
+ * 示意图报告的分区：把所选机型的 Tab 按「类型 + 名称」合并，
  * 每个分区里按机型列出各自的行、示意图和用到的 Sensor。
  */
 export function buildReportSections(
   store: SelectionStore,
   machineNames: readonly string[],
-  processId: number,
 ): MachineReportSection[] {
   const resolvedByMachine = new Map(
     machineNames.map((machineName) => [
       machineName,
-      store.resolvedMachineSections(machineName, processId),
+      store.resolvedMachineSections(machineName),
     ]),
   );
   const sectionMap = new Map<string, MachineReportSection>();
@@ -43,11 +42,7 @@ export function buildReportSections(
           .get(machineName)
           ?.find((candidate) => sectionKey(candidate) === sectionKey(section));
         if (!machineSection) return [];
-        const rows = store.machineSectionRows(
-          machineSection.id,
-          machineName,
-          processId,
-        );
+        const rows = store.machineSectionRows(machineSection.id, machineName);
         const reportRows = rows.map((row) => {
           const processStep = store.processSteps.find(
             (item) => item.id === row.processStepId,
@@ -65,11 +60,7 @@ export function buildReportSections(
             machineName,
             rows: reportRows,
             images: structure
-              ? store.machineSectionImages(
-                  machineSection.id,
-                  machineName,
-                  processId,
-                )
+              ? store.machineSectionImages(machineSection.id, machineName)
               : [],
             sensors: structure
               ? store.sensors.filter((sensor) =>

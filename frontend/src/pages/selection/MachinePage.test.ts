@@ -10,7 +10,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { dialogs } from '@/pages/shared/confirm';
 import {
   chooseSegment,
   columnWidths,
@@ -96,7 +95,7 @@ describe('MachinePage', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
-  it('separates mechanism and project machines under every process', async () => {
+  it('separates mechanism and project machines', async () => {
     const wrapper = await mountPage(true, true);
     expect(wrapper.get('h1.visually-hidden').text()).toBe('机型结构');
     const catalogTabs = wrapper.get('.machine-catalog-tabs');
@@ -151,68 +150,13 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('shows a user-defined process selector while keeping the machine tree shared', async () => {
-    const wrapper = await mountPage(true, true);
-    const selectionStore = useSelectionStore();
-    const second = selectionStore.saveMachineProcess({
-      name: '制程2',
-      sort: 2,
-    });
-    if (!second.ok) throw new Error(second.reason);
-    expect(
-      selectionStore.saveExtraMachineSection(
-        '01 单段输送段（搭配）',
-        { kind: 'notes', name: '制程2注意事项', sort: 1 },
-        undefined,
-        second.item.id,
-      ).ok,
-    ).toBe(true);
-    await flushPromises();
-
-    const processSelect = wrapper
-      .findAllComponents({ name: 'ASelect' })
-      .find((component) => component.props('placeholder') === '选择制程');
-    expect(processSelect).toBeDefined();
-    expect(processSelect?.props('size')).toBe('small');
-    expect(processSelect?.props('options')).toEqual([
-      { label: '制程1', value: 1 },
-      { label: '制程2', value: 2 },
-    ]);
-    expect(document.querySelector('#toolbar-context')?.textContent).toBe('');
-    expect(
-      wrapper.get('.machine-source-stack > .machine-process-context'),
-    ).toBeDefined();
-    expect(wrapper.find('.machine-process-context__label').exists()).toBe(
-      false,
-    );
-    expect(processSelect?.attributes('aria-label')).toBe('当前浏览制程');
-    expect(wrapper.text()).toContain('管理制程');
-    expect(wrapper.get('.machine-process-context__manage').classes()).toContain(
-      'ant-btn-sm',
-    );
-    expect(wrapper.text()).toContain('标准输送段配置');
-
-    await wrapper.get('.machine-process-context__manage').trigger('click');
-    await flushPromises();
-    expect(document.body.textContent).not.toContain('默认制程 · 兼容现有数据');
-
-    processSelect?.vm.$emit('update:value', second.item.id);
-    await flushPromises();
-
-    expect(wrapper.getComponent(MachineSectionPanel).props('processId')).toBe(
-      second.item.id,
-    );
-    expect(wrapper.text()).toContain('制程2注意事项');
-    expect(wrapper.text()).toContain('标准输送段配置');
-
-    wrapper.unmount();
-  });
-
-  it('keeps the current browsing process while global structure search defaults to every process', async () => {
+  it('has no machine process selector or process manager', async () => {
     const wrapper = await mountPage(true, true);
 
-    const browsingProcess = selectBy(wrapper, '选择制程');
-    expect(browsingProcess).toBeDefined();
+    expect(selectBy(wrapper, '选择制程')).toBeUndefined();
+    expect(wrapper.find('.machine-process-context').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('管理制程');
+    expect(wrapper.text()).toContain('标准输送段配置');
     expect(wrapper.text()).toContain('目录浏览');
     expect(wrapper.text()).toContain('条件查找');
 
@@ -220,15 +164,13 @@ describe('MachinePage', () => {
       wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
       '条件查找',
     );
-
-    expect(wrapper.text()).not.toContain('全局查找不受当前浏览制程限制');
-    expect(wrapper.text()).toContain('全部制程');
-    expect(wrapper.text()).not.toContain('默认覆盖所有上层制程');
-    expect(browsingProcess?.props('value')).toBe(1);
+    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    expect(globalSearch.text()).not.toContain('上层制程');
+    expect(globalSearch.text()).not.toContain('全部制程');
     wrapper.unmount();
   });
 
-  it('finds matching structures across processes and opens the selected process and row', async () => {
+  it('finds matching structures and opens the selected machine tab and row', async () => {
     const wrapper = await mountPage(true, true);
     const selectionStore = useSelectionStore();
     const panel = wrapper.getComponent(MachineSectionPanel);
@@ -236,47 +178,14 @@ describe('MachinePage', () => {
     const section = panel.props('section') as { id: number; kind: string };
     const sensor = selectionStore.sensors[0];
     const machineModel = selectionStore.dictionaryItems('machine-model')[0];
-    const second = selectionStore.saveMachineProcess({
-      name: '制程2',
-      sort: 2,
-    });
-    if (!sensor || !machineModel || !second.ok) {
+    if (!sensor || !machineModel)
       throw new Error('global search fixture failed');
-    }
-    const secondSection = selectionStore.saveExtraMachineSection(
-      machineName,
-      { kind: 'structure', name: '输送机构', sort: 1 },
-      undefined,
-      second.item.id,
-    );
-    if (!secondSection.ok) {
-      throw new Error('global search section fixture failed');
-    }
-    const firstRow = selectionStore.saveMachineSectionRow(
-      section.id,
-      machineName,
-      {
-        machineModelId: machineModel.id,
-        role: '制程1入料确认',
-        sensorIds: [sensor.id],
-      },
-      undefined,
-      1,
-    );
-    const secondRow = selectionStore.saveMachineSectionRow(
-      secondSection.item.id,
-      machineName,
-      {
-        machineModelId: machineModel.id,
-        role: '制程2出料确认',
-        sensorIds: [sensor.id],
-      },
-      undefined,
-      second.item.id,
-    );
-    if (!firstRow.ok || !secondRow.ok) {
-      throw new Error('global search row fixture failed');
-    }
+    const row = selectionStore.saveMachineSectionRow(section.id, machineName, {
+      machineModelId: machineModel.id,
+      role: '入料确认',
+      sensorIds: [sensor.id],
+    });
+    if (!row.ok) throw new Error('global search row fixture failed');
     await flushPromises();
 
     await chooseSegment(
@@ -299,28 +208,24 @@ describe('MachinePage', () => {
     await findButton(globalSearch, '查找')?.trigger('click');
     await flushPromises();
 
-    expect(globalSearch.text()).toContain('制程1（1个结构）');
-    expect(globalSearch.text()).toContain('制程2（1个结构）');
-    const secondResult = globalSearch
+    expect(globalSearch.text()).toContain('找到 1 个结构');
+    const result = globalSearch
       .findAll('button')
-      .filter((button) => button.text().includes('查看结构'))[1];
-    expect(secondResult).toBeDefined();
-    await secondResult?.trigger('click');
+      .find((button) => button.text().includes('查看结构'));
+    expect(result).toBeDefined();
+    await result?.trigger('click');
     await flushPromises();
 
     expect(wrapper.vm.$route.query.view).toBeUndefined();
-    expect(wrapper.vm.$route.query.process).toBe(String(second.item.id));
-    expect(wrapper.vm.$route.query.focusRow).toBe(String(secondRow.item.id));
-    expect(wrapper.getComponent(MachineSectionPanel).props('processId')).toBe(
-      second.item.id,
-    );
+    expect(wrapper.vm.$route.query.process).toBeUndefined();
+    expect(wrapper.vm.$route.query.focusRow).toBe(String(row.item.id));
     expect(wrapper.getComponent(MachineSectionPanel).props('focusRowId')).toBe(
-      secondRow.item.id,
+      row.item.id,
     );
     wrapper.unmount();
   });
 
-  it('enables global search when only an upper process is selected', async () => {
+  it('enables global search when only a board characteristic is selected', async () => {
     const wrapper = await mountPage(true, true);
     await chooseSegment(
       wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
@@ -328,12 +233,18 @@ describe('MachinePage', () => {
     );
 
     const globalSearch = wrapper.getComponent(MachineGlobalSearch);
-    const processField = globalSearch.findAllComponents({ name: 'ASelect' })[3];
-    processField?.vm.$emit('update:value', [1]);
+    const searchButton = () => findButton(globalSearch, '查找');
+    expect(searchButton()?.attributes('disabled')).toBeDefined();
+    const boardField = globalSearch
+      .findAllComponents({ name: 'ASelect' })
+      .find((component) => component.props('placeholder') === '选择板件特性');
+    const board = useSelectionStore().dictionaryItems(
+      'board-characteristic',
+    )[0];
+    boardField?.vm.$emit('update:value', [board?.id]);
     await flushPromises();
 
-    const searchButton = findButton(globalSearch, '查找');
-    expect(searchButton?.attributes('disabled')).toBeUndefined();
+    expect(searchButton()?.attributes('disabled')).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -449,7 +360,6 @@ describe('MachinePage', () => {
     const structurePanel = mount(MachineSectionPanel, {
       props: {
         machineName: '测试机型',
-        processId: 1,
         section: structure.item,
       },
       global: { plugins: [pinia] },
@@ -478,7 +388,6 @@ describe('MachinePage', () => {
     const notesPanel = mount(MachineSectionPanel, {
       props: {
         machineName: '测试机型',
-        processId: 1,
         section: notes.item,
       },
       global: { plugins: [pinia] },
@@ -530,7 +439,6 @@ describe('MachinePage', () => {
     const wrapper = mount(MachineSectionPanel, {
       props: {
         machineName: '测试机型',
-        processId: 1,
         section: structure.item,
       },
       global: { plugins: [pinia] },
@@ -946,101 +854,6 @@ describe('MachinePage', () => {
     await flushPromises();
     expect(typeFilter.props('value')).toEqual([]);
     expect(wrapper.text()).toContain('机型类型多选-3');
-    wrapper.unmount();
-  });
-
-  it('resets the process form when the process being edited is deleted, and confirms before switching away from unsaved input', async () => {
-    const wrapper = await mountPage(true, true);
-    const selectionStore = useSelectionStore();
-    const extra = selectionStore.saveMachineProcess({
-      name: '待删制程',
-      sort: 9,
-    });
-    if (!extra.ok) throw new Error('process fixture failed');
-    await flushPromises();
-
-    await wrapper.get('.machine-process-context__manage').trigger('click');
-    await flushPromises();
-
-    const processButton = (name: string, label: string) => {
-      const row = [
-        ...document.querySelectorAll<HTMLElement>(
-          '.machine-process-list .ant-list-item',
-        ),
-      ].find((item) => item.textContent?.includes(name));
-      const button = row?.querySelector<HTMLButtonElement>(
-        `button[aria-label="${label}"]`,
-      );
-      if (!button) throw new Error(`${name} ${label} button missing`);
-      return button;
-    };
-    const nameField = () => inputBy(wrapper, '例如：制程2')!;
-
-    // 有未保存的新增草稿时切到编辑，用户选择“继续编辑”就保留草稿。
-    nameField().vm.$emit('update:value', '未保存草稿');
-    await flushPromises();
-    const confirmSpy = vi
-      .spyOn(dialogs, 'confirm')
-      .mockResolvedValueOnce(false);
-    processButton('待删制程', '编辑制程').click();
-    await flushPromises();
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    expect(nameField().props('value')).toBe('未保存草稿');
-
-    // 确认放弃后才切到编辑该制程。
-    confirmSpy.mockResolvedValueOnce(true);
-    processButton('待删制程', '编辑制程').click();
-    await flushPromises();
-    expect(nameField().props('value')).toBe('待删制程');
-    expect(document.body.textContent).toContain('编辑制程');
-
-    // 删掉正在编辑的制程，表单退回新增状态。
-    confirmSpy.mockResolvedValueOnce(true);
-    processButton('待删制程', '删除制程').click();
-    await flushPromises();
-    expect(
-      selectionStore.machineProcesses.some((item) => item.id === extra.item.id),
-    ).toBe(false);
-    expect(nameField().props('value')).toBe('');
-    expect(
-      document
-        .querySelector('.machine-process-form .ant-divider')
-        ?.textContent?.trim(),
-    ).toBe('新增制程');
-
-    wrapper.unmount();
-  });
-
-  it('falls back to the default process when the process being browsed is deleted', async () => {
-    const wrapper = await mountPage(true, true);
-    const selectionStore = useSelectionStore();
-    const extra = selectionStore.saveMachineProcess({
-      name: '浏览中制程',
-      sort: 9,
-    });
-    if (!extra.ok) throw new Error('process fixture failed');
-    await flushPromises();
-    await wrapper.vm.$router.replace({
-      query: { ...wrapper.vm.$route.query, process: String(extra.item.id) },
-    });
-    await flushPromises();
-    expect(wrapper.vm.$route.query.process).toBe(String(extra.item.id));
-
-    await wrapper.get('.machine-process-context__manage').trigger('click');
-    await flushPromises();
-    vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
-    const row = [
-      ...document.querySelectorAll<HTMLElement>(
-        '.machine-process-list .ant-list-item',
-      ),
-    ].find((item) => item.textContent?.includes('浏览中制程'));
-    row
-      ?.querySelector<HTMLButtonElement>('button[aria-label="删除制程"]')
-      ?.click();
-    await flushPromises();
-
-    expect(wrapper.vm.$route.query.process).toBeUndefined();
-    expect(wrapper.vm.$route.query.item).toBeTruthy();
     wrapper.unmount();
   });
 });

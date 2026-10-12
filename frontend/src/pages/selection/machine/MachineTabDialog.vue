@@ -8,7 +8,7 @@ import { notifyResult } from '@/pages/shared/save-feedback';
 import { useSelectionStore } from '@/stores/selection';
 
 /** 新增 / 重命名机型 Tab（分区）；父组件调用 openAdd() / openEdit() 打开 */
-const props = defineProps<{ machineName: string; processId: number }>();
+const props = defineProps<{ machineName: string }>();
 const store = useSelectionStore();
 
 const KIND_OPTIONS = [
@@ -64,7 +64,6 @@ function save() {
     props.machineName,
     { kind: form.kind, name: form.name.trim(), sort: form.sort },
     editId.value,
-    props.processId,
   );
   if (
     notifyResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {

@@ -6,8 +6,6 @@ export interface MachineStructureSearchDocument {
   machineModelId: number | null;
   machineModelName: string;
   machineName: string;
-  processId: number;
-  processName: string;
   processStepId: number | null;
   processStepName: string;
   rowId: number;
@@ -19,7 +17,6 @@ export interface MachineStructureSearchDocument {
 export interface MachineStructureSearchFilters {
   boardCharacteristicIds: number[];
   machineModelIds: number[];
-  processIds: number[];
   processStepIds: number[];
   query: string;
 }
@@ -31,18 +28,10 @@ export interface MachineStructureSearchResult {
   machineModelNames: string[];
   machineName: string;
   matchCount: number;
-  processId: number;
-  processName: string;
   processStepNames: string[];
   rowIds: number[];
   sectionId: number;
   sectionName: string;
-}
-
-export interface MachineStructureSearchGroup {
-  processId: number;
-  processName: string;
-  results: MachineStructureSearchResult[];
 }
 
 function normalize(value: string): string {
@@ -59,20 +48,14 @@ function unique(values: string[]): string[] {
 
 /**
  * 全局结构查找以单条结构记录为匹配边界，避免把不同记录上的条件
- * 交叉拼接成一个并不存在的组合；命中后再按制程、结构路径和 Tab 聚合。
+ * 交叉拼接成一个并不存在的组合；命中后再按结构路径和 Tab 聚合。
  */
 export function searchMachineStructures(
   documents: MachineStructureSearchDocument[],
   filters: MachineStructureSearchFilters,
-): MachineStructureSearchGroup[] {
+): MachineStructureSearchResult[] {
   const keyword = normalize(filters.query);
   const matched = documents.filter((document) => {
-    if (
-      filters.processIds.length > 0 &&
-      !filters.processIds.includes(document.processId)
-    ) {
-      return false;
-    }
     if (!includesSelected(filters.machineModelIds, document.machineModelId)) {
       return false;
     }
@@ -90,7 +73,6 @@ export function searchMachineStructures(
     if (!keyword) return true;
     return normalize(
       [
-        document.processName,
         document.category,
         document.configuration,
         document.machineName,
@@ -109,7 +91,6 @@ export function searchMachineStructures(
   >();
   for (const document of matched) {
     const key = JSON.stringify([
-      document.processId,
       document.category,
       document.configuration,
       document.machineName,
@@ -120,11 +101,11 @@ export function searchMachineStructures(
     else resultMap.set(key, { documents: [document] });
   }
 
-  const groups = new Map<number, MachineStructureSearchGroup>();
+  const results: MachineStructureSearchResult[] = [];
   for (const { documents: hits } of resultMap.values()) {
     const first = hits[0];
     if (!first) continue;
-    const result: MachineStructureSearchResult = {
+    results.push({
       boardCharacteristicNames: unique(
         hits.map((item) => item.boardCharacteristicName),
       ),
@@ -133,22 +114,11 @@ export function searchMachineStructures(
       machineModelNames: unique(hits.map((item) => item.machineModelName)),
       machineName: first.machineName,
       matchCount: hits.length,
-      processId: first.processId,
-      processName: first.processName,
       processStepNames: unique(hits.map((item) => item.processStepName)),
       rowIds: unique(hits.map((item) => String(item.rowId))).map(Number),
       sectionId: first.sectionId,
       sectionName: first.sectionName,
-    };
-    const group = groups.get(first.processId);
-    if (group) group.results.push(result);
-    else {
-      groups.set(first.processId, {
-        processId: first.processId,
-        processName: first.processName,
-        results: [result],
-      });
-    }
+    });
   }
-  return [...groups.values()];
+  return results;
 }

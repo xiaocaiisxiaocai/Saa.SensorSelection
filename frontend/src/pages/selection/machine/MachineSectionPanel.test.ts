@@ -48,7 +48,7 @@ function addNoteRows(
     });
     if (!result.ok) throw new Error('row fixture failed');
   }
-  return store.machineSectionRows(sectionId, MACHINE, 1);
+  return store.machineSectionRows(sectionId, MACHINE);
 }
 
 function visibleRowIds(wrapper: ReturnType<typeof mount>) {
@@ -79,7 +79,6 @@ describe('MachineSectionPanel', () => {
       props: {
         focusRowId: target.id,
         machineName: MACHINE,
-        processId: 1,
         section,
       },
       global: { plugins: [pinia] },
@@ -102,7 +101,6 @@ describe('MachineSectionPanel', () => {
       props: {
         focusRowId: target.id,
         machineName: MACHINE,
-        processId: 1,
         section,
       },
       global: { plugins: [pinia] },
@@ -129,7 +127,6 @@ describe('MachineSectionPanel', () => {
       props: {
         focusRowId: last.id,
         machineName: MACHINE,
-        processId: 1,
         section,
       },
       global: { plugins: [pinia] },
@@ -137,9 +134,9 @@ describe('MachineSectionPanel', () => {
     await flushPromises();
     expect(visibleRowIds(wrapper)).toEqual([last.id]);
 
-    expect(
-      store.deleteMachineSectionRow(section.id, MACHINE, last.id, 1).ok,
-    ).toBe(true);
+    expect(store.deleteMachineSectionRow(section.id, MACHINE, last.id).ok).toBe(
+      true,
+    );
     await flushPromises();
 
     expect(visibleRowIds(wrapper)).toHaveLength(20);
@@ -179,7 +176,7 @@ describe('MachineSectionPanel', () => {
     );
 
     const wrapper = mount(MachineSectionPanel, {
-      props: { machineName: MACHINE, processId: 1, section },
+      props: { machineName: MACHINE, section },
       global: { plugins: [pinia] },
     });
     await flushPromises();
@@ -199,15 +196,14 @@ describe('MachineSectionPanel', () => {
     await pick();
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
 
-    // 上传途中切到别的制程，图片仍要写进发起上传时的分区。
-    await wrapper.setProps({ processId: 2 });
+    // 上传途中切到别的机型，图片仍要写进发起上传时的分区。
+    await wrapper.setProps({ machineName: '02 多段输送段（搭配）' });
     resolveUpload('/api/files/1/content');
     await flushPromises();
 
     expect(saveSpy).toHaveBeenCalledTimes(1);
     expect(saveSpy.mock.calls[0]?.[0]).toBe(section.id);
     expect(saveSpy.mock.calls[0]?.[1]).toBe(MACHINE);
-    expect(saveSpy.mock.calls[0]?.[3]).toBe(1);
     wrapper.unmount();
   });
 });

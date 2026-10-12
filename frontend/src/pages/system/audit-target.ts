@@ -15,7 +15,6 @@ const NAMESPACE_LABELS: Record<string, string> = {
   'general-structure-labels': '通用结构标签',
   'machine-extra-sections': '机型页签',
   'machine-global-sections': '机型公共页签',
-  'machine-processes': '机型制程',
   'machine-section-images': '结构示意图',
   'machine-section-rows': '机型选型',
   meta: '系统数据',

@@ -22,7 +22,6 @@ import { useSelectionStore } from '@/stores/selection';
 const props = defineProps<{
   sectionId: number;
   machineName: string;
-  processId: number;
   /** 分区里已有记录才允许加图 */
   hasContent: boolean;
 }>();
@@ -38,11 +37,7 @@ const touched = ref(false);
 let compactMedia: MediaQueryList | null = null;
 
 const images = computed(() =>
-  store.machineSectionImages(
-    props.sectionId,
-    props.machineName,
-    props.processId,
-  ),
+  store.machineSectionImages(props.sectionId, props.machineName),
 );
 const toggleLabel = computed(() =>
   collapsed.value ? '展开结构示意图' : '折叠结构示意图',
@@ -85,7 +80,7 @@ const imagePicker = createFilePicker(
 async function uploadImages(files: File[]) {
   // 上传是异步的，途中可能切换到别的机型/分区；目标分区和基础图片列表必须在
   // 第一次 await 之前记下，否则会把图片写进切换后的分区。
-  const { sectionId, machineName, processId } = props;
+  const { sectionId, machineName } = props;
   const base = [...images.value];
   const next = [...base];
   for (const file of files) {
@@ -102,7 +97,7 @@ async function uploadImages(files: File[]) {
   // 全部上传失败时已逐个提示，不再提交一次没有变化的保存。
   if (next.length === base.length) return;
   notifyResult(
-    store.saveMachineSectionImages(sectionId, machineName, next, processId),
+    store.saveMachineSectionImages(sectionId, machineName, next),
     '示意图已更新',
     {
       size: '图片大小不能超过 2 MB',
@@ -121,12 +116,7 @@ async function removeImage(index: number) {
   if (!ok) return;
   const next = images.value.filter((_, current) => current !== index);
   notifyResult(
-    store.saveMachineSectionImages(
-      props.sectionId,
-      props.machineName,
-      next,
-      props.processId,
-    ),
+    store.saveMachineSectionImages(props.sectionId, props.machineName, next),
     '示意图已删除',
   );
 }

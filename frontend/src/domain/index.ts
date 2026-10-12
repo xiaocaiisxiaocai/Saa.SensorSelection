@@ -22,7 +22,6 @@ export {
   normalizeEntityGroups,
   normalizeFeedbackTypes,
   normalizeMachineRowImage,
-  normalizeMachineProcesses,
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,

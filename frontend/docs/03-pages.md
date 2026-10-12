@@ -155,7 +155,7 @@ const { canWrite } = useAccess()      // canWrite('selection:write')
 
 最复杂的页面。左侧 `MachineSourceList` 使用「分类 → 配置 → 机型」三层树并启用复选；配置层可选，`专案机型` 等分类允许直接挂机型。分类、配置、机型编辑表单均提供 1 起算的排序字段，数组顺序即显示顺序。右侧为报告工具栏 + 动态 tab + 表格 + 示意图侧栏。
 
-URL 同步 `?category=&configuration=&item=&section=`；无配置机型省略 `configuration`。
+URL 同步 `?category=&configuration=&item=&section=`；无配置机型省略 `configuration`。机型数据不分「制程」：没有制程切换和「管理制程」，每个机型只有一套 Tab 和内容（存储里没有 `machine-processes`，也没有 `@process:` 前缀的 key）。
 
 ### 5.1 报告工具栏
 

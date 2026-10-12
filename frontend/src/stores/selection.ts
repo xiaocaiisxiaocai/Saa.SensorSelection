@@ -17,7 +17,6 @@ import {
   type EntityKind,
   type MachineCatalogKind,
   type MachineRowImage,
-  type MachineProcessItem,
   type MachineSectionItem,
   type MachineSectionRow,
   type ProcessStepItem,
@@ -78,11 +77,6 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getGlobalMachineSections();
   });
 
-  const machineProcesses = computed(() => {
-    void revision.value;
-    return repository.getMachineProcesses();
-  });
-
   const generalStructureLabelMap = computed(() => {
     void revision.value;
     return repository.getGeneralStructureLabelMap();
@@ -116,34 +110,29 @@ export const useSelectionStore = defineStore('selection', () => {
   function buildFullSearchIndex(): SearchItem[] {
     const machineGroups = repository.getEntityGroups('machine');
     const machineSectionHits: SearchItem[] = [];
-    for (const process of repository.getMachineProcesses()) {
-      for (const group of machineGroups) {
-        for (const machineName of listEntityGroupItems(group)) {
-          for (const section of repository.listResolvedMachineSections(
+    for (const group of machineGroups) {
+      for (const machineName of listEntityGroupItems(group)) {
+        for (const section of repository.listResolvedMachineSections(
+          machineName,
+        )) {
+          for (const row of repository.getMachineSectionRows(
+            section.id,
             machineName,
-            process.id,
           )) {
-            for (const row of repository.getMachineSectionRows(
-              section.id,
-              machineName,
-              process.id,
-            )) {
-              machineSectionHits.push({
-                type: 'machine',
-                title: row.sensorType || row.name || row.role,
+            machineSectionHits.push({
+              type: 'machine',
+              title: row.sensorType || row.name || row.role,
+              category: group.name,
+              sub: [machineName, section.name, row.role]
+                .filter(Boolean)
+                .join(' · '),
+              path: '/selection/machine',
+              query: {
                 category: group.name,
-                sub: [process.name, machineName, section.name, row.role]
-                  .filter(Boolean)
-                  .join(' · '),
-                path: '/selection/machine',
-                query: {
-                  category: group.name,
-                  item: machineName,
-                  section: String(section.id),
-                  ...(process.id === 1 ? {} : { process: String(process.id) }),
-                },
-              });
-            }
+                item: machineName,
+                section: String(section.id),
+              },
+            });
           }
         }
       }
@@ -201,36 +190,24 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getControlledDocuments(entityName);
   }
 
-  function extraMachineSections(machineName: string, processId = 1) {
+  function extraMachineSections(machineName: string) {
     void revision.value;
-    return repository.getExtraMachineSections(machineName, processId);
+    return repository.getExtraMachineSections(machineName);
   }
 
-  function resolvedMachineSections(machineName: string, processId = 1) {
+  function resolvedMachineSections(machineName: string) {
     void revision.value;
-    return repository.listResolvedMachineSections(machineName, processId);
+    return repository.listResolvedMachineSections(machineName);
   }
 
-  function machineSectionRows(
-    sectionId: number,
-    machineName: string,
-    processId = 1,
-  ) {
+  function machineSectionRows(sectionId: number, machineName: string) {
     void revision.value;
-    return repository.getMachineSectionRows(sectionId, machineName, processId);
+    return repository.getMachineSectionRows(sectionId, machineName);
   }
 
-  function machineSectionImages(
-    sectionId: number,
-    machineName: string,
-    processId = 1,
-  ) {
+  function machineSectionImages(sectionId: number, machineName: string) {
     void revision.value;
-    return repository.getMachineSectionImages(
-      sectionId,
-      machineName,
-      processId,
-    );
+    return repository.getMachineSectionImages(sectionId, machineName);
   }
 
   function clearReconnectTimer() {
@@ -382,31 +359,17 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() =>
         repository.deleteEntityItem(kind, name, category, configuration),
       ),
-    deleteExtraMachineSection: (
-      machineName: string,
-      id: number,
-      processId = 1,
-    ) =>
-      mutate(() =>
-        repository.deleteExtraMachineSection(machineName, id, processId),
-      ),
+    deleteExtraMachineSection: (machineName: string, id: number) =>
+      mutate(() => repository.deleteExtraMachineSection(machineName, id)),
     deleteGlobalMachineSection: (id: number) =>
       mutate(() => repository.deleteGlobalMachineSection(id)),
-    deleteMachineProcess: (id: number) =>
-      mutate(() => repository.deleteMachineProcess(id)),
     deleteMachineSectionRow: (
       sectionId: number,
       machineName: string,
       id: number,
-      processId = 1,
     ) =>
       mutate(() =>
-        repository.deleteMachineSectionRow(
-          sectionId,
-          machineName,
-          id,
-          processId,
-        ),
+        repository.deleteMachineSectionRow(sectionId, machineName, id),
       ),
     deleteProcessIntroFile: (id: number) =>
       mutate(() => repository.deleteProcessIntroFile(id)),
@@ -432,7 +395,6 @@ export const useSelectionStore = defineStore('selection', () => {
     lastFailure,
     machineSectionImages,
     machineSectionRows,
-    machineProcesses,
     processIntroFiles,
     processSteps,
     reconnect,
@@ -525,44 +487,27 @@ export const useSelectionStore = defineStore('selection', () => {
       machineName: string,
       payload: Partial<MachineSectionItem>,
       editId?: number,
-      processId = 1,
     ) =>
       mutate(() =>
-        repository.saveExtraMachineSection(
-          machineName,
-          payload,
-          editId,
-          processId,
-        ),
+        repository.saveExtraMachineSection(machineName, payload, editId),
       ),
     saveGlobalMachineSection: (
       payload: Partial<MachineSectionItem>,
       editId?: number,
     ) => mutate(() => repository.saveGlobalMachineSection(payload, editId)),
-    saveMachineProcess: (
-      payload: Partial<MachineProcessItem>,
-      editId?: number,
-    ) => mutate(() => repository.saveMachineProcess(payload, editId)),
     saveMachineSectionImages: (
       sectionId: number,
       machineName: string,
       images: MachineRowImage[],
-      processId = 1,
     ) =>
       mutate(() =>
-        repository.saveMachineSectionImages(
-          sectionId,
-          machineName,
-          images,
-          processId,
-        ),
+        repository.saveMachineSectionImages(sectionId, machineName, images),
       ),
     saveMachineSectionRow: (
       sectionId: number,
       machineName: string,
       payload: Partial<MachineSectionRow>,
       editId?: number,
-      processId = 1,
     ) =>
       mutate(() =>
         repository.saveMachineSectionRow(
@@ -570,7 +515,6 @@ export const useSelectionStore = defineStore('selection', () => {
           machineName,
           payload,
           editId,
-          processId,
         ),
       ),
     saveProcessIntroFile: (attachment: {

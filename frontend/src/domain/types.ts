@@ -161,13 +161,6 @@ export interface ControlledFileItem extends ControlledFileAttachment {
 
 export type MachineSectionKind = 'notes' | 'structure';
 
-export interface MachineProcessItem {
-  id: number;
-  name: string;
-  sort: number;
-  locked?: boolean;
-}
-
 export interface MachineSectionItem {
   id: number;
   name: string;

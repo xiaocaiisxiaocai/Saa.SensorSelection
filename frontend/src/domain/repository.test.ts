@@ -41,7 +41,6 @@ describe('createSelectionRepository persist', () => {
 
     expect(repo.getEntityGroups('customer')).toEqual([]);
     expect(repo.getEntityGroups('machine')).toEqual([]);
-    expect(repo.getMachineProcesses()).toEqual([]);
     expect(repo.getProcessSteps()).toEqual([]);
     expect(repo.getSensors()).toEqual([]);
     expect(repo.getDictionaryItems('sensor-type')).toEqual([]);
@@ -597,11 +596,7 @@ describe('entity tree and dictionary', () => {
       }),
     ).toEqual(expect.objectContaining({ ok: true }));
     expect(
-      repo.saveEntityGroup(
-        'machine',
-        { name: '客户专机（新版）' },
-        '客户专机',
-      ),
+      repo.saveEntityGroup('machine', { name: '客户专机（新版）' }, '客户专机'),
     ).toEqual(expect.objectContaining({ ok: true }));
 
     expect(
@@ -696,16 +691,12 @@ describe('machine sections', () => {
       throw new Error('dictionary binding fixture failed');
     }
 
-    const linked = repo.saveMachineSectionRow(
-      structure.item.id,
-      machineName,
-      {
-        role: '进板检测',
-        sensorIds: [sensor.id],
-        machineModelId: machineModel.id,
-        boardCharacteristicId: boardCharacteristic.id,
-      },
-    );
+    const linked = repo.saveMachineSectionRow(structure.item.id, machineName, {
+      role: '进板检测',
+      sensorIds: [sensor.id],
+      machineModelId: machineModel.id,
+      boardCharacteristicId: boardCharacteristic.id,
+    });
     expect(linked).toEqual(
       expect.objectContaining({
         ok: true,
@@ -734,7 +725,10 @@ describe('machine sections', () => {
     );
 
     expect(
-      reloaded.deleteDictionaryItem('board-characteristic', boardCharacteristic.id),
+      reloaded.deleteDictionaryItem(
+        'board-characteristic',
+        boardCharacteristic.id,
+      ),
     ).toEqual({ ok: true });
     expect(
       reloaded.getMachineSectionRows(structure.item.id, machineName)[0],
@@ -761,15 +755,11 @@ describe('machine sections', () => {
       throw new Error('process-step fixture failed');
     }
 
-    const linked = repo.saveMachineSectionRow(
-      structure.item.id,
-      machineName,
-      {
-        role: '进板检测',
-        sensorIds: [sensor.id],
-        processStepId: processStep.id,
-      },
-    );
+    const linked = repo.saveMachineSectionRow(structure.item.id, machineName, {
+      role: '进板检测',
+      sensorIds: [sensor.id],
+      processStepId: processStep.id,
+    });
     expect(linked).toEqual(
       expect.objectContaining({
         ok: true,
@@ -835,93 +825,6 @@ describe('machine sections', () => {
     expect(repo.getMachineSectionRows(1, '既有机型')).toEqual([
       expect.objectContaining({ id: 9, role: '真实结构资料' }),
     ]);
-  });
-
-  it('keeps legacy machine content in the default process and isolates custom processes', () => {
-    const repo = createRepo();
-    const machineName = '01 单段输送段（搭配）';
-    const sensor = repo.getSensors()[0];
-
-    expect(repo.getMachineProcesses()).toEqual([
-      { id: 1, name: '制程1', sort: 1, locked: true },
-    ]);
-    const second = repo.saveMachineProcess({ name: '制程2', sort: 2 });
-    if (!second.ok || !sensor) throw new Error('process fixture failed');
-
-    const firstSection = repo.saveExtraMachineSection(machineName, {
-      kind: 'structure',
-      name: '默认制程内容',
-      sort: 1,
-    });
-    const secondSection = repo.saveExtraMachineSection(
-      machineName,
-      { kind: 'structure', name: '第二制程内容', sort: 1 },
-      undefined,
-      second.item.id,
-    );
-    if (!firstSection.ok || !secondSection.ok) {
-      throw new Error('machine section fixture failed');
-    }
-
-    expect(repo.listResolvedMachineSections(machineName)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: '默认制程内容' })]),
-    );
-    expect(repo.listResolvedMachineSections(machineName, second.item.id)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: '第二制程内容' })]),
-    );
-    expect(repo.listResolvedMachineSections(machineName, second.item.id)).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: '默认制程内容' })]),
-    );
-
-    expect(
-      repo.saveMachineSectionRow(firstSection.item.id, machineName, {
-        role: '默认制程检测',
-        sensorIds: [sensor.id],
-      }).ok,
-    ).toBe(true);
-    expect(
-      repo.saveMachineSectionRow(
-        secondSection.item.id,
-        machineName,
-        { role: '第二制程检测', sensorIds: [sensor.id] },
-        undefined,
-        second.item.id,
-      ).ok,
-    ).toBe(true);
-
-    expect(repo.getMachineSectionRows(firstSection.item.id, machineName)[0]?.role).toBe(
-      '默认制程检测',
-    );
-    expect(
-      repo.getMachineSectionRows(
-        secondSection.item.id,
-        machineName,
-        second.item.id,
-      )[0]?.role,
-    ).toBe('第二制程检测');
-  });
-
-  it('protects the default process and refuses to delete a custom process with tabs', () => {
-    const repo = createRepo();
-    const second = repo.saveMachineProcess({ name: '客户制程', sort: 2 });
-    if (!second.ok) throw new Error(second.reason);
-    expect(
-      repo.saveExtraMachineSection(
-        '01 单段输送段（搭配）',
-        { kind: 'notes', name: '客户注意事项' },
-        undefined,
-        second.item.id,
-      ).ok,
-    ).toBe(true);
-
-    expect(repo.deleteMachineProcess(1)).toEqual({
-      ok: false,
-      reason: 'validation',
-    });
-    expect(repo.deleteMachineProcess(second.item.id)).toEqual({
-      ok: false,
-      reason: 'not-empty',
-    });
   });
 
   it('starts without global tabs and lets each machine own both tab kinds', () => {
@@ -1004,7 +907,9 @@ describe('machine sections', () => {
     };
 
     if (!section.ok) throw new Error(section.reason);
-    expect(repo.saveMachineSectionImages(section.item.id, machineName, [image])).toEqual({
+    expect(
+      repo.saveMachineSectionImages(section.item.id, machineName, [image]),
+    ).toEqual({
       ok: false,
       reason: 'validation',
     });
@@ -1015,9 +920,9 @@ describe('machine sections', () => {
         sensorIds: [sensor.id],
       }).ok,
     ).toBe(true);
-    expect(repo.saveMachineSectionImages(section.item.id, machineName, [image])).toEqual(
-      expect.objectContaining({ ok: true }),
-    );
+    expect(
+      repo.saveMachineSectionImages(section.item.id, machineName, [image]),
+    ).toEqual(expect.objectContaining({ ok: true }));
   });
 });
 
@@ -1046,7 +951,9 @@ describe('controlled documents', () => {
     expect(repo.getControlledDocuments('庆鼎/华东')[0]?.kind).toBe('pdf');
     expect(repo.getControlledDocuments('景旺/华东')).toEqual([]);
     expect(
-      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎/华东'],
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')[
+        'customer-sop:庆鼎/华东'
+      ],
     ).toEqual([saved.item]);
   });
 

@@ -36,9 +36,9 @@ describe('selection store', () => {
     const result = store.saveEntityGroup('customer', { name: '测试区' });
     expect(result.ok).toBe(true);
     expect(store.revision).toBe(before + 1);
-    expect(store.entityGroups('customer').some((group) => group.name === '测试区')).toBe(
-      true,
-    );
+    expect(
+      store.entityGroups('customer').some((group) => group.name === '测试区'),
+    ).toBe(true);
   });
 
   it('goes online when the store endpoint succeeds', async () => {
@@ -54,9 +54,6 @@ describe('selection store', () => {
     vi.spyOn(api, 'getStore').mockResolvedValue({
       'entity-groups:customer': [{ name: '演示客户', items: ['客户A'] }],
       'entity-groups:machine': [{ name: '输送机构', items: ['演示机型'] }],
-      'machine-processes:all': [
-        { id: 1, name: '制程1', sort: 1, locked: true },
-      ],
       'dict:sensor-status': [{ id: 1, name: '现用', sort: 1 }],
       'dict:sensor-type': [{ id: 1, name: '漫反射', sort: 1 }],
       'sensor-catalog:all': [
@@ -123,8 +120,7 @@ describe('selection store', () => {
       store
         .crudItems('customer-req', '庆鼎')
         .some(
-          (item) =>
-            'content' in item && item.content === '浏览器本地旧数据',
+          (item) => 'content' in item && item.content === '浏览器本地旧数据',
         ),
     ).toBe(false);
   });
@@ -202,7 +198,9 @@ describe('selection store', () => {
   });
 
   it('rolls the repository back when a queued write is rejected', async () => {
-    vi.spyOn(api, 'getStore').mockResolvedValue({ 'entity-groups:customer': [] });
+    vi.spyOn(api, 'getStore').mockResolvedValue({
+      'entity-groups:customer': [],
+    });
     vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
       new ApiError('error', '数据格式无效', 400),
     );
@@ -212,9 +210,9 @@ describe('selection store', () => {
     expect(store.saveEntityGroup('customer', { name: '测试区' }).ok).toBe(true);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(store.entityGroups('customer').some((g) => g.name === '测试区')).toBe(
-      false,
-    );
+    expect(
+      store.entityGroups('customer').some((g) => g.name === '测试区'),
+    ).toBe(false);
     expect(store.lastFailure).toBe('storage');
     // 4xx 是确定性的拒绝，不应进入离线、触发重连
     expect(store.backendStatus).toBe('online');
@@ -233,9 +231,9 @@ describe('selection store', () => {
     store.saveEntityGroup('customer', { name: '测试区' });
     await vi.advanceTimersByTimeAsync(0);
     expect(store.backendStatus).toBe('unauthorized');
-    expect(store.entityGroups('customer').some((g) => g.name === '测试区')).toBe(
-      false,
-    );
+    expect(
+      store.entityGroups('customer').some((g) => g.name === '测试区'),
+    ).toBe(false);
 
     // 登录页在登录成功后调用 ensureBackendInit
     await store.ensureBackendInit();

@@ -14,12 +14,11 @@ import { useSelectionStore } from '@/stores/selection';
 
 /**
  * 机型分区里一条记录的新增 / 编辑对话框。结构分区填选型（功能作用、关联传感器…），
- * 注意事项分区填事项。父组件调用 open() 打开；切换分区/机型/制程时自动关闭。
+ * 注意事项分区填事项。父组件调用 open() 打开；切换分区/机型时自动关闭。
  */
 const props = defineProps<{
   sectionId: number;
   machineName: string;
-  processId: number;
   structure: boolean;
 }>();
 
@@ -75,7 +74,7 @@ function sensorOptionLabel(item: SensorItem) {
 }
 
 watch(
-  () => [props.sectionId, props.machineName, props.processId] as const,
+  () => [props.sectionId, props.machineName] as const,
   () => {
     visible.value = false;
   },
@@ -139,7 +138,6 @@ function save() {
       sensorIds: form.sensorIds.map(Number),
     },
     editId.value,
-    props.processId,
   );
   if (notifyResult(result, editId.value ? '记录已更新' : '记录已新增')) {
     visible.value = false;

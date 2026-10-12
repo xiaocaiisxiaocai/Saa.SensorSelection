@@ -17,7 +17,6 @@ const props = defineProps<{
   machineNames: readonly string[];
   /** 当前目录可勾选的机型总数 */
   availableCount: number;
-  processId: number;
 }>();
 const emit = defineEmits<{ selectAll: []; clear: [] }>();
 
@@ -27,7 +26,7 @@ const noneSelected = computed(() => props.machineNames.length === 0);
 const NONE_SELECTED_HINT = '请先在左侧勾选至少一个机型';
 
 const reportSections = computed(() =>
-  buildReportSections(store, props.machineNames, props.processId),
+  buildReportSections(store, props.machineNames),
 );
 
 function ready() {

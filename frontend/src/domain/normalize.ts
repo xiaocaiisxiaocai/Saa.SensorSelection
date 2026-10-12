@@ -12,7 +12,6 @@ import type {
   EntityKind,
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
-  MachineProcessItem,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
@@ -565,36 +564,6 @@ export function normalizeMachineSections(
   return unique;
 }
 
-export function normalizeMachineProcesses(
-  source: unknown,
-): MachineProcessItem[] {
-  const usedIds = new Set<number>();
-  const nextIdRef = { value: 1 };
-  const seenNames = new Set<string>();
-
-  return asList(source)
-    .filter(isRecord)
-    .map((item, index) => {
-      const id = allocateId(item.id, usedIds, nextIdRef);
-      const name = storedText(item.name).trim().slice(0, 40);
-      const sort = Number(item.sort);
-      return {
-        id,
-        name,
-        sort: Number.isFinite(sort) ? sort : index + 1,
-        locked: item.locked === true || id === 1 ? true : undefined,
-      } satisfies MachineProcessItem;
-    })
-    .filter((item) => item.name)
-    .filter((item) => {
-      const key = item.name.toLocaleLowerCase('zh-CN');
-      if (seenNames.has(key)) return false;
-      seenNames.add(key);
-      return true;
-    })
-    .sort((left, right) => left.sort - right.sort || left.id - right.id);
-}
-
 export function validateMachineRowImage(
   fileName: string,
   mimeType: string,
@@ -727,7 +696,8 @@ export function normalizeMachineSectionRows(
       ) =>
         Number.isSafeInteger(value) &&
         value > 0 &&
-        (items.length === 0 || items.some((candidate) => candidate.id === value))
+        (items.length === 0 ||
+          items.some((candidate) => candidate.id === value))
           ? value
           : null;
       const row: MachineSectionRow = {
@@ -934,8 +904,7 @@ export function normalizeEntityGroups(
       usedGroupNames.add(nameKey);
 
       // 机型名全局唯一（数据按机型名存）；客户下的区域只需在本客户内唯一
-      const itemNames =
-        kind === 'customer' ? new Set<string>() : usedItemNames;
+      const itemNames = kind === 'customer' ? new Set<string>() : usedItemNames;
       const items: string[] = [];
       for (const rawItem of asList(group.items)) {
         const item = storedText(rawItem).trim().slice(0, 40);

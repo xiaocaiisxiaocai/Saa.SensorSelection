@@ -12,7 +12,6 @@ import {
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import MachineCatalogSwitch from '@/pages/selection/machine/MachineCatalogSwitch.vue';
 import MachineGlobalSearch from '@/pages/selection/machine/MachineGlobalSearch.vue';
-import MachineProcessDialog from '@/pages/selection/machine/MachineProcessDialog.vue';
 import MachineReportBar from '@/pages/selection/machine/MachineReportBar.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
 import MachineTabDialog from '@/pages/selection/machine/MachineTabDialog.vue';
@@ -35,22 +34,11 @@ const auth = useAuthStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
-const processDialog = ref<InstanceType<typeof MachineProcessDialog>>();
 const tabDialog = ref<InstanceType<typeof MachineTabDialog>>();
 const activeSection = ref('');
 const checkedMachineKeys = ref<string[]>([]);
 
 const groups = computed(() => store.entityGroups('machine'));
-const processes = computed(() => store.machineProcesses);
-const activeProcessId = computed(() => {
-  const requested = Number(route.query.process);
-  return processes.value.some((item) => item.id === requested)
-    ? requested
-    : (processes.value[0]?.id ?? 1);
-});
-const processOptions = computed(() =>
-  processes.value.map((item) => ({ label: item.name, value: item.id })),
-);
 const activeMachineType = computed<MachineCatalogKind>(() =>
   machineCatalogFromQuery(groups.value, route.query),
 );
@@ -103,16 +91,14 @@ const boardCharacteristicOptions = computed(() =>
     .map((item) => ({ label: item.name, value: item.id })),
 );
 const globalSearchDocuments = computed(() =>
-  // 遍历「制程 × 机型 × 分区」时，每次取行都会重新归一化 Sensor/工序/字典；
+  // 遍历「机型 × 分区」时，每次取行都会重新归一化 Sensor/工序/字典；
   // batchRead 让这些归一化结果在本次构建里只算一次。
-  store.batchRead(() =>
-    buildMachineSearchDocuments(store, groups.value, processes.value),
-  ),
+  store.batchRead(() => buildMachineSearchDocuments(store, groups.value)),
 );
 const displaySections = computed(() => {
   if (!selection.value.item) return [];
   return store
-    .resolvedMachineSections(selection.value.item, activeProcessId.value)
+    .resolvedMachineSections(selection.value.item)
     .map((section) => ({ ...section, displayName: section.name }));
 });
 const tabs = computed(() =>
@@ -140,11 +126,9 @@ function currentSelectionQuery(
 
 function addMachineContextQuery(
   query: Record<string, string>,
-  processId = activeProcessId.value,
   catalog = activeMachineType.value,
   view = activeMachineView.value,
 ) {
-  if (processId !== 1) query.process = String(processId);
   if (catalog === 'project') query.catalog = catalog;
   if (catalog === 'mechanism' && view === 'find') query.view = 'find';
   return query;
@@ -174,24 +158,18 @@ watch(
       route.query.item,
       route.query.category,
       route.query.configuration,
-      route.query.process,
       route.query.catalog,
       groups.value,
-      processes.value,
     ] as const,
   () => {
     const { category, configuration, item } = selection.value;
     if (!item) return;
-    const requestedProcess = String(route.query.process || '');
-    const canonicalProcess =
-      activeProcessId.value === 1 ? '' : String(activeProcessId.value);
     const canonicalCatalog =
       activeMachineType.value === 'project' ? 'project' : '';
     if (
       route.query.item === item &&
       route.query.category === category &&
       String(route.query.configuration || '') === configuration &&
-      requestedProcess === canonicalProcess &&
       String(route.query.catalog || '') === canonicalCatalog
     ) {
       return;
@@ -214,7 +192,6 @@ watch(
       selection.value.item,
       selection.value.category,
       selection.value.configuration,
-      activeProcessId.value,
       route.query.section,
       displaySections.value.map((item) => item.id).join(','),
     ] as const,
@@ -234,8 +211,6 @@ watch(
       route.query.category === selection.value.category &&
       String(route.query.configuration || '') ===
         selection.value.configuration &&
-      String(route.query.process || '') ===
-        (activeProcessId.value === 1 ? '' : String(activeProcessId.value)) &&
       String(route.query.catalog || '') ===
         (activeMachineType.value === 'project' ? 'project' : '') &&
       route.query.section === next
@@ -278,20 +253,6 @@ function onTabChange(sectionId: string) {
   });
 }
 
-function selectProcess(processId: number) {
-  if (
-    !Number.isSafeInteger(processId) ||
-    !processes.value.some((item) => item.id === processId) ||
-    processId === activeProcessId.value
-  ) {
-    return;
-  }
-  void router.replace({
-    path: route.path,
-    query: addMachineContextQuery(currentSelectionQuery(), processId),
-  });
-}
-
 function selectMachineCatalog(value: string) {
   if (
     (value !== 'mechanism' && value !== 'project') ||
@@ -301,7 +262,7 @@ function selectMachineCatalog(value: string) {
   }
   void router.replace({
     path: route.path,
-    query: addMachineContextQuery({}, activeProcessId.value, value, 'browse'),
+    query: addMachineContextQuery({}, value, 'browse'),
   });
 }
 
@@ -317,7 +278,6 @@ function selectMachineView(value: string) {
     currentSelectionQuery(
       activeSection.value ? { section: activeSection.value } : {},
     ),
-    activeProcessId.value,
     activeMachineType.value,
     value,
   );
@@ -332,24 +292,12 @@ function openGlobalSearchResult(result: MachineStructureSearchResult) {
       section: String(result.sectionId),
       focusRow: String(result.rowIds[0] ?? ''),
     },
-    result.processId,
     'mechanism',
     'browse',
   );
   if (!query.focusRow) delete query.focusRow;
   if (result.configuration) query.configuration = result.configuration;
   void router.replace({ path: route.path, query });
-}
-
-// 删掉的正是当前浏览的制程：地址栏退回默认制程。
-// 删除后 activeProcessId 已经回落，所以按地址栏里的制程判断（默认制程不能删，
-// 被删的制程只要正在浏览就一定写在 ?process= 里）。
-function onProcessDeleted(processId: number) {
-  if (Number(route.query.process) !== processId) return;
-  void router.replace({
-    path: route.path,
-    query: addMachineContextQuery(currentSelectionQuery()),
-  });
 }
 
 function onToggleCheck(payload: {
@@ -393,11 +341,7 @@ async function closeTab(value: string) {
   );
   if (!ok) return;
   notifyResult(
-    store.deleteExtraMachineSection(
-      selection.value.item,
-      section.id,
-      activeProcessId.value,
-    ),
+    store.deleteExtraMachineSection(selection.value.item, section.id),
     'Tab 已删除',
     {
       'not-empty': '请先清空该 Tab 下的全部数据后再删除',
@@ -419,15 +363,10 @@ async function closeTab(value: string) {
     >
       <div class="machine-source-stack">
         <MachineCatalogSwitch
-          :process-id="activeProcessId"
-          :process-options="processOptions"
           :catalog="activeMachineType"
           :view="activeMachineView"
-          :writable="writable"
-          @process="selectProcess"
           @catalog="selectMachineCatalog"
           @view="selectMachineView"
-          @manage-processes="processDialog?.open()"
         />
         <EntitySource
           v-if="activeMachineView === 'browse'"
@@ -447,7 +386,6 @@ async function closeTab(value: string) {
         :machine-model-options="machineModelOptions"
         :process-step-options="processStepOptions"
         :board-characteristic-options="boardCharacteristicOptions"
-        :process-options="processOptions"
         @select="openGlobalSearchResult"
       />
       <div v-else-if="selection.item" class="selection-panel">
@@ -484,7 +422,6 @@ async function closeTab(value: string) {
             <MachineSectionPanel
               v-if="activeSectionItem"
               :machine-name="selection.item"
-              :process-id="activeProcessId"
               :section="activeSectionItem"
               :focus-row-id="Number(route.query.focusRow) || undefined"
             />
@@ -493,7 +430,6 @@ async function closeTab(value: string) {
             <MachineReportBar
               :machine-names="selectedMachineNames"
               :available-count="availableMachineItems.length"
-              :process-id="activeProcessId"
               @select-all="checkedMachineKeys = [...availableMachineKeys]"
               @clear="checkedMachineKeys = []"
             />
@@ -511,12 +447,7 @@ async function closeTab(value: string) {
       </div>
       <a-empty v-else description="暂无机型，请在左侧新建分类和机型" />
     </div>
-    <MachineProcessDialog ref="processDialog" @deleted="onProcessDeleted" />
-    <MachineTabDialog
-      ref="tabDialog"
-      :machine-name="selection.item"
-      :process-id="activeProcessId"
-    />
+    <MachineTabDialog ref="tabDialog" :machine-name="selection.item" />
   </section>
 </template>
 

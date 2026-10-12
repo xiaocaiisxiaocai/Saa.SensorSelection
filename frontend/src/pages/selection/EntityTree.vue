@@ -12,6 +12,13 @@ import { computed, ref, watch } from 'vue';
 import type { EntityGroup } from '@/domain';
 import EntityTreeNode from '@/pages/selection/entity/EntityTreeNode.vue';
 import {
+  dragCarries,
+  dropped,
+  startDrag,
+  TAB_MACHINE_DRAG,
+  TREE_ITEM_DRAG,
+} from '@/pages/selection/entity/entity-drag';
+import {
   branchKeys,
   buildEntityTree,
   dropMove,
@@ -26,6 +33,7 @@ import {
  * 客户（客户 → 区域）与机型（分类 → 配置 → 机型）共用的左侧目录树，
  * 直接基于 a-tree：展开/选中/勾选/拖拽排序都是 antd 自带交互，
  * 节点的编辑删除放在每行的「更多」下拉菜单里（EntityTreeNode）。
+ * externalDrag 时叶子可以拖出树（机型拖进 Tab），树也接收从 Tab 拖回来的机型。
  */
 const props = withDefaults(
   defineProps<{
@@ -38,8 +46,14 @@ const props = withDefaults(
     allowConfigurations?: boolean;
     groupLabel: string;
     itemLabel: string;
+    /** 叶子可拖出树、树接收拖回来的叶子（机型 ↔ Tab） */
+    externalDrag?: boolean;
+    /** 叶子「更多」菜单里额外的操作，选中后发出 itemAction */
+    extraItemActions?: readonly { key: string; label: string }[];
   }>(),
   {
+    externalDrag: false,
+    extraItemActions: () => [],
     editable: false,
     sortable: false,
     allowConfigurations: false,
@@ -71,6 +85,15 @@ const emit = defineEmits<{
       oldIndex: number;
       newIndex: number;
     },
+  ];
+  itemAction: [key: string, payload: ItemPayload];
+  /** 从外面拖回来的叶子；target 为空表示放在树的空白处 */
+  externalDrop: [
+    name: string,
+    target: {
+      node: ItemPayload & { kind: EntityNode['kind'] };
+      position: 'after' | 'before' | 'inside';
+    } | null,
   ];
 }>();
 
@@ -145,9 +168,48 @@ const allowDrop: TreeProps['allowDrop'] = ({
   dragNode,
   dropNode,
   dropPosition,
-}) => dropPosition !== 0 && sameParent(nodeOf(dragNode), nodeOf(dropNode));
+}) =>
+  canSort.value &&
+  dropPosition !== 0 &&
+  sameParent(nodeOf(dragNode), nodeOf(dropNode));
 
-const draggable = (node: unknown) => canSort.value && Boolean(nodeOf(node));
+const draggable = (node: unknown) =>
+  canSort.value ||
+  (props.externalDrag && props.editable && nodeOf(node).kind === 'item');
+const treeDraggable = computed(
+  () => canSort.value || (props.externalDrag && props.editable),
+);
+
+const onDragStart: TreeProps['onDragstart'] = ({ event, node }) => {
+  const dragged = nodeOf(node);
+  if (props.externalDrag && dragged.kind === 'item' && dragged.item) {
+    startDrag(event, TREE_ITEM_DRAG, dragged.item);
+  }
+};
+
+function onNodeExternalDrop(
+  node: EntityNode,
+  name: string,
+  position: 'after' | 'before' | 'inside',
+) {
+  emit('externalDrop', name, {
+    node: { ...payloadOf(node), kind: node.kind },
+    position,
+  });
+}
+
+// 放在树的空白处（没有落在任何节点上）：退回它原来所在的位置
+function onBodyDragOver(event: DragEvent) {
+  if (!props.externalDrag || !dragCarries(event, TAB_MACHINE_DRAG)) return;
+  event.preventDefault();
+}
+
+function onBodyDrop(event: DragEvent) {
+  if (!props.externalDrag || !dragCarries(event, TAB_MACHINE_DRAG)) return;
+  event.preventDefault();
+  const name = dropped(event, TAB_MACHINE_DRAG);
+  if (name) emit('externalDrop', name, null);
+}
 
 const onDrop: TreeProps['onDrop'] = (info) => {
   const drag = nodeOf(info.dragNode);
@@ -238,6 +300,10 @@ function actionsFor(node: EntityNode): MenuAction[] {
     ];
   }
   return [
+    ...props.extraItemActions.map((action) => ({
+      ...action,
+      run: () => emit('itemAction', action.key, payloadOf(node)),
+    })),
     {
       key: 'edit',
       label: `编辑${props.itemLabel}`,
@@ -317,7 +383,11 @@ function runAction(node: EntityNode, key: string) {
       </a-input>
     </div>
 
-    <div class="entity-tree__body">
+    <div
+      class="entity-tree__body"
+      @dragover="onBodyDragOver"
+      @drop="onBodyDrop"
+    >
       <a-tree
         v-if="treeData.length"
         block-node
@@ -327,20 +397,26 @@ function runAction(node: EntityNode, key: string) {
         :checkable="checkedItems !== undefined"
         check-strictly
         :checked-keys="checkedKeys"
-        :draggable="canSort ? draggable : false"
+        :draggable="treeDraggable ? draggable : false"
         :allow-drop="allowDrop"
         @expand="onExpand"
         @select="onSelect"
         @check="onCheck"
         @drop="onDrop"
+        @dragstart="onDragStart"
       >
         <template #title="{ dataRef }">
           <EntityTreeNode
             :node="dataRef as EntityNode"
             :editable="editable"
             :actions="editable ? actionsFor(dataRef as EntityNode) : []"
+            :accepts-drop="externalDrag && editable"
             @toggle="toggleBranch((dataRef as EntityNode).key)"
             @action="runAction(dataRef as EntityNode, $event)"
+            @external-drop="
+              (name: string, position: 'after' | 'before' | 'inside') =>
+                onNodeExternalDrop(dataRef as EntityNode, name, position)
+            "
           />
         </template>
       </a-tree>

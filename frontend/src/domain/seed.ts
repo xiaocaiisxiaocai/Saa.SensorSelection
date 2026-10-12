@@ -909,6 +909,13 @@ export const MACHINE_SECTION_LEGACY_MAP: Record<string, number> = {
   'machine-notes': 4,
 };
 
+/**
+ * 机型内容（选型记录、示意图）存放用的分区 id：内容跟着机型走，不随所在 Tab 变，
+ * 所以统一存在 `machine-section-rows:1000:{机型}` / `machine-section-images:1000:{机型}`。
+ * 1000 不会和旧的全局分区（1–4）或机型自建分区（1001 起）冲突。
+ */
+export const MACHINE_CONTENT_SECTION_ID = 1000;
+
 export const MACHINE_ROW_IMAGE_RULES = {
   accept: '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp',
   extensions: ['.jpg', '.jpeg', '.png', '.webp'],

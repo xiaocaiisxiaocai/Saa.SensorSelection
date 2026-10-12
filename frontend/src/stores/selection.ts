@@ -8,6 +8,7 @@ import {
   createSelectionRepository,
   CRUD_DEFAULTS,
   listEntityGroupItems,
+  MACHINE_CONTENT_SECTION_ID,
   SENSOR_DATA,
   type BackendSyncStatus,
   type CrudRecord,
@@ -19,6 +20,7 @@ import {
   type MachineRowImage,
   type MachineSectionItem,
   type MachineSectionRow,
+  type MachineTab,
   type ProcessStepItem,
   type SaveFailure,
   type SearchItem,
@@ -97,6 +99,11 @@ export const useSelectionStore = defineStore('selection', () => {
     return repository.getSensorSopFiles();
   });
 
+  const machineTabs = computed(() => {
+    void revision.value;
+    return repository.getMachineTabs();
+  });
+
   const sensor3dFiles = computed(() => {
     void revision.value;
     return repository.getSensor3dFiles();
@@ -109,31 +116,27 @@ export const useSelectionStore = defineStore('selection', () => {
 
   function buildFullSearchIndex(): SearchItem[] {
     const machineGroups = repository.getEntityGroups('machine');
+    // 机型内容只有放进 Tab 的机型才看得到，所以只索引 Tab 里的机型
+    const groupOf = new Map(
+      machineGroups.flatMap((group) =>
+        listEntityGroupItems(group).map((name) => [name, group.name] as const),
+      ),
+    );
     const machineSectionHits: SearchItem[] = [];
-    for (const group of machineGroups) {
-      for (const machineName of listEntityGroupItems(group)) {
-        for (const section of repository.listResolvedMachineSections(
+    for (const tab of repository.getMachineTabs()) {
+      for (const machineName of tab.machines) {
+        for (const row of repository.getMachineSectionRows(
+          MACHINE_CONTENT_SECTION_ID,
           machineName,
         )) {
-          for (const row of repository.getMachineSectionRows(
-            section.id,
-            machineName,
-          )) {
-            machineSectionHits.push({
-              type: 'machine',
-              title: row.sensorType || row.name || row.role,
-              category: group.name,
-              sub: [machineName, section.name, row.role]
-                .filter(Boolean)
-                .join(' · '),
-              path: '/selection/machine',
-              query: {
-                category: group.name,
-                item: machineName,
-                section: String(section.id),
-              },
-            });
-          }
+          machineSectionHits.push({
+            type: 'machine',
+            title: row.sensorType || row.name || row.role,
+            category: groupOf.get(machineName) ?? '',
+            sub: [tab.name, machineName, row.role].filter(Boolean).join(' · '),
+            path: '/selection/machine',
+            query: { tab: String(tab.id), item: machineName },
+          });
         }
       }
     }
@@ -361,6 +364,8 @@ export const useSelectionStore = defineStore('selection', () => {
       ),
     deleteExtraMachineSection: (machineName: string, id: number) =>
       mutate(() => repository.deleteExtraMachineSection(machineName, id)),
+    deleteMachineTab: (id: number) =>
+      mutate(() => repository.deleteMachineTab(id)),
     deleteGlobalMachineSection: (id: number) =>
       mutate(() => repository.deleteGlobalMachineSection(id)),
     deleteMachineSectionRow: (
@@ -491,6 +496,20 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() =>
         repository.saveExtraMachineSection(machineName, payload, editId),
       ),
+    saveMachineTab: (
+      catalog: MachineCatalogKind,
+      payload: Partial<Pick<MachineTab, 'kind' | 'name' | 'sort'>>,
+      editId?: number,
+    ) => mutate(() => repository.saveMachineTab(catalog, payload, editId)),
+    placeMachineInTab: (machineName: string, tabId: number, index?: number) =>
+      mutate(() => repository.placeMachineInTab(machineName, tabId, index)),
+    removeMachineFromTab: (machineName: string) =>
+      mutate(() => repository.removeMachineFromTab(machineName)),
+    moveMachineToCatalog: (
+      machineName: string,
+      target: { category: string; configuration: string | null; sort?: number },
+    ) => mutate(() => repository.moveMachineToCatalog(machineName, target)),
+    machineTabs,
     saveGlobalMachineSection: (
       payload: Partial<MachineSectionItem>,
       editId?: number,

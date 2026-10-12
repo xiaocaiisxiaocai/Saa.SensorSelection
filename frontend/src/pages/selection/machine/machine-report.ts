@@ -1,76 +1,68 @@
-import type { MachineReportSection } from '@/domain';
+import {
+  MACHINE_CONTENT_SECTION_ID,
+  type MachineReportSection,
+} from '@/domain';
 import type { useSelectionStore } from '@/stores/selection';
 
 type SelectionStore = ReturnType<typeof useSelectionStore>;
 
-const sectionKey = (section: { kind: string; name: string }) =>
-  `${section.kind}:${section.name.toLocaleLowerCase('zh-CN')}`;
-
 /**
- * 示意图报告的分区：把所选机型的 Tab 按「类型 + 名称」合并，
- * 每个分区里按机型列出各自的行、示意图和用到的 Sensor。
+ * 示意图报告的分区：每个 Tab 一节，节里按 Tab 内的顺序列出所选机型的
+ * 选型记录、示意图和用到的 Sensor。还没放进 Tab 的机型没有内容，不出现在报告里。
  */
 export function buildReportSections(
   store: SelectionStore,
   machineNames: readonly string[],
 ): MachineReportSection[] {
-  const resolvedByMachine = new Map(
-    machineNames.map((machineName) => [
-      machineName,
-      store.resolvedMachineSections(machineName),
-    ]),
-  );
-  const sectionMap = new Map<string, MachineReportSection>();
-  for (const sectionsForMachine of resolvedByMachine.values()) {
-    for (const section of sectionsForMachine) {
-      const key = sectionKey(section);
-      if (!sectionMap.has(key)) {
-        sectionMap.set(key, {
-          ...section,
-          displayName: section.name,
-          blocks: [],
-        });
-      }
-    }
-  }
-  return [...sectionMap.values()]
-    .sort((left, right) => left.sort - right.sort)
-    .map((section) => ({
-      ...section,
-      blocks: machineNames.flatMap((machineName) => {
-        const machineSection = resolvedByMachine
-          .get(machineName)
-          ?.find((candidate) => sectionKey(candidate) === sectionKey(section));
-        if (!machineSection) return [];
-        const rows = store.machineSectionRows(machineSection.id, machineName);
-        const reportRows = rows.map((row) => {
-          const processStep = store.processSteps.find(
-            (item) => item.id === row.processStepId,
-          );
-          return {
-            ...row,
-            processStepName: processStep
-              ? `${processStep.layer} · ${processStep.name}`
-              : '',
-          };
-        });
-        const structure = section.kind === 'structure';
-        return [
-          {
-            machineName,
-            rows: reportRows,
-            images: structure
-              ? store.machineSectionImages(machineSection.id, machineName)
-              : [],
-            sensors: structure
-              ? store.sensors.filter((sensor) =>
-                  rows.some((row) => row.sensorIds.includes(sensor.id)),
-                )
-              : [],
-          },
-        ];
-      }),
-    }));
+  const selected = new Set(machineNames);
+  return store.machineTabs.flatMap((tab) => {
+    const structure = tab.kind === 'structure';
+    const blocks = tab.machines
+      .filter((machineName) => selected.has(machineName))
+      .map((machineName) => {
+        const rows = store.machineSectionRows(
+          MACHINE_CONTENT_SECTION_ID,
+          machineName,
+        );
+        return {
+          machineName,
+          rows: rows.map((row) => {
+            const processStep = store.processSteps.find(
+              (item) => item.id === row.processStepId,
+            );
+            return {
+              ...row,
+              processStepName: processStep
+                ? `${processStep.layer} · ${processStep.name}`
+                : '',
+            };
+          }),
+          images: structure
+            ? store.machineSectionImages(
+                MACHINE_CONTENT_SECTION_ID,
+                machineName,
+              )
+            : [],
+          sensors: structure
+            ? store.sensors.filter((sensor) =>
+                rows.some((row) => row.sensorIds.includes(sensor.id)),
+              )
+            : [],
+        };
+      });
+    if (blocks.length === 0) return [];
+    return [
+      {
+        id: tab.id,
+        name: tab.name,
+        displayName: tab.name,
+        sort: tab.sort,
+        kind: tab.kind,
+        scope: 'machine' as const,
+        blocks,
+      },
+    ];
+  });
 }
 
 /** 报告里至少有一行数据或一张示意图 */

@@ -53,8 +53,10 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | `sensor-sop-file:all` | Sensor SOP 文件库（PDF，不参与型号关联） |
 | `sensor-sop:all` | Sensor 资料文件（历史兼容键，当前为 PDF 资料） |
 | `sensor-3d:all` | Sensor 3D 文件（暂为 PDF） |
-| `machine-extra-sections:{机型名}` | 当前机型的用户自定义 tab（结构或机型注意事项） |
-| `machine-section-rows:{sectionId}:{机型名}` | 结构/注意事项行 |
+| `machine-tabs:all` | 机型 Tab：`{ id, catalog: mechanism\|project, name, sort, kind: structure\|notes, machines: 机型名[] }`；一个机型只在一个 Tab 里 |
+| `machine-section-rows:1000:{机型名}` / `machine-section-images:1000:{机型名}` | 机型内容（`MACHINE_CONTENT_SECTION_ID`）：跟着机型走，不随所在 Tab 变 |
+| `machine-extra-sections:{机型名}` | 旧模型里机型自建的 Tab；机型第一次放进同名同类型的 Tab 时，其中的记录和示意图并入机型内容 |
+| `machine-section-rows:{sectionId}:{机型名}` | 旧模型的结构/注意事项行（`sectionId` 为上一行旧 Tab 的 id） |
 | `machine-section-images:{sectionId}:{机型名}` | 结构示意图（最多 2 张） |
 
 文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF、图片和 3D 文件仅在预览或下载时按需请求，避免登录阶段传输文件正文。

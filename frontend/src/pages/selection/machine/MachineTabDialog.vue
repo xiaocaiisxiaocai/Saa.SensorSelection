@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 
-import type { MachineSectionKind } from '@/domain';
+import type { MachineCatalogKind, MachineSectionKind } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import { notifyResult } from '@/pages/shared/save-feedback';
 import { useSelectionStore } from '@/stores/selection';
 
-/** 新增 / 重命名机型 Tab（分区）；父组件调用 openAdd() / openEdit() 打开 */
-const props = defineProps<{ machineName: string }>();
+/**
+ * 新增 / 编辑机型 Tab（当前目录共用）；父组件调用 openAdd() / openEdit() 打开。
+ * 保存成功后发出 saved，带上 Tab id，新建时页面据此切到新 Tab。
+ */
+const props = defineProps<{ catalog: MachineCatalogKind }>();
+const emit = defineEmits<{ saved: [tabId: number] }>();
 const store = useSelectionStore();
 
 const KIND_OPTIONS = [
@@ -58,21 +62,21 @@ async function cancel() {
 }
 
 function save() {
-  if (!props.machineName) return;
   validationAttempted.value = true;
-  const result = store.saveExtraMachineSection(
-    props.machineName,
+  const result = store.saveMachineTab(
+    props.catalog,
     { kind: form.kind, name: form.name.trim(), sort: form.sort },
     editId.value,
   );
   if (
     notifyResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
       duplicate: '该 Tab 名称已存在',
-      'not-empty': '请先清空该 Tab 的数据和示意图后再修改类型',
+      'not-empty': '该 Tab 下的机型已有内容，不能修改类型',
       stale: '该 Tab 已被删除，请刷新后重试',
     })
   ) {
     visible.value = false;
+    if (result.ok) emit('saved', result.item.id);
   }
 }
 

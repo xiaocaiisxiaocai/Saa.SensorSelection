@@ -1558,6 +1558,149 @@ async function run() {
   assert.deepEqual(transport11.calls.writes, [])
   assert.equal(transport11.calls.writeAlls, 0)
 
+  // 机型 Tab：按目录（结构 / 专案机型）共用的一组容器，机型放进 Tab 后
+  // 只在 Tab 下显示；一个机型只在一个 Tab 里，内容跟着机型走。
+  {
+    const memoryTabs = new Map()
+    const tabsRepo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: {
+        getItem: (key) => memoryTabs.get(key) ?? null,
+        setItem: (key, value) => memoryTabs.set(key, value),
+      },
+    })
+    const groups = tabsRepo.getEntityGroups('machine')
+    const mechanismMachine = groups
+      .filter((group) => domain.machineCatalogKind(group) === 'mechanism')
+      .flatMap((group) => domain.listEntityGroupItems(group))[0]
+    const projectMachine = groups
+      .filter((group) => domain.machineCatalogKind(group) === 'project')
+      .flatMap((group) => domain.listEntityGroupItems(group))[0]
+    assert.ok(mechanismMachine && projectMachine)
+    assert.deepEqual(tabsRepo.getMachineTabs('mechanism'), [])
+
+    // 旧数据：机型自己的同名 Tab 里已有一条记录，放进 Tab 时要带过去
+    const legacy = tabsRepo.saveExtraMachineSection(mechanismMachine, {
+      kind: 'structure',
+      name: '输送机构',
+    })
+    assert.equal(legacy.ok, true)
+    const sensor = tabsRepo.getSensors()[0]
+    assert.equal(
+      tabsRepo.saveMachineSectionRow(legacy.item.id, mechanismMachine, {
+        role: '旧入料确认',
+        sensorIds: [sensor.id],
+      }).ok,
+      true,
+    )
+
+    const conveyor = tabsRepo.saveMachineTab('mechanism', {
+      kind: 'structure',
+      name: '输送机构',
+    })
+    assert.equal(conveyor.ok, true)
+    assert.deepEqual(
+      tabsRepo.saveMachineTab('mechanism', { kind: 'structure', name: '输送机构' }),
+      { ok: false, reason: 'duplicate' },
+    )
+    // 两个目录的 Tab 各自独立，同名不冲突
+    assert.equal(
+      tabsRepo.saveMachineTab('project', { kind: 'structure', name: '输送机构' }).ok,
+      true,
+    )
+    const lifter = tabsRepo.saveMachineTab('mechanism', {
+      kind: 'structure',
+      name: '收板机构',
+    })
+    assert.equal(lifter.ok, true)
+
+    assert.deepEqual(tabsRepo.placeMachineInTab(projectMachine, conveyor.item.id), {
+      ok: false,
+      reason: 'validation',
+    })
+    assert.equal(tabsRepo.placeMachineInTab(mechanismMachine, conveyor.item.id).ok, true)
+    assert.equal(tabsRepo.machineTabOf(mechanismMachine)?.id, conveyor.item.id)
+    // 机型仍在目录数据里（改名/删除/查重照旧），只是目录树不再显示它
+    assert.equal(
+      tabsRepo
+        .getEntityGroups('machine')
+        .some((group) => domain.listEntityGroupItems(group).includes(mechanismMachine)),
+      true,
+    )
+    const contentId = domain.MACHINE_CONTENT_SECTION_ID
+    assert.deepEqual(
+      tabsRepo.getMachineSectionRows(contentId, mechanismMachine).map((row) => row.role),
+      ['旧入料确认'],
+    )
+    assert.deepEqual(tabsRepo.getMachineSectionRows(legacy.item.id, mechanismMachine), [])
+
+    // 换到另一个 Tab：只在一个 Tab 里，内容跟着机型走
+    assert.equal(tabsRepo.placeMachineInTab(mechanismMachine, lifter.item.id).ok, true)
+    assert.equal(tabsRepo.machineTabOf(mechanismMachine)?.id, lifter.item.id)
+    assert.deepEqual(
+      tabsRepo.getMachineTabs('mechanism').find((tab) => tab.id === conveyor.item.id)
+        ?.machines,
+      [],
+    )
+    assert.equal(tabsRepo.getMachineSectionRows(contentId, mechanismMachine).length, 1)
+
+    // 有内容时不能换到另一种类型（注意事项）的 Tab
+    const notes = tabsRepo.saveMachineTab('mechanism', {
+      kind: 'notes',
+      name: '机型注意事项',
+    })
+    assert.deepEqual(tabsRepo.placeMachineInTab(mechanismMachine, notes.item.id), {
+      ok: false,
+      reason: 'not-empty',
+    })
+
+    // 改名时 Tab 里的名字跟着改；有内容的机型不能删
+    const renamed = `${mechanismMachine}-改`
+    const location = groups.find((group) =>
+      domain.listEntityGroupItems(group).includes(mechanismMachine),
+    )
+    const configuration =
+      location.configurations?.find((item) => item.items.includes(mechanismMachine))
+        ?.name ?? null
+    assert.equal(
+      tabsRepo.saveEntityItem(
+        'machine',
+        {
+          category: location.name,
+          configuration,
+          name: renamed,
+          previousCategory: location.name,
+          previousConfiguration: configuration,
+        },
+        mechanismMachine,
+      ).ok,
+      true,
+    )
+    assert.equal(tabsRepo.machineTabOf(renamed)?.id, lifter.item.id)
+    assert.equal(tabsRepo.machineTabOf(mechanismMachine), null)
+    assert.equal(tabsRepo.getMachineSectionRows(contentId, renamed).length, 1)
+    assert.deepEqual(
+      tabsRepo.deleteEntityItem('machine', renamed, location.name, configuration),
+      { ok: false, reason: 'not-empty' },
+    )
+
+    // 移回目录；删除 Tab 时里面的机型也都回到目录
+    assert.equal(tabsRepo.removeMachineFromTab(renamed).ok, true)
+    assert.equal(tabsRepo.machineTabOf(renamed), null)
+    assert.equal(tabsRepo.placeMachineInTab(renamed, lifter.item.id).ok, true)
+    assert.deepEqual(tabsRepo.deleteMachineTab(lifter.item.id), { ok: true })
+    assert.equal(tabsRepo.machineTabOf(renamed), null)
+    assert.equal(tabsRepo.getMachineSectionRows(contentId, renamed).length, 1)
+
+    const persisted = JSON.parse(memoryTabs.get(domain.STORAGE_KEY))
+    assert.equal(Array.isArray(persisted['machine-tabs:all']), true)
+    assert.equal(
+      persisted['machine-tabs:all'].some((tab) => tab.id === lifter.item.id),
+      false,
+    )
+  }
+
   // 内置基础数据物化：buildDefaultStore 覆盖字典/分组/制程/Sensor 目录；机型 Tab 由用户逐机型维护
   const defaultStore = domain.buildDefaultStore({
     crudDefaults: data.CRUD_DEFAULTS,

@@ -5,6 +5,7 @@ import {
   machineCatalogKind,
   type EntityGroup,
   type MachineCatalogKind,
+  type MachineTab,
 } from '@/domain';
 
 type Query = Record<string, unknown>;
@@ -71,4 +72,38 @@ export function resolveMachineSelection(
     configuration: first?.configuration || '',
     item: first?.name || '',
   };
+}
+
+export interface MachineTabSelection {
+  /** 当前显示的 Tab；当前目录还没有 Tab 时为 null */
+  tab: MachineTab | null;
+  /** Tab 下选中的机型；Tab 是空的时为空串 */
+  machine: string;
+  /** 选中的是还在目录树里（没放进 Tab）的机型 */
+  treeMachine: string;
+}
+
+/**
+ * 地址栏 ?tab=&item= 指向的 Tab 和机型：机型在某个 Tab 里就显示那个 Tab；
+ * 机型还在目录树里就记为 treeMachine；否则按 ?tab= 或第一个 Tab，选它的第一个机型。
+ */
+export function resolveTabSelection(
+  tabs: readonly MachineTab[],
+  catalogMachines: ReadonlySet<string>,
+  query: Query,
+): MachineTabSelection {
+  const item = text(query.item);
+  const tabOfItem = item
+    ? tabs.find((tab) => tab.machines.includes(item))
+    : undefined;
+  if (tabOfItem) return { tab: tabOfItem, machine: item, treeMachine: '' };
+  if (item && catalogMachines.has(item)) {
+    return { tab: null, machine: '', treeMachine: item };
+  }
+  const requested = text(query.tab);
+  const tab =
+    tabs.find((candidate) => String(candidate.id) === requested) ??
+    tabs[0] ??
+    null;
+  return { tab, machine: tab?.machines[0] ?? '', treeMachine: '' };
 }

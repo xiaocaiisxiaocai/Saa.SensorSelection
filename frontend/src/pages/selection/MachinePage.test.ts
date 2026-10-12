@@ -8,6 +8,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MACHINE_CONTENT_SECTION_ID } from '@/domain';
+import { dialogs } from '@/pages/shared/confirm';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
@@ -15,6 +17,7 @@ import {
   columnWidths,
   findButton,
   runTreeAction,
+  tabCount,
   toggleTreeCheck,
   treeChecks,
   treeNodes,
@@ -48,12 +51,16 @@ async function mountPage(
   const pinia = createPinia();
   setActivePinia(pinia);
   const selectionStore = useSelectionStore();
+  // 结构目录有一个「输送机构」Tab，第一个机型已放在里面
+  const conveyor = selectionStore.saveMachineTab('mechanism', {
+    kind: 'structure',
+    name: '输送机构',
+    sort: 1,
+  });
+  if (!conveyor.ok) throw new Error('tab fixture failed');
   expect(
-    selectionStore.saveExtraMachineSection('01 单段输送段（搭配）', {
-      kind: 'structure',
-      name: '输送机构',
-      sort: 1,
-    }).ok,
+    selectionStore.placeMachineInTab('01 单段输送段（搭配）', conveyor.item.id)
+      .ok,
   ).toBe(true);
   if (authenticated) {
     useAuthStore().applyProfile({
@@ -287,7 +294,7 @@ describe('MachinePage', () => {
     expect(wrapper.getComponent(EntityTree).props('allowConfigurations')).toBe(
       true,
     );
-    await runTreeAction(wrapper, '01 单段输送段（搭配）', '编辑机型');
+    await runTreeAction(wrapper, '02 多段输送段（搭配）', '编辑机型');
 
     expect(document.body.textContent).toContain('配置（可选）');
     expect(document.body.textContent).toContain('排序');
@@ -319,7 +326,7 @@ describe('MachinePage', () => {
 
   it('explains why a selected machine with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
-    await toggleTreeCheck(wrapper, '01 单段输送段（搭配）');
+    await toggleTreeCheck(wrapper, '02 多段输送段（搭配）');
 
     const openSpy = vi.spyOn(window, 'open');
     const warning = vi.spyOn(message, 'warning');
@@ -854,6 +861,136 @@ describe('MachinePage', () => {
     await flushPromises();
     expect(typeFilter.props('value')).toEqual([]);
     expect(wrapper.text()).toContain('机型类型多选-3');
+    wrapper.unmount();
+  });
+});
+
+describe('MachinePage machine tabs', () => {
+  const PLACED = '01 单段输送段（搭配）';
+  const LOOSE = '02 多段输送段（搭配）';
+
+  afterEach(() => {
+    message.destroy();
+    vi.restoreAllMocks();
+  });
+
+  const chipNames = (wrapper: VueWrapper) =>
+    wrapper.findAll('.machine-chip__name').map((chip) => chip.text().trim());
+
+  async function runChipAction(
+    wrapper: VueWrapper,
+    name: string,
+    action: string,
+  ) {
+    await wrapper
+      .get(`button[aria-label="${name} 的更多操作"]`)
+      .trigger('click');
+    await flushPromises();
+    const item = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ].find((menuItem) => menuItem.textContent?.trim() === action);
+    if (!item) throw new Error(`menu item "${action}" not found`);
+    item.click();
+    await flushPromises();
+  }
+
+  it('shows a placed machine only under its tab, with its own content', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const tabId = useSelectionStore().machineTabs[0]!.id;
+
+    expect(treeNodes(wrapper, PLACED)).toHaveLength(0);
+    expect(treeNodes(wrapper, LOOSE).length).toBeGreaterThan(0);
+    expect(tabCount(wrapper, '输送机构')).toBe('1');
+    expect(chipNames(wrapper)).toEqual([PLACED]);
+    expect(wrapper.vm.$route.query).toMatchObject({
+      tab: String(tabId),
+      item: PLACED,
+    });
+    expect(
+      wrapper.getComponent(MachineSectionPanel).props('section'),
+    ).toMatchObject({ id: MACHINE_CONTENT_SECTION_ID, name: '输送机构' });
+    wrapper.unmount();
+  });
+
+  it('moves a tree machine into a tab from its menu and back from the tag menu', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const tabId = useSelectionStore().machineTabs[0]!.id;
+
+    await runTreeAction(wrapper, LOOSE, '移到 Tab…');
+    selectBy(wrapper, '选择 Tab')?.vm.$emit('update:value', tabId);
+    await flushPromises();
+    [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === '移动')
+      ?.click();
+    await flushPromises();
+
+    expect(treeNodes(wrapper, LOOSE)).toHaveLength(0);
+    expect(chipNames(wrapper)).toEqual([PLACED, LOOSE]);
+    expect(wrapper.vm.$route.query.item).toBe(LOOSE);
+
+    await runChipAction(wrapper, LOOSE, '移回目录');
+    expect(chipNames(wrapper)).toEqual([PLACED]);
+    expect(treeNodes(wrapper, LOOSE).length).toBeGreaterThan(0);
+    wrapper.unmount();
+  });
+
+  it('returns the machines of a deleted tab to the tree', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
+
+    await wrapper.get('.ant-tabs-tab-remove').trigger('click');
+    await flushPromises();
+
+    expect(useSelectionStore().machineTabs).toEqual([]);
+    expect(treeNodes(wrapper, PLACED).length).toBeGreaterThan(0);
+    // 一个 Tab 都没有了：先引导新建 Tab（哪怕正选着目录树里的机型）
+    expect(wrapper.text()).toContain('还没有 Tab');
+    expect(findButton(wrapper, '新建Tab')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('keeps tree reordering correct while some machines are hidden in tabs', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const store = useSelectionStore();
+    const itemsOf = () =>
+      store
+        .entityGroups('machine')
+        .find((group) => group.name === '输送机构')
+        ?.configurations?.find((item) => item.name === '标准输送段配置')?.items;
+    const before = itemsOf()!;
+    expect(before[0]).toBe(PLACED);
+
+    // 树里看到的是去掉 PLACED 后的列表：把第 1 个拖到第 2 个的位置
+    wrapper.getComponent(EntityTree).vm.$emit('reorderItems', {
+      category: '输送机构',
+      configuration: '标准输送段配置',
+      oldIndex: 0,
+      newIndex: 1,
+    });
+    await flushPromises();
+
+    expect(itemsOf()).toEqual([
+      PLACED,
+      before[2],
+      before[1],
+      ...before.slice(3),
+    ]);
+    wrapper.unmount();
+  });
+
+  it('offers no dragging or move menus to read-only users', async () => {
+    const wrapper = await mountPage(true, false);
+    await flushPromises();
+
+    expect(wrapper.get('.machine-chip').attributes('draggable')).toBe('false');
+    expect(
+      wrapper.find(`button[aria-label="${PLACED} 的更多操作"]`).exists(),
+    ).toBe(false);
+    expect(wrapper.getComponent(EntityTree).props('externalDrag')).toBe(false);
     wrapper.unmount();
   });
 });

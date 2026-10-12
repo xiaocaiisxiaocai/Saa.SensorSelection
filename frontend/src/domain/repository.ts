@@ -18,6 +18,7 @@ import {
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,
+  normalizeMachineTabs,
   normalizeMachineRowImage,
   normalizeProcessSteps,
   normalizeSensorItems,
@@ -31,7 +32,11 @@ import {
   createDefaultControlledDocuments,
   createSensorCatalogDefaults,
 } from './normalize';
-import { entityDataName } from './entity-tree';
+import {
+  entityDataName,
+  listEntityGroupItems,
+  machineCatalogKind,
+} from './entity-tree';
 import { migrateSelectionSeedStore } from './seed-migration';
 import { findSensorStatusName, isSensorStatus } from './sensor-status';
 import {
@@ -39,6 +44,7 @@ import {
   ENTITY_KIND_DEFINITIONS,
   GENERAL_STRUCTURE_CATEGORY,
   GENERAL_STRUCTURE_SECTION_LABELS,
+  MACHINE_CONTENT_SECTION_ID,
   MACHINE_SECTION_LEGACY_MAP,
   MACHINE_SECTION_SEED,
   SEED_VERSION,
@@ -62,6 +68,7 @@ import type {
   MachineCatalogKind,
   MachineSectionItem,
   MachineSectionRow,
+  MachineTab,
   PersistedStore,
   ProcessStepItem,
   ReorderResult,
@@ -1317,8 +1324,247 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
+  // ── 机型 Tab ─────────────────────────────────────────────────────
+  // Tab 是按目录共用的容器；机型放进 Tab 后目录树不再显示它，
+  // 但它仍留在 entity-groups 里（改名、删除、查重、退回原分类都照旧）。
+  // 机型内容固定存在 MACHINE_CONTENT_SECTION_ID 下，换 Tab 不用搬数据。
+
+  const machineTabsKey = () => keyFor('machine-tabs', 'all');
+
+  function getMachineTabs(catalog?: MachineCatalogKind): MachineTab[] {
+    const key = machineTabsKey();
+    store[key] = normalizeMachineTabs(
+      Array.isArray(store[key]) ? store[key] : [],
+    );
+    const tabs = store[key] as MachineTab[];
+    return catalog ? tabs.filter((tab) => tab.catalog === catalog) : tabs;
+  }
+
+  function machineTabOf(machineName: string): MachineTab | null {
+    // 只读：Tab 列表还没建立时不要往 store 里写空 key
+    if (!Array.isArray(store[machineTabsKey()])) return null;
+    return (
+      getMachineTabs().find((tab) => tab.machines.includes(machineName)) ?? null
+    );
+  }
+
+  function machineCatalogOf(machineName: string): MachineCatalogKind | null {
+    const group = getEntityGroups('machine').find((candidate) =>
+      listEntityGroupItems(candidate).includes(machineName),
+    );
+    return group ? machineCatalogKind(group) : null;
+  }
+
+  function machineHasContent(machineName: string): boolean {
+    return (
+      getMachineSectionRows(MACHINE_CONTENT_SECTION_ID, machineName).length >
+        0 ||
+      getMachineSectionImages(MACHINE_CONTENT_SECTION_ID, machineName).length >
+        0
+    );
+  }
+
+  function writeMachineTabs(tabs: MachineTab[]) {
+    store[machineTabsKey()] = normalizeMachineTabs(tabs);
+  }
+
+  function saveMachineTab(
+    catalog: MachineCatalogKind,
+    payload: Partial<Pick<MachineTab, 'kind' | 'name' | 'sort'>>,
+    editId?: number,
+  ): SaveResult<MachineTab> {
+    const tabs = getMachineTabs();
+    const name = storedText(payload.name).trim().slice(0, 40);
+    if (!name) return { ok: false, reason: 'validation' };
+    if (
+      tabs.some(
+        (tab) =>
+          tab.catalog === catalog &&
+          tab.id !== editId &&
+          sameLocaleName(tab.name, name),
+      )
+    ) {
+      return { ok: false, reason: 'duplicate' };
+    }
+    const kind = payload.kind === 'notes' ? 'notes' : 'structure';
+    const sort = Number(payload.sort);
+    const snapshot = cloneStore(store);
+    let saved: MachineTab;
+    if (editId) {
+      const existing = tabs.find((tab) => tab.id === editId);
+      if (!existing) return { ok: false, reason: 'stale' };
+      // 换类型会改变 Tab 下机型内容的格式，有内容时不允许
+      if (
+        kind !== existing.kind &&
+        existing.machines.some((machine) => machineHasContent(machine))
+      ) {
+        return { ok: false, reason: 'not-empty' };
+      }
+      saved = {
+        ...existing,
+        name,
+        kind,
+        sort: Number.isFinite(sort) ? sort : existing.sort,
+      };
+      tabs.splice(tabs.indexOf(existing), 1, saved);
+    } else {
+      saved = {
+        id: nextAvailableId(tabs),
+        catalog,
+        name,
+        kind,
+        sort: Number.isFinite(sort)
+          ? sort
+          : tabs.filter((tab) => tab.catalog === catalog).length + 1,
+        machines: [],
+      };
+      tabs.push(saved);
+    }
+    writeMachineTabs(tabs);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item: saved };
+  }
+
+  /** 删除 Tab：里面的机型回到目录树（数据都保留） */
+  function deleteMachineTab(id: number): DeleteResult {
+    const tabs = getMachineTabs();
+    const index = tabs.findIndex((tab) => tab.id === id);
+    if (index === -1) return { ok: false, reason: 'stale' };
+    const snapshot = cloneStore(store);
+    tabs.splice(index, 1);
+    writeMachineTabs(tabs);
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
+  /**
+   * 第一次放进 Tab 时，把机型旧的同名同类型分区里的记录和示意图搬到机型内容里，
+   * 并移除那个旧分区（旧模型是每个机型各有一套 Tab）。
+   */
+  function adoptLegacyMachineSection(machineName: string, tab: MachineTab) {
+    if (machineHasContent(machineName)) return;
+    const sections = getExtraMachineSections(machineName);
+    const legacy = sections.find(
+      (section) =>
+        section.kind === tab.kind && sameLocaleName(section.name, tab.name),
+    );
+    if (!legacy) return;
+    const rows = getMachineSectionRows(legacy.id, machineName);
+    const images = getMachineSectionImages(legacy.id, machineName);
+    store[machineSectionRowsKey(MACHINE_CONTENT_SECTION_ID, machineName)] =
+      rows;
+    store[machineSectionImagesKey(MACHINE_CONTENT_SECTION_ID, machineName)] =
+      images;
+    store[keyFor('machine-extra-sections', machineName)] = sections.filter(
+      (section) => section.id !== legacy.id,
+    );
+    store = omitStoreKeys(store, [
+      machineSectionRowsKey(legacy.id, machineName),
+      machineSectionImagesKey(legacy.id, machineName),
+    ]);
+  }
+
+  /** 放进（或在 Tab 之间、Tab 之内移动）机型；index 为在目标 Tab 里的位置 */
+  function placeMachineInTab(
+    machineName: string,
+    tabId: number,
+    index?: number,
+  ): SaveResult<MachineTab> {
+    const tabs = getMachineTabs();
+    const target = tabs.find((tab) => tab.id === tabId);
+    if (!target) return { ok: false, reason: 'stale' };
+    const catalog = machineCatalogOf(machineName);
+    if (!catalog) return { ok: false, reason: 'stale' };
+    if (catalog !== target.catalog) return { ok: false, reason: 'validation' };
+    const current = tabs.find((tab) => tab.machines.includes(machineName));
+    if (
+      current &&
+      current.kind !== target.kind &&
+      machineHasContent(machineName)
+    ) {
+      return { ok: false, reason: 'not-empty' };
+    }
+
+    const snapshot = cloneStore(store);
+    if (!current) adoptLegacyMachineSection(machineName, target);
+    const next = tabs.map((tab) => ({
+      ...tab,
+      machines: tab.machines.filter((machine) => machine !== machineName),
+    }));
+    const updated = next.find((tab) => tab.id === tabId)!;
+    const requested = Number(index);
+    const position = Number.isInteger(requested)
+      ? Math.max(0, Math.min(updated.machines.length, requested))
+      : updated.machines.length;
+    updated.machines.splice(position, 0, machineName);
+    writeMachineTabs(next);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item: updated };
+  }
+
+  /** 移回目录：机型重新出现在它所在的分类里 */
+  function removeMachineFromTab(machineName: string): DeleteResult {
+    const tabs = getMachineTabs();
+    if (!tabs.some((tab) => tab.machines.includes(machineName))) {
+      return { ok: false, reason: 'stale' };
+    }
+    const snapshot = cloneStore(store);
+    writeMachineTabs(
+      tabs.map((tab) => ({
+        ...tab,
+        machines: tab.machines.filter((machine) => machine !== machineName),
+      })),
+    );
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
+  }
+
+  /** 从 Tab 拖回目录树的指定分类 / 配置 / 位置（一次提交） */
+  function moveMachineToCatalog(
+    machineName: string,
+    target: { category: string; configuration: string | null; sort?: number },
+  ): SaveResult<EntityTreeItem> {
+    return transaction(() => {
+      if (machineTabOf(machineName)) {
+        const removed = removeMachineFromTab(machineName);
+        if (!removed.ok) return removed;
+      }
+      const location = findEntityLocation(
+        getEntityGroups('machine'),
+        machineName,
+      );
+      if (!location) return { ok: false, reason: 'stale' } as const;
+      return saveEntityItemSteps(
+        'machine',
+        {
+          category: target.category,
+          configuration: target.configuration,
+          name: machineName,
+          previousCategory: location.group.name,
+          previousConfiguration: location.configuration?.name ?? null,
+          sort: target.sort,
+        },
+        machineName,
+      );
+    });
+  }
+
+  /** 改名 / 删除机型时同步 Tab 里的名字 */
+  function syncMachineTabMembers(fromName: string, toName: string | null) {
+    if (!Array.isArray(store[machineTabsKey()])) return;
+    writeMachineTabs(
+      getMachineTabs().map((tab) => ({
+        ...tab,
+        machines: tab.machines.flatMap((machine) =>
+          machine !== fromName ? [machine] : toName ? [toName] : [],
+        ),
+      })),
+    );
+  }
+
   function sectionAllowsImage(sectionId: number, machineName: string): boolean {
     const numericId = Number(sectionId);
+    if (numericId === MACHINE_CONTENT_SECTION_ID) {
+      return (machineTabOf(machineName)?.kind ?? 'structure') === 'structure';
+    }
     const localSection = getExtraMachineSections(machineName).find(
       (item) => item.id === numericId,
     );
@@ -2040,6 +2286,7 @@ export function createSelectionRepository({
   function entityHasData(kind: EntityKind, entityName: string): boolean {
     if (kind === 'machine') {
       if (getExtraMachineSections(entityName).length > 0) return true;
+      if (machineHasContent(entityName)) return true;
       return listResolvedMachineSections(entityName).some(
         (section) =>
           getMachineSectionRows(section.id, entityName).length > 0 ||
@@ -2057,6 +2304,7 @@ export function createSelectionRepository({
     toName: string,
   ) {
     if (kind === 'machine') {
+      syncMachineTabMembers(fromName, toName);
       const removals: string[] = [];
       const extraFrom = keyFor('machine-extra-sections', fromName);
       const extraTo = keyFor('machine-extra-sections', toName);
@@ -2501,6 +2749,12 @@ export function createSelectionRepository({
     }
 
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
+    if (kind === 'machine') {
+      const tab = machineTabOf(name);
+      if (tab && tab.catalog !== machineCatalogKind(targetGroup)) {
+        syncMachineTabMembers(name, null);
+      }
+    }
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
     if (kind === 'machine' && category === GENERAL_STRUCTURE_CATEGORY) {
@@ -2573,6 +2827,7 @@ export function createSelectionRepository({
     const snapshot = cloneStore(store);
     location.items.splice(location.index, 1);
     clearEntityDataKeys(kind, dataName);
+    if (kind === 'machine') syncMachineTabMembers(name, null);
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
@@ -2609,6 +2864,7 @@ export function createSelectionRepository({
     deleteFeedbackType,
     deleteGlobalMachineSection,
     deleteMachineSectionRow,
+    deleteMachineTab,
     deleteProcessIntroFile,
     deleteProcessStep,
     deleteSensor,
@@ -2629,6 +2885,7 @@ export function createSelectionRepository({
     getGlobalMachineSections,
     getMachineSectionImages,
     getMachineSectionRows,
+    getMachineTabs,
     getProcessIntroFiles,
     getProcessSteps,
     getSensors,
@@ -2636,6 +2893,10 @@ export function createSelectionRepository({
     getSensorSopFiles,
     getSensorSops,
     listResolvedMachineSections,
+    machineTabOf,
+    moveMachineToCatalog,
+    placeMachineInTab,
+    removeMachineFromTab,
     replaceFromStorage,
     reorderEntityGroups,
     reorderEntityItems,
@@ -2650,6 +2911,7 @@ export function createSelectionRepository({
     saveGlobalMachineSection,
     saveMachineSectionRow,
     saveMachineSectionImages,
+    saveMachineTab,
     saveProcessIntroFile,
     saveProcessStep,
     replaceSensorCurrent,

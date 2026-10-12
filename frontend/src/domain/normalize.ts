@@ -12,6 +12,7 @@ import type {
   EntityKind,
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
+  MachineTab,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
@@ -562,6 +563,47 @@ export function normalizeMachineSections(
   }
   unique.sort((left, right) => left.sort - right.sort || left.id - right.id);
   return unique;
+}
+
+/**
+ * 机型 Tab：同一目录内名称不重复；一个机型只能在一个 Tab 里（先出现的为准），
+ * 同一 Tab 内机型不重复。
+ */
+export function normalizeMachineTabs(source: unknown): MachineTab[] {
+  const usedIds = new Set<number>();
+  const nextIdRef = { value: 1 };
+  const seenNames = new Set<string>();
+  const placed = new Set<string>();
+  const tabs: MachineTab[] = [];
+  asList(source)
+    .filter(isRecord)
+    .forEach((item, index) => {
+      const name = storedText(item.name).trim().slice(0, 40);
+      if (!name) return;
+      const catalog = item.catalog === 'project' ? 'project' : 'mechanism';
+      const nameKey = `${catalog}:${name.toLocaleLowerCase('zh-CN')}`;
+      if (seenNames.has(nameKey)) return;
+      seenNames.add(nameKey);
+      const sort = Number(item.sort);
+      const machines: string[] = [];
+      for (const machine of asList(item.machines)) {
+        const machineName = storedText(machine).trim();
+        if (!machineName || placed.has(machineName)) continue;
+        placed.add(machineName);
+        machines.push(machineName);
+      }
+      tabs.push({
+        id: allocateId(item.id, usedIds, nextIdRef),
+        catalog,
+        name,
+        sort: Number.isFinite(sort) ? sort : index + 1,
+        kind: item.kind === 'notes' ? 'notes' : 'structure',
+        machines,
+      });
+    });
+  return tabs.sort(
+    (left, right) => left.sort - right.sort || left.id - right.id,
+  );
 }
 
 export function validateMachineRowImage(

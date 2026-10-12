@@ -127,7 +127,8 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `sensor-sop-file:all` | | Sensor SOP 文件库（独立 PDF，不参与型号关联） |
 | `sensor-sop:all` | | Sensor 资料（历史兼容键） |
 | `sensor-3d:all` | | Sensor 3D 文件 |
-| `machine-extra-sections:{机型名}` | | 当前机型的用户自定义 Tab（结构或机型注意事项） |
+| `machine-tabs:all` | | 机型 Tab（按目录共用的容器，`normalizeMachineTabs`：同目录不重名、一个机型只在一个 Tab） |
+| `machine-extra-sections:{机型名}` | | 旧模型里机型自建的 Tab（放进同名同类型 Tab 时并入机型内容） |
 | `machine-section-rows:{sectionId}:{机型名}` | 专用函数，**不用** `keyFor` | 结构/注意事项行 |
 | `machine-section-images:{sectionId}:{机型名}` | 专用函数 | 结构示意图（最多 2 张） |
 | `meta:seed-version` | | `[{ version: number }]` |
@@ -687,7 +688,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 `dictionaryCodeForList(listId)`：定义里 `listIds` 包含该 list **且** `(field \|\| 'type') === 'type'` 的 code。因此 `customer-req-source`（field=`source`）不会当 CRUD 的 type 字典。
 
-机型 Tab 不属于数据字典；由每台机型通过 `machine-extra-sections:{机型名}` 独立维护。
+机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的容器。机型内容固定存在 `MACHINE_CONTENT_SECTION_ID`（1000）分区下：`placeMachineInTab` 只改 Tab 的 `machines`，不搬数据；有内容时不能换到类型不同的 Tab（`not-empty`）；只能放进同一目录的 Tab（`validation`）；`removeMachineFromTab` / `deleteMachineTab` 让机型回到目录树；`moveMachineToCatalog` 在一次提交里移出 Tab 并改到目录的指定分类 / 配置 / 位置。机型改名时 Tab 里的名字同步，删除时一并移出。
 
 #### `getDictionaryItems(code)`
 
@@ -768,7 +769,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 #### `entityHasData(kind, entityName)`
 
-- machine：extra Tab 非空，或任一已解析 section 有行或图。
+- machine：extra Tab 非空，或任一已解析 section 有行或图，或机型内容（1000 分区）有行或图。
 - customer：`entityDataKeys` 里任一数组长度 > 0（含 `customer-sop`）。
 
 #### `saveEntityItem(kind, { category, configuration?, name, sort? }, editName?)`

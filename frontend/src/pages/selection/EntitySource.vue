@@ -17,6 +17,8 @@ import EntityTree from './EntityTree.vue';
 const props = defineProps<{
   kind: EntityKind;
   selected: string;
+  /** 当前选中叶子所在的分组；客户目录里区域名会在不同客户下重复，需要它区分 */
+  selectedCategory?: string;
   selectedKey?: string;
   checkedItems?: string[];
   machineType?: MachineCatalogKind;
@@ -40,10 +42,29 @@ const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
+// 客户目录是「客户 → 区域」：分组是客户，叶子是区域
 const groupLabel = computed(() =>
-  props.kind === 'customer' ? '区域' : '分类',
+  props.kind === 'customer' ? '客户' : '分类',
 );
-const itemLabel = computed(() => (props.kind === 'customer' ? '客户' : '机型'));
+const itemLabel = computed(() => (props.kind === 'customer' ? '区域' : '机型'));
+
+/** 客户资料按「客户/区域」存，两级名称里都不能有「/」 */
+function nameError(label: string, name: string, attempted: boolean) {
+  if (!attempted) return undefined;
+  if (!name.trim()) return `请输入${label}名称`;
+  if (props.kind === 'customer' && name.includes('/')) {
+    return `${label}名称不能包含“/”`;
+  }
+  return undefined;
+}
+
+function isSelectedLeaf(category: string | undefined, item: string) {
+  return (
+    item === props.selected &&
+    (props.selectedCategory === undefined ||
+      category === props.selectedCategory)
+  );
+}
 
 const allMachineGroups = computed(() => store.entityGroups('machine'));
 const machineGroups = computed(() =>
@@ -250,10 +271,12 @@ async function cancelItemDialog() {
 
 function saveGroup() {
   groupValidationAttempted.value = true;
+  const previous = editingGroup.value;
+  const name = groupForm.name.trim();
   const result = store.saveEntityGroup(
     props.kind,
     {
-      name: groupForm.name.trim(),
+      name,
       sort: groupForm.sort,
       ...(props.kind === 'machine' && props.machineType
         ? { machineType: props.machineType }
@@ -274,6 +297,15 @@ function saveGroup() {
     )
   ) {
     groupOpen.value = false;
+    // 改名的正好是当前选中叶子所在的分组：跟着新名字继续选中，别跳回第一个
+    if (
+      previous &&
+      previous !== name &&
+      props.selectedCategory !== undefined &&
+      previous === props.selectedCategory
+    ) {
+      emit('select', { category: name, item: props.selected });
+    }
   }
 }
 
@@ -357,7 +389,7 @@ function saveItem() {
     itemOpen.value = false;
     // A new row lands in a group that may still be collapsed, and renaming the
     // current selection would otherwise fall back to the first entity.
-    if (!previous || previous === props.selected) {
+    if (!previous || isSelectedLeaf(editingItemCategory.value, previous)) {
       emit('select', { category, item: name });
     }
   }
@@ -481,9 +513,7 @@ function onReorderItems(payload: {
           required
           v-bind="
             fieldError(
-              groupValidationAttempted && !groupForm.name.trim()
-                ? `请输入${groupLabel}名称`
-                : undefined,
+              nameError(groupLabel, groupForm.name, groupValidationAttempted),
             )
           "
         >
@@ -627,9 +657,7 @@ function onReorderItems(payload: {
           required
           v-bind="
             fieldError(
-              itemValidationAttempted && !itemForm.name.trim()
-                ? `请输入${itemLabel}名称`
-                : undefined,
+              nameError(itemLabel, itemForm.name, itemValidationAttempted),
             )
           "
         >

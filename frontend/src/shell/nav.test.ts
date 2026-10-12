@@ -1,16 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { navGroupsFor, selectionNav, systemNav } from './nav';
+import { activeNavKey, navGroupsFor, selectionNav, systemNav } from './nav';
 
 describe('nav', () => {
   it('lists the selection routes in sidebar order', () => {
     expect(selectionNav.items.map((item) => item.to)).toEqual([
       '/selection/customer',
-      '/selection/process',
       '/selection/machine',
       '/selection/sensor',
       '/selection/dictionary',
     ]);
+  });
+
+  it('selects the merged 客户/制程 item on either tab, and only exact sub-paths', () => {
+    const groups = navGroupsFor([]);
+    expect(activeNavKey(groups, '/selection/customer')).toBe(
+      '/selection/customer',
+    );
+    expect(activeNavKey(groups, '/selection/process')).toBe(
+      '/selection/customer',
+    );
+    expect(activeNavKey(groups, '/selection/machine')).toBe(
+      '/selection/machine',
+    );
+    // 前缀相同但不是子路径的地址不算
+    expect(activeNavKey(groups, '/selection/customers')).toBeUndefined();
+    expect(activeNavKey(groups, '/selection/search')).toBeUndefined();
   });
 
   it('keeps system routes available for later permission gating', () => {

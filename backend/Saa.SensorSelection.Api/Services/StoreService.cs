@@ -193,9 +193,13 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return StoreWriteResult.Validation("分类顺序必须是数组");
         }
 
+        // 客户目录是「客户 → 区域」：区域名在不同客户下会重复（多个客户都有华东），
+        // 只要求在同一客户内唯一；业务数据按「客户/区域」落键，所以两级名称都不能含「/」。
+        // 机型名全局唯一（数据按机型名落键）。
+        var isCustomer = normalizedKind == "customer";
         var groups = new List<EntityGroupPayload>();
         var groupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var itemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var machineItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in value.EnumerateArray())
         {
             if (group.ValueKind != JsonValueKind.Object ||
@@ -214,6 +218,11 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             if (!groupNames.Add(name))
             {
                 return StoreWriteResult.Validation($"分类重复: {name}");
+            }
+
+            if (isCustomer && name.Contains('/'))
+            {
+                return StoreWriteResult.Validation($"客户名称不能包含“/”: {name}");
             }
 
             string? machineType = null;
@@ -239,6 +248,9 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             }
 
             var items = new List<string>();
+            var itemNames = isCustomer
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : machineItemNames;
             foreach (var item in itemsProperty.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.String)
@@ -250,6 +262,11 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                 if (itemName.Length == 0 || itemName.Length > 40)
                 {
                     return StoreWriteResult.Validation("条目名称长度必须为 1-40 个字符");
+                }
+
+                if (isCustomer && itemName.Contains('/'))
+                {
+                    return StoreWriteResult.Validation($"区域名称不能包含“/”: {itemName}");
                 }
 
                 if (!itemNames.Add(itemName))

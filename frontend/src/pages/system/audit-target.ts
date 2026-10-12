@@ -28,7 +28,7 @@ const NAMESPACE_LABELS: Record<string, string> = {
 };
 
 const ENTITY_GROUP_LABELS: Record<string, string> = {
-  customer: '客户分类',
+  customer: '客户目录',
   machine: '机型分类',
 };
 

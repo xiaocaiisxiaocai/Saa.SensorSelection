@@ -3,6 +3,8 @@ export type NavGroupId = 'selection' | 'system';
 export interface NavItem {
   label: string;
   to: string;
+  /** 这些路径（及其子路径）下菜单项也算选中；一个菜单项对应多张 Tab 页时用 */
+  activePaths?: string[];
   permissions?: string[];
 }
 
@@ -16,8 +18,11 @@ export const selectionNav: NavGroup = {
   id: 'selection',
   label: '选型数据',
   items: [
-    { to: '/selection/customer', label: '客户管理' },
-    { to: '/selection/process', label: '制程管理' },
+    {
+      to: '/selection/customer',
+      label: '客户/制程',
+      activePaths: ['/selection/customer', '/selection/process'],
+    },
     { to: '/selection/machine', label: '机型结构' },
     { to: '/selection/sensor', label: 'Sensor型号' },
     { to: '/selection/dictionary', label: '数据字典' },
@@ -50,6 +55,19 @@ export const systemNav: NavGroup = {
     },
   ],
 };
+
+/** 当前路径对应的菜单项（取 to），没有则返回 undefined */
+export function activeNavKey(
+  groups: readonly NavGroup[],
+  path: string,
+): string | undefined {
+  const items = groups.flatMap((group) => group.items);
+  const within = (base: string) => path === base || path.startsWith(`${base}/`);
+  return (
+    items.find((item) => item.to === path) ??
+    items.find((item) => (item.activePaths ?? []).some(within))
+  )?.to;
+}
 
 export function navGroupsFor(permissions: readonly string[]): NavGroup[] {
   const groups: NavGroup[] = [selectionNav];

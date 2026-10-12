@@ -279,7 +279,7 @@ describe('BackendStorage', () => {
     localMemory.set(
       STORAGE_KEY,
       JSON.stringify({
-        'customer-req:庆鼎': [{ id: 1, content: '本地旧数据' }],
+        'customer-req:庆鼎/华东': [{ id: 1, content: '本地旧数据' }],
       }),
     );
     const bridge = new BackendStorage({
@@ -296,7 +296,7 @@ describe('BackendStorage', () => {
   it('backfills missing seed keys without overwriting user data', async () => {
     const transport = createFakeTransport({
       a: [1],
-      'customer-req:庆鼎': [{ id: 1, content: '用户数据' }],
+      'customer-req:庆鼎/华东': [{ id: 1, content: '用户数据' }],
       'dict:sensor-type': [{ id: 1, name: '旧类型' }],
     });
     const bridge = new BackendStorage({
@@ -323,7 +323,7 @@ describe('BackendStorage', () => {
   it('persists the production seed migration before advancing its version', async () => {
     const transport = createFakeTransport({
       'meta:seed-version': [{ version: 1 }],
-      'customer-req:庆鼎': [
+      'customer-req:庆鼎/华东': [
         {
           id: 1,
           type: '输送段',
@@ -334,7 +334,7 @@ describe('BackendStorage', () => {
           note: 'OMRON E3Z-D61 或同等级',
         },
       ],
-      'customer-req:景旺': [
+      'customer-req:景旺/华东': [
         {
           id: 9,
           type: '特殊要求',
@@ -355,8 +355,8 @@ describe('BackendStorage', () => {
 
     await bridge.init();
 
-    expect(transport.remote.get('customer-req:庆鼎')).toEqual([]);
-    expect(transport.remote.get('customer-req:景旺')).toEqual([
+    expect(transport.remote.get('customer-req:庆鼎/华东')).toEqual([]);
+    expect(transport.remote.get('customer-req:景旺/华东')).toEqual([
       expect.objectContaining({ id: 9, content: '景旺专属要求' }),
     ]);
     expect(transport.remote.get('meta:seed-version')).toEqual([{ version: 2 }]);
@@ -369,8 +369,8 @@ describe('BackendStorage', () => {
     });
     const transport = createFakeTransport({
       'meta:seed-version': [{ version: 2 }],
-      'customer-req:庆鼎': [],
-      'customer-req:景旺': [],
+      'customer-req:庆鼎/华东': [],
+      'customer-req:景旺/华东': [],
     });
     const bridge = new BackendStorage({
       transport,
@@ -381,12 +381,12 @@ describe('BackendStorage', () => {
 
     await bridge.init();
 
-    expect(transport.remote.get('customer-req:庆鼎')).toEqual(
+    expect(transport.remote.get('customer-req:庆鼎/华东')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ content: '进板前确认板件到位后再启动输送' }),
       ]),
     );
-    expect(transport.remote.get('customer-req:景旺')).toEqual(
+    expect(transport.remote.get('customer-req:景旺/华东')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ content: '中段与末端均需设置掉板检测' }),
       ]),
@@ -409,7 +409,7 @@ describe('BackendStorage', () => {
         { id: 1, name: '01 待处理', sort: 3 },
         { id: 4, name: '04 已解决', sort: 4 },
       ],
-      'customer-feedback:庆鼎': [
+      'customer-feedback:庆鼎/华东': [
         { id: 1, problem: '历史问题', status: '已解决' },
       ],
     });
@@ -428,7 +428,7 @@ describe('BackendStorage', () => {
       { id: 10, name: '03 测试中', sort: 3 },
       { id: 4, name: '04 已解决', sort: 4 },
     ]);
-    expect(transport.remote.get('customer-feedback:庆鼎')).toEqual([
+    expect(transport.remote.get('customer-feedback:庆鼎/华东')).toEqual([
       { id: 1, problem: '历史问题', status: '04 已解决' },
     ]);
     expect(transport.remote.get('meta:seed-version')).toEqual([
@@ -481,15 +481,15 @@ describe('BackendStorage', () => {
       crudDefaults: CRUD_DEFAULTS,
       sensorData: SENSOR_DATA,
     });
-    expect(defaultStore['entity-groups:customer']).toHaveLength(3);
+    expect(defaultStore['entity-groups:customer']).toHaveLength(15); // 客户 → 区域
     expect(defaultStore['machine-global-sections:all']).toBeUndefined();
     expect(defaultStore['general-structure-labels:all']).toBeUndefined();
     expect(defaultStore['dict:machine-section']).toBeUndefined();
     expect(defaultStore['dict:machine-model']).toHaveLength(14);
     expect(defaultStore['dict:board-characteristic']).toHaveLength(9);
-    expect(defaultStore['customer-req:庆鼎']).toHaveLength(2);
-    expect(defaultStore['customer-req:景旺']).toHaveLength(2);
-    expect(defaultStore['customer-req:健鼎']).toBeUndefined();
+    expect(defaultStore['customer-req:庆鼎/华东']).toHaveLength(2);
+    expect(defaultStore['customer-req:景旺/华东']).toHaveLength(2);
+    expect(defaultStore['customer-req:健鼎/华东']).toBeUndefined();
     expect(defaultStore['meta:seed-version']).toEqual([
       { version: SEED_VERSION },
     ]);

@@ -112,6 +112,13 @@ async function confirmDelete() {
   await alertBox().waitFor({ state: 'hidden' })
 }
 
+// 客户、制程合并为「客户/制程」一个菜单，页面顶部用 Tab 切换
+async function openCustomerProcess(tab) {
+  await navTo('客户/制程')
+  await page.getByRole('tab', { name: tab, exact: true }).click()
+  await page.waitForURL(tab === '制程' ? '**/selection/process**' : '**/selection/customer**', { timeout: 10000 })
+}
+
 async function navTo(label) {
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: label, exact: true }).click()
   await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
@@ -128,7 +135,9 @@ function documentRow(fileName) {
 
 /** 左侧目录树（a-tree）的行操作在每行的「更多」下拉菜单里。 */
 async function treeAction(text, actionLabel) {
-  const row = page.locator('.ant-tree-treenode', { hasText: text }).first()
+  // 按「X 的更多操作」精确定位节点：hasText 是子串匹配，会命中同前缀的其他节点
+  const more = page.getByRole('button', { name: `${text} 的更多操作`, exact: true })
+  const row = page.locator('.ant-tree-treenode').filter({ has: more }).first()
   await row.hover()
   await row.getByRole('button', { name: `${text} 的更多操作`, exact: true }).click()
   await page.getByRole('menuitem', { name: actionLabel, exact: true }).click()
@@ -156,7 +165,7 @@ async function deleteDocument(fileName, successText) {
 }
 
 async function runProcessFiles() {
-  await navTo('制程管理')
+  await openCustomerProcess('制程')
   await page.getByRole('tab', { name: '制程介绍', exact: true }).click()
 
   await check('制程介绍: upload and preview a real PDF', async () => {
@@ -176,18 +185,19 @@ async function runProcessFiles() {
 }
 
 async function runCustomerFile() {
-  await navTo('客户管理')
+  await openCustomerProcess('客户')
   const region = `${TAG}区域`
   const customer = `${TAG}客户`
 
-  await page.getByRole('button', { name: '新建区域', exact: true }).click()
-  await fillField(sheet(), '区域名称', region)
-  await saveSheet()
+  // 客户目录是「客户 → 区域」：先建客户，再在客户下建区域，资料挂在区域上
   await page.getByRole('button', { name: '新建客户', exact: true }).click()
-  await pickSelect(sheet(), '区域', region)
   await fillField(sheet(), '客户名称', customer)
   await saveSheet()
-  await page.locator('.ant-tree-node-content-wrapper', { hasText: customer }).first().click()
+  await page.getByRole('button', { name: '新建区域', exact: true }).click()
+  await pickSelect(sheet(), '客户', customer)
+  await fillField(sheet(), '区域名称', region)
+  await saveSheet()
+  await page.locator('.ant-tree-node-content-wrapper', { hasText: region }).first().click()
   await page.getByRole('tab', { name: '感应器选用标准' }).click()
 
   await check('客户感应器选用标准: upload, preview and delete a real PDF', async () => {
@@ -197,9 +207,9 @@ async function runCustomerFile() {
     await deleteDocument(PDF_NAME, '文件已删除')
   })
 
-  await treeAction(customer, '删除客户')
-  await confirmDelete()
   await treeAction(region, '删除区域')
+  await confirmDelete()
+  await treeAction(customer, '删除客户')
   await confirmDelete()
 }
 

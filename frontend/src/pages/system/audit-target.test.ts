@@ -21,7 +21,7 @@ describe('formatAuditTarget', () => {
   });
 
   it('names the entity group being reordered', () => {
-    expect(formatAuditTarget('entity-groups:customer')).toBe('客户分类');
+    expect(formatAuditTarget('entity-groups:customer')).toBe('客户目录');
     expect(formatAuditTarget('entity-groups:machine')).toBe('机型分类');
   });
 

@@ -117,10 +117,10 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | 业务 key | 构造 | 内容 |
 | --- | --- | --- |
 | `entity-groups:customer` / `entity-groups:machine` | `keyFor('entity-groups', kind)` | 分组与条目顺序 |
-| `customer-req:{客户名}` | `keyFor('customer-req', name)` | 客户通用要求 |
-| `customer-proc:{客户名}` | | 制程注意事项 |
-| `customer-feedback:{客户名}` | | 厂外反馈 |
-| `customer-sop:{客户名}` | `keyFor('customer-sop', name)` | 受控文档。**活键是 `customer-sop:`，不是 `04-data-api.md` 写的 `controlled-docs:`**（文档漂移，实现跟旧代码） |
+| `customer-req:{客户}/{区域}` | `keyFor('customer-req', entityDataName('customer', 客户, 区域))` | 客户通用要求 |
+| `customer-proc:{客户}/{区域}` | | 制程注意事项 |
+| `customer-feedback:{客户}/{区域}` | | 厂外反馈 |
+| `customer-sop:{客户}/{区域}` | `keyFor('customer-sop', 数据名)` | 受控文档。**活键是 `customer-sop:`，不是 `04-data-api.md` 写的 `controlled-docs:`**（文档漂移，实现跟旧代码） |
 | `dict:{code}` | `keyFor('dict', code)` | 8 类数据字典 |
 | `process-steps:all` | | 工艺制程 |
 | `sensor-catalog:all` | | Sensor 型号目录 |
@@ -372,7 +372,7 @@ Token 键 `symtek_token` 不属于领域 store。
 
 | type | title | category | sub | path | query |
 | --- | --- | --- | --- | --- | --- |
-| customer | 条目名 | 组名 | `` `${组名}区域 · PCB 制造客户` `` | `/selection/customer` | `{ category, item }` |
+| customer | `` `${客户} / ${区域}` `` | 客户（组名） | `` `${区域}区域 · PCB 制造客户` `` | `/selection/customer` | `{ category: 客户, item: 区域 }` |
 | process | `item.name` | `item.layer` | `layer · role · feature`（滤空） | `/selection/process` | `{ tab: 'steps', q: name }` |
 | machine | 条目名 | 组名 | `` `${组名} · ${machineDetails[title].desc \|\| '机型结构'}` `` | `/selection/machine` | `{ category, item }` |
 | machine（hits） | `item.title` 等原样 | | | `item.path \|\| '/selection/machine'` | 浅拷贝 `item.query` |
@@ -657,7 +657,7 @@ toName 空 → `validation`。找不到 from → `ensureGeneralStructureSection(
 
 ### 7.9 受控文档
 
-活键：`customer-sop:{客户名}`。
+活键：`customer-sop:{客户}/{区域}`。
 
 #### `getControlledDocuments(entityName)`
 
@@ -738,6 +738,8 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 机型树兼容两种形态：普通分类 `{ name, items, configurations }` 与无配置分类 `{ name, items }`。`configurations` 中每项也是 `{ name, items }`。不同配置可包含同名机型，配置内仍去重。
 
+客户树是「客户 → 区域」：组是客户、条目是区域。区域名只在本客户内去重（多个客户都可以有「华东」），机型名仍全局去重。叶子的业务数据名用 `entityDataName(kind, 组名, 条目名)`：客户为 `客户/区域`，机型为机型名；所以客户名和区域名都不能含 `/`（`validation`）。
+
 #### `saveEntityGroup(kind, { name, sort? }, editName?)`
 
 | 条件 | reason |
@@ -746,7 +748,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 | 其他组（`group.name !== editName`）zh-CN 同名 | `duplicate` |
 | 编辑但找不到 `editName` 精确匹配 | `stale` |
 
-新建 `items: []`。改名保留 `items` 与 `configurations`；`sort` 为 1 起算并钳制到合法范围。
+新建 `items: []`。改名保留 `items` 与 `configurations`；`sort` 为 1 起算并钳制到合法范围。客户改名时，其下每个区域的数据键从 `旧客户/区域` 迁到 `新客户/区域`。
 
 #### `saveMachineConfiguration(category, { name, sort? }, editName?)`
 
@@ -773,20 +775,22 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 | 条件 | reason |
 | --- | --- |
-| name 或 category 空（各 40） | `validation` |
+| name 或 category 空（各 40）；客户名称含 `/` | `validation` |
+| 客户树编辑时没给 `previousCategory`（区域名跨客户不唯一） | `validation` |
 | 目标组（精确 `category`）不存在 | `validation` |
-| 目标直属数组/配置数组里其他条目（`!== editName`）zh-CN 同名 | `duplicate` |
+| 目标直属数组/配置数组里已有 zh-CN 同名条目（编辑时只有「仍在原分组里的自己」不算） | `duplicate` |
 | 编辑但 `editName` 不在树中 | `stale` |
 
 新建：按 1 起算的 `sort` 插入目标直属数组或配置数组，并 `initEmptyEntityData`（机型：extra=`[]`，每个全局 section 的 rows=`[]`；客户：各 list + sop 置 `[]`）。
-编辑：从原分类/配置移除；若改名则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再按排序插入目标位置。
+编辑：从原分类/配置移除；若数据名（客户为 `客户/区域`，即改名或换客户都会变）变了则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再按排序插入目标位置。
 
 **persist 之后**（已落盘）：若 `kind==='machine' && category==='通用结构'`：新建调 `ensureGeneralStructureSection(name)`；改名再调 `syncGeneralStructureItemRename(editName, name)`。若同步失败，**返回该失败（树改动已 persist）**——与旧实现一致。
 
-#### `deleteEntityItem(kind, name)`
+#### `deleteEntityItem(kind, name, category?, configuration?)`
 
 | 条件 | reason |
 | --- | --- |
+| 客户树没给 `category` | `validation` |
 | 树中无该精确名 | `stale` |
 | `entityHasData` | `not-empty` |
 | 机型且分类是「通用结构」，绑定到**非种子 id** 的全局 Tab，且**其他机型**该 Tab 仍有行 | `not-empty` |

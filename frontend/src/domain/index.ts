@@ -39,6 +39,7 @@ export {
 export { buildDefaultStore, createSelectionRepository } from './repository';
 export { buildSearchIndex, searchItemDetail } from './search';
 export {
+  entityDataName,
   entityTreeItemKey,
   filterMachineGroups,
   findEntityTreeItem,

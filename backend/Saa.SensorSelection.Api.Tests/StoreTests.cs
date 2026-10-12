@@ -174,8 +174,9 @@ public class StoreTests
         await using var factory = new ApiFactory();
         using var client = await CreateLoggedInClientAsync(factory);
 
+        // 客户 → 区域：同一区域名可以出现在不同客户下
         var payload = JsonSerializer.Deserialize<JsonElement>(
-            "[{\"name\":\"华南\",\"items\":[\"健鼎\",\"庆鼎\"]},{\"name\":\"华东\",\"items\":[\"沪士\"]}]");
+            "[{\"name\":\"健鼎\",\"items\":[\"华南\",\"华东\"]},{\"name\":\"沪士\",\"items\":[\"华东\"]}]");
         var response = await client.PutAsJsonAsync(
             "/api/store/entity-groups/customer",
             payload);
@@ -183,20 +184,27 @@ public class StoreTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var stored = await client.GetFromJsonAsync<JsonElement>(
             StoreRoute("entity-groups:customer"));
-        Assert.Equal("华南", stored[0].GetProperty("name").GetString());
-        Assert.Equal("健鼎", stored[0].GetProperty("items")[0].GetString());
+        Assert.Equal("健鼎", stored[0].GetProperty("name").GetString());
+        Assert.Equal("华南", stored[0].GetProperty("items")[0].GetString());
+        Assert.Equal("华东", stored[1].GetProperty("items")[0].GetString());
     }
 
-    [Fact]
-    public async Task Store_EntityGroupsOrder_RejectsDuplicateItems()
+    [Theory]
+    // 同一客户下区域重复
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"华东\",\"华东\"]}]")]
+    // 客户/区域名称含「/」（数据键用它拼接）
+    [InlineData("customer", "[{\"name\":\"庆/鼎\",\"items\":[\"华东\"]}]")]
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"华/东\"]}]")]
+    // 机型名仍然全局唯一
+    [InlineData("machine", "[{\"name\":\"输送机构\",\"items\":[\"A\"]},{\"name\":\"收板机\",\"items\":[\"A\"]}]")]
+    public async Task Store_EntityGroupsOrder_RejectsInvalidItems(string kind, string json)
     {
         await using var factory = new ApiFactory();
         using var client = await CreateLoggedInClientAsync(factory);
 
-        var payload = JsonSerializer.Deserialize<JsonElement>(
-            "[{\"name\":\"华东\",\"items\":[\"庆鼎\"]},{\"name\":\"华南\",\"items\":[\"庆鼎\"]}]");
+        var payload = JsonSerializer.Deserialize<JsonElement>(json);
         var response = await client.PutAsJsonAsync(
-            "/api/store/entity-groups/customer",
+            $"/api/store/entity-groups/{kind}",
             payload);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

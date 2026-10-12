@@ -56,7 +56,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 
 ### 数据流（跨前后端）
 
-- **后端是通用 `key → JSON 数组` 仓库，不做业务校验**；全部业务规则、归一化、迁移都在前端 `frontend/src/domain`。key 构造集中在 `domain/keys.ts`（如 `customer-req:客户名`、`machine-section-rows:{sectionId}:{机型}`），与浏览器 `symtek_crud_store` 快照里的 key 一一对应。
+- **后端是通用 `key → JSON 数组` 仓库，不做业务校验**；全部业务规则、归一化、迁移都在前端 `frontend/src/domain`。key 构造集中在 `domain/keys.ts`（如 `customer-req:客户/区域`、`machine-section-rows:{sectionId}:{机型}`）。客户目录是「客户 → 区域」：`entity-groups:customer` 的分组是客户、条目是区域（一个客户可有多个区域，区域名只在本客户内唯一，前后端都校验，名称里不能含 `/`），客户资料挂在区域叶子上，数据名由 `entityDataName(kind, 分组, 条目)` 生成（客户为 `客户/区域`，机型仍是机型名），与浏览器 `symtek_crud_store` 快照里的 key 一一对应。
 - 写入按 key 增量同步：`PUT/DELETE /api/store/by-key?key=...`。key 必须放查询参数（避免 IIS / 反代把 `%2F` 解码成路径分隔符），不要再加路径参数形式的单 key 接口。`PUT /api/store` 仅用于整体导入。
 - 前端不再给后端灌数据：`stores/selection.ts` 创建 `BackendStorage` 时 `migrateOnEmpty: false`、不传 `local` / `seedDefaults`，后端为空就显示为空（种子/演示数据由后端 `DbSeeder` 负责）。`BackendStorage` 里的本地快照导入、`seedDefaults` 回填和 `seedMigration` 分支只剩合同测试在用。
 - **种子版本**：`seed.ts` 的 `SEED_VERSION` 写入 store 的 `meta:seed-version`；`seed-migration.ts` 的 `migrateSelectionSeedStore` 按 `currentVersion < XXX_VERSION` 逐步迁移，目前只在仓库 `demoData`（Vitest 夹具）模式下执行。修改内置种子数据要同时递增 `SEED_VERSION`，并在 `seed-migration.ts` 加一个按版本门控的步骤（配套 `seed-migration.test.ts`）。
@@ -74,7 +74,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
   - `schematic-report.ts`：机型示意图报告生成（后端 `POST /api/reports/machine-schematic` 对应 `MachineSchematicReportService`）。
 - `stores/`（Pinia）：`selection.ts` 包裹领域仓库供页面消费，负责创建 `BackendStorage` 和断线重连；`auth.ts` 持有 JWT 与当前用户权限（token 键 `symtek_token`），并提供 `useAccess()`。
 - `router/guards.ts`：路由级权限守卫，按页面所需权限码放行/拦截。生产构建用 hash 路由（`.env.production` 中 `VITE_ROUTER_HISTORY=hash`）。
-- `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）。客户和机型左侧目录共用 `EntityTree.vue`（基于 `a-tree`：勾选、同级拖拽排序、行内「更多」菜单）。
+- `pages/selection`：客户、制程、机型、Sensor 型号、字典、全局搜索业务页（`/selection/customer|process|machine|sensor|dictionary|search`）。客户和制程在侧边栏合并为一个「客户/制程」菜单：父路由 `/selection`（`CustomerProcessPage.vue`，只声明两张 Tab）用 `shell/RouteTabs.vue` 渲染顶部卡片式 Tab「客户 | 制程」——一个菜单下多个子路由的通用组件，切换、记住每张 Tab 最后停留的地址、卡片外观样式都在组件里，页面不写 CSS；两者仍是独立子路由（URL 与 query 不变）；菜单项用 `nav.ts` 的 `activePaths` 在多个路由下高亮。客户和机型左侧目录共用 `EntityTree.vue`（基于 `a-tree`：勾选、同级拖拽排序、行内「更多」菜单）。
 - `pages/shared`：跨页复用的非组件工具——`table.ts`（受控排序、`rowClick` 整行点击、`scrollX`、`PAGINATION_PROPS` 与 `useTablePagination` 分页）、`form.ts`（`fieldError`）、`confirm.ts`（`dialogs.confirm`，`Modal.confirm` 的 Promise 版）、`dirty-guard.ts`、`file-rules.ts`（`createFilePicker` 给 `a-upload-dragger` 做校验与合批）、`save-feedback.ts`、`selection-page.css`（页面骨架布局）。
 - `pages/system`：用户、角色、组织、操作日志系统管理页（`/system/user|role|org|audit-log`，各自对应下方权限码）。
 - 组件：业务页**直接使用 `a-*`**（`main.ts` 全局 `app.use(Antd)`）。`ui/` 只保留 antd 没有的两个组件：`APdfViewer`（pdf.js 预览）与 `AHighlightText`（搜索高亮），不要再新增 `A*` 包装组件。`App.vue` 的 `a-config-provider` 设 zh_CN、`auto-insert-space-in-button=false` 与 `:theme="appTheme"`（`styles/theme.ts`：`compactAppAlgorithm` = antd `compactAlgorithm` 收紧控件高度/间距，但**字号/行高沿用默认主题（正文 14px）**、`controlHeightSM` 保持 24px 热区）；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格并套同一主题。用法与约定见 `frontend/docs/01-design-system.md`、`02-component-library.md`（`00` / `05` / `06` 是早期 Apple 方案的历史文档）。

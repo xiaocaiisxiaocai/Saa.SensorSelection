@@ -16,14 +16,15 @@ export function buildSearchIndex({
   processSteps: ProcessStepItem[];
   sensors: SensorItem[];
 }): SearchItem[] {
+  // 客户目录是「客户 → 区域」：每个区域是一条结果，标题带上客户名便于按客户搜到
   const customers = customerGroups.flatMap((group) =>
-    group.items.map((title) => ({
+    group.items.map((region) => ({
       type: 'customer' as const,
-      title,
+      title: `${group.name} / ${region}`,
       category: group.name,
-      sub: `${group.name}区域 · PCB 制造客户`,
+      sub: `${region}区域 · PCB 制造客户`,
       path: '/selection/customer',
-      query: { category: group.name, item: title },
+      query: { category: group.name, item: region },
     })),
   );
   const processes = (Array.isArray(processSteps) ? processSteps : []).map(
@@ -81,7 +82,7 @@ export function buildSearchIndex({
 
 /**
  * 结果卡片第三行的说明文字。索引里的 sub 为了便于检索，开头往往重复了
- * category（「输送机构 · 客户特殊配置 · …」、「华东区域 · PCB 制造客户」），
+ * category（「输送机构 · 客户特殊配置 · …」），
  * 而卡片第二行已经显示了 category，这里把重复的首段去掉；只剩重复内容时返回空串。
  */
 export function searchItemDetail(item: Pick<SearchItem, 'category' | 'sub'>): string {

@@ -32,6 +32,7 @@ import {
   createDefaultControlledDocuments,
   createSensorCatalogDefaults,
 } from './normalize';
+import { entityDataName } from './entity-tree';
 import { migrateSelectionSeedStore } from './seed-migration';
 import { findSensorStatusName, isSensorStatus } from './sensor-status';
 import {
@@ -2374,6 +2375,11 @@ export function createSelectionRepository({
     return null;
   }
 
+  /** 客户数据名用「客户/区域」拼接，客户名和区域名里不能再有 `/` */
+  function validEntityName(kind: EntityKind, name: string) {
+    return kind !== 'customer' || !name.includes('/');
+  }
+
   function insertBySort(items: string[], item: string, sort?: number) {
     const requested = Number(sort);
     const index = Number.isInteger(requested)
@@ -2458,7 +2464,9 @@ export function createSelectionRepository({
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
     const groups = getEntityGroups(kind);
     const name = storedText(payload.name).trim().slice(0, 40);
-    if (!name) return { ok: false, reason: 'validation' };
+    if (!name || !validEntityName(kind, name)) {
+      return { ok: false, reason: 'validation' };
+    }
 
     const duplicate = groups.some(
       (group) => group.name !== editName && sameLocaleName(group.name, name),
@@ -2496,6 +2504,16 @@ export function createSelectionRepository({
         ? Math.max(0, Math.min(groups.length, requested - 1))
         : index;
       groups.splice(targetIndex, 0, moved);
+      // 客户改名：其下每个区域的数据键（客户/区域）都要跟着改
+      if (editName !== name && kind === 'customer') {
+        for (const item of existing.items) {
+          migrateEntityDataKeys(
+            kind,
+            entityDataName(kind, editName, item),
+            entityDataName(kind, name, item),
+          );
+        }
+      }
     } else {
       const requested = Number(payload.sort);
       const targetIndex = Number.isInteger(requested)
@@ -2628,7 +2646,13 @@ export function createSelectionRepository({
     const groups = getEntityGroups(kind);
     const name = storedText(payload.name).trim().slice(0, 40);
     const category = storedText(payload.category).trim().slice(0, 40);
-    if (!name || !category) return { ok: false, reason: 'validation' };
+    if (!name || !category || !validEntityName(kind, name)) {
+      return { ok: false, reason: 'validation' };
+    }
+    // 区域名在客户之间会重复，编辑时必须指明原来所在的客户
+    if (kind === 'customer' && editName && !payload.previousCategory) {
+      return { ok: false, reason: 'validation' };
+    }
 
     const targetGroup = groups.find((group) => group.name === category);
     if (!targetGroup) return { ok: false, reason: 'validation' };
@@ -2642,12 +2666,18 @@ export function createSelectionRepository({
       : targetGroup.items;
     if (!targetItems) return { ok: false, reason: 'validation' };
 
+    // 编辑时自己不算重复——但只有留在原分组里才是「自己」；
+    // 移到另一个分组时，那里的同名条目就是真重复。
+    const sourceCategory = payload.previousCategory ?? category;
     const duplicate = targetItems.some(
-      (item) => item !== editName && sameLocaleName(item, name),
+      (item) =>
+        sameLocaleName(item, name) &&
+        !(editName && item === editName && sourceCategory === category),
     );
     if (duplicate) return { ok: false, reason: 'duplicate' };
 
     const snapshot = cloneStore(store);
+    const dataName = entityDataName(kind, category, name);
     if (editName) {
       const location = findEntityLocation(
         groups,
@@ -2657,13 +2687,18 @@ export function createSelectionRepository({
       );
       if (!location) return { ok: false, reason: 'stale' };
       location.items.splice(location.index, 1);
-      if (editName !== name) {
-        migrateEntityDataKeys(kind, editName, name);
+      const previousDataName = entityDataName(
+        kind,
+        location.group.name,
+        editName,
+      );
+      if (previousDataName !== dataName) {
+        migrateEntityDataKeys(kind, previousDataName, dataName);
       }
       insertBySort(targetItems, name, payload.sort);
     } else {
       insertBySort(targetItems, name, payload.sort);
-      initEmptyEntityData(kind, name);
+      initEmptyEntityData(kind, dataName);
     }
 
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
@@ -2696,10 +2731,17 @@ export function createSelectionRepository({
     configuration?: string | null,
   ): DeleteResult {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
+    // 区域名在客户之间会重复，删除时必须指明客户
+    if (kind === 'customer' && !category) {
+      return { ok: false, reason: 'validation' };
+    }
     const groups = getEntityGroups(kind);
     const location = findEntityLocation(groups, name, category, configuration);
     if (!location) return { ok: false, reason: 'stale' };
-    if (entityHasData(kind, name)) return { ok: false, reason: 'not-empty' };
+    const dataName = entityDataName(kind, location.group.name, name);
+    if (entityHasData(kind, dataName)) {
+      return { ok: false, reason: 'not-empty' };
+    }
 
     const locationCategory = location.group.name;
     const generalBinding =
@@ -2736,7 +2778,7 @@ export function createSelectionRepository({
 
     const snapshot = cloneStore(store);
     location.items.splice(location.index, 1);
-    clearEntityDataKeys(kind, name);
+    clearEntityDataKeys(kind, dataName);
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
@@ -2864,7 +2906,11 @@ export function buildDefaultStore({
   const next = repo.snapshotStore();
   const customerNames = repo
     .getEntityGroups('customer')
-    .flatMap((group) => group.items);
+    .flatMap((group) =>
+      group.items.map((region) =>
+        entityDataName('customer', group.name, region),
+      ),
+    );
   for (const [listId, factory] of Object.entries(crudDefaults)) {
     if (!listId.startsWith('customer-')) continue;
     for (const entityName of customerNames) {

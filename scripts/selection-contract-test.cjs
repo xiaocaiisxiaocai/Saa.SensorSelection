@@ -23,6 +23,8 @@ async function run() {
 
   required('frontend/src/pages/selection/CustomerPage.vue')
   required('frontend/src/pages/selection/ProcessPage.vue')
+  // 客户、制程合并为一个「客户/制程」菜单，页面内用 Tab 切换
+  required('frontend/src/pages/selection/CustomerProcessPage.vue')
   required('frontend/src/pages/selection/MachinePage.vue')
   required('frontend/src/pages/selection/SensorPage.vue')
   assert.equal(fs.existsSync(path.join(root, 'public/index.html')), false)
@@ -360,7 +362,10 @@ async function run() {
     beforeReject,
   )
 
-  const customer = '庆鼎'
+  // 客户目录是「客户 → 区域」，资料挂在区域叶子上，数据键名为「客户/区域」
+  assert.equal(domain.entityDataName('customer', '庆鼎', '华东'), '庆鼎/华东')
+  assert.equal(domain.entityDataName('machine', '输送机构', '01 单段'), '01 单段')
+  const customer = domain.entityDataName('customer', '庆鼎', '华东')
   const defaultDocs = repository.getControlledDocuments(customer)
   assert.equal(defaultDocs.length, 0)
 
@@ -704,75 +709,132 @@ async function run() {
     true,
   )
 
+  // ── 客户目录：客户（分组）→ 区域（叶子）────────────────────────────
   const customerGroups = repository.getEntityGroups('customer')
-  assert.equal(customerGroups.some((group) => group.name === '华东'), true)
+  assert.equal(customerGroups.some((group) => group.name === '庆鼎'), true)
   assert.equal(
-    customerGroups.some((group) => group.items.includes('庆鼎')),
+    customerGroups.find((group) => group.name === '庆鼎').items.includes('华东'),
     true,
   )
 
-  const createdRegion = repository.saveEntityGroup('customer', {
-    name: '华中',
+  const createdCustomerGroup = repository.saveEntityGroup('customer', {
+    name: '测试客户',
   })
-  assert.equal(createdRegion.ok, true)
+  assert.equal(createdCustomerGroup.ok, true)
 
-  const reorderedGroups = repository.reorderEntityGroups('customer', 0, 2)
-  assert.equal(reorderedGroups.ok, true)
+  // 同名区域可以出现在不同客户下；同一客户下不能重复
+  const firstRegion = repository.saveEntityItem('customer', {
+    category: '测试客户',
+    name: '华东',
+  })
+  assert.equal(firstRegion.ok, true)
+  assert.deepEqual(repository.getCrud('customer-req', '测试客户/华东'), [])
   assert.deepEqual(
-    repository.getEntityGroups('customer').map((group) => group.name),
-    ['华南', 'SAT', '华东', '华中'],
+    repository.saveEntityItem('customer', { category: '测试客户', name: '华东' }),
+    { ok: false, reason: 'duplicate' },
   )
-  const reorderedItems = repository.reorderEntityItems(
+  assert.equal(
+    repository.saveEntityItem('customer', { category: '测试客户', name: '华南' })
+      .ok,
+    true,
+  )
+  assert.deepEqual(
+    repository
+      .getEntityGroups('customer')
+      .find((group) => group.name === '测试客户').items,
+    ['华东', '华南'],
+  )
+  const normalizedShared = domain.normalizeEntityGroups(
+    [
+      { name: 'A', items: ['华东'] },
+      { name: 'B', items: ['华东', '华东'] },
+    ],
     'customer',
-    '华东',
-    0,
-    1,
   )
-  assert.equal(reorderedItems.ok, true)
-  assert.deepEqual(repository.getEntityGroups('customer')[2].items.slice(0, 2), [
-    '健鼎',
-    '庆鼎',
-  ])
+  assert.deepEqual(
+    normalizedShared.map((group) => group.items),
+    [['华东'], ['华东']],
+    'region names are unique per customer, not across customers',
+  )
+
+  // 同一区域名在两个客户下的资料互不影响
+  assert.equal(
+    repository.saveCrud('customer-req', '测试客户/华东', {
+      type: '输送段-改',
+      machine: 'ALL',
+      process: 'DES',
+      content: '测试客户华东要求',
+      source: '验收规范-改',
+    }).ok,
+    true,
+  )
+  assert.equal(repository.getCrud('customer-req', '测试客户/华东').length, 1)
+  assert.equal(
+    repository
+      .getCrud('customer-req', customer)
+      .some((item) => item.content === '测试客户华东要求'),
+    false,
+  )
+
+  // 重命名客户：其下所有区域的资料跟着改键
+  const renamedCustomer = repository.saveEntityGroup(
+    'customer',
+    { name: '测试客户-改' },
+    '测试客户',
+  )
+  assert.equal(renamedCustomer.ok, true)
+  assert.equal(repository.getCrud('customer-req', '测试客户-改/华东').length, 1)
+  assert.equal(
+    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户/华东'),
+    false,
+  )
+
+  // 把区域移到另一个客户并改名：资料跟着移动
+  const movedRegion = repository.saveEntityItem(
+    'customer',
+    { category: '健鼎', name: '华中', previousCategory: '测试客户-改' },
+    '华东',
+  )
+  assert.equal(movedRegion.ok, true)
+  assert.equal(repository.getCrud('customer-req', '健鼎/华中').length, 1)
+  assert.equal(
+    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户-改/华东'),
+    false,
+  )
+
+  // 区域名在客户之间不唯一，删除/编辑叶子必须指明客户
+  assert.deepEqual(repository.deleteEntityItem('customer', '华东'), {
+    ok: false,
+    reason: 'validation',
+  })
+  assert.deepEqual(repository.deleteEntityItem('customer', '华中', '健鼎'), {
+    ok: false,
+    reason: 'not-empty',
+  })
+  assert.deepEqual(repository.deleteEntityItem('customer', '华东', '庆鼎'), {
+    ok: false,
+    reason: 'not-empty',
+  })
+  assert.equal(
+    repository.entityHasData('customer', domain.entityDataName('customer', '测试客户-改', '华南')),
+    false,
+  )
+  assert.equal(
+    repository.deleteEntityItem('customer', '华南', '测试客户-改').ok,
+    true,
+  )
+  assert.equal(repository.deleteEntityGroup('customer', '测试客户-改').ok, true)
+
+  const reorderedGroups = repository.reorderEntityGroups('customer', 0, 1)
+  assert.equal(reorderedGroups.ok, true)
+  assert.equal(repository.getEntityGroups('customer')[1].name, '庆鼎')
   assert.deepEqual(repository.reorderEntityGroups('customer', 0, 99), {
     ok: false,
     reason: 'validation',
   })
 
-  const createdCustomer = repository.saveEntityItem('customer', {
-    category: '华中',
-    name: '测试客户',
-  })
-  assert.equal(createdCustomer.ok, true)
-  assert.deepEqual(repository.getCrud('customer-req', '测试客户'), [])
-
-  const blockedDelete = repository.deleteEntityItem('customer', '庆鼎')
-  assert.deepEqual(blockedDelete, { ok: false, reason: 'not-empty' })
-
-  const movedCustomer = repository.saveEntityItem(
-    'customer',
-    { category: '华南', name: '测试客户-改' },
-    '测试客户',
-  )
-  assert.equal(movedCustomer.ok, true)
-  assert.equal(
-    repository
-      .getEntityGroups('customer')
-      .some(
-        (group) =>
-          group.name === '华南' && group.items.includes('测试客户-改'),
-      ),
-    true,
-  )
-  assert.deepEqual(repository.getCrud('customer-req', '测试客户-改'), [])
-
-  const deletedCustomer = repository.deleteEntityItem('customer', '测试客户-改')
-  assert.equal(deletedCustomer.ok, true)
-
-  const blockedGroupDelete = repository.deleteEntityGroup('customer', '华东')
+  const blockedGroupDelete = repository.deleteEntityGroup('customer', '庆鼎')
   assert.deepEqual(blockedGroupDelete, { ok: false, reason: 'not-empty' })
-
-  const deletedRegion = repository.deleteEntityGroup('customer', '华中')
-  assert.equal(deletedRegion.ok, true)
 
   const sensorStatuses = repository.getDictionaryItems('sensor-status')
   assert.equal(sensorStatuses.some((item) => item.name === '现用'), true)
@@ -1008,7 +1070,18 @@ async function run() {
     sensors: repository.getSensors(),
   })
   assert.equal(index.some((item) => item.title.includes('E3Z-D61')), true)
-  assert.equal(index.some((item) => item.title === '庆鼎' && item.category === '华东'), true)
+  assert.equal(
+    index.some(
+      (item) =>
+        item.type === 'customer' &&
+        item.title === '庆鼎 / 华东' &&
+        item.category === '庆鼎' &&
+        item.query.category === '庆鼎' &&
+        item.query.item === '华东',
+    ),
+    true,
+    'customer search hits point at the customer/region leaf',
+  )
   assert.equal(
     index.some(
       (item) =>
@@ -1494,7 +1567,15 @@ async function run() {
     Object.values(defaultStore).every((value) => Array.isArray(value)),
     true,
   )
-  assert.equal(defaultStore['entity-groups:customer'].length, 3) // 华东/华南/SAT
+  // 客户目录：客户 → 区域，内置资料按「客户/区域」落键
+  assert.equal(defaultStore['entity-groups:customer'].length, 15)
+  assert.deepEqual(
+    defaultStore['entity-groups:customer'].find((group) => group.name === '庆鼎')
+      .items,
+    ['华东', '华南'],
+  )
+  assert.equal(defaultStore['customer-req:庆鼎/华东'].length > 0, true)
+  assert.equal(defaultStore['customer-req:庆鼎'], undefined)
   assert.equal(defaultStore['entity-groups:machine'].length, 10)
   assert.equal(defaultStore['dict:sensor-type'].length > 0, true)
   assert.equal(

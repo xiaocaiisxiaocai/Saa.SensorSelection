@@ -32,7 +32,12 @@ describe('buildSearchIndex', () => {
     expect(types).toEqual(['sensor', 'process', 'machine', 'customer']);
     expect(index.some((item) => item.title.includes('E3Z-D61'))).toBe(true);
     expect(
-      index.some((item) => item.title === '庆鼎' && item.category === '华东'),
+      index.some(
+        (item) =>
+          item.title === '庆鼎 / 华东' &&
+          item.category === '庆鼎' &&
+          item.query.item === '华东',
+      ),
     ).toBe(true);
     expect(
       index.some(

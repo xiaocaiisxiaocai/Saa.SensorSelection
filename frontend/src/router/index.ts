@@ -12,7 +12,7 @@ const history =
     ? createWebHashHistory(import.meta.env.BASE_URL)
     : createWebHistory(import.meta.env.BASE_URL);
 
-const routes: RouteRecordRaw[] = [
+export const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/selection/customer',
@@ -22,15 +22,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/LoginPage.vue'),
     meta: { layout: 'none', public: true, title: '登录' },
   },
+  // 「客户/制程」是一个菜单：父路由渲染顶部 Tab，客户、制程是它的两个子页面。
+  // 子路由仍是 /selection/customer、/selection/process，搜索结果、书签和
+  // ?category=&item= / ?tab= 这些 URL 状态都不变。
   {
-    path: '/selection/customer',
-    component: () => import('@/pages/selection/CustomerPage.vue'),
-    meta: { title: '客户管理' },
-  },
-  {
-    path: '/selection/process',
-    component: () => import('@/pages/selection/ProcessPage.vue'),
-    meta: { title: '制程管理' },
+    path: '/selection',
+    name: 'customer-process',
+    component: () => import('@/pages/selection/CustomerProcessPage.vue'),
+    redirect: '/selection/customer',
+    children: [
+      {
+        path: 'customer',
+        component: () => import('@/pages/selection/CustomerPage.vue'),
+        meta: { title: '客户' },
+      },
+      {
+        path: 'process',
+        component: () => import('@/pages/selection/ProcessPage.vue'),
+        meta: { title: '制程' },
+      },
+    ],
   },
   {
     path: '/selection/machine',

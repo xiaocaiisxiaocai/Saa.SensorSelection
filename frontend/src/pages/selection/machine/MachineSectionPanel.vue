@@ -991,7 +991,7 @@ async function removeImage(index: number) {
           <a-form-item
             html-for="machine-section-process-step-id"
             label="工艺制程"
-            extra="可选；来自“制程管理 → 工艺制程”。"
+            extra="可选；来自“客户/制程 → 制程 → 工艺制程”。"
           >
             <a-select
               id="machine-section-process-step-id"

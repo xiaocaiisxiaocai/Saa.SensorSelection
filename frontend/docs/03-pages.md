@@ -26,8 +26,7 @@
 
 | 分组 | 项 | 图标 | 路由 | 权限 |
 | --- | --- | --- | --- | --- |
-| 感应器选型 | 客户管理 | `building-2` | `/selection/customer` | 匿名可读 |
-| | 制程管理 | `factory` | `/selection/process` | 匿名可读 |
+| 感应器选型 | 客户/制程 | — | `/selection/customer`、`/selection/process`（同一菜单，两张 Tab） | 匿名可读 |
 | | 机型结构 | `cpu` | `/selection/machine` | 匿名可读 |
 | | Sensor 型号字典 | `list-filter` | `/selection/sensor` | 匿名可读 |
 | | 数据字典 | `book-type` | `/selection/dictionary` | 匿名可读 |
@@ -37,6 +36,14 @@
 | | 操作日志 | `scroll-text` | `/system/audit-log` | `rbac:view` + `audit:view` |
 
 隐藏路由：`/selection/search`（搜索结果，不进导航）、`/login`、404。
+
+### 客户/制程（合并菜单）
+
+客户和制程合并为侧边栏一个「客户/制程」菜单（`nav.ts` 的 `activePaths`：两个路由下都高亮）。父路由 `/selection`（`name: 'customer-process'`，`CustomerProcessPage.vue`，直接访问重定向到 `/selection/customer`）只声明两张 Tab，由通用组件 `shell/RouteTabs.vue` 在页面顶部渲染**卡片式** `a-tabs`「客户 | 制程」（组件自带样式，页面不写 CSS；以后别的菜单要合并多个子路由也用它），子路由仍是 `/selection/customer`、`/selection/process`，所以搜索结果、书签和 `?category=&item=` / `?tab=` 都不变。
+
+- 卡片式 Tab 贴在下面的白色页面卡片上（选中 Tab 白底与卡片连成一体），与两个页面内部的线条式 Tab 区分层级。
+- 每张 Tab 记住最后停留的完整地址：客户 → 制程 → 客户 回到原来选中的客户/区域，制程回到原来的子 Tab。
+- 子页面渲染在当前 Tab 的 tabpanel 里；文档标题随子路由为「客户」/「制程」。
 
 「系统管理」整组在无 `rbac:view` 时**不渲染**（不是禁用），沿用旧行为。
 
@@ -65,11 +72,11 @@ const { canWrite } = useAccess()      // canWrite('selection:write')
 
 ---
 
-## 3. 客户管理 `/selection/customer`
+## 3. 客户（「客户/制程」的客户 Tab）`/selection/customer`
 
-左侧 `EntityTree（a-tree）`（`groupLabel="区域"`、`itemLabel="客户"`）+ 右侧详情。URL 同步 `?category=&item=`。
+左侧 `EntityTree（a-tree）`（`groupLabel="客户"`、`itemLabel="区域"`：客户 → 区域，一个客户可有多个区域）+ 右侧详情。URL 同步 `?category=客户&item=区域`，定位同时匹配客户和区域（区域名会在不同客户下重复）；只给客户时落到该客户的第一个区域。四个 tab 的资料挂在区域上，数据名为 `客户/区域`。
 
-切换客户时详情 tab 重置到第一个。无客户时右侧显示「暂无客户，请在左侧新建区域和客户」。
+切换客户时详情 tab 重置到第一个。无客户时右侧显示「暂无客户，请在左侧新建客户和区域」。改名当前选中的客户或区域后继续选中改名后的节点。
 
 详情用 `a-tabs`，4 个 tab：
 
@@ -122,7 +129,7 @@ const { canWrite } = useAccess()      // canWrite('selection:write')
 
 ---
 
-## 4. 制程管理 `/selection/process`
+## 4. 制程（「客户/制程」的制程 Tab）`/selection/process`
 
 无侧栏，整页 `a-tabs` 2 个 tab。URL 同步 `?tab=steps&q=`。
 

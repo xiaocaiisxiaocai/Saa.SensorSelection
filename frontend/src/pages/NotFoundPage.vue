@@ -13,7 +13,7 @@ const router = useRouter();
   >
     <template #extra>
       <a-button type="primary" @click="router.push('/selection/customer')">
-        返回客户管理
+        返回客户/制程
       </a-button>
     </template>
   </a-result>

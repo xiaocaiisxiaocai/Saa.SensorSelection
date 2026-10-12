@@ -16,10 +16,23 @@ import type {
   TimelineItem,
 } from './types';
 
+// 客户目录：客户 → 区域（一个客户可在多个区域设厂，资料按「客户/区域」存）
 export const CUSTOMER_GROUPS: EntityGroup[] = [
-  { name: '华东', items: ['庆鼎', '健鼎', '沪士', '胜宏', '景旺'] },
-  { name: '华南', items: ['宏恒胜', '崇达', '深南', '兴森', '博敏'] },
-  { name: 'SAT', items: ['维信', '依顿', '奥士康', '华通', '定颖'] },
+  { name: '庆鼎', items: ['华东', '华南'] },
+  { name: '健鼎', items: ['华东'] },
+  { name: '沪士', items: ['华东'] },
+  { name: '胜宏', items: ['华东'] },
+  { name: '景旺', items: ['华东', '华南'] },
+  { name: '宏恒胜', items: ['华南'] },
+  { name: '崇达', items: ['华南'] },
+  { name: '深南', items: ['华南'] },
+  { name: '兴森', items: ['华南'] },
+  { name: '博敏', items: ['华南'] },
+  { name: '维信', items: ['SAT'] },
+  { name: '依顿', items: ['SAT'] },
+  { name: '奥士康', items: ['SAT'] },
+  { name: '华通', items: ['SAT'] },
+  { name: '定颖', items: ['SAT'] },
 ];
 
 export const PROCESS_GROUPS: EntityGroup[] = [
@@ -699,7 +712,7 @@ export const LEGACY_DEMO_CRUD_DEFAULTS: CrudDefaults = {
 // 只保留少量可直接使用的首装业务资料，帮助新环境快速确认页面结构。
 // 数据严格按客户键写入，其他客户和未配置的客户仍然保持为空。
 export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
-  'customer-req:庆鼎': [
+  'customer-req:庆鼎/华东': [
     {
       id: 1,
       type: '输送段',
@@ -719,7 +732,7 @@ export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
       note: '与下游设备联锁',
     },
   ],
-  'customer-req:景旺': [
+  'customer-req:景旺/华东': [
     {
       id: 1,
       type: '掉板检测',
@@ -739,7 +752,7 @@ export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
       note: '避免误触发检测',
     },
   ],
-  'customer-proc:庆鼎': [
+  'customer-proc:庆鼎/华东': [
     {
       id: 1,
       type: 'DES 制程',
@@ -749,7 +762,7 @@ export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
       note: '首件确认检测距离',
     },
   ],
-  'customer-proc:景旺': [
+  'customer-proc:景旺/华东': [
     {
       id: 1,
       type: 'AOI 制程',
@@ -759,7 +772,7 @@ export const INITIAL_CRUD_DATA: Record<string, CrudRecord[]> = {
       note: '每班点检一次',
     },
   ],
-  'customer-feedback:庆鼎': [
+  'customer-feedback:庆鼎/华东': [
     {
       id: 1,
       type: '选型配置异常',
@@ -992,8 +1005,8 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
 export const ENTITY_KIND_DEFINITIONS: EntityKindDefinition[] = [
   {
     kind: 'customer',
-    label: '客户',
-    groupLabel: '区域',
+    label: '区域',
+    groupLabel: '客户',
     listIds: ['customer-req', 'customer-proc', 'customer-feedback'],
     hasControlledFiles: true,
     seedGroups: CUSTOMER_GROUPS,

@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { useAuthStore } from '@/stores/auth';
 import AppNav from './AppNav.vue';
 
-async function mountNav(permissions: string[] | null) {
+async function mountNav(
+  permissions: string[] | null,
+  path = '/selection/dictionary',
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/:path(.*)*', component: { template: '<div />' } }],
@@ -22,7 +25,7 @@ async function mountNav(permissions: string[] | null) {
       username: 'admin',
     },
   );
-  await router.push('/selection/dictionary');
+  await router.push(path);
   await router.isReady();
   return mount(AppNav, { global: { plugins: [pinia, router] } });
 }
@@ -35,7 +38,7 @@ describe('AppNav', () => {
     const wrapper = await mountNav(null);
 
     expect(groupTitles(wrapper)).toEqual([]);
-    expect(wrapper.findAll('.ant-menu-item')).toHaveLength(5);
+    expect(wrapper.findAll('.ant-menu-item')).toHaveLength(4);
   });
 
   it('labels groups without repeating the brand name', async () => {
@@ -43,7 +46,7 @@ describe('AppNav', () => {
 
     expect(groupTitles(wrapper)).toEqual(['选型数据', '系统管理']);
     expect(wrapper.get('.app-nav__name').text()).toBe('感应器选型');
-    expect(wrapper.findAll('.ant-menu-item')).toHaveLength(9);
+    expect(wrapper.findAll('.ant-menu-item')).toHaveLength(8);
   });
 
   it('marks only the current page as selected and shows no icons', async () => {
@@ -52,5 +55,25 @@ describe('AppNav', () => {
 
     expect(selected.map((item) => item.text())).toEqual(['数据字典']);
     expect(wrapper.find('.ant-menu-item svg').exists()).toBe(false);
+  });
+
+  it('merges customer and process into one menu item selected on both tabs', async () => {
+    for (const path of [
+      '/selection/customer',
+      '/selection/process',
+      '/selection/customer?category=庆鼎&item=华东',
+    ]) {
+      const wrapper = await mountNav(null, path);
+      const labels = wrapper
+        .findAll('.ant-menu-item')
+        .map((item) => item.text());
+      expect(labels).toContain('客户/制程');
+      expect(labels).not.toContain('客户管理');
+      expect(labels).not.toContain('制程管理');
+      expect(
+        wrapper.findAll('.ant-menu-item-selected').map((item) => item.text()),
+      ).toEqual(['客户/制程']);
+      wrapper.unmount();
+    }
   });
 });

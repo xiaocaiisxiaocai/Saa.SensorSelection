@@ -3,12 +3,16 @@ import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 import BrandMark from '@/shell/BrandMark.vue';
-import { navGroupsFor } from '@/shell/nav';
+import { activeNavKey, navGroupsFor } from '@/shell/nav';
 import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
 const auth = useAuthStore();
 const groups = computed(() => navGroupsFor(auth.permissions));
+const selectedKeys = computed(() => {
+  const key = activeNavKey(groups.value, route.path);
+  return key ? [key] : [];
+});
 </script>
 
 <template>
@@ -21,7 +25,7 @@ const groups = computed(() => navGroupsFor(auth.permissions));
       theme="dark"
       mode="inline"
       :class="{ 'app-nav__menu--grouped': groups.length > 1 }"
-      :selected-keys="[route.path]"
+      :selected-keys="selectedKeys"
     >
       <!-- 只有一个分组（未登录/无系统权限）时不显示分组标题，免得和品牌名重复 -->
       <template v-if="groups.length === 1">

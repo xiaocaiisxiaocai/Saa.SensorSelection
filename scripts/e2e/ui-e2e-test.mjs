@@ -248,7 +248,9 @@ async function rowAction(text, actionLabel) {
  * 左侧目录树（a-tree）的行操作放在每行的「更多」下拉菜单里，按钮在悬停时出现。
  */
 async function sourceListAction(text, actionLabel) {
-  const row = page.locator('.ant-tree-treenode', { hasText: text }).first()
+  // 按「X 的更多操作」精确定位节点：hasText 是子串匹配，「E2E客户」会先命中「E2E客户改」
+  const more = page.getByRole('button', { name: `${text} 的更多操作`, exact: true })
+  const row = page.locator('.ant-tree-treenode').filter({ has: more }).first()
   await row.waitFor({ state: 'visible', timeout: 8000 })
   await row.hover()
   await row.getByRole('button', { name: `${text} 的更多操作`, exact: true }).click()
@@ -263,6 +265,13 @@ async function goto(path) {
 async function navTo(label) {
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: label, exact: true }).click()
   await page.locator('.app-shell__loading').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+}
+
+// 客户、制程合并为「客户/制程」一个菜单，页面顶部用 Tab 切换
+async function openCustomerProcess(tab) {
+  await navTo('客户/制程')
+  await page.getByRole('tab', { name: tab, exact: true }).click()
+  await page.waitForURL(tab === '制程' ? '**/selection/process**' : '**/selection/customer**', { timeout: 10000 })
 }
 
 async function settle() {
@@ -357,7 +366,7 @@ async function runLogin() {
 
   await check('Admin sees both the business and the system nav groups', async () => {
     const nav = page.getByRole('navigation', { name: '主导航' })
-    for (const label of ['客户管理', '制程管理', '机型结构', 'Sensor型号', '数据字典']) {
+    for (const label of ['客户/制程', '机型结构', 'Sensor型号', '数据字典']) {
       assert(await nav.getByRole('link', { name: label, exact: true }).isVisible(), `missing nav item ${label}`)
     }
     for (const label of ['用户管理', '角色管理', '组织架构', '操作日志']) {
@@ -423,10 +432,47 @@ async function runLogin() {
 async function runCustomerCrud() {
   section('Customer module CRUD')
 
-  await navTo('客户管理')
+  await openCustomerProcess('客户')
 
-  await check('Creating a region (区域) works', async () => {
-    await page.getByRole('button', { name: '新建区域', exact: true }).click()
+  // 客户目录是「客户 → 区域」：先建客户（分组），再在客户下建区域（叶子），资料挂在区域上
+  await check('Creating a customer (客户) works', async () => {
+    await page.getByRole('button', { name: '新建客户', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建客户', 'sheet title')
+    await fillField(sheet(), '客户名称', NAMES.customer)
+    await saveSheet()
+    await expectToast('客户已新增')
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.customer }).first().waitFor({ state: 'visible' })
+  })
+
+  await check('A duplicate customer name is rejected', async () => {
+    await page.getByRole('button', { name: '新建客户', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '客户名称', NAMES.customer)
+    await sheet().getByRole('button', { name: '保存', exact: true }).click()
+    await expectToast('该客户已存在')
+    await cancelSheet()
+  })
+
+  await check('An empty customer name is rejected', async () => {
+    await page.getByRole('button', { name: '新建客户', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    await sheet().getByRole('button', { name: '保存', exact: true }).click()
+    await expectToast('请检查标红的必填项')
+    await cancelSheet()
+  })
+
+  await check('A region name containing "/" is rejected', async () => {
+    await sourceListAction(NAMES.customer, '新建区域')
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '区域名称', '华/东')
+    await sheet().getByRole('button', { name: '保存', exact: true }).click()
+    await sheet().getByText('区域名称不能包含“/”').waitFor({ state: 'visible' })
+    await cancelSheet()
+  })
+
+  await check('Creating a region inside the customer works', async () => {
+    await sourceListAction(NAMES.customer, '新建区域')
     await sheet().waitFor({ state: 'visible' })
     assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建区域', 'sheet title')
     await fillField(sheet(), '区域名称', NAMES.region)
@@ -435,36 +481,12 @@ async function runCustomerCrud() {
     await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.region }).first().waitFor({ state: 'visible' })
   })
 
-  await check('A duplicate region name is rejected', async () => {
-    await page.getByRole('button', { name: '新建区域', exact: true }).click()
-    await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '区域名称', NAMES.region)
-    await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('该区域已存在')
-    await cancelSheet()
-  })
-
-  await check('An empty region name is rejected', async () => {
-    await page.getByRole('button', { name: '新建区域', exact: true }).click()
-    await sheet().waitFor({ state: 'visible' })
-    await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await expectToast('请检查标红的必填项')
-    await cancelSheet()
-  })
-
-  await check('Creating a customer inside the region works', async () => {
-    await page.getByRole('button', { name: '新建客户', exact: true }).click()
-    await sheet().waitFor({ state: 'visible' })
-    await pickSelect(sheet(), '区域', NAMES.region)
-    await fillField(sheet(), '客户名称', NAMES.customer)
-    await saveSheet()
-    await expectToast('客户已新增')
-    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.customer }).first().waitFor({ state: 'visible' })
-  })
-
-  await check('Selecting the customer opens its four tabs', async () => {
-    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.customer }).first().click()
+  await check('Selecting the region opens its four tabs', async () => {
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.region }).first().click()
     await settle()
+    const url = new URL(page.url())
+    assertEqual(url.searchParams.get('category'), NAMES.customer, 'selected customer in URL')
+    assertEqual(url.searchParams.get('item'), NAMES.region, 'selected region in URL')
     for (const tab of ['客户通用要求', '制程注意事项', '感应器选用标准', '厂外反馈问题项']) {
       await page.getByRole('tab', { name: tab }).waitFor({ state: 'visible', timeout: 8000 })
     }
@@ -600,16 +622,45 @@ async function runCustomerCrud() {
     assert(await page.locator('.selection-panel').first().isVisible(), 'panel not visible')
   })
 
-  await check('Renaming the customer works', async () => {
+  await check('Renaming the region keeps its data', async () => {
+    // 先确认选中的确实是测试区域，否则会把测试数据写进真实客户（前面步骤失败时页面停在第一个客户）
+    const selected = new URL(page.url()).searchParams
+    assertEqual(selected.get('category'), NAMES.customer, 'selected customer before writing')
+    assertEqual(selected.get('item'), NAMES.region, 'selected region before writing')
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
+    await page.getByRole('button', { name: '新增要求', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '要求内容', `${TAG} 跟随改名`)
+    await saveSheet()
+    await expectToast('要求已新增')
+
+    await sourceListAction(NAMES.region, '编辑区域')
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '区域名称', `${NAMES.region}改`)
+    await saveSheet()
+    await expectToast('区域已更新')
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: `${NAMES.region}改` }).first().waitFor({ state: 'visible' })
+    await settle()
+    await tableRow(`${TAG} 跟随改名`).first().waitFor({ state: 'visible' })
+    // rename back so the rest of the run uses a stable name
+    await sourceListAction(`${NAMES.region}改`, '编辑区域')
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '区域名称', NAMES.region)
+    await saveSheet()
+    await expectToast('区域已更新')
+  })
+
+  await check('Renaming the customer keeps its regions and data', async () => {
     await sourceListAction(NAMES.customer, '编辑客户')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '客户名称', `${NAMES.customer}改`)
     await saveSheet()
     await expectToast('客户已更新')
     await page.locator('.ant-tree-node-content-wrapper', { hasText: `${NAMES.customer}改` }).first().waitFor({ state: 'visible' })
-    // rename back so the rest of the run uses a stable name
+    await settle()
+    assertEqual(new URL(page.url()).searchParams.get('category'), `${NAMES.customer}改`, 'selection follows the rename')
+    await tableRow(`${TAG} 跟随改名`).first().waitFor({ state: 'visible' })
     await sourceListAction(`${NAMES.customer}改`, '编辑客户')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '客户名称', NAMES.customer)
@@ -617,10 +668,10 @@ async function runCustomerCrud() {
     await expectToast('客户已更新')
   })
 
-  await check('A region that still has customers cannot be deleted', async () => {
-    await sourceListAction(NAMES.region, '删除区域')
+  await check('A customer that still has regions cannot be deleted', async () => {
+    await sourceListAction(NAMES.customer, '删除客户')
     await confirmDelete()
-    await expectToast('请先清空该区域下的全部客户')
+    await expectToast('请先清空该客户下的全部区域')
   })
 }
 
@@ -628,7 +679,7 @@ async function runCustomerCrud() {
 
 async function runProcessCrud() {
   section('Process module CRUD')
-  await navTo('制程管理')
+  await openCustomerProcess('制程')
 
   await check('工艺制程: create a step', async () => {
     await page.getByRole('tab', { name: '工艺制程' }).click()
@@ -911,7 +962,7 @@ async function runSearch() {
   })
 
   await check('An empty search query warns instead of navigating', async () => {
-    await navTo('客户管理')
+    await openCustomerProcess('客户')
     const search = page.getByRole('search').getByRole('textbox', { name: '全局搜索' })
     await search.fill('   ')
     await search.press('Enter')
@@ -1139,7 +1190,7 @@ async function runReadOnlyGuest() {
     await goto('/definitely/not/a/route')
     await settle()
     const body = await page.locator('body').innerText()
-    assert(/未找到|返回客户管理/.test(body), 'not-found page did not render')
+    assert(/未找到|返回客户\/制程/.test(body), 'not-found page did not render')
   })
 }
 
@@ -1341,7 +1392,8 @@ async function runUiAudit() {
       for (const path of pages) {
         await goto(path)
         await settle()
-        const tabs = page.locator('.app-shell__content .ant-tabs-tab')
+        // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
+        const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
         const tabCount = Math.max(1, await tabs.count())
         for (let i = 0; i < tabCount; i++) {
           if ((await tabs.count()) > 0) {
@@ -1407,7 +1459,8 @@ async function runUiAudit() {
       for (const path of pages) {
         await goto(path)
         await settle()
-        const tabs = page.locator('.app-shell__content .ant-tabs-tab')
+        // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
+        const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
         const tabCount = Math.max(1, await tabs.count())
         for (let i = 0; i < tabCount; i++) {
           if ((await tabs.count()) > 0) {
@@ -1547,7 +1600,10 @@ async function teardown() {
   try {
     const token = await loginApi()
     // Remove the customer/machine created through the UI plus their store keys.
-    await deleteEntity(token, 'customer', NAMES.region, NAMES.customer)
+    // 改名步骤中途失败会留下「…改」，一并清掉，免得下次运行撞名
+    for (const customer of [NAMES.customer, `${NAMES.customer}改`]) {
+      await deleteEntity(token, 'customer', customer, NAMES.region)
+    }
     await deleteEntity(token, 'machine', NAMES.machineCategory, NAMES.machine)
     await cleanupStoreKeys(token)
     await cleanupRbac(token)

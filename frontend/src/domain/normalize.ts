@@ -933,13 +933,16 @@ export function normalizeEntityGroups(
       if (usedGroupNames.has(nameKey)) return null;
       usedGroupNames.add(nameKey);
 
+      // 机型名全局唯一（数据按机型名存）；客户下的区域只需在本客户内唯一
+      const itemNames =
+        kind === 'customer' ? new Set<string>() : usedItemNames;
       const items: string[] = [];
       for (const rawItem of asList(group.items)) {
         const item = storedText(rawItem).trim().slice(0, 40);
         if (!item) continue;
         const itemKey = item.toLocaleLowerCase('zh-CN');
-        if (usedItemNames.has(itemKey)) continue;
-        usedItemNames.add(itemKey);
+        if (itemNames.has(itemKey)) continue;
+        itemNames.add(itemKey);
         items.push(item);
       }
 

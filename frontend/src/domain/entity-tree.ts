@@ -1,8 +1,22 @@
 import type {
   EntityGroup,
+  EntityKind,
   EntityTreeItem,
   MachineCatalogKind,
 } from './types';
+
+/**
+ * 叶子节点的业务数据名（数据键 `listId:数据名` 里的那一段）。
+ * 客户目录是「客户 → 区域」，区域名在客户之间会重复（多个客户都有华东），
+ * 所以客户数据按「客户/区域」存；机型名全局唯一，仍按机型名存。
+ */
+export function entityDataName(
+  kind: EntityKind,
+  category: string,
+  name: string,
+): string {
+  return kind === 'customer' ? `${category}/${name}` : name;
+}
 
 export const PROJECT_MACHINE_CATEGORY = '专案机型';
 

@@ -87,12 +87,12 @@ describe('createSelectionRepository persist', () => {
       },
       setItem: () => undefined,
     });
-    expect(repo.snapshotStore()['customer-req:庆鼎']).toEqual(
+    expect(repo.snapshotStore()['customer-req:庆鼎/华东']).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ content: '进板前确认板件到位后再启动输送' }),
       ]),
     );
-    expect(repo.snapshotStore()['customer-req:健鼎']).toBeUndefined();
+    expect(repo.snapshotStore()['customer-req:健鼎/华东']).toBeUndefined();
   });
 });
 
@@ -100,28 +100,28 @@ describe('entity-scoped business data', () => {
   it('seeds only the configured customers and keeps other customers empty', () => {
     const repo = createRepo();
 
-    expect(repo.getCrud('customer-req', '庆鼎')).toHaveLength(2);
-    expect(repo.getCrud('customer-proc', '庆鼎')).toHaveLength(1);
-    expect(repo.getCrud('customer-feedback', '庆鼎')).toHaveLength(1);
-    expect(repo.getCrud('customer-req', '景旺')).toHaveLength(2);
-    expect(repo.getCrud('customer-proc', '景旺')).toHaveLength(1);
-    expect(repo.getCrud('customer-feedback', '景旺')).toEqual([]);
-    expect(repo.getCrud('customer-req', '健鼎')).toEqual([]);
-    expect(repo.getCrud('customer-proc', '健鼎')).toEqual([]);
-    expect(repo.getCrud('customer-feedback', '健鼎')).toEqual([]);
-    expect(repo.getControlledDocuments('庆鼎')).toEqual([]);
-    expect(repo.getControlledDocuments('景旺')).toEqual([]);
+    expect(repo.getCrud('customer-req', '庆鼎/华东')).toHaveLength(2);
+    expect(repo.getCrud('customer-proc', '庆鼎/华东')).toHaveLength(1);
+    expect(repo.getCrud('customer-feedback', '庆鼎/华东')).toHaveLength(1);
+    expect(repo.getCrud('customer-req', '景旺/华东')).toHaveLength(2);
+    expect(repo.getCrud('customer-proc', '景旺/华东')).toHaveLength(1);
+    expect(repo.getCrud('customer-feedback', '景旺/华东')).toEqual([]);
+    expect(repo.getCrud('customer-req', '健鼎/华东')).toEqual([]);
+    expect(repo.getCrud('customer-proc', '健鼎/华东')).toEqual([]);
+    expect(repo.getCrud('customer-feedback', '健鼎/华东')).toEqual([]);
+    expect(repo.getControlledDocuments('庆鼎/华东')).toEqual([]);
+    expect(repo.getControlledDocuments('景旺/华东')).toEqual([]);
   });
 
   it('keeps old countermeasures when feedback is updated', () => {
     const { storage } = createMemory();
     const repo = createRepo(storage);
-    const original = repo.getCrud('customer-feedback', '庆鼎')[0];
+    const original = repo.getCrud('customer-feedback', '庆鼎/华东')[0];
     expect(original).toBeDefined();
 
     const changed = repo.saveCrud(
       'customer-feedback',
-      '庆鼎',
+      '庆鼎/华东',
       {
         ...original,
         measure: '更换新型真空表头并重新验证参数。',
@@ -153,7 +153,7 @@ describe('entity-scoped business data', () => {
 
     const statusOnly = repo.saveCrud(
       'customer-feedback',
-      '庆鼎',
+      '庆鼎/华东',
       { ...changed.item, status: FEEDBACK_STATUS_OPTIONS[1] },
       changed.item.id,
     );
@@ -164,7 +164,7 @@ describe('entity-scoped business data', () => {
     expect(statusOnly.item.measureHistory).toHaveLength(2);
 
     const reloaded = createRepo(storage);
-    const persisted = reloaded.getCrud('customer-feedback', '庆鼎')[0];
+    const persisted = reloaded.getCrud('customer-feedback', '庆鼎/华东')[0];
     expect(persisted && 'measureHistory' in persisted).toBe(true);
     if (!persisted || !('measureHistory' in persisted)) return;
     expect(persisted.measureHistory).toEqual(statusOnly.item.measureHistory);
@@ -189,7 +189,7 @@ describe('entity-scoped business data', () => {
     storage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        'customer-req:庆鼎': [
+        'customer-req:庆鼎/华东': [
           {
             id: 7,
             type: '特殊要求',
@@ -204,12 +204,12 @@ describe('entity-scoped business data', () => {
     );
     const repo = createRepo(storage);
 
-    expect(repo.getCrud('customer-req', '庆鼎')).toEqual(
+    expect(repo.getCrud('customer-req', '庆鼎/华东')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 7, content: '庆鼎专属要求' }),
       ]),
     );
-    expect(repo.getCrud('customer-req', '景旺')).toEqual(
+    expect(repo.getCrud('customer-req', '景旺/华东')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 1,
@@ -225,7 +225,7 @@ describe('entity-scoped business data', () => {
       STORAGE_KEY,
       JSON.stringify({
         'meta:seed-version': [{ version: 1 }],
-        'customer-req:庆鼎': [
+        'customer-req:庆鼎/华东': [
           {
             id: 1,
             type: '输送段',
@@ -259,7 +259,7 @@ describe('entity-scoped business data', () => {
 
     const repo = createRepo(storage);
 
-    expect(repo.getCrud('customer-req', '庆鼎')).toEqual(
+    expect(repo.getCrud('customer-req', '庆鼎/华东')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 9, content: '庆鼎专属要求' }),
       ]),
@@ -535,7 +535,7 @@ describe('sensors', () => {
 describe('entity tree and dictionary', () => {
   it('blocks deleting a group that still has items', () => {
     const repo = createRepo();
-    expect(repo.deleteEntityGroup('customer', '华东')).toEqual({
+    expect(repo.deleteEntityGroup('customer', '庆鼎')).toEqual({
       ok: false,
       reason: 'not-empty',
     });
@@ -1026,7 +1026,7 @@ describe('controlled documents', () => {
     const { storage } = createMemory();
     const repo = createRepo(storage);
     expect(
-      repo.saveControlledFile('庆鼎', {
+      repo.saveControlledFile('庆鼎/华东', {
         fileName: 'a.txt',
         mimeType: 'text/plain',
         dataUrl: 'data:text/plain;base64,YQ==',
@@ -1035,7 +1035,7 @@ describe('controlled documents', () => {
       }),
     ).toEqual({ ok: false, reason: 'type' });
 
-    const saved = repo.saveControlledFile('庆鼎', {
+    const saved = repo.saveControlledFile('庆鼎/华东', {
       fileName: 'a.pdf',
       mimeType: 'application/pdf',
       dataUrl: 'data:application/pdf;base64,YQ==',
@@ -1043,10 +1043,10 @@ describe('controlled documents', () => {
       uploadedAt: '2024-01-01',
     });
     if (!saved.ok) throw new Error(saved.reason);
-    expect(repo.getControlledDocuments('庆鼎')[0]?.kind).toBe('pdf');
-    expect(repo.getControlledDocuments('景旺')).toEqual([]);
+    expect(repo.getControlledDocuments('庆鼎/华东')[0]?.kind).toBe('pdf');
+    expect(repo.getControlledDocuments('景旺/华东')).toEqual([]);
     expect(
-      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎'],
+      JSON.parse(storage.getItem(STORAGE_KEY) || '{}')['customer-sop:庆鼎/华东'],
     ).toEqual([saved.item]);
   });
 
@@ -1098,7 +1098,7 @@ describe('controlled documents', () => {
     expect(repo.getProcessIntroFiles()).toEqual([
       expect.objectContaining({ fileName: '制程介绍.pptx', kind: 'ppt' }),
     ]);
-    expect(repo.saveControlledFile('庆鼎', pptx)).toEqual({
+    expect(repo.saveControlledFile('庆鼎/华东', pptx)).toEqual({
       ok: false,
       reason: 'type',
     });

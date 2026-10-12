@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { describe, expect, it, vi } from 'vitest';
 
+import { entityDataName, entityTreeItemKey } from '@/domain';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { dialogs } from '@/pages/shared/confirm';
@@ -17,6 +18,7 @@ import {
   tagColor,
 } from '@/test-helpers';
 import CustomerPage from './CustomerPage.vue';
+import EntityTree from './EntityTree.vue';
 
 async function mountPage(authenticated = false) {
   const router = createRouter({
@@ -63,24 +65,83 @@ describe('CustomerPage', () => {
     expect(heading.text()).toContain(item);
     expect(heading.text()).toContain(category);
     expect(tabCount(wrapper, '客户通用要求')).toBe(
-      String(store.crudItems('customer-req', item).length),
+      String(
+        store.crudItems(
+          'customer-req',
+          entityDataName('customer', category, item),
+        ).length,
+      ),
     );
     wrapper.unmount();
   });
 
-  it('asks before discarding unsaved input in the sidebar create region dialog', async () => {
+  it('tells apart the same region under different customers', async () => {
     const wrapper = await mountPage(true);
-    // EntitySource 的“新建/编辑区域”弹窗必须带未保存确认，否则 Esc/点
+    // 等页面把空路由补成默认选中项，免得这次导航晚于下面的切换落地
+    await flushPromises();
+    const store = useSelectionStore();
+    expect(store.saveEntityGroup('customer', { name: '测试客户' }).ok).toBe(
+      true,
+    );
+    expect(
+      store.saveEntityItem('customer', { category: '测试客户', name: '华东' })
+        .ok,
+    ).toBe(true);
+    const type = store.dictionaryNames('customer-req')[0]!;
+    const source = store.dictionaryNames('customer-req-source')[0]!;
+    expect(
+      store.saveCrud('customer-req', '测试客户/华东', {
+        content: '只属于测试客户华东',
+        machine: 'ALL',
+        note: '',
+        process: '',
+        source,
+        type,
+      }).ok,
+    ).toBe(true);
+
+    await flushPromises();
+    const router = wrapper.vm.$router;
+    await router.replace({
+      path: '/selection/customer',
+      query: { category: '测试客户', item: '华东' },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('.selection-panel > h2').text()).toBe('测试客户，华东');
+    expect(wrapper.text()).toContain('只属于测试客户华东');
+    // 树里选中的是「测试客户」下的华东，而不是第一个同名的「庆鼎 / 华东」
+    expect(wrapper.getComponent(EntityTree).props('selectedKey')).toBe(
+      entityTreeItemKey({
+        category: '测试客户',
+        configuration: null,
+        name: '华东',
+      }),
+    );
+
+    await router.replace({
+      path: '/selection/customer',
+      query: { category: '庆鼎', item: '华东' },
+    });
+    await flushPromises();
+    expect(wrapper.get('.selection-panel > h2').text()).toBe('庆鼎，华东');
+    expect(wrapper.text()).not.toContain('只属于测试客户华东');
+    wrapper.unmount();
+  });
+
+  it('asks before discarding unsaved input in the sidebar create customer dialog', async () => {
+    const wrapper = await mountPage(true);
+    // EntitySource 的“新建/编辑客户”弹窗必须带未保存确认，否则 Esc/点
     // 遮罩会静默丢弃输入（回归自一次真实缺口：这个共享侧栏组件
     // 之前完全没接未保存确认）。
     const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValue(false);
-    await wrapper.get('button[aria-label="新建区域"]').trigger('click');
+    await wrapper.get('button[aria-label="新建客户"]').trigger('click');
     await flushPromises();
     const input = document.querySelector<HTMLInputElement>(
       '#entity-source-name input, input#entity-source-name',
     );
     expect(input).not.toBeNull();
-    input!.value = '新区域';
+    input!.value = '新客户';
     input!.dispatchEvent(new Event('input', { bubbles: true }));
     await flushPromises();
 
@@ -136,7 +197,10 @@ describe('CustomerPage', () => {
     window.localStorage.clear();
     const wrapper = await mountPage(true);
     const selectionStore = useSelectionStore();
-    const customerName = selectionStore.entityGroups('customer')[0]?.items[0];
+    const firstCustomer = selectionStore.entityGroups('customer')[0];
+    const customerName =
+      firstCustomer?.items[0] &&
+      entityDataName('customer', firstCustomer.name, firstCustomer.items[0]);
     const type = selectionStore.dictionaryNames('customer-req')[0];
     const sources = selectionStore
       .dictionaryNames('customer-req-source')
@@ -173,7 +237,10 @@ describe('CustomerPage', () => {
     window.localStorage.clear();
     const wrapper = await mountPage(true);
     const selectionStore = useSelectionStore();
-    const customerName = selectionStore.entityGroups('customer')[0]?.items[0];
+    const firstCustomer = selectionStore.entityGroups('customer')[0];
+    const customerName =
+      firstCustomer?.items[0] &&
+      entityDataName('customer', firstCustomer.name, firstCustomer.items[0]);
     const requirementTypes = selectionStore
       .dictionaryNames('customer-req')
       .slice(0, 3);
@@ -317,7 +384,8 @@ describe('CustomerPage', () => {
     await flushPromises();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
-    await clickTreeNode(wrapper, '健鼎');
+    // 切到同一客户的另一个区域，也算换了一份资料
+    await clickTreeNode(wrapper, '华南');
 
     const nextSearch = wrapper
       .findAll('input')
@@ -330,11 +398,14 @@ describe('CustomerPage', () => {
   it('shows countermeasure history without version, reason, or operator fields', async () => {
     const wrapper = await mountPage();
     const selectionStore = useSelectionStore();
-    const feedback = selectionStore.crudItems('customer-feedback', '庆鼎')[0];
+    const feedback = selectionStore.crudItems(
+      'customer-feedback',
+      '庆鼎/华东',
+    )[0];
     expect(feedback).toBeDefined();
     selectionStore.saveCrud(
       'customer-feedback',
-      '庆鼎',
+      '庆鼎/华东',
       {
         ...feedback,
         date: '2026-08-25',
@@ -405,7 +476,7 @@ describe('CustomerPage', () => {
 
     for (const status of prefixedStatuses) {
       expect(
-        selectionStore.saveCrud('customer-feedback', '庆鼎', {
+        selectionStore.saveCrud('customer-feedback', '庆鼎/华东', {
           date: '2026-08-27',
           machine: '测试机型',
           measure: '验证状态颜色',

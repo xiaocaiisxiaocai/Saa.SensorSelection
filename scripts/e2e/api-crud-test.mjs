@@ -248,15 +248,23 @@ async function main() {
   })
 
   await check('PUT /store/entity-groups/{kind} validates duplicate item names', async () => {
-    const res = await request('PUT', '/store/entity-groups/customer', {
+    // 客户 → 区域：区域只需在同一客户内唯一（跨客户同名合法，由后端单测覆盖，这里不改真实目录）
+    const customer = await request('PUT', '/store/entity-groups/customer', {
+      token: adminToken,
+      body: [{ name: `${E2E_PREFIX}A`, items: ['dup', 'dup'] }],
+    })
+    assertEqual(customer.status, 400, 'customer status')
+    assertEqual(customer.data.reason, 'validation', 'customer reason')
+    // 机型名仍然全局唯一
+    const machine = await request('PUT', '/store/entity-groups/machine', {
       token: adminToken,
       body: [
         { name: `${E2E_PREFIX}A`, items: ['dup'] },
         { name: `${E2E_PREFIX}B`, items: ['dup'] },
       ],
     })
-    assertEqual(res.status, 400, 'status')
-    assertEqual(res.data.reason, 'validation', 'reason')
+    assertEqual(machine.status, 400, 'machine status')
+    assertEqual(machine.data.reason, 'validation', 'machine reason')
   })
 
   await check('PUT /store/entity-groups/{kind} validates an empty group list', async () => {

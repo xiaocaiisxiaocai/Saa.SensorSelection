@@ -122,7 +122,7 @@ describe('ProcessPage', () => {
     const wrapper = await mountPage();
     await clickTab(wrapper, '工艺制程');
 
-    expect(columnWidths(wrapper)['制程']).toBe(64);
+    expect(columnWidths(wrapper)['制程']).toBe(88);
 
     wrapper.unmount();
   });

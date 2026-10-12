@@ -802,7 +802,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true, true);
     const widths = Object.values(columnWidths(wrapper));
 
-    expect(widths).toEqual([90, 100, 110, 120, 100, 220, 120, 96, 72]);
+    expect(widths).toEqual([104, 100, 110, 120, 116, 220, 120, 96, 72]);
 
     wrapper.unmount();
   });

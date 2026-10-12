@@ -289,7 +289,7 @@ const columns = computed<TableColumnType[]>(() => {
       key: 'sensorType',
       dataIndex: 'sensorType',
       title: '感应器类型',
-      width: 120,
+      width: 136,
       sorter: true,
       sortOrder: sortOrderOf(sort.value, 'sensorType'),
     },
@@ -829,6 +829,8 @@ function saveReplace() {
               <template v-else-if="column.key === 'sensorType'">
                 <a-badge
                   v-if="row.sensorType"
+                  class="sensor-type"
+                  :title="row.sensorType"
                   :color="typeAccent(row.sensorType)"
                   :text="row.sensorType"
                 />
@@ -1219,3 +1221,18 @@ function saveReplace() {
     </a-modal>
   </section>
 </template>
+
+<style scoped>
+/* 类型名不换行：列宽放不下时省略，完整名称见 title */
+.sensor-type {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.sensor-type :deep(.ant-badge-status-text) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

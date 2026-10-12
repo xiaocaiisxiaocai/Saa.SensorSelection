@@ -365,17 +365,21 @@ async function runLogin() {
     }
   })
 
-  await check('The sidebar collapse toggle works and is reversible', async () => {
+  await check('The sidebar is fixed: no collapse toggle, no menu icons, no Ctrl+K', async () => {
     const sider = page.locator('.app-shell__sider')
-    const collapsed = async () =>
-      ((await sider.getAttribute('class')) ?? '').includes('ant-layout-sider-collapsed')
-    const before = await collapsed()
-    await page.getByRole('button', { name: /折叠侧栏|展开侧栏/ }).click()
-    await settle()
-    assert((await collapsed()) !== before, 'collapsing did not change the shell state')
-    await page.getByRole('button', { name: /折叠侧栏|展开侧栏/ }).click()
-    await settle()
-    assertEqual(await collapsed(), before, 'sidebar did not restore')
+    assert(await sider.isVisible(), 'desktop sidebar should always be visible')
+    assert(
+      !((await sider.getAttribute('class')) ?? '').includes('ant-layout-sider-collapsed'),
+      'desktop sidebar should never be collapsed',
+    )
+    assertEqual(await page.locator('[aria-controls="app-sidebar"]').count(), 0, 'desktop shell should have no sidebar toggle')
+    assertEqual(await sider.locator('.ant-menu-item svg, .ant-menu-item-icon').count(), 0, 'nav items should have no icons')
+    assertEqual(await page.locator('.app-shell__header kbd').count(), 0, 'search should show no shortcut hint')
+    await page.keyboard.press('Control+k')
+    assert(
+      (await page.evaluate(() => document.activeElement?.id)) !== 'global-search-input',
+      'Ctrl+K should no longer focus the global search',
+    )
   })
 
   await check('The app stays in light mode with no theme switcher', async () => {
@@ -1295,6 +1299,57 @@ async function runUiAudit() {
       if (m && (m.h > 0 || m.v > 0)) bad.push(`${path} 横${m.h}px 纵${m.v}px`)
     }
     assertEqual(bad.length, 0, `.selection-page 出现了自己的滚动条: ${bad.join(' | ')}`)
+  })
+
+  await check('Table headers and short labels never wrap onto a second line', async () => {
+    const pages = [
+      '/selection/customer', '/selection/process', '/selection/machine', '/selection/sensor',
+      '/selection/dictionary', '/system/user', '/system/role', '/system/org', '/system/audit-log',
+    ]
+    const selector = [
+      '.ant-table-thead th', '.ant-btn', '.ant-tabs-tab-btn', '.ant-tag', '.ant-badge-status',
+      '.ant-segmented-item-label', '.ant-menu-title-content', '.ant-pagination-options',
+    ].join(', ')
+    const bad = []
+    for (const width of [1440, 1024]) {
+      await page.setViewportSize({ width, height: 900 })
+      for (const path of pages) {
+        await goto(path)
+        await settle()
+        const tabs = page.locator('.app-shell__content .ant-tabs-tab')
+        const tabCount = Math.max(1, await tabs.count())
+        for (let i = 0; i < tabCount; i++) {
+          if ((await tabs.count()) > 0) {
+            // 窄屏下放不下的标签会收进 antd 的「…」菜单，直接派发点击，不走真实指针
+            await tabs.nth(i).locator('[role="tab"]').dispatchEvent('click')
+            await settle()
+          }
+          // 逐个文字节点数行数：一个节点的矩形落在两条基线上就是换行了
+          const wrapped = await page.evaluate((sel) => {
+            const out = []
+            for (const el of document.querySelectorAll(sel)) {
+              if (!el.getClientRects().length) continue
+              const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+              for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+                if (!n.textContent.trim()) continue
+                const range = document.createRange()
+                range.selectNodeContents(n)
+                const tops = []
+                for (const r of range.getClientRects()) {
+                  if (r.width > 0 && !tops.some((t) => Math.abs(t - r.top) < 4)) tops.push(r.top)
+                }
+                if (tops.length > 1) out.push(n.textContent.trim().slice(0, 20))
+              }
+            }
+            return out
+          }, selector)
+          for (const text of wrapped) bad.push(`${width}px ${path}: ${text}`)
+        }
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await settle()
+    assertEqual(bad.length, 0, `wrapped labels: ${[...new Set(bad)].slice(0, 8).join(' | ')}`)
   })
 
   await check('No text node overflows its container horizontally', async () => {

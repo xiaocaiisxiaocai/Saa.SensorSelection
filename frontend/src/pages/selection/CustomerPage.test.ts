@@ -294,7 +294,7 @@ describe('CustomerPage', () => {
     await clickTab(wrapper, '厂外反馈问题项');
     const feedbackWidths = readWidths();
     expect(feedbackWidths['反馈时间']).toBe(120);
-    expect(feedbackWidths['处理状态']).toBe(90);
+    expect(feedbackWidths['处理状态']).toBe(112);
     expect(feedbackWidths['操作']).toBe(96);
     expect(feedbackWidths['改善对策']).toBe(205);
     expect(feedbackWidths['适用机型']).toBe(90);

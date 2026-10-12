@@ -86,7 +86,7 @@ const stepColumns = computed<TableColumnType[]>(() => {
       key: 'layer',
       dataIndex: 'layer',
       title: '制程',
-      width: 64,
+      width: 88,
       fixed: 'left',
       sorter: true,
       sortOrder: sortOrderOf(sort.value, 'layer'),

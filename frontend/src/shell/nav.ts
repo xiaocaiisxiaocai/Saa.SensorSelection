@@ -1,20 +1,6 @@
-import type { Component } from 'vue';
-import {
-  BookType,
-  Building2,
-  Cpu,
-  Factory,
-  ListFilter,
-  Network,
-  ScrollText,
-  ShieldCheck,
-  Users,
-} from 'lucide-vue-next';
-
 export type NavGroupId = 'selection' | 'system';
 
 export interface NavItem {
-  icon: Component;
   label: string;
   to: string;
   permissions?: string[];
@@ -30,11 +16,11 @@ export const selectionNav: NavGroup = {
   id: 'selection',
   label: '感应器选型',
   items: [
-    { to: '/selection/customer', label: '客户管理', icon: Building2 },
-    { to: '/selection/process', label: '制程管理', icon: Factory },
-    { to: '/selection/machine', label: '机型结构', icon: Cpu },
-    { to: '/selection/sensor', label: 'Sensor型号', icon: ListFilter },
-    { to: '/selection/dictionary', label: '数据字典', icon: BookType },
+    { to: '/selection/customer', label: '客户管理' },
+    { to: '/selection/process', label: '制程管理' },
+    { to: '/selection/machine', label: '机型结构' },
+    { to: '/selection/sensor', label: 'Sensor型号' },
+    { to: '/selection/dictionary', label: '数据字典' },
   ],
 };
 
@@ -45,25 +31,21 @@ export const systemNav: NavGroup = {
     {
       to: '/system/user',
       label: '用户管理',
-      icon: Users,
       permissions: ['rbac:view'],
     },
     {
       to: '/system/role',
       label: '角色管理',
-      icon: ShieldCheck,
       permissions: ['rbac:view'],
     },
     {
       to: '/system/org',
       label: '组织架构',
-      icon: Network,
       permissions: ['rbac:view'],
     },
     {
       to: '/system/audit-log',
       label: '操作日志',
-      icon: ScrollText,
       permissions: ['rbac:view', 'audit:view'],
     },
   ],

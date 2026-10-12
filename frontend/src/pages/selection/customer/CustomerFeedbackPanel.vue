@@ -115,7 +115,7 @@ const columns = computed<TableColumnType[]>(() => {
       key: 'status',
       dataIndex: 'status',
       title: '处理状态',
-      width: 90,
+      width: 112,
       sorter: sortBy('status'),
     },
     { key: 'history', dataIndex: 'history', title: '历史', width: 60 },

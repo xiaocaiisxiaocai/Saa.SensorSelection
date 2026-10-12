@@ -41,7 +41,7 @@ const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
       key: 'sort',
       dataIndex: 'sort',
       title: '排序',
-      width: 72,
+      width: 88,
       fixed: 'left',
       align: 'right',
       sorter: sortBy<DictionaryItem>('sort'),

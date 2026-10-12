@@ -33,9 +33,10 @@
 
 ## 布局
 
-- 外壳：`a-layout` + 暗色 `a-layout-sider`（可折叠，960px 以下改为 `a-drawer`）+ `a-layout-header` + `a-layout-content`。
+- 外壳：`a-layout` + 暗色 `a-layout-sider`（宽屏常驻、不可折叠，菜单项不带图标；960px 以下改为 `a-drawer`）+ `a-layout-header` + `a-layout-content`。
 - 业务页：白底圆角卡片 `.selection-page`；左侧目录树 + 右侧内容的页面用 `.selection-split`；
   表格占满剩余高度并在内部滚动，筛选栏与分页始终可见（见 `pages/shared/selection-page.css`）。
+- 表头不换行：列宽至少容得下标题文字 + 排序图标 + 左右 16px 内边距（两个汉字的可排序列 ≥ 88px）。
 - 弹窗表单：`a-modal` + `a-form layout="vertical"`，多列用 `a-row` / `a-col`（`:span="12"` 两列，`8` 三列，`24` 整行）。
 
 ## 状态色

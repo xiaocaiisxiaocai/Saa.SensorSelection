@@ -262,7 +262,7 @@ const columns = computed<Column[]>(() => {
           key: 'role',
           dataIndex: 'role',
           title: '功能作用',
-          width: 90,
+          width: 104,
           fixed: 'left',
           ...merged,
         },
@@ -291,7 +291,7 @@ const columns = computed<Column[]>(() => {
           key: 'sensorType',
           dataIndex: 'sensorType',
           title: '传感器类型',
-          width: 100,
+          width: 116,
         },
         { key: 'spec', dataIndex: 'spec', title: '规格', width: 220 },
         {

@@ -79,7 +79,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - `pages/system`：用户、角色、组织、操作日志系统管理页（`/system/user|role|org|audit-log`，各自对应下方权限码）。
 - 组件：业务页**直接使用 `a-*`**（`main.ts` 全局 `app.use(Antd)`）。`ui/` 只保留 antd 没有的两个组件：`APdfViewer`（pdf.js 预览）与 `AHighlightText`（搜索高亮），不要再新增 `A*` 包装组件。`App.vue` 的 `a-config-provider` 只设 zh_CN 与 `auto-insert-space-in-button=false`，**不传 `:theme`**；`Modal.confirm` 等静态 API 渲染在应用树外，`main.ts` 另用 `ConfigProvider.config` 关掉按钮插空格。用法与约定见 `frontend/docs/01-design-system.md`、`02-component-library.md`（`00` / `05` / `06` 是早期 Apple 方案的历史文档）。
 - `styles/tokens.css`：唯一允许写字面量颜色/字号/时长的地方，取值与 antd 默认主题一致、命名对应 antd token（`--color-primary`、`--color-text-secondary`、`--radius-md`…）；`tokens.test.ts` 用 `theme.defaultAlgorithm(theme.defaultSeed)` 逐项比对，并断言没有 Apple 式材质/发丝线/负字距、`ui/` 只含上述两个组件。**只有浅色模式**，`main.ts` 启动时清掉遗留的 `data-theme` 与 `apple-frontend:theme`。
-- `shell/AppShell.vue`：antd `a-layout`（暗色 `a-layout-sider` 可折叠，960px 以下导航改为 `a-drawer`；导航菜单在 `AppNav.vue`）+ 56px `a-layout-header`，无多标签页，⌘K / Ctrl+K 聚焦全局搜索。
+- `shell/AppShell.vue`：antd `a-layout`（宽屏常驻 200px 暗色 `a-layout-sider`，**不可折叠**；960px 以下导航改为 `a-drawer`；导航菜单在 `AppNav.vue`，菜单项**不带图标**）+ 56px `a-layout-header`，无多标签页，**不设全局搜索快捷键**。
 
 ### 后端（`backend/Saa.SensorSelection.Api`）
 
@@ -101,6 +101,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 - 未登录允许只读预览业务数据；写入需要 JWT 与 `selection:write`。页面用 `useAccess().canWrite()` **隐藏**写入入口，而不是禁用。
 - 操作按钮使用 Lucide 图标（放在 `a-button` 的 `#icon` 插槽）+ `a-tooltip` + `aria-label`；被禁用的操作保留按钮并 `disabled`，原因写进 tooltip。表格分页档位 20 / 50 / 100。
 - 表单：业务校验在领域层，**不用 antd 表单校验**——`a-form` 不传 `:model`、`a-form-item` 不写 `name`（否则 `required` 会触发 antd 自带校验）；标签关联用 `a-form-item html-for="x"` + 控件 `id="x"`，错误用 `v-bind="fieldError(msg)"`。
+- 表头、按钮、标签页、标签等短文字不能换行：列宽要容得下标题 + 排序图标（`test:ui` 在 1440/1024px 下逐页检查）。
 - 长文本截断用 CSS `text-overflow` + `title`，不要用 `a-typography` 的 `ellipsis`（会把 DOM 文字截短，影响读屏、页内查找和 e2e 定位）。
 - stylelint 禁止在 `tokens.css` 以外硬编码颜色、`font-size`、过渡/动画时长，一律用 `var(--*)`；class 选择器必须是 kebab-case（允许 BEM 的 `__` / `--`）。
 - 修改持久化、路由或搜索行为时，先扩展 `test:selection` 回归，再实现变更。

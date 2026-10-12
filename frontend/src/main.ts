@@ -13,6 +13,7 @@ import './styles/global.css';
 document.documentElement.removeAttribute('data-theme');
 try {
   localStorage.removeItem('apple-frontend:theme');
+  localStorage.removeItem('symtek:sidebar-collapsed');
 } catch {
   /* private browsing */
 }

@@ -10,8 +10,6 @@ import type { BackendSyncStatus } from '@/domain/types';
 import AppShell from './AppShell.vue';
 
 async function mountShell(backendStatus?: BackendSyncStatus) {
-  localStorage.removeItem('symtek:sidebar-collapsed');
-
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -50,7 +48,6 @@ async function mountShell(backendStatus?: BackendSyncStatus) {
 
 describe('AppShell', () => {
   afterEach(() => {
-    localStorage.removeItem('symtek:sidebar-collapsed');
     document.body.innerHTML = '';
   });
 
@@ -88,8 +85,7 @@ describe('AppShell', () => {
     wrapper.unmount();
   });
 
-  it('updates the desktop sidebar toggle label and expanded state', async () => {
-    // 宽屏桌面：两个断点都不命中（happy-dom 默认视口 1024px 会命中中等断点）
+  it('keeps the desktop sidebar fixed, without a collapse toggle or icons', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: false,
       media: query,
@@ -101,18 +97,31 @@ describe('AppShell', () => {
       removeListener: vi.fn(),
     }));
     const { wrapper } = await mountShell();
-    const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
+    const sider = wrapper.get('.app-shell__sider');
 
-    expect(toggle().attributes('aria-expanded')).toBe('true');
-    expect(toggle().attributes('aria-label')).toBe('折叠侧栏');
-
-    await toggle().trigger('click');
-
-    expect(toggle().attributes('aria-expanded')).toBe('false');
-    expect(toggle().attributes('aria-label')).toBe('展开侧栏');
-    expect(localStorage.getItem('symtek:sidebar-collapsed')).toBe('1');
+    expect(sider.classes()).not.toContain('ant-layout-sider-collapsed');
+    expect(wrapper.find('[aria-controls="app-sidebar"]').exists()).toBe(false);
+    expect(wrapper.find('.ant-layout-sider-trigger').exists()).toBe(false);
+    expect(sider.findAll('.ant-menu-item').length).toBeGreaterThan(0);
+    expect(sider.find('.ant-menu-item svg').exists()).toBe(false);
     wrapper.unmount();
     vi.unstubAllGlobals();
+  });
+
+  it('has no keyboard shortcut for global search', async () => {
+    const { wrapper } = await mountShell();
+    const input = document.getElementById('global-search-input');
+    const event = new KeyboardEvent('keydown', {
+      key: 'k',
+      ctrlKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe(input);
+    expect(wrapper.find('kbd').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it('uses an off-canvas navigation drawer on compact viewports', async () => {
@@ -160,71 +169,6 @@ describe('AppShell', () => {
     await nextTick();
     expect(toggle().attributes('aria-expanded')).toBe('false');
     wrapper.unmount();
-  });
-
-  it('collapses to an icon rail on medium viewports without overwriting the wide-screen preference', async () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query.includes('1200px'),
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: () => true,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    }));
-
-    const { wrapper } = await mountShell();
-    const toggle = () => wrapper.get('[aria-controls="app-sidebar"]');
-
-    const sider = () => wrapper.get('.app-shell__sider');
-    expect(sider().classes()).toContain('ant-layout-sider-collapsed');
-    expect(toggle().attributes('aria-expanded')).toBe('false');
-
-    await toggle().trigger('click');
-    expect(sider().classes()).not.toContain('ant-layout-sider-collapsed');
-    expect(toggle().attributes('aria-expanded')).toBe('true');
-    // 中等宽度下的临时展开不写回宽屏偏好
-    expect(localStorage.getItem('symtek:sidebar-collapsed')).toBeNull();
-
-    await toggle().trigger('click');
-    expect(sider().classes()).toContain('ant-layout-sider-collapsed');
-    wrapper.unmount();
-    vi.unstubAllGlobals();
-  });
-
-  it('focuses search only with the platform search shortcut', async () => {
-    const platform = vi.spyOn(navigator, 'platform', 'get');
-    platform.mockReturnValue('Win32');
-    const { wrapper } = await mountShell();
-    const input = document.getElementById('global-search-input');
-    const press = (init: KeyboardEventInit) => {
-      const event = new KeyboardEvent('keydown', {
-        key: 'k',
-        cancelable: true,
-        ...init,
-      });
-      window.dispatchEvent(event);
-      return event;
-    };
-
-    expect(press({ ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(
-      false,
-    );
-    expect(press({ metaKey: true }).defaultPrevented).toBe(false);
-    expect(document.activeElement).not.toBe(input);
-    expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(input);
-
-    // macOS 输入框里 Ctrl+K 是系统的「删除到行尾」，不能被抢走
-    (document.activeElement as HTMLElement).blur();
-    platform.mockReturnValue('MacIntel');
-    expect(press({ ctrlKey: true }).defaultPrevented).toBe(false);
-    expect(press({ metaKey: true }).defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(input);
-
-    wrapper.unmount();
-    platform.mockRestore();
   });
 
   it('keeps the page mounted while reconnecting after a successful first load', async () => {

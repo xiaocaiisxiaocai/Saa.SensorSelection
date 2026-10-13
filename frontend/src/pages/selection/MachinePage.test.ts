@@ -8,18 +8,17 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MACHINE_CONTENT_SECTION_ID } from '@/domain';
+import { MACHINE_CONTENT_SECTION_ID, MACHINE_TAB_PAGE_OWNER } from '@/domain';
 import { dialogs } from '@/pages/shared/confirm';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
   chooseSegment,
+  clickTreeNode,
   columnWidths,
   findButton,
   runTreeAction,
   tabCount,
-  toggleTreeCheck,
-  treeChecks,
   treeNodes,
 } from '@/test-helpers';
 import EntityTree from './EntityTree.vue';
@@ -37,6 +36,8 @@ const machineSectionPanelCss = readFileSync(
   'utf8',
 );
 
+const FIRST_PAGE = '入料输送（L-RACK）';
+
 async function mountPage(
   authenticated = false,
   writable = false,
@@ -51,7 +52,7 @@ async function mountPage(
   const pinia = createPinia();
   setActivePinia(pinia);
   const selectionStore = useSelectionStore();
-  // 结构目录有一个「输送机构」Tab，第一个机型已放在里面
+  // 结构目录有一个「输送机构」Tab，下面有一个二级 Tab
   const conveyor = selectionStore.saveMachineTab('mechanism', {
     kind: 'structure',
     name: '输送机构',
@@ -59,7 +60,7 @@ async function mountPage(
   });
   if (!conveyor.ok) throw new Error('tab fixture failed');
   expect(
-    selectionStore.placeMachineInTab('01 单段输送段（搭配）', conveyor.item.id)
+    selectionStore.saveMachineTabPage(conveyor.item.id, { name: FIRST_PAGE })
       .ok,
   ).toBe(true);
   if (authenticated) {
@@ -259,7 +260,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage();
     expect(wrapper.text()).not.toContain('生成并下载报告');
     expect(wrapper.text()).not.toContain('预览 / 打印 PDF');
-    expect(wrapper.text()).not.toContain('全选机型');
+    expect(wrapper.find('.machine-sub-tab .ant-checkbox').exists()).toBe(false);
     expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
     expect(wrapper.text()).toMatch(/输送机构|分类/);
     wrapper.unmount();
@@ -269,21 +270,21 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true);
     expect(wrapper.text()).toContain('生成并下载报告');
     expect(wrapper.text()).toContain('预览 / 打印 PDF');
-    expect(wrapper.text()).toContain('全选机型');
-    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(true);
-    expect(wrapper.text()).toMatch(/输送机构|分类/);
+    expect(findButton(wrapper, '全选')).toBeDefined();
+    // 报告勾的是二级 Tab，目录树不再有勾选框
+    expect(wrapper.find('.machine-sub-tab .ant-checkbox').exists()).toBe(true);
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('checks only the selected tree node when machine names are duplicated', async () => {
+  it('checks second-level tabs for the report and selects all of them', async () => {
     const wrapper = await mountPage(true);
-    const duplicates = treeNodes(wrapper, '01 中心拍板');
-    expect(duplicates.length).toBeGreaterThan(1);
-    await toggleTreeCheck(wrapper, '01 中心拍板', 0);
-
-    expect(treeChecks(wrapper, '01 中心拍板')).toEqual(
-      duplicates.map((_, index) => index === 0),
-    );
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
+    await wrapper.get('.machine-sub-tab input[type="checkbox"]').setValue(true);
+    expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+1/);
+    await findButton(wrapper, '清空')?.trigger('click');
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\//);
+    await findButton(wrapper, '全选')?.trigger('click');
     expect(wrapper.text()).toMatch(/已选\s+1\s+\//);
     wrapper.unmount();
   });
@@ -324,16 +325,16 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('explains why a selected machine with no rows or images cannot be reported', async () => {
+  it('explains why a selected page with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
-    await toggleTreeCheck(wrapper, '02 多段输送段（搭配）');
+    await wrapper.get('.machine-sub-tab input[type="checkbox"]').setValue(true);
 
     const openSpy = vi.spyOn(window, 'open');
     const warning = vi.spyOn(message, 'warning');
     await findButton(wrapper, '预览/打印PDF')?.trigger('click');
 
     expect(openSpy).not.toHaveBeenCalled();
-    expect(warning).toHaveBeenLastCalledWith('所选机型暂无可生成的内容');
+    expect(warning).toHaveBeenLastCalledWith('所选二级 Tab 暂无可生成的内容');
     wrapper.unmount();
   });
 
@@ -866,24 +867,23 @@ describe('MachinePage', () => {
 });
 
 describe('MachinePage machine tabs', () => {
-  const PLACED = '01 单段输送段（搭配）';
-  const LOOSE = '02 多段输送段（搭配）';
+  const TREE_MACHINE = '02 多段输送段（搭配）';
 
   afterEach(() => {
     message.destroy();
     vi.restoreAllMocks();
   });
 
-  const chipNames = (wrapper: VueWrapper) =>
-    wrapper.findAll('.machine-sub-tab__name').map((chip) => chip.text().trim());
+  const pageNames = (wrapper: VueWrapper) =>
+    wrapper.findAll('.machine-sub-tab__name').map((page) => page.text().trim());
 
-  async function runChipAction(
+  async function runPageAction(
     wrapper: VueWrapper,
     name: string,
     action: string,
   ) {
     await wrapper
-      .get(`button[aria-label="${name} 的更多操作"]`)
+      .get(`button[aria-label="二级 Tab ${name} 的更多操作"]`)
       .trigger('click');
     await flushPromises();
     const item = [
@@ -894,103 +894,141 @@ describe('MachinePage machine tabs', () => {
     await flushPromises();
   }
 
-  it('shows a placed machine only under its tab, with its own content', async () => {
-    const wrapper = await mountPage(true, true);
+  async function createPage(wrapper: VueWrapper, name: string) {
+    await wrapper.get('button[aria-label="新建二级 Tab"]').trigger('click');
     await flushPromises();
-    const tabId = useSelectionStore().machineTabs[0]!.id;
-
-    expect(treeNodes(wrapper, PLACED)).toHaveLength(0);
-    expect(treeNodes(wrapper, LOOSE).length).toBeGreaterThan(0);
-    expect(tabCount(wrapper, '输送机构')).toBe('1');
-    expect(chipNames(wrapper)).toEqual([PLACED]);
-    expect(wrapper.vm.$route.query).toMatchObject({
-      tab: String(tabId),
-      item: PLACED,
-    });
-    expect(
-      wrapper.getComponent(MachineSectionPanel).props('section'),
-    ).toMatchObject({ id: MACHINE_CONTENT_SECTION_ID, name: '输送机构' });
-    wrapper.unmount();
-  });
-
-  it('moves a tree machine into a tab from its menu and back from the tag menu', async () => {
-    const wrapper = await mountPage(true, true);
+    const input = document.querySelector<HTMLInputElement>(
+      '#machine-tab-page-name',
+    );
+    if (!input) throw new Error('page dialog not open');
+    input.value = name;
+    input.dispatchEvent(new Event('input'));
     await flushPromises();
-    const tabId = useSelectionStore().machineTabs[0]!.id;
-
-    await runTreeAction(wrapper, LOOSE, '移到 Tab…');
-    selectBy(wrapper, '选择 Tab')?.vm.$emit('update:value', tabId);
-    await flushPromises();
-    [...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.trim() === '移动')
+    [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
+      .find((button) => button.textContent?.trim() === '保存')
       ?.click();
     await flushPromises();
+  }
 
-    expect(treeNodes(wrapper, LOOSE)).toHaveLength(0);
-    expect(chipNames(wrapper)).toEqual([PLACED, LOOSE]);
-    expect(wrapper.vm.$route.query.item).toBe(LOOSE);
+  it('shows second-level tabs under the tab, each with its own content', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const tab = useSelectionStore().machineTabs[0]!;
 
-    await runChipAction(wrapper, LOOSE, '移回目录');
-    expect(chipNames(wrapper)).toEqual([PLACED]);
-    expect(treeNodes(wrapper, LOOSE).length).toBeGreaterThan(0);
+    expect(tabCount(wrapper, '输送机构')).toBe('1');
+    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
+    expect(wrapper.vm.$route.query).toMatchObject({
+      tab: String(tab.id),
+      page: String(tab.pages[0]!.id),
+    });
+    expect(wrapper.getComponent(MachineSectionPanel).props()).toMatchObject({
+      machineName: MACHINE_TAB_PAGE_OWNER,
+      section: { id: tab.pages[0]!.id, kind: 'structure' },
+    });
+    // 目录树和 Tab 互不相干：目录里的机型都还在，没有拖动
+    expect(treeNodes(wrapper, TREE_MACHINE).length).toBeGreaterThan(0);
+    expect(wrapper.find('[draggable="true"].machine-sub-tab').exists()).toBe(
+      false,
+    );
     wrapper.unmount();
   });
 
-  it('returns the machines of a deleted tab to the tree', async () => {
+  it('creates, reorders, renames and deletes second-level tabs', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
+    const store = useSelectionStore();
+
+    await createPage(wrapper, '出料确认');
+    expect(pageNames(wrapper)).toEqual([FIRST_PAGE, '出料确认']);
+    const created = store.machineTabs[0]!.pages[1]!;
+    expect(wrapper.vm.$route.query.page).toBe(String(created.id));
+
+    await runPageAction(wrapper, '出料确认', '左移');
+    expect(pageNames(wrapper)).toEqual(['出料确认', FIRST_PAGE]);
+
+    await runPageAction(wrapper, '出料确认', '改名');
+    const input = document.querySelector<HTMLInputElement>(
+      '#machine-tab-page-name',
+    )!;
+    expect(input.value).toBe('出料确认');
+    input.value = '出料确认（改）';
+    input.dispatchEvent(new Event('input'));
+    await flushPromises();
+    [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
+      .find((button) => button.textContent?.trim() === '保存')
+      ?.click();
+    await flushPromises();
+    expect(pageNames(wrapper)).toEqual(['出料确认（改）', FIRST_PAGE]);
+
     vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
+    await runPageAction(wrapper, '出料确认（改）', '删除');
+    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
+    wrapper.unmount();
+  });
+
+  it('allows the same page name under different tabs', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const store = useSelectionStore();
+    const lifter = store.saveMachineTab('mechanism', {
+      kind: 'structure',
+      name: '收板机构',
+    });
+    if (!lifter.ok) throw new Error('tab fixture failed');
+    expect(
+      store.saveMachineTabPage(lifter.item.id, { name: FIRST_PAGE }).ok,
+    ).toBe(true);
+    expect(
+      store.saveMachineTabPage(lifter.item.id, { name: FIRST_PAGE }),
+    ).toEqual({ ok: false, reason: 'duplicate' });
+    wrapper.unmount();
+  });
+
+  it('deletes a tab together with its second-level tabs', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
 
     await wrapper.get('.ant-tabs-tab-remove').trigger('click');
     await flushPromises();
 
+    expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个二级 Tab');
     expect(useSelectionStore().machineTabs).toEqual([]);
-    expect(treeNodes(wrapper, PLACED).length).toBeGreaterThan(0);
-    // 一个 Tab 都没有了：先引导新建 Tab（哪怕正选着目录树里的机型）
     expect(wrapper.text()).toContain('还没有 Tab');
     expect(findButton(wrapper, '新建Tab')).toBeDefined();
     wrapper.unmount();
   });
 
-  it('keeps tree reordering correct while some machines are hidden in tabs', async () => {
+  it('shows a tree machine with its own content, outside every tab', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
-    const store = useSelectionStore();
-    const itemsOf = () =>
-      store
-        .entityGroups('machine')
-        .find((group) => group.name === '输送机构')
-        ?.configurations?.find((item) => item.name === '标准输送段配置')?.items;
-    const before = itemsOf()!;
-    expect(before[0]).toBe(PLACED);
 
-    // 树里看到的是去掉 PLACED 后的列表：把第 1 个拖到第 2 个的位置
-    wrapper.getComponent(EntityTree).vm.$emit('reorderItems', {
-      category: '输送机构',
-      configuration: '标准输送段配置',
-      oldIndex: 0,
-      newIndex: 1,
+    await clickTreeNode(wrapper, TREE_MACHINE);
+
+    expect(wrapper.vm.$route.query.item).toBe(TREE_MACHINE);
+    expect(wrapper.vm.$route.query.tab).toBeUndefined();
+    expect(wrapper.get('.machine-tree-content__title').text()).toBe(
+      TREE_MACHINE,
+    );
+    expect(wrapper.getComponent(MachineSectionPanel).props()).toMatchObject({
+      machineName: TREE_MACHINE,
+      section: { id: MACHINE_CONTENT_SECTION_ID, kind: 'structure' },
     });
-    await flushPromises();
-
-    expect(itemsOf()).toEqual([
-      PLACED,
-      before[2],
-      before[1],
-      ...before.slice(3),
-    ]);
+    expect(wrapper.find('.machine-sub-tabs').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('offers no dragging or move menus to read-only users', async () => {
+  it('offers no page menus or 新建 to read-only users', async () => {
     const wrapper = await mountPage(true, false);
     await flushPromises();
 
-    expect(wrapper.get('.machine-sub-tab').attributes('draggable')).toBe('false');
+    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
     expect(
-      wrapper.find(`button[aria-label="${PLACED} 的更多操作"]`).exists(),
+      wrapper.find(`button[aria-label="二级 Tab ${FIRST_PAGE} 的更多操作"]`).exists(),
     ).toBe(false);
-    expect(wrapper.getComponent(EntityTree).props('externalDrag')).toBe(false);
+    expect(wrapper.find('button[aria-label="新建二级 Tab"]').exists()).toBe(
+      false,
+    );
     wrapper.unmount();
   });
 });

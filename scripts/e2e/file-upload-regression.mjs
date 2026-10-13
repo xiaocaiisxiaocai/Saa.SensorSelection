@@ -252,14 +252,14 @@ async function runMachineImage() {
   await saveSheet()
   await page.getByPlaceholder('搜索分类或机型…').fill(machine)
 
-  // 机型 Tab 是共用的：新建一个结构 Tab，再用机型的「移到 Tab…」把机型放进去
+  // 机型 Tab 是共用的：新建一个结构 Tab，再在它下面新建一个二级 Tab
   await page.locator('.machine-section-tabs .ant-tabs-nav-add:visible, button:has-text("新建 Tab")').first().click()
   await fillField(sheet(), 'Tab 名称', tab)
   await pickSelect(sheet(), 'Tab 类型', '结构')
   await saveSheet()
-  await treeAction(machine, '移到 Tab…')
-  await pickSelect(sheet(), '目标 Tab', tab)
-  await sheet().getByRole('button', { name: '移动', exact: true }).click()
+  await page.locator('button[aria-label="新建二级 Tab"], button:has-text("新建二级 Tab")').first().click()
+  await fillField(sheet(), '名称', machine)
+  await saveSheet()
   await page.locator('.machine-sub-tab', { hasText: machine }).first().waitFor({ state: 'visible' })
 
   await check('机型结构: image upload stays hidden until the Tab has content', async () => {
@@ -297,7 +297,7 @@ async function runMachineImage() {
   const contentRow = page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first()
   await contentRow.getByRole('button', { name: '删除', exact: true }).click()
   await confirmDelete()
-  // a-tabs editable-card 每个标签自带关闭按钮；删除 Tab 后机型回到目录树
+  // a-tabs editable-card 每个标签自带关闭按钮；删除 Tab 连同其下二级 Tab 一起删除
   await page.locator('.ant-tabs-tab', { hasText: tab }).locator('.ant-tabs-tab-remove').click()
   await confirmDelete()
   await page.getByPlaceholder('搜索分类或机型…').fill(machine)

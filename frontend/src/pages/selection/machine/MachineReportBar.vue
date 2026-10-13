@@ -9,24 +9,30 @@ import { useSelectionStore } from '@/stores/selection';
 import { buildReportSections, hasReportContent } from './machine-report';
 
 /**
- * 机型结构示意图报告：显示已勾选机型数，提供全选 / 清空、
+ * 机型结构示意图报告：显示已勾选的二级 Tab 数，提供全选 / 清空、
  * 后端生成下载和浏览器预览打印。勾选状态由父页面持有。
  */
 const props = defineProps<{
-  /** 左侧目录里勾选的机型名 */
-  machineNames: readonly string[];
-  /** 当前目录可勾选的机型总数 */
+  /** 勾选的二级 Tab id */
+  pageIds: readonly number[];
+  /** 当前目录可勾选的二级 Tab 总数 */
   availableCount: number;
 }>();
 const emit = defineEmits<{ selectAll: []; clear: [] }>();
 
 const store = useSelectionStore();
 const generating = ref(false);
-const noneSelected = computed(() => props.machineNames.length === 0);
-const NONE_SELECTED_HINT = '请先在左侧勾选至少一个机型';
+const noneSelected = computed(() => props.pageIds.length === 0);
+const NONE_SELECTED_HINT = '请先勾选至少一个二级 Tab';
 
 const reportSections = computed(() =>
-  buildReportSections(store, props.machineNames),
+  buildReportSections(store, props.pageIds),
+);
+// 报告抬头列出的名称：按报告里出现的顺序
+const pageNames = computed(() =>
+  reportSections.value.flatMap((section) =>
+    section.blocks.map((block) => block.machineName),
+  ),
 );
 
 function ready() {
@@ -35,7 +41,7 @@ function ready() {
     return false;
   }
   if (!hasReportContent(reportSections.value)) {
-    message.warning('所选机型暂无可生成的内容');
+    message.warning('所选二级 Tab 暂无可生成的内容');
     return false;
   }
   return true;
@@ -44,7 +50,7 @@ function ready() {
 function preview() {
   if (!ready()) return;
   const opened = openMachineSchematicReport(
-    [...props.machineNames],
+    pageNames.value,
     reportSections.value,
   );
   if (!opened) {
@@ -57,7 +63,7 @@ async function generate() {
   generating.value = true;
   try {
     const blob = await api.downloadMachineSchematicReport({
-      machineNames: [...props.machineNames],
+      machineNames: pageNames.value,
       sections: reportSections.value,
     });
     const url = URL.createObjectURL(blob);
@@ -82,10 +88,10 @@ async function generate() {
 <template>
   <div class="machine-report">
     <span class="selection-toolbar__count">
-      已选 {{ machineNames.length }} / {{ availableCount }} 个机型
+      已选 {{ pageIds.length }} / {{ availableCount }}
     </span>
     <a-button type="text" size="small" @click="emit('selectAll')">
-      全选机型
+      全选
     </a-button>
     <a-button
       type="text"

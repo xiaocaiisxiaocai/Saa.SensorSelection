@@ -7,8 +7,9 @@ import {
   buildSearchIndex,
   createSelectionRepository,
   CRUD_DEFAULTS,
-  listEntityGroupItems,
+  listEntityTreeItems,
   MACHINE_CONTENT_SECTION_ID,
+  MACHINE_TAB_PAGE_OWNER,
   SENSOR_DATA,
   type BackendSyncStatus,
   type CrudRecord,
@@ -21,6 +22,7 @@ import {
   type MachineSectionItem,
   type MachineSectionRow,
   type MachineTab,
+  type MachineTabPage,
   type ProcessStepItem,
   type SaveFailure,
   type SearchItem,
@@ -116,26 +118,47 @@ export const useSelectionStore = defineStore('selection', () => {
 
   function buildFullSearchIndex(): SearchItem[] {
     const machineGroups = repository.getEntityGroups('machine');
-    // 机型内容只有放进 Tab 的机型才看得到，所以只索引 Tab 里的机型
-    const groupOf = new Map(
-      machineGroups.flatMap((group) =>
-        listEntityGroupItems(group).map((name) => [name, group.name] as const),
-      ),
-    );
     const machineSectionHits: SearchItem[] = [];
+    // 目录树里机型自己的内容
+    for (const item of listEntityTreeItems(machineGroups)) {
+      for (const row of repository.getMachineSectionRows(
+        MACHINE_CONTENT_SECTION_ID,
+        item.name,
+      )) {
+        machineSectionHits.push({
+          type: 'machine',
+          title: row.sensorType || row.name || row.role,
+          category: item.category,
+          sub: [item.name, row.role].filter(Boolean).join(' · '),
+          path: '/selection/machine',
+          query: {
+            category: item.category,
+            ...(item.configuration
+              ? { configuration: item.configuration }
+              : {}),
+            item: item.name,
+          },
+        });
+      }
+    }
+    // Tab 下的二级 Tab
     for (const tab of repository.getMachineTabs()) {
-      for (const machineName of tab.machines) {
+      for (const page of tab.pages) {
         for (const row of repository.getMachineSectionRows(
-          MACHINE_CONTENT_SECTION_ID,
-          machineName,
+          page.id,
+          MACHINE_TAB_PAGE_OWNER,
         )) {
           machineSectionHits.push({
             type: 'machine',
             title: row.sensorType || row.name || row.role,
-            category: groupOf.get(machineName) ?? '',
-            sub: [tab.name, machineName, row.role].filter(Boolean).join(' · '),
+            category: tab.name,
+            sub: [tab.name, page.name, row.role].filter(Boolean).join(' · '),
             path: '/selection/machine',
-            query: { tab: String(tab.id), item: machineName },
+            query: {
+              ...(tab.catalog === 'project' ? { catalog: 'project' } : {}),
+              tab: String(tab.id),
+              page: String(page.id),
+            },
           });
         }
       }
@@ -501,14 +524,15 @@ export const useSelectionStore = defineStore('selection', () => {
       payload: Partial<Pick<MachineTab, 'kind' | 'name' | 'sort'>>,
       editId?: number,
     ) => mutate(() => repository.saveMachineTab(catalog, payload, editId)),
-    placeMachineInTab: (machineName: string, tabId: number, index?: number) =>
-      mutate(() => repository.placeMachineInTab(machineName, tabId, index)),
-    removeMachineFromTab: (machineName: string) =>
-      mutate(() => repository.removeMachineFromTab(machineName)),
-    moveMachineToCatalog: (
-      machineName: string,
-      target: { category: string; configuration: string | null; sort?: number },
-    ) => mutate(() => repository.moveMachineToCatalog(machineName, target)),
+    deleteMachineTabPage: (tabId: number, pageId: number) =>
+      mutate(() => repository.deleteMachineTabPage(tabId, pageId)),
+    moveMachineTabPage: (tabId: number, pageId: number, offset: -1 | 1) =>
+      mutate(() => repository.moveMachineTabPage(tabId, pageId, offset)),
+    saveMachineTabPage: (
+      tabId: number,
+      payload: Partial<Pick<MachineTabPage, 'name'>>,
+      editId?: number,
+    ) => mutate(() => repository.saveMachineTabPage(tabId, payload, editId)),
     machineTabs,
     saveGlobalMachineSection: (
       payload: Partial<MachineSectionItem>,

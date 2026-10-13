@@ -688,7 +688,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 `dictionaryCodeForList(listId)`：定义里 `listIds` 包含该 list **且** `(field \|\| 'type') === 'type'` 的 code。因此 `customer-req-source`（field=`source`）不会当 CRUD 的 type 字典。
 
-机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的容器。机型内容固定存在 `MACHINE_CONTENT_SECTION_ID`（1000）分区下：`placeMachineInTab` 只改 Tab 的 `machines`，不搬数据；有内容时不能换到类型不同的 Tab（`not-empty`）；只能放进同一目录的 Tab（`validation`）；`removeMachineFromTab` / `deleteMachineTab` 让机型回到目录树；`moveMachineToCatalog` 在一次提交里移出 Tab 并改到目录的指定分类 / 配置 / 位置。机型改名时 Tab 里的名字同步，删除时一并移出。
+机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的容器，和目录树里的机型无关。`saveMachineTab`：名称同一目录内不重复（`duplicate`），Tab 下的二级 Tab 有内容时不能换类型（`not-empty`）；`deleteMachineTab` 连同其下所有二级 Tab 的内容一起删除。二级 Tab：`saveMachineTabPage(tabId, { name }, editId?)` 新建（排在最后）或改名，名称同一 Tab 内不重复（`duplicate`），Tab 不存在为 `stale`；`moveMachineTabPage(tabId, pageId, -1 | 1)` 左移 / 右移，到头为 `validation`；`deleteMachineTabPage` 连同内容删除。二级 Tab 的内容走机型分区同一套读写函数：`sectionId` 传二级 Tab id，`machineName` 传 `MACHINE_TAB_PAGE_OWNER`（`@tab-page`），能否放示意图看所在 Tab 的类型；`MACHINE_CONTENT_SECTION_ID`（1000）分区是目录机型自己的内容，总是结构选型表。`getMachineTabs` 读到旧格式（`machines: 机型名[]`）时在内存里转成同名二级 Tab 并把机型 1000 分区的内容搬过去，随下一次写入提交。
 
 #### `getDictionaryItems(code)`
 

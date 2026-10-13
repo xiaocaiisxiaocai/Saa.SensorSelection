@@ -13,6 +13,7 @@ import type {
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
   MachineTab,
+  MachineTabPage,
   MachineSectionItem,
   MachineSectionRow,
   PersistedStore,
@@ -86,7 +87,7 @@ export function storedText(value: unknown): string {
     : '';
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -566,14 +567,15 @@ export function normalizeMachineSections(
 }
 
 /**
- * 机型 Tab：同一目录内名称不重复；一个机型只能在一个 Tab 里（先出现的为准），
- * 同一 Tab 内机型不重复。
+ * 机型 Tab：同一目录内名称不重复；二级 Tab（页）名称在同一 Tab 内不重复，
+ * 页 id 在所有 Tab 间唯一（内容按页 id 存放）。
  */
 export function normalizeMachineTabs(source: unknown): MachineTab[] {
   const usedIds = new Set<number>();
   const nextIdRef = { value: 1 };
+  const usedPageIds = new Set<number>();
+  const nextPageIdRef = { value: 1 };
   const seenNames = new Set<string>();
-  const placed = new Set<string>();
   const tabs: MachineTab[] = [];
   asList(source)
     .filter(isRecord)
@@ -585,12 +587,17 @@ export function normalizeMachineTabs(source: unknown): MachineTab[] {
       if (seenNames.has(nameKey)) return;
       seenNames.add(nameKey);
       const sort = Number(item.sort);
-      const machines: string[] = [];
-      for (const machine of asList(item.machines)) {
-        const machineName = storedText(machine).trim();
-        if (!machineName || placed.has(machineName)) continue;
-        placed.add(machineName);
-        machines.push(machineName);
+      const pageNames = new Set<string>();
+      const pages: MachineTabPage[] = [];
+      for (const page of asList(item.pages).filter(isRecord)) {
+        const pageName = storedText(page.name).trim().slice(0, 40);
+        const pageKey = pageName.toLocaleLowerCase('zh-CN');
+        if (!pageName || pageNames.has(pageKey)) continue;
+        pageNames.add(pageKey);
+        pages.push({
+          id: allocateId(page.id, usedPageIds, nextPageIdRef),
+          name: pageName,
+        });
       }
       tabs.push({
         id: allocateId(item.id, usedIds, nextIdRef),
@@ -598,7 +605,7 @@ export function normalizeMachineTabs(source: unknown): MachineTab[] {
         name,
         sort: Number.isFinite(sort) ? sort : index + 1,
         kind: item.kind === 'notes' ? 'notes' : 'structure',
-        machines,
+        pages,
       });
     });
   return tabs.sort(

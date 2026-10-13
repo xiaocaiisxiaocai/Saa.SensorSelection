@@ -1,145 +1,71 @@
 <script setup lang="ts">
-import { Ellipsis } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { Ellipsis, Plus } from 'lucide-vue-next';
 
-import type { MachineTab } from '@/domain';
-import {
-  dragCarries,
-  dropped,
-  startDrag,
-  TAB_MACHINE_DRAG,
-  TREE_ITEM_DRAG,
-} from '@/pages/selection/entity/entity-drag';
+import type { MachineTab, MachineTabPage } from '@/domain';
 
 /**
- * 一级 Tab 下的二级 Tab：每个机型一页，点它在下方显示该机型的内容。
- * 可写时：二级 Tab 可拖动（排序、拖到别的一级 Tab、拖回左侧目录），
- * 也接收从左侧目录拖来的机型；「…」菜单提供同样的操作，触屏也能用。
+ * 一级 Tab 下的二级 Tab：直接在这里新建，每页有自己的选型表和示意图（在下方渲染）。
+ * 可写时右侧有「新建」，每页的「…」菜单提供改名、左移、右移、删除。
  */
 const props = defineProps<{
   tab: MachineTab;
-  active: string;
+  activePageId: number | null;
   writable: boolean;
   /** 显示报告用的勾选框 */
   checkable: boolean;
-  checked: ReadonlySet<string>;
+  checked: ReadonlySet<number>;
 }>();
+
+type PageAction = 'delete' | 'left' | 'rename' | 'right';
+
 const emit = defineEmits<{
-  select: [name: string];
-  check: [name: string, checked: boolean];
-  action: [key: 'delete' | 'move' | 'rename' | 'return', name: string];
-  /** 机型放进这个 Tab 的第 index 位（不传为末尾） */
-  place: [name: string, index?: number];
+  select: [pageId: number];
+  check: [pageId: number, checked: boolean];
+  add: [];
+  action: [key: PageAction, page: MachineTabPage];
 }>();
 
-const MENU = [
-  { key: 'move', label: '移到其他 Tab…' },
-  { key: 'return', label: '移回目录' },
-  { key: 'rename', label: '改名' },
-  { key: 'delete', label: '删除', danger: true },
-] as const;
-
-const dropHint = ref<{ name: string; side: 'after' | 'before' } | null>(null);
-const rowHint = ref(false);
-
-const accepts = (event: DragEvent) =>
-  props.writable &&
-  (dragCarries(event, TREE_ITEM_DRAG) || dragCarries(event, TAB_MACHINE_DRAG));
-
-function draggedName(event: DragEvent) {
-  return (
-    dropped(event, TAB_MACHINE_DRAG) || dropped(event, TREE_ITEM_DRAG) || ''
-  );
-}
-
-function sideOf(event: DragEvent) {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  return event.clientX < box.left + box.width / 2 ? 'before' : 'after';
-}
-
-function onChipDragOver(event: DragEvent, name: string) {
-  if (!accepts(event)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  dropHint.value = { name, side: sideOf(event) };
-}
-
-function onChipDrop(event: DragEvent, target: string) {
-  if (!accepts(event)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const side = sideOf(event);
-  dropHint.value = null;
-  const name = draggedName(event);
-  if (!name || name === target) return;
-  // 位置按「去掉被拖的那个之后」的列表算
-  const others = props.tab.machines.filter((machine) => machine !== name);
-  const index = others.indexOf(target) + (side === 'after' ? 1 : 0);
-  emit('place', name, index);
-}
-
-function onRowDragOver(event: DragEvent) {
-  if (!accepts(event)) return;
-  event.preventDefault();
-  rowHint.value = true;
-}
-
-function onRowDrop(event: DragEvent) {
-  if (!accepts(event)) return;
-  event.preventDefault();
-  rowHint.value = false;
-  const name = draggedName(event);
-  if (name) emit('place', name);
+function menuFor(index: number) {
+  return [
+    { key: 'rename', label: '改名' },
+    { key: 'left', label: '左移', disabled: index === 0 },
+    {
+      key: 'right',
+      label: '右移',
+      disabled: index === props.tab.pages.length - 1,
+    },
+    { key: 'delete', label: '删除', danger: true },
+  ];
 }
 </script>
 
 <template>
-  <!-- 一级 Tab（如「输送机构」）下面的二级 Tab：每个机型一页 -->
-  <div
-    class="machine-tab-members"
-    :class="{ 'machine-tab-members--drop': rowHint }"
-    :aria-label="`${tab.name} 下的机型`"
-    @dragover="onRowDragOver"
-    @dragleave.self="rowHint = false"
-    @drop="onRowDrop"
-  >
+  <!-- 一级 Tab（如「输送机构」）下面的二级 Tab -->
+  <div class="machine-tab-pages" :aria-label="`${tab.name} 下的二级 Tab`">
     <a-tabs
-      v-if="tab.machines.length"
+      v-if="tab.pages.length"
       class="machine-sub-tabs"
       size="small"
-      :active-key="active"
-      @change="emit('select', String($event))"
+      :active-key="activePageId === null ? undefined : String(activePageId)"
+      @change="emit('select', Number($event))"
     >
-      <a-tab-pane v-for="name in tab.machines" :key="name">
+      <a-tab-pane v-for="(page, index) in tab.pages" :key="String(page.id)">
         <template #tab>
-          <span
-            class="machine-sub-tab"
-            :class="{
-              'machine-sub-tab--drop-before':
-                dropHint?.name === name && dropHint.side === 'before',
-              'machine-sub-tab--drop-after':
-                dropHint?.name === name && dropHint.side === 'after',
-            }"
-            :draggable="writable"
-            @dragstart="startDrag($event, TAB_MACHINE_DRAG, name)"
-            @dragover="onChipDragOver($event, name)"
-            @dragleave="dropHint = null"
-            @drop="onChipDrop($event, name)"
-          >
+          <span class="machine-sub-tab">
             <a-checkbox
               v-if="checkable"
-              :checked="checked.has(name)"
-              :aria-label="`报告中包含 ${name}`"
+              :checked="checked.has(page.id)"
+              :aria-label="`报告中包含 ${page.name}`"
               @click.stop
-              @change="emit('check', name, $event.target.checked)"
+              @change="emit('check', page.id, $event.target.checked)"
             />
-            <span class="machine-sub-tab__name">{{ name }}</span>
+            <span class="machine-sub-tab__name">{{ page.name }}</span>
             <a-dropdown v-if="writable" :trigger="['click']">
               <a-button
                 class="machine-sub-tab__more"
                 type="text"
                 size="small"
-                :aria-label="`${name} 的更多操作`"
+                :aria-label="`二级 Tab ${page.name} 的更多操作`"
                 @click.stop
               >
                 <template #icon><Ellipsis :size="14" /></template>
@@ -148,13 +74,14 @@ function onRowDrop(event: DragEvent) {
                 <a-menu
                   @click="
                     ({ key }: { key: string | number }) =>
-                      emit('action', key as (typeof MENU)[number]['key'], name)
+                      emit('action', key as PageAction, page)
                   "
                 >
                   <a-menu-item
-                    v-for="item in MENU"
+                    v-for="item in menuFor(index)"
                     :key="item.key"
-                    :danger="'danger' in item"
+                    :disabled="item.disabled"
+                    :danger="item.danger"
                   >
                     {{ item.label }}
                   </a-menu-item>
@@ -164,15 +91,29 @@ function onRowDrop(event: DragEvent) {
           </span>
         </template>
       </a-tab-pane>
+      <template v-if="writable" #rightExtra>
+        <a-tooltip title="新建二级 Tab">
+          <a-button
+            type="text"
+            size="small"
+            aria-label="新建二级 Tab"
+            @click="emit('add')"
+          >
+            <template #icon><Plus :size="14" /></template>
+            新建
+          </a-button>
+        </a-tooltip>
+      </template>
     </a-tabs>
-    <span v-else class="machine-tab-members__empty">
-      {{
-        writable
-          ? '把左侧目录里的机型拖到上方的 Tab 上，或拖到这里；也可以在机型的「…」菜单里选「移到 Tab…」'
-          : '这个 Tab 下还没有机型'
-      }}
-    </span>
+    <a-empty v-else class="machine-tab-pages__empty">
+      <template #description>
+        「{{ tab.name }}」下还没有二级 Tab
+      </template>
+      <template v-if="writable" #default>
+        <a-button type="primary" @click="emit('add')">新建二级 Tab</a-button>
+      </template>
+    </a-empty>
   </div>
 </template>
 
-<style scoped src="./MachineTabMembers.css"></style>
+<style scoped src="./MachineTabPages.css"></style>

@@ -163,17 +163,23 @@ export type MachineSectionKind = 'notes' | 'structure';
 
 /**
  * 机型页顶部的 Tab：按目录（结构 / 专案机型）共用的一组容器。
- * 机型放进 Tab 后只在 Tab 下显示（目录树里隐藏），一个机型只在一个 Tab 里。
+ * Tab 下直接新建二级 Tab（页），和左侧目录里的机型无关。
  */
 export interface MachineTab {
   id: number;
   catalog: MachineCatalogKind;
   name: string;
   sort: number;
-  /** 决定 Tab 下机型内容的格式：结构选型表或注意事项表 */
+  /** 决定 Tab 下各页内容的格式：结构选型表或注意事项表 */
   kind: MachineSectionKind;
-  /** 放在这个 Tab 下的机型名，按显示顺序 */
-  machines: string[];
+  /** 二级 Tab，按显示顺序 */
+  pages: MachineTabPage[];
+}
+
+/** 二级 Tab：名称只在所属 Tab 内不重复；id 在所有 Tab 间唯一，内容按 id 存放 */
+export interface MachineTabPage {
+  id: number;
+  name: string;
 }
 
 export interface MachineSectionItem {

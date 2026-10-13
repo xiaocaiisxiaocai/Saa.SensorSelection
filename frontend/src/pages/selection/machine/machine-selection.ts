@@ -6,6 +6,7 @@ import {
   type EntityGroup,
   type MachineCatalogKind,
   type MachineTab,
+  type MachineTabPage,
 } from '@/domain';
 
 type Query = Record<string, unknown>;
@@ -75,17 +76,17 @@ export function resolveMachineSelection(
 }
 
 export interface MachineTabSelection {
-  /** 当前显示的 Tab；当前目录还没有 Tab 时为 null */
+  /** 当前显示的 Tab；选中目录机型或当前目录还没有 Tab 时为 null */
   tab: MachineTab | null;
-  /** Tab 下选中的机型；Tab 是空的时为空串 */
-  machine: string;
-  /** 选中的是还在目录树里（没放进 Tab）的机型 */
+  /** Tab 下选中的二级 Tab；Tab 还没有二级 Tab 时为 null */
+  page: MachineTabPage | null;
+  /** 选中的是左侧目录里的机型（看它自己的内容） */
   treeMachine: string;
 }
 
 /**
- * 地址栏 ?tab=&item= 指向的 Tab 和机型：机型在某个 Tab 里就显示那个 Tab；
- * 机型还在目录树里就记为 treeMachine；否则按 ?tab= 或第一个 Tab，选它的第一个机型。
+ * 地址栏指向的位置：?item= 是当前目录里的机型就看它自己的内容；
+ * 否则按 ?tab=（找不到用第一个 Tab）和 ?page=（找不到用它的第一个二级 Tab）。
  */
 export function resolveTabSelection(
   tabs: readonly MachineTab[],
@@ -93,17 +94,24 @@ export function resolveTabSelection(
   query: Query,
 ): MachineTabSelection {
   const item = text(query.item);
-  const tabOfItem = item
-    ? tabs.find((tab) => tab.machines.includes(item))
-    : undefined;
-  if (tabOfItem) return { tab: tabOfItem, machine: item, treeMachine: '' };
   if (item && catalogMachines.has(item)) {
-    return { tab: null, machine: '', treeMachine: item };
+    return { tab: null, page: null, treeMachine: item };
   }
-  const requested = text(query.tab);
   const tab =
-    tabs.find((candidate) => String(candidate.id) === requested) ??
+    tabs.find((candidate) => String(candidate.id) === text(query.tab)) ??
     tabs[0] ??
     null;
-  return { tab, machine: tab?.machines[0] ?? '', treeMachine: '' };
+  const page =
+    tab?.pages.find((candidate) => String(candidate.id) === text(query.page)) ??
+    tab?.pages[0] ??
+    null;
+  return { tab, page, treeMachine: '' };
+}
+
+/** 二级 Tab 所在的 Tab */
+export function tabOfPage(
+  tabs: readonly MachineTab[],
+  pageId: number,
+): MachineTab | null {
+  return tabs.find((tab) => tab.pages.some((page) => page.id === pageId)) ?? null;
 }

@@ -1,17 +1,8 @@
-.machine-tab-members {
+.machine-tab-pages {
   flex-shrink: 0;
-  min-height: var(--control-height);
-  border: 1px dashed transparent;
-  border-radius: var(--radius-md);
 }
 
-/* 拖着机型经过时，整条二级 Tab 栏都是落点 */
-.machine-tab-members--drop {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-
-/* 二级 Tab 只当标题栏用：机型内容在下面单独渲染 */
+/* 二级 Tab 只当标题栏用：页内容在下面单独渲染 */
 .machine-sub-tabs :deep(.ant-tabs-nav) {
   margin-bottom: 0;
 }
@@ -26,20 +17,6 @@
   align-items: center;
 }
 
-.machine-sub-tab[draggable='true'] {
-  cursor: grab;
-}
-
-.machine-sub-tab--drop-before {
-  box-shadow: -3px 0 0 var(--color-primary);
-}
-
-.machine-sub-tab--drop-after {
-  box-shadow: 3px 0 0 var(--color-primary);
-}
-
-.machine-tab-members__empty {
-  display: block;
+.machine-tab-pages__empty {
   padding: var(--space-3);
-  color: var(--color-text-tertiary);
 }

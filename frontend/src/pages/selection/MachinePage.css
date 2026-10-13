@@ -28,14 +28,7 @@
   align-items: center;
 }
 
-/* 拖着机型经过某个 Tab 标题时提示可以放下 */
-.machine-section-tabs__label--drop {
-  border-radius: var(--radius-sm);
-  outline: 1px dashed var(--color-primary);
-  outline-offset: var(--space-1);
-}
-
-/* Tab 只当标题栏用：内容（机型标签 + 选型表）在下面单独渲染 */
+/* Tab 只当标题栏用：内容（二级 Tab + 选型表）在下面单独渲染 */
 .machine-section-tabs {
   flex-shrink: 0;
 }
@@ -46,6 +39,13 @@
 
 .machine-section-tabs :deep(.ant-tabs-content-holder) {
   display: none;
+}
+
+/* 看目录机型时，选型表上方显示机型名 */
+.machine-tree-content__title {
+  flex-shrink: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 @media (width <= 60rem) {

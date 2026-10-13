@@ -1,31 +1,25 @@
-import {
-  MACHINE_CONTENT_SECTION_ID,
-  type MachineReportSection,
-} from '@/domain';
+import { MACHINE_TAB_PAGE_OWNER, type MachineReportSection } from '@/domain';
 import type { useSelectionStore } from '@/stores/selection';
 
 type SelectionStore = ReturnType<typeof useSelectionStore>;
 
 /**
- * 示意图报告的分区：每个 Tab 一节，节里按 Tab 内的顺序列出所选机型的
- * 选型记录、示意图和用到的 Sensor。还没放进 Tab 的机型没有内容，不出现在报告里。
+ * 示意图报告的分区：每个 Tab 一节，节里按 Tab 内的顺序列出所勾选二级 Tab 的
+ * 选型记录、示意图和用到的 Sensor。
  */
 export function buildReportSections(
   store: SelectionStore,
-  machineNames: readonly string[],
+  pageIds: readonly number[],
 ): MachineReportSection[] {
-  const selected = new Set(machineNames);
+  const selected = new Set(pageIds);
   return store.machineTabs.flatMap((tab) => {
     const structure = tab.kind === 'structure';
-    const blocks = tab.machines
-      .filter((machineName) => selected.has(machineName))
-      .map((machineName) => {
-        const rows = store.machineSectionRows(
-          MACHINE_CONTENT_SECTION_ID,
-          machineName,
-        );
+    const blocks = tab.pages
+      .filter((page) => selected.has(page.id))
+      .map((page) => {
+        const rows = store.machineSectionRows(page.id, MACHINE_TAB_PAGE_OWNER);
         return {
-          machineName,
+          machineName: page.name,
           rows: rows.map((row) => {
             const processStep = store.processSteps.find(
               (item) => item.id === row.processStepId,
@@ -38,10 +32,7 @@ export function buildReportSections(
             };
           }),
           images: structure
-            ? store.machineSectionImages(
-                MACHINE_CONTENT_SECTION_ID,
-                machineName,
-              )
+            ? store.machineSectionImages(page.id, MACHINE_TAB_PAGE_OWNER)
             : [],
           sensors: structure
             ? store.sensors.filter((sensor) =>

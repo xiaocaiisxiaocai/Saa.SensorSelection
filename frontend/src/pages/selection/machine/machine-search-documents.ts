@@ -1,8 +1,4 @@
-import {
-  listEntityTreeItems,
-  MACHINE_CONTENT_SECTION_ID,
-  type EntityGroup,
-} from '@/domain';
+import { MACHINE_TAB_PAGE_OWNER } from '@/domain';
 import type { useSelectionStore } from '@/stores/selection';
 
 import type { MachineStructureSearchDocument } from './machine-structure-search';
@@ -10,14 +6,13 @@ import type { MachineStructureSearchDocument } from './machine-structure-search'
 type SelectionStore = ReturnType<typeof useSelectionStore>;
 
 /**
- * 「条件查找」的索引：遍历结构目录里结构类 Tab 下每个机型的每一行选型，
+ * 「条件查找」的索引：遍历结构目录里结构类 Tab 下每个二级 Tab 的每一行选型，
  * 把机型型号 / 工序 / 板件特性的名称和 Sensor 文字摊平成一条文档。
- * 还没放进 Tab 的机型看不到内容，不进索引。
+ * 文档的 sectionId 是二级 Tab 的 id，category / sectionName 是所属 Tab 名。
  * 调用方应包在 store.batchRead 里，让归一化结果在一次构建内只算一次。
  */
 export function buildMachineSearchDocuments(
   store: SelectionStore,
-  groups: readonly EntityGroup[],
 ): MachineStructureSearchDocument[] {
   const documents: MachineStructureSearchDocument[] = [];
   const machineModelById = new Map(
@@ -34,19 +29,14 @@ export function buildMachineSearchDocuments(
   const sensorById = new Map(
     store.sensors.map((sensor) => [sensor.id, sensor]),
   );
-  const treeItemByName = new Map(
-    listEntityTreeItems([...groups]).map((item) => [item.name, item]),
-  );
   const tabs = store.machineTabs.filter(
     (tab) => tab.catalog === 'mechanism' && tab.kind === 'structure',
   );
   for (const tab of tabs) {
-    for (const machineName of tab.machines) {
-      const treeItem = treeItemByName.get(machineName);
-      if (!treeItem) continue;
+    for (const page of tab.pages) {
       for (const row of store.machineSectionRows(
-        MACHINE_CONTENT_SECTION_ID,
-        machineName,
+        page.id,
+        MACHINE_TAB_PAGE_OWNER,
       )) {
         const machineModel =
           row.machineModelId == null
@@ -66,11 +56,11 @@ export function buildMachineSearchDocuments(
         documents.push({
           boardCharacteristicId: row.boardCharacteristicId,
           boardCharacteristicName: boardCharacteristic?.name ?? '',
-          category: treeItem.category,
-          configuration: treeItem.configuration ?? '',
+          category: tab.name,
+          configuration: '',
           machineModelId: row.machineModelId,
           machineModelName: machineModel?.name ?? '',
-          machineName,
+          machineName: page.name,
           processStepId: row.processStepId,
           processStepName: processStep
             ? `${processStep.layer} · ${processStep.name}`
@@ -89,8 +79,8 @@ export function buildMachineSearchDocuments(
           ]
             .filter(Boolean)
             .join(' '),
-          // 结果按「Tab + 机型」聚合，点开时跳到这个 Tab
-          sectionId: tab.id,
+          // 结果按二级 Tab 聚合，点开时跳到它
+          sectionId: page.id,
           sectionName: tab.name,
         });
       }

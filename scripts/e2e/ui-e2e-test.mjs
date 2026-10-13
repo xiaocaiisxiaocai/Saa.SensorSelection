@@ -873,10 +873,9 @@ async function runMachineCrud() {
     await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
   })
 
-  // 机型 Tab 是结构目录共用的容器：新建两个 Tab，把机型从目录拖进去
-  const tabLabel = (name) => page.locator('.machine-section-tabs__label', { hasText: name }).first()
-  const treeMachine = () => page.locator(`.entity-tree__node[data-item="${NAMES.machine}"]`).first()
-  const machineChip = () => page.locator('.machine-sub-tab', { hasText: NAMES.machine }).first()
+  // 机型 Tab 是结构目录共用的容器：新建两个 Tab，再在 Tab 下直接新建二级 Tab
+  const subTab = (name) => page.locator('.machine-sub-tab', { hasText: name }).first()
+  const PAGE_NAME = `${TAG}页`
 
   async function addTab(name, kind) {
     // antd 会在溢出菜单里另渲染一个隐藏的「+」，只点看得见的那个
@@ -888,6 +887,20 @@ async function runMachineCrud() {
     await expectToast('Tab 已新增')
   }
 
+  async function addPage(name) {
+    await page.locator('button[aria-label="新建二级 Tab"], button:has-text("新建二级 Tab")').first().click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '名称', name)
+    await saveSheet()
+    await expectToast('二级 Tab 已新建')
+    await subTab(name).waitFor({ state: 'visible', timeout: 8000 })
+  }
+
+  async function pageAction(name, action) {
+    await page.getByRole('button', { name: `二级 Tab ${name} 的更多操作`, exact: true }).click()
+    await page.getByRole('menuitem', { name: action, exact: true }).click()
+  }
+
   await check('Machine: create shared structure and notes tabs', async () => {
     await addTab(`${TAG}机构`, '结构')
     await addTab(`${TAG}注意事项`, '机型注意事项')
@@ -895,15 +908,17 @@ async function runMachineCrud() {
     assert(await page.getByRole('tab', { name: new RegExp(`^${TAG}注意事项`) }).isVisible(), 'notes tab missing')
   })
 
-  await check('Machine: drag a machine from the tree onto a tab', async () => {
-    await treeMachine().dragTo(tabLabel(`${TAG}注意事项`))
-    await settle()
-    await machineChip().waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await treeMachine().count(), 0, 'machine still shown in the tree')
-    assert(decodeURIComponent(page.url()).includes(`item=${NAMES.machine}`), 'placed machine is not selected')
+  await check('Machine: create a second-level tab directly under a tab', async () => {
+    // 新建的 Tab 已经选中，还没有二级 Tab
+    await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}注意事项` }).waitFor({ state: 'visible', timeout: 8000 })
+    await page.getByText(`「${TAG}注意事项」下还没有二级 Tab`).waitFor({ state: 'visible', timeout: 8000 })
+    await addPage(PAGE_NAME)
+    assert(page.url().includes('page='), 'new second-level tab is not selected')
+    // 目录里的机型不受影响，也没有拖放
+    assertEqual(await page.locator('.machine-sub-tab[draggable="true"]').count(), 0, 'second-level tab is draggable')
   })
 
-  // 注意事项 Tab 下机型的内容是纯文本事项；结构 Tab 另外要求关联传感器。
+  // 注意事项 Tab 下的内容是纯文本事项；结构 Tab 另外要求关联传感器。
   await check('Machine: create, edit and delete a 注意事项 row', async () => {
     await page.getByRole('button', { name: '新增事项', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
@@ -933,11 +948,11 @@ async function runMachineCrud() {
     )
   })
 
-  await check('Machine: drag the machine tag onto another tab', async () => {
-    await machineChip().dragTo(tabLabel(`${TAG}机构`))
-    await settle()
+  await check('Machine: the same second-level tab name works under another tab', async () => {
+    await page.getByRole('tab', { name: new RegExp(`^${TAG}机构`) }).click()
     await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}机构` }).waitFor({ state: 'visible', timeout: 8000 })
-    await machineChip().waitFor({ state: 'visible', timeout: 8000 })
+    await addPage(PAGE_NAME)
+    await addPage(`${TAG}页二`)
   })
 
   await check('Machine: a structure row requires an associated sensor', async () => {
@@ -950,18 +965,42 @@ async function runMachineCrud() {
   })
 
   await check('Machine: the report toolbar exposes selection and export actions', async () => {
-    for (const label of ['全选机型', '清空']) {
+    for (const label of ['全选', '清空']) {
       assert(await page.getByRole('button', { name: label, exact: true }).isVisible(), `missing ${label}`)
     }
+    assert(await subTab(PAGE_NAME).locator('.ant-checkbox').isVisible(), 'second-level tab has no report checkbox')
   })
 
-  await check('Machine: drag the machine tag back into the tree', async () => {
-    await machineChip().dragTo(
-      page.locator(`.entity-tree__node[data-node-kind="group"][data-category="${NAMES.machineCategory}"]`).first(),
+  await check('Machine: reorder, rename and delete a second-level tab', async () => {
+    const names = () => page.locator('.machine-sub-tab__name').allInnerTexts()
+    await pageAction(`${TAG}页二`, '左移')
+    await page.waitForFunction(
+      ([first]) => document.querySelector('.machine-sub-tab__name')?.textContent?.trim() === first,
+      [`${TAG}页二`],
+      { timeout: 8000 },
     )
-    await expectToast('已移回目录')
-    await treeMachine().waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await machineChip().count(), 0, 'machine tag still shown in the tab')
+    await pageAction(`${TAG}页二`, '改名')
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '名称', `${TAG}页三`)
+    await saveSheet()
+    await expectToast('已改名')
+    await subTab(`${TAG}页三`).waitFor({ state: 'visible', timeout: 8000 })
+    await pageAction(`${TAG}页三`, '删除')
+    await confirmDelete()
+    await expectToast('已删除')
+    await page.waitForFunction(
+      (name) => !Array.from(document.querySelectorAll('.machine-sub-tab__name')).some((el) => el.textContent?.trim() === name),
+      `${TAG}页三`,
+      { timeout: 8000 },
+    )
+    assert((await names()).includes(PAGE_NAME), 'remaining second-level tab missing')
+  })
+
+  await check('Machine: a tree machine shows its own content outside the tabs', async () => {
+    await page.locator(`.entity-tree__node[data-node-kind="item"][data-item="${NAMES.machine}"]`).first().click()
+    await page.locator('.machine-tree-content__title', { hasText: NAMES.machine }).waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await page.locator('.machine-section-tabs .ant-tabs-tab-active').count(), 0, 'a tab is still active')
+    assert(await page.getByRole('button', { name: '新增选型', exact: true }).first().isVisible(), 'tree machine has no content table')
   })
 }
 
@@ -1695,6 +1734,15 @@ async function deleteMachineTabs(token) {
   if (next.length === current.data.length) return
   const res = await api('PUT', storeRoute(key), token, next)
   if (res.status !== 200) throw new Error(`failed to prune machine tabs: ${res.status}`)
+  // 删掉的 Tab 下二级 Tab 的内容
+  const pageIds = current.data
+    .filter((tab) => String(tab.name).startsWith(TAG))
+    .flatMap((tab) => (tab.pages ?? []).map((page) => page.id))
+  for (const id of pageIds) {
+    for (const prefix of ['machine-section-rows', 'machine-section-images']) {
+      await api('DELETE', storeRoute(`${prefix}:${id}:@tab-page`), token)
+    }
+  }
 }
 
 async function cleanupStoreKeys(token) {

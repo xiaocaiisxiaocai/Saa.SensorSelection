@@ -12,8 +12,8 @@ import {
 } from '@/pages/selection/entity/entity-drag';
 
 /**
- * Tab 下的机型：一行机型标签，点标签在下方显示它的内容。
- * 可写时：标签可拖动（排序、拖到别的 Tab、拖回左侧目录），
+ * 一级 Tab 下的二级 Tab：每个机型一页，点它在下方显示该机型的内容。
+ * 可写时：二级 Tab 可拖动（排序、拖到别的一级 Tab、拖回左侧目录），
  * 也接收从左侧目录拖来的机型；「…」菜单提供同样的操作，触屏也能用。
  */
 const props = defineProps<{
@@ -94,78 +94,81 @@ function onRowDrop(event: DragEvent) {
 </script>
 
 <template>
+  <!-- 一级 Tab（如「输送机构」）下面的二级 Tab：每个机型一页 -->
   <div
     class="machine-tab-members"
     :class="{ 'machine-tab-members--drop': rowHint }"
-    role="list"
     :aria-label="`${tab.name} 下的机型`"
     @dragover="onRowDragOver"
     @dragleave.self="rowHint = false"
     @drop="onRowDrop"
   >
-    <div
-      v-for="name in tab.machines"
-      :key="name"
-      class="machine-chip"
-      :class="{
-        'machine-chip--active': name === active,
-        'machine-chip--drop-before':
-          dropHint?.name === name && dropHint.side === 'before',
-        'machine-chip--drop-after':
-          dropHint?.name === name && dropHint.side === 'after',
-      }"
-      role="listitem"
-      :draggable="writable"
-      @dragstart="startDrag($event, TAB_MACHINE_DRAG, name)"
-      @dragover="onChipDragOver($event, name)"
-      @dragleave="dropHint = null"
-      @drop="onChipDrop($event, name)"
+    <a-tabs
+      v-if="tab.machines.length"
+      class="machine-sub-tabs"
+      size="small"
+      :active-key="active"
+      @change="emit('select', String($event))"
     >
-      <a-checkbox
-        v-if="checkable"
-        :checked="checked.has(name)"
-        :aria-label="`报告中包含 ${name}`"
-        @change="emit('check', name, $event.target.checked)"
-      />
-      <button
-        type="button"
-        class="machine-chip__name"
-        :aria-current="name === active ? 'true' : undefined"
-        @click="emit('select', name)"
-      >
-        {{ name }}
-      </button>
-      <a-dropdown v-if="writable" :trigger="['click']">
-        <a-button
-          class="machine-chip__more"
-          type="text"
-          size="small"
-          :aria-label="`${name} 的更多操作`"
-        >
-          <template #icon><Ellipsis :size="14" /></template>
-        </a-button>
-        <template #overlay>
-          <a-menu
-            @click="
-              ({ key }: { key: string | number }) =>
-                emit('action', key as (typeof MENU)[number]['key'], name)
-            "
+      <a-tab-pane v-for="name in tab.machines" :key="name">
+        <template #tab>
+          <span
+            class="machine-sub-tab"
+            :class="{
+              'machine-sub-tab--drop-before':
+                dropHint?.name === name && dropHint.side === 'before',
+              'machine-sub-tab--drop-after':
+                dropHint?.name === name && dropHint.side === 'after',
+            }"
+            :draggable="writable"
+            @dragstart="startDrag($event, TAB_MACHINE_DRAG, name)"
+            @dragover="onChipDragOver($event, name)"
+            @dragleave="dropHint = null"
+            @drop="onChipDrop($event, name)"
           >
-            <a-menu-item
-              v-for="item in MENU"
-              :key="item.key"
-              :danger="'danger' in item"
-            >
-              {{ item.label }}
-            </a-menu-item>
-          </a-menu>
+            <a-checkbox
+              v-if="checkable"
+              :checked="checked.has(name)"
+              :aria-label="`报告中包含 ${name}`"
+              @click.stop
+              @change="emit('check', name, $event.target.checked)"
+            />
+            <span class="machine-sub-tab__name">{{ name }}</span>
+            <a-dropdown v-if="writable" :trigger="['click']">
+              <a-button
+                class="machine-sub-tab__more"
+                type="text"
+                size="small"
+                :aria-label="`${name} 的更多操作`"
+                @click.stop
+              >
+                <template #icon><Ellipsis :size="14" /></template>
+              </a-button>
+              <template #overlay>
+                <a-menu
+                  @click="
+                    ({ key }: { key: string | number }) =>
+                      emit('action', key as (typeof MENU)[number]['key'], name)
+                  "
+                >
+                  <a-menu-item
+                    v-for="item in MENU"
+                    :key="item.key"
+                    :danger="'danger' in item"
+                  >
+                    {{ item.label }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </span>
         </template>
-      </a-dropdown>
-    </div>
-    <span v-if="tab.machines.length === 0" class="machine-tab-members__empty">
+      </a-tab-pane>
+    </a-tabs>
+    <span v-else class="machine-tab-members__empty">
       {{
         writable
-          ? '把左侧目录里的机型拖到这里，或在机型的「…」菜单里选「移到 Tab…」'
+          ? '把左侧目录里的机型拖到上方的 Tab 上，或拖到这里；也可以在机型的「…」菜单里选「移到 Tab…」'
           : '这个 Tab 下还没有机型'
       }}
     </span>

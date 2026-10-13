@@ -875,7 +875,7 @@ describe('MachinePage machine tabs', () => {
   });
 
   const chipNames = (wrapper: VueWrapper) =>
-    wrapper.findAll('.machine-chip__name').map((chip) => chip.text().trim());
+    wrapper.findAll('.machine-sub-tab__name').map((chip) => chip.text().trim());
 
   async function runChipAction(
     wrapper: VueWrapper,
@@ -986,7 +986,7 @@ describe('MachinePage machine tabs', () => {
     const wrapper = await mountPage(true, false);
     await flushPromises();
 
-    expect(wrapper.get('.machine-chip').attributes('draggable')).toBe('false');
+    expect(wrapper.get('.machine-sub-tab').attributes('draggable')).toBe('false');
     expect(
       wrapper.find(`button[aria-label="${PLACED} 的更多操作"]`).exists(),
     ).toBe(false);

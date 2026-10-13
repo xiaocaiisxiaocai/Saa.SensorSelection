@@ -253,14 +253,14 @@ async function runMachineImage() {
   await page.getByPlaceholder('搜索分类或机型…').fill(machine)
 
   // 机型 Tab 是共用的：新建一个结构 Tab，再用机型的「移到 Tab…」把机型放进去
-  await page.locator('.ant-tabs-nav-add, button:has-text("新建 Tab")').first().click()
+  await page.locator('.machine-section-tabs .ant-tabs-nav-add:visible, button:has-text("新建 Tab")').first().click()
   await fillField(sheet(), 'Tab 名称', tab)
   await pickSelect(sheet(), 'Tab 类型', '结构')
   await saveSheet()
   await treeAction(machine, '移到 Tab…')
   await pickSelect(sheet(), '目标 Tab', tab)
   await sheet().getByRole('button', { name: '移动', exact: true }).click()
-  await page.locator('.machine-chip', { hasText: machine }).first().waitFor({ state: 'visible' })
+  await page.locator('.machine-sub-tab', { hasText: machine }).first().waitFor({ state: 'visible' })
 
   await check('机型结构: image upload stays hidden until the Tab has content', async () => {
     assert((await page.locator('.machine-images .ant-upload-drag').count()) === 0, 'image upload is visible before the Tab has content')

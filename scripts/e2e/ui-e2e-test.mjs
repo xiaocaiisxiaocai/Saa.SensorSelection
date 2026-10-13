@@ -876,10 +876,11 @@ async function runMachineCrud() {
   // 机型 Tab 是结构目录共用的容器：新建两个 Tab，把机型从目录拖进去
   const tabLabel = (name) => page.locator('.machine-section-tabs__label', { hasText: name }).first()
   const treeMachine = () => page.locator(`.entity-tree__node[data-item="${NAMES.machine}"]`).first()
-  const machineChip = () => page.locator('.machine-chip', { hasText: NAMES.machine }).first()
+  const machineChip = () => page.locator('.machine-sub-tab', { hasText: NAMES.machine }).first()
 
   async function addTab(name, kind) {
-    await page.locator('.ant-tabs-nav-add, button:has-text("新建 Tab")').first().click()
+    // antd 会在溢出菜单里另渲染一个隐藏的「+」，只点看得见的那个
+    await page.locator('.machine-section-tabs .ant-tabs-nav-add:visible, button:has-text("新建 Tab")').first().click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), 'Tab 名称', name)
     await pickSelect(sheet(), 'Tab 类型', kind)
@@ -1412,9 +1413,9 @@ async function runUiAudit() {
         await settle()
         // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
         const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
-        const tabCount = Math.max(1, await tabs.count())
-        for (let i = 0; i < tabCount; i++) {
-          if ((await tabs.count()) > 0) {
+        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab（机型）的数量会变
+        for (let i = 0; i < Math.max(1, await tabs.count()) && i < 40; i++) {
+          if (i < (await tabs.count())) {
             await tabs.nth(i).locator('[role="tab"]').dispatchEvent('click')
             await settle()
           }
@@ -1479,9 +1480,9 @@ async function runUiAudit() {
         await settle()
         // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
         const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
-        const tabCount = Math.max(1, await tabs.count())
-        for (let i = 0; i < tabCount; i++) {
-          if ((await tabs.count()) > 0) {
+        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab（机型）的数量会变
+        for (let i = 0; i < Math.max(1, await tabs.count()) && i < 40; i++) {
+          if (i < (await tabs.count())) {
             // 窄屏下放不下的标签会收进 antd 的「…」菜单，直接派发点击，不走真实指针
             await tabs.nth(i).locator('[role="tab"]').dispatchEvent('click')
             await settle()

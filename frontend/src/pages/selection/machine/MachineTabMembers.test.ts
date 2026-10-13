@@ -57,7 +57,7 @@ const AFTER = 1;
 describe('MachineTabMembers', () => {
   it('reorders inside the tab by dropping before or after another tag', async () => {
     const wrapper = mountMembers();
-    const chips = wrapper.findAll('.machine-chip');
+    const chips = wrapper.findAll('.machine-sub-tab');
     chips[0]!.element.dispatchEvent(
       dragEvent('drop', { [TAB_MACHINE_DRAG]: 'C' }, BEFORE),
     );
@@ -74,7 +74,7 @@ describe('MachineTabMembers', () => {
   it('accepts machines dragged from the tree, on a tag or on the empty row', async () => {
     const wrapper = mountMembers();
     wrapper
-      .findAll('.machine-chip')[2]!
+      .findAll('.machine-sub-tab')[2]!
       .element.dispatchEvent(
         dragEvent('drop', { [TREE_ITEM_DRAG]: '新机型' }, BEFORE),
       );
@@ -90,7 +90,7 @@ describe('MachineTabMembers', () => {
       .get('.machine-tab-members')
       .element.dispatchEvent(dragEvent('drop', { [TREE_ITEM_DRAG]: 'X' }));
     expect(readOnly.emitted('place')).toBeUndefined();
-    expect(readOnly.get('.machine-chip').attributes('draggable')).toBe('false');
+    expect(readOnly.get('.machine-sub-tab').attributes('draggable')).toBe('false');
 
     const writable = mountMembers();
     writable

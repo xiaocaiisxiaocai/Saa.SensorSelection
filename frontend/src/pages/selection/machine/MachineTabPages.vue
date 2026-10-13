@@ -4,11 +4,16 @@ import { Ellipsis, Plus } from 'lucide-vue-next';
 import type { MachineTab, MachineTabPage } from '@/domain';
 
 /**
- * 一级 Tab 下的二级 Tab：直接在这里新建，每页有自己的选型表和示意图（在下方渲染）。
- * 可写时右侧有「新建」，每页的「…」菜单提供改名、左移、右移、删除。
+ * 选中选单节点在当前一级 Tab 下的二级 Tab：直接在这里新建，每页有自己的
+ * 选型表和示意图（在下方渲染）。可写时右侧有「新建」，每页的「…」菜单提供
+ * 改名、左移、右移、删除。
  */
 const props = defineProps<{
   tab: MachineTab;
+  /** 选中节点在这个 Tab 下的二级 Tab */
+  pages: readonly MachineTabPage[];
+  /** 选中节点的显示名 */
+  nodeName: string;
   activePageId: number | null;
   writable: boolean;
   /** 显示报告用的勾选框 */
@@ -32,7 +37,7 @@ function menuFor(index: number) {
     {
       key: 'right',
       label: '右移',
-      disabled: index === props.tab.pages.length - 1,
+      disabled: index === props.pages.length - 1,
     },
     { key: 'delete', label: '删除', danger: true },
   ];
@@ -41,15 +46,18 @@ function menuFor(index: number) {
 
 <template>
   <!-- 一级 Tab（如「输送机构」）下面的二级 Tab -->
-  <div class="machine-tab-pages" :aria-label="`${tab.name} 下的二级 Tab`">
+  <div
+    class="machine-tab-pages"
+    :aria-label="`${nodeName} 在 ${tab.name} 下的二级 Tab`"
+  >
     <a-tabs
-      v-if="tab.pages.length"
+      v-if="pages.length"
       class="machine-sub-tabs"
       size="small"
       :active-key="activePageId === null ? undefined : String(activePageId)"
       @change="emit('select', Number($event))"
     >
-      <a-tab-pane v-for="(page, index) in tab.pages" :key="String(page.id)">
+      <a-tab-pane v-for="(page, index) in pages" :key="String(page.id)">
         <template #tab>
           <span class="machine-sub-tab">
             <a-checkbox
@@ -107,7 +115,7 @@ function menuFor(index: number) {
     </a-tabs>
     <a-empty v-else class="machine-tab-pages__empty">
       <template #description>
-        「{{ tab.name }}」下还没有二级 Tab
+        「{{ nodeName }}」在「{{ tab.name }}」下还没有二级 Tab
       </template>
       <template v-if="writable" #default>
         <a-button type="primary" @click="emit('add')">新建二级 Tab</a-button>

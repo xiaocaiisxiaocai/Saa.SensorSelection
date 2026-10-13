@@ -688,7 +688,14 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 `dictionaryCodeForList(listId)`：定义里 `listIds` 包含该 list **且** `(field \|\| 'type') === 'type'` 的 code。因此 `customer-req-source`（field=`source`）不会当 CRUD 的 type 字典。
 
-机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的容器，和目录树里的机型无关。`saveMachineTab`：名称同一目录内不重复（`duplicate`），Tab 下的二级 Tab 有内容时不能换类型（`not-empty`）；`deleteMachineTab` 连同其下所有二级 Tab 的内容一起删除。二级 Tab：`saveMachineTabPage(tabId, { name }, editId?)` 新建（排在最后）或改名，名称同一 Tab 内不重复（`duplicate`），Tab 不存在为 `stale`；`moveMachineTabPage(tabId, pageId, -1 | 1)` 左移 / 右移，到头为 `validation`；`deleteMachineTabPage` 连同内容删除。二级 Tab 的内容走机型分区同一套读写函数：`sectionId` 传二级 Tab id，`machineName` 传 `MACHINE_TAB_PAGE_OWNER`（`@tab-page`），能否放示意图看所在 Tab 的类型；`MACHINE_CONTENT_SECTION_ID`（1000）分区是目录机型自己的内容，总是结构选型表。`getMachineTabs` 读到旧格式（`machines: 机型名[]`）时在内存里转成同名二级 Tab 并把机型 1000 分区的内容搬过去，随下一次写入提交。
+机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的一级 Tab。`saveMachineTab`：名称同一目录内不重复（`duplicate`），Tab 下的二级 Tab 有内容时不能换类型（`not-empty`）；`deleteMachineTab` 连同其下所有节点的二级 Tab 和内容一起删除。
+
+二级 Tab 属于「选单节点 × 一级 Tab」（`page.node = { category, configuration, item }`）。**选单节点的下一层只能二选一**：
+- `saveMachineTabPage(tabId, { name, node }, editId?)` 新建（排在最后）或改名（改名时 node 不变）。节点不存在 / Tab 不存在为 `stale`；节点不属于 Tab 的目录为 `validation`；节点下已有子选单为 `not-empty`；名称在同一 Tab、同一节点内不重复（`duplicate`）。
+- `moveMachineTabPage(tabId, pageId, -1 | 1)` 在同一节点的二级 Tab 之间左移 / 右移，到头为 `validation`；`deleteMachineTabPage` 连同内容删除。
+- 节点有二级 Tab 时：`saveMachineConfiguration` 新建配置、`saveEntityItem` 把机型新建或移到它下面都返回 `not-empty`（机型留在原处改名不算）；`deleteEntityGroup` / `deleteMachineConfiguration` / `deleteEntityItem` 也返回 `not-empty`。分类 / 配置改名、机型改名或移动时，二级 Tab 的 node 跟着更新。
+
+二级 Tab 的内容走机型分区同一套读写函数：`sectionId` 传二级 Tab id，`machineName` 传 `MACHINE_TAB_PAGE_OWNER`（`@tab-page`），能否放示意图看所在 Tab 的类型。`getMachineTabs` 读到旧格式（`machines: 机型名[]`）时在内存里转成同名二级 Tab、挂到同名机型节点下，并把机型 1000 分区的内容搬过去，随下一次写入提交。
 
 #### `getDictionaryItems(code)`
 

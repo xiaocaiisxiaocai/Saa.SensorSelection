@@ -13,6 +13,7 @@ import type {
   FeedbackMeasureHistoryEntry,
   MachineRowImage,
   MachineTab,
+  MachineNodeRef,
   MachineTabPage,
   MachineSectionItem,
   MachineSectionRow,
@@ -566,8 +567,18 @@ export function normalizeMachineSections(
   return unique;
 }
 
+/** 选单节点引用；category 为空表示还没归属到节点（旧数据） */
+export function normalizeMachineNodeRef(source: unknown): MachineNodeRef {
+  const record = isRecord(source) ? source : {};
+  const text = (value: unknown) => storedText(value).trim().slice(0, 40);
+  const category = text(record.category);
+  const configuration = text(record.configuration) || null;
+  const item = text(record.item) || null;
+  return { category, configuration, item };
+}
+
 /**
- * 机型 Tab：同一目录内名称不重复；二级 Tab（页）名称在同一 Tab 内不重复，
+ * 机型 Tab：同一目录内名称不重复；二级 Tab（页）名称在同一 Tab、同一节点内不重复，
  * 页 id 在所有 Tab 间唯一（内容按页 id 存放）。
  */
 export function normalizeMachineTabs(source: unknown): MachineTab[] {
@@ -591,12 +602,19 @@ export function normalizeMachineTabs(source: unknown): MachineTab[] {
       const pages: MachineTabPage[] = [];
       for (const page of asList(item.pages).filter(isRecord)) {
         const pageName = storedText(page.name).trim().slice(0, 40);
-        const pageKey = pageName.toLocaleLowerCase('zh-CN');
+        const node = normalizeMachineNodeRef(page.node);
+        const pageKey = JSON.stringify([
+          node.category,
+          node.configuration,
+          node.item,
+          pageName.toLocaleLowerCase('zh-CN'),
+        ]);
         if (!pageName || pageNames.has(pageKey)) continue;
         pageNames.add(pageKey);
         pages.push({
           id: allocateId(page.id, usedPageIds, nextPageIdRef),
           name: pageName,
+          node,
         });
       }
       tabs.push({

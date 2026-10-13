@@ -164,6 +164,7 @@ function save() {
     notifyResult(result, previous ? `${item}已更新` : `${item}已新增`, {
       duplicate: `该${item}已存在`,
       'in-use': `请先清空该${item}下的业务数据`,
+      'not-empty': `所选位置已有二级 Tab，不能再添加${item}`,
     })
   ) {
     visible.value = false;

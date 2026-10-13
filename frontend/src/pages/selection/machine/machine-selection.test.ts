@@ -55,7 +55,9 @@ describe('machine-selection', () => {
     });
   });
 
-  it('resolves the tab and page from ?tab=&page=, or a tree machine from ?item=', () => {
+  it('resolves the tab and the page of the selected node from ?tab=&page=', () => {
+    const leaf = { category: '01 输送', configuration: '配置A', item: '双段' };
+    const other = { category: '01 输送', configuration: null, item: '单段' };
     const tabs: MachineTab[] = [
       {
         id: 1,
@@ -64,8 +66,9 @@ describe('machine-selection', () => {
         sort: 1,
         kind: 'structure',
         pages: [
-          { id: 11, name: '入料（L-RACK）' },
-          { id: 12, name: '出料' },
+          { id: 11, name: '入料（L-RACK）', node: leaf },
+          { id: 12, name: '出料', node: leaf },
+          { id: 13, name: '别的节点', node: other },
         ],
       },
       {
@@ -74,47 +77,24 @@ describe('machine-selection', () => {
         name: '收板',
         sort: 2,
         kind: 'structure',
-        pages: [{ id: 21, name: '入料（L-RACK）' }],
-      },
-      {
-        id: 3,
-        catalog: 'mechanism',
-        name: '空',
-        sort: 3,
-        kind: 'notes',
-        pages: [],
+        pages: [{ id: 21, name: '入料（L-RACK）', node: leaf }],
       },
     ];
-    const catalog = new Set(['单段', '双段']);
-    expect(resolveTabSelection(tabs, catalog, { tab: '2', page: '21' })).toEqual(
-      { tab: tabs[1], page: tabs[1]!.pages[0], treeMachine: '' },
+    expect(resolveTabSelection(tabs, leaf, { tab: '2', page: '21' })).toEqual({
+      tab: tabs[1],
+      page: tabs[1]!.pages[0],
+    });
+    // 页不属于这个 Tab / 这个节点：用该节点在这个 Tab 下的第一页
+    expect(resolveTabSelection(tabs, leaf, { tab: '1', page: '13' }).page).toEqual(
+      tabs[0]!.pages[0],
     );
-    // 页不在这个 Tab 里：用这个 Tab 的第一页
-    expect(
-      resolveTabSelection(tabs, catalog, { tab: '1', page: '21' }).page,
-    ).toEqual(tabs[0]!.pages[0]);
-    // 目录里的机型看它自己的内容
-    expect(resolveTabSelection(tabs, catalog, { item: '双段' })).toEqual({
-      tab: null,
+    expect(resolveTabSelection(tabs, other, {}).page).toEqual(tabs[0]!.pages[2]);
+    // 这个节点在收板下没有页
+    expect(resolveTabSelection(tabs, other, { tab: '2' })).toEqual({
+      tab: tabs[1],
       page: null,
-      treeMachine: '双段',
     });
-    // 什么都没指定：第一个 Tab 的第一页；空 Tab 没有页
-    expect(resolveTabSelection(tabs, catalog, {})).toEqual({
-      tab: tabs[0],
-      page: tabs[0]!.pages[0],
-      treeMachine: '',
-    });
-    expect(resolveTabSelection(tabs, catalog, { tab: '3' })).toEqual({
-      tab: tabs[2],
-      page: null,
-      treeMachine: '',
-    });
-    expect(resolveTabSelection([], catalog, {})).toEqual({
-      tab: null,
-      page: null,
-      treeMachine: '',
-    });
+    expect(resolveTabSelection([], leaf, {})).toEqual({ tab: null, page: null });
     expect(tabOfPage(tabs, 21)).toBe(tabs[1]);
     expect(tabOfPage(tabs, 99)).toBeNull();
   });

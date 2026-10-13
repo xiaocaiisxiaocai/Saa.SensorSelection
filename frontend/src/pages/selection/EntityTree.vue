@@ -38,8 +38,17 @@ const props = withDefaults(
     allowConfigurations?: boolean;
     groupLabel: string;
     itemLabel: string;
+    /** 没有子节点的分组 / 配置也能选中（机型选单的末级节点） */
+    selectableBranches?: boolean;
+    /**
+     * 不能再加子节点的分组 / 配置的 key（机型：已有二级 Tab），
+     * 它们「更多」菜单里的新建项禁用，原因写在菜单文字里
+     */
+    lockedBranches?: ReadonlySet<string>;
   }>(),
   {
+    selectableBranches: false,
+    lockedBranches: () => new Set<string>(),
     editable: false,
     sortable: false,
     allowConfigurations: false,
@@ -80,7 +89,9 @@ const canSort = computed(
   () => props.sortable && props.editable && keyword.value === '',
 );
 
-const treeData = computed(() => buildEntityTree(props.groups, keyword.value));
+const treeData = computed(() =>
+  buildEntityTree(props.groups, keyword.value, props.selectableBranches),
+);
 
 // 默认全部展开；之后新增的分组/配置也自动展开，用户手动收起的保持收起。
 const expandedKeys = ref<string[]>(branchKeys(treeData.value));
@@ -131,7 +142,7 @@ const nodeOf = (node: unknown) =>
 
 const onSelect: TreeProps['onSelect'] = (_keys, info) => {
   const node = nodeOf(info.node);
-  if (node.kind === 'item') emit('select', payloadOf(node));
+  if (node.kind === 'item' || node.selectable) emit('select', payloadOf(node));
 };
 
 const onCheck: TreeProps['onCheck'] = (_keys, info) => {
@@ -175,7 +186,17 @@ interface MenuAction {
   key: string;
   label: string;
   danger?: boolean;
+  disabled?: boolean;
   run: () => void;
+}
+
+const LOCKED_SUFFIX = '（已有二级 Tab）';
+
+/** 已有二级 Tab 的节点：新建子节点的菜单项禁用 */
+function lockCreate(node: EntityNode, action: MenuAction): MenuAction {
+  return props.lockedBranches.has(node.key)
+    ? { ...action, label: action.label + LOCKED_SUFFIX, disabled: true }
+    : action;
 }
 
 function actionsFor(node: EntityNode): MenuAction[] {
@@ -183,19 +204,19 @@ function actionsFor(node: EntityNode): MenuAction[] {
     return [
       ...(props.allowConfigurations
         ? [
-            {
+            lockCreate(node, {
               key: 'create-configuration',
               label: '新建配置',
               run: () => emit('createConfiguration', node.category),
-            },
+            }),
           ]
         : []),
-      {
+      lockCreate(node, {
         key: 'create-item',
         label: `新建${props.itemLabel}`,
         run: () =>
           emit('createItem', { category: node.category, configuration: null }),
-      },
+      }),
       {
         key: 'edit',
         label: `编辑${props.groupLabel}`,
@@ -215,7 +236,7 @@ function actionsFor(node: EntityNode): MenuAction[] {
       configuration: node.configuration ?? '',
     };
     return [
-      {
+      lockCreate(node, {
         key: 'create-item',
         label: `新建${props.itemLabel}`,
         run: () =>
@@ -223,7 +244,7 @@ function actionsFor(node: EntityNode): MenuAction[] {
             category: node.category,
             configuration: node.configuration,
           }),
-      },
+      }),
       {
         key: 'edit',
         label: '编辑配置',
@@ -253,9 +274,8 @@ function actionsFor(node: EntityNode): MenuAction[] {
 }
 
 function runAction(node: EntityNode, key: string) {
-  actionsFor(node)
-    .find((action) => action.key === key)
-    ?.run();
+  const action = actionsFor(node).find((candidate) => candidate.key === key);
+  if (action && !action.disabled) action.run();
 }
 </script>
 

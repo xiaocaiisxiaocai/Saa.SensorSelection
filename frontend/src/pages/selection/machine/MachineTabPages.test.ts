@@ -5,6 +5,8 @@ import type { MachineTab } from '@/domain';
 
 import MachineTabPages from './MachineTabPages.vue';
 
+const node = { category: '输送机构', configuration: '空配置', item: null };
+
 const tab: MachineTab = {
   id: 7,
   catalog: 'mechanism',
@@ -12,8 +14,8 @@ const tab: MachineTab = {
   sort: 1,
   kind: 'structure',
   pages: [
-    { id: 1, name: 'A' },
-    { id: 2, name: 'B' },
+    { id: 1, name: 'A', node },
+    { id: 2, name: 'B', node },
   ],
 };
 
@@ -21,6 +23,8 @@ function mountPages(props: Partial<{ tab: MachineTab; writable: boolean }>) {
   return mount(MachineTabPages, {
     props: {
       tab,
+      pages: (props.tab ?? tab).pages,
+      nodeName: '空配置',
       activePageId: 1,
       writable: true,
       checkable: false,
@@ -50,7 +54,7 @@ describe('MachineTabPages', () => {
 
   it('asks to create the first page when the tab is empty', async () => {
     const wrapper = mountPages({ tab: { ...tab, pages: [] } });
-    expect(wrapper.text()).toContain('「输送机构」下还没有二级 Tab');
+    expect(wrapper.text()).toContain('「空配置」在「输送机构」下还没有二级 Tab');
     await wrapper.get('.machine-tab-pages__empty button').trigger('click');
     expect(wrapper.emitted('add')).toEqual([[]]);
   });

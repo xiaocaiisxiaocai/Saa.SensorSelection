@@ -1,6 +1,8 @@
 import { MACHINE_TAB_PAGE_OWNER, type MachineReportSection } from '@/domain';
 import type { useSelectionStore } from '@/stores/selection';
 
+import { nodeLabel } from './machine-nodes';
+
 type SelectionStore = ReturnType<typeof useSelectionStore>;
 
 /**
@@ -19,7 +21,8 @@ export function buildReportSections(
       .map((page) => {
         const rows = store.machineSectionRows(page.id, MACHINE_TAB_PAGE_OWNER);
         return {
-          machineName: page.name,
+          // 报告里写明是哪个选单节点下的二级 Tab
+          machineName: `${nodeLabel(page.node)} / ${page.name}`,
           rows: rows.map((row) => {
             const processStep = store.processSteps.find(
               (item) => item.id === row.processStepId,

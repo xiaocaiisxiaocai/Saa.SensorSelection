@@ -4,12 +4,10 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
-  entityTreeItemKey,
   filterMachineGroups,
-  listEntityTreeItems,
-  MACHINE_CONTENT_SECTION_ID,
   MACHINE_TAB_PAGE_OWNER,
   type MachineCatalogKind,
+  type MachineNodeRef,
   type MachineSectionItem,
   type MachineTabPage,
 } from '@/domain';
@@ -22,10 +20,17 @@ import MachineTabDialog from '@/pages/selection/machine/MachineTabDialog.vue';
 import MachineTabPageDialog from '@/pages/selection/machine/MachineTabPageDialog.vue';
 import MachineTabPages from '@/pages/selection/machine/MachineTabPages.vue';
 import {
+  lockedBranchKeys,
+  nodeFromQuery,
+  nodeHasChildren,
+  nodeLabel,
+  nodeTreeKey,
+  pagesOf,
+} from '@/pages/selection/machine/machine-nodes';
+import {
   machineCatalogFromQuery,
   resolveMachineSelection,
   resolveTabSelection,
-  tabOfPage,
 } from '@/pages/selection/machine/machine-selection';
 import { buildMachineSearchDocuments } from '@/pages/selection/machine/machine-search-documents';
 import type { MachineStructureSearchResult } from '@/pages/selection/machine/machine-structure-search';
@@ -37,10 +42,10 @@ import { useSelectionStore } from '@/stores/selection';
 import '../shared/selection-page.css';
 
 /*
- * 机型结构页。顶部 Tab 是当前目录（结构 / 专案机型）共用的容器，Tab 下直接新建
- * 二级 Tab，每个二级 Tab 有自己的选型表和示意图。左侧目录和 Tab 互不相干：
- * 点目录里的机型看它自己的内容。
- * 地址栏：?catalog=&view=&tab=&page=&focusRow=；看目录机型时是 ?category=&configuration=&item=。
+ * 机型结构页。左侧选单（分类 → 配置 → 机型）选中一个末级节点，右侧显示
+ * 当前目录（结构 / 专案机型）共用的一级 Tab，以及这个节点在该 Tab 下的二级 Tab。
+ * 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单。
+ * 地址栏：?catalog=&view=&category=&configuration=&item=&tab=&page=&focusRow=。
  */
 const route = useRoute();
 const router = useRouter();
@@ -65,37 +70,45 @@ const activeMachineView = computed<'browse' | 'find'>(() =>
 const catalogGroups = computed(() =>
   filterMachineGroups(groups.value, activeMachineType.value),
 );
-const catalogMachineNames = computed(
-  () =>
-    new Set(listEntityTreeItems(catalogGroups.value).map((item) => item.name)),
+
+/** 选中的选单节点：地址栏指定的，没有就退回第一个机型；目录为空时为 null */
+const node = computed<MachineNodeRef | null>(() => {
+  const requested = nodeFromQuery(catalogGroups.value, route.query);
+  if (requested) return requested;
+  const fallback = resolveMachineSelection(catalogGroups.value, {});
+  return fallback.item
+    ? {
+        category: fallback.category,
+        configuration: fallback.configuration || null,
+        item: fallback.item,
+      }
+    : null;
+});
+const nodeIsBranch = computed(() =>
+  node.value ? nodeHasChildren(catalogGroups.value, node.value) === true : false,
 );
+const nodeName = computed(() => (node.value ? nodeLabel(node.value) : ''));
 
 const tabs = computed(() =>
   store.machineTabs.filter((tab) => tab.catalog === activeMachineType.value),
 );
+const lockedBranches = computed(() => lockedBranchKeys(tabs.value));
 const availablePageIds = computed(() =>
   tabs.value.flatMap((tab) => tab.pages.map((page) => page.id)),
 );
 const checkedPages = computed(() => new Set(checkedPageIds.value));
 const current = computed(() =>
-  resolveTabSelection(tabs.value, catalogMachineNames.value, route.query),
+  resolveTabSelection(tabs.value, node.value, route.query),
 );
 const activeTab = computed(() => current.value.tab);
 const activePage = computed(() => current.value.page);
-const treeSelection = computed(() =>
-  current.value.treeMachine
-    ? resolveMachineSelection(catalogGroups.value, route.query)
-    : null,
+const nodePages = computed(() =>
+  activeTab.value && node.value ? pagesOf(activeTab.value, node.value) : [],
 );
-const selectedTreeKey = computed(() =>
-  treeSelection.value
-    ? entityTreeItemKey({
-        category: treeSelection.value.category,
-        configuration: treeSelection.value.configuration || null,
-        name: treeSelection.value.item,
-      })
-    : undefined,
-);
+const pageCount = (tabId: number) => {
+  const tab = tabs.value.find((item) => item.id === tabId);
+  return tab && node.value ? pagesOf(tab, node.value).length : 0;
+};
 /** 二级 Tab 的内容按页 id 存放，格式跟着所在 Tab 的类型 */
 const pageSection = computed<MachineSectionItem | null>(() =>
   activeTab.value && activePage.value
@@ -108,14 +121,6 @@ const pageSection = computed<MachineSectionItem | null>(() =>
       }
     : null,
 );
-/** 目录机型自己的内容：结构选型表 */
-const TREE_SECTION: MachineSectionItem = {
-  id: MACHINE_CONTENT_SECTION_ID,
-  name: '机型内容',
-  sort: 0,
-  kind: 'structure',
-  scope: 'machine',
-};
 
 const machineModelOptions = computed(() =>
   store
@@ -151,21 +156,22 @@ function contextQuery(
   return query;
 }
 
+function nodeQuery(target: MachineNodeRef | null): Record<string, string> {
+  if (!target) return {};
+  return {
+    category: target.category,
+    ...(target.configuration ? { configuration: target.configuration } : {}),
+    ...(target.item ? { item: target.item } : {}),
+  };
+}
+
 function canonicalQuery(): Record<string, string> {
-  const query = contextQuery();
-  const { tab, page, treeMachine } = current.value;
-  if (treeMachine && treeSelection.value) {
-    query.category = treeSelection.value.category;
-    if (treeSelection.value.configuration) {
-      query.configuration = treeSelection.value.configuration;
-    }
-    query.item = treeMachine;
-  } else {
-    if (tab) query.tab = String(tab.id);
-    if (page) query.page = String(page.id);
-  }
+  const query = { ...contextQuery(), ...nodeQuery(node.value) };
+  const { tab, page } = current.value;
+  if (tab && !nodeIsBranch.value) query.tab = String(tab.id);
+  if (page) query.page = String(page.id);
   const focusRow = String(route.query.focusRow || '');
-  if ((page || treeMachine) && focusRow) query.focusRow = focusRow;
+  if (page && focusRow) query.focusRow = focusRow;
   return query;
 }
 
@@ -209,11 +215,13 @@ watch(
 function showTab(tabId: number | string, pageId?: number) {
   go({
     ...contextQuery(),
+    ...nodeQuery(node.value),
     tab: String(tabId),
     ...(pageId === undefined ? {} : { page: String(pageId) }),
   });
 }
 
+// 换选单节点时留在当前一级 Tab
 function selectEntity(payload: {
   category: string;
   configuration?: string | null;
@@ -221,9 +229,12 @@ function selectEntity(payload: {
 }) {
   go({
     ...contextQuery(),
-    category: payload.category,
-    ...(payload.configuration ? { configuration: payload.configuration } : {}),
-    item: payload.item,
+    ...nodeQuery({
+      category: payload.category,
+      configuration: payload.configuration ?? null,
+      item: payload.item || null,
+    }),
+    ...(activeTab.value ? { tab: String(activeTab.value.id) } : {}),
   });
 }
 
@@ -251,14 +262,18 @@ function selectMachineView(value: string) {
 }
 
 function openGlobalSearchResult(result: MachineStructureSearchResult) {
-  const tab = tabOfPage(store.machineTabs, result.sectionId);
-  if (!tab) return;
-  const focusRow = String(result.rowIds[0] ?? '');
-  go({
-    tab: String(tab.id),
-    page: String(result.sectionId),
-    ...(focusRow ? { focusRow } : {}),
-  });
+  for (const tab of store.machineTabs) {
+    const page = tab.pages.find((item) => item.id === result.sectionId);
+    if (!page) continue;
+    const focusRow = String(result.rowIds[0] ?? '');
+    go({
+      ...nodeQuery(page.node),
+      tab: String(tab.id),
+      page: String(page.id),
+      ...(focusRow ? { focusRow } : {}),
+    });
+    return;
+  }
 }
 
 // ── 报告勾选 ────────────────────────────────────────────────────
@@ -274,8 +289,7 @@ function setChecked(pageId: number, checked: boolean) {
 // ── 二级 Tab ────────────────────────────────────────────────────
 
 function onPageSaved(pageId: number) {
-  const tab = tabOfPage(store.machineTabs, pageId);
-  if (tab) showTab(tab.id, pageId);
+  if (activeTab.value) showTab(activeTab.value.id, pageId);
 }
 
 async function onPageAction(
@@ -329,7 +343,7 @@ async function removeTab(tabId: number) {
   const ok = await confirmDelete(
     '删除 Tab',
     tab.pages.length
-      ? `确认删除“${tab.name}”吗？其下 ${tab.pages.length} 个二级 Tab 和它们的内容会一起删除。`
+      ? `确认删除“${tab.name}”吗？所有选单在它下面的 ${tab.pages.length} 个二级 Tab 和内容会一起删除。`
       : `确认删除“${tab.name}”吗？`,
   );
   if (!ok) return;
@@ -360,8 +374,9 @@ async function removeTab(tabId: number) {
           v-if="activeMachineView === 'browse'"
           kind="machine"
           :machine-type="activeMachineType"
-          :selected="current.treeMachine"
-          :selected-key="selectedTreeKey"
+          :selected="node?.item ?? ''"
+          :selected-key="node ? nodeTreeKey(node) : undefined"
+          :locked-branches="lockedBranches"
           @select="selectEntity"
         />
       </div>
@@ -375,98 +390,102 @@ async function removeTab(tabId: number) {
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">
-        <a-tabs
-          v-if="tabs.length"
-          class="machine-section-tabs"
-          type="editable-card"
-          size="small"
-          :active-key="activeTab ? String(activeTab.id) : ''"
-          :hide-add="!writable"
-          @change="showTab(String($event))"
-          @edit="onTabEdit"
-        >
-          <a-tab-pane
-            v-for="tab in tabs"
-            :key="String(tab.id)"
-            :closable="writable"
-          >
-            <template #tab>
-              <span class="machine-section-tabs__label">
-                {{ tab.name }}
-                <a-badge
-                  :count="tab.pages.length"
-                  show-zero
-                  :overflow-count="999"
-                  :number-style="TAB_COUNT_STYLE"
-                />
-                <a-tooltip
-                  v-if="writable && tab.id === activeTab?.id"
-                  title="编辑 Tab"
-                >
-                  <a-button
-                    type="text"
-                    size="small"
-                    aria-label="编辑 Tab"
-                    @click.stop="tabDialog?.openEdit(tab)"
-                  >
-                    <template #icon><Pencil :size="12" /></template>
-                  </a-button>
-                </a-tooltip>
-              </span>
-            </template>
-          </a-tab-pane>
-          <template v-if="auth.isAuthenticated" #rightExtra>
-            <MachineReportBar
-              :page-ids="checkedPageIds"
-              :available-count="availablePageIds.length"
-              @select-all="checkedPageIds = [...availablePageIds]"
-              @clear="checkedPageIds = []"
-            />
-          </template>
-        </a-tabs>
-
-        <!-- 看目录里的机型：它自己的内容，和 Tab 无关 -->
-        <template v-if="current.treeMachine">
-          <div class="machine-tree-content__title">
-            {{ current.treeMachine }}
-          </div>
-          <MachineSectionPanel
-            :machine-name="current.treeMachine"
-            :section="TREE_SECTION"
-            :focus-row-id="Number(route.query.focusRow) || undefined"
-          />
-        </template>
-        <a-empty v-else-if="tabs.length === 0">
+        <a-empty
+          v-if="!node"
+          description="暂无机型，请在左侧新建分类和机型"
+        />
+        <!-- 有子选单的节点没有二级 Tab -->
+        <a-empty v-else-if="nodeIsBranch">
           <template #description>
-            <div>还没有 Tab</div>
-            <div class="empty-hint">
-              新建 Tab（如「输送机构」），再在 Tab 下新建二级 Tab
-            </div>
-          </template>
-          <template v-if="writable" #default>
-            <a-button type="primary" @click="tabDialog?.openAdd(1)">
-              新建 Tab
-            </a-button>
+            <div>「{{ nodeName }}」下有子选单</div>
+            <div class="empty-hint">请在左侧选择下一级</div>
           </template>
         </a-empty>
-        <template v-else-if="activeTab">
-          <MachineTabPages
-            :tab="activeTab"
-            :active-page-id="activePage?.id ?? null"
-            :writable="writable"
-            :checkable="auth.isAuthenticated"
-            :checked="checkedPages"
-            @select="showTab(activeTab.id, $event)"
-            @check="setChecked"
-            @add="pageDialog?.openAdd(activeTab)"
-            @action="onPageAction"
-          />
-          <MachineSectionPanel
-            v-if="pageSection"
-            :machine-name="MACHINE_TAB_PAGE_OWNER"
-            :section="pageSection"
-            :focus-row-id="Number(route.query.focusRow) || undefined"
-          />
+        <template v-else>
+          <a-tabs
+            v-if="tabs.length"
+            class="machine-section-tabs"
+            type="editable-card"
+            size="small"
+            :active-key="activeTab ? String(activeTab.id) : ''"
+            :hide-add="!writable"
+            @change="showTab(String($event))"
+            @edit="onTabEdit"
+          >
+            <a-tab-pane
+              v-for="tab in tabs"
+              :key="String(tab.id)"
+              :closable="writable"
+            >
+              <template #tab>
+                <span class="machine-section-tabs__label">
+                  {{ tab.name }}
+                  <a-badge
+                    :count="pageCount(tab.id)"
+                    show-zero
+                    :overflow-count="999"
+                    :number-style="TAB_COUNT_STYLE"
+                  />
+                  <a-tooltip
+                    v-if="writable && tab.id === activeTab?.id"
+                    title="编辑 Tab"
+                  >
+                    <a-button
+                      type="text"
+                      size="small"
+                      aria-label="编辑 Tab"
+                      @click.stop="tabDialog?.openEdit(tab)"
+                    >
+                      <template #icon><Pencil :size="12" /></template>
+                    </a-button>
+                  </a-tooltip>
+                </span>
+              </template>
+            </a-tab-pane>
+            <template v-if="auth.isAuthenticated" #rightExtra>
+              <MachineReportBar
+                :page-ids="checkedPageIds"
+                :available-count="availablePageIds.length"
+                @select-all="checkedPageIds = [...availablePageIds]"
+                @clear="checkedPageIds = []"
+              />
+            </template>
+          </a-tabs>
+
+          <a-empty v-if="tabs.length === 0">
+            <template #description>
+              <div>还没有 Tab</div>
+              <div class="empty-hint">
+                新建 Tab（如「输送机构」），再在 Tab 下新建二级 Tab
+              </div>
+            </template>
+            <template v-if="writable" #default>
+              <a-button type="primary" @click="tabDialog?.openAdd(1)">
+                新建 Tab
+              </a-button>
+            </template>
+          </a-empty>
+          <template v-else-if="activeTab">
+            <MachineTabPages
+              :tab="activeTab"
+              :pages="nodePages"
+              :node-name="nodeName"
+              :active-page-id="activePage?.id ?? null"
+              :writable="writable"
+              :checkable="auth.isAuthenticated"
+              :checked="checkedPages"
+              @select="showTab(activeTab.id, $event)"
+              @check="setChecked"
+              @add="pageDialog?.openAdd(activeTab, node)"
+              @action="onPageAction"
+            />
+            <MachineSectionPanel
+              v-if="pageSection"
+              :machine-name="MACHINE_TAB_PAGE_OWNER"
+              :section="pageSection"
+              :focus-row-id="Number(route.query.focusRow) || undefined"
+            />
+          </template>
         </template>
       </div>
     </div>

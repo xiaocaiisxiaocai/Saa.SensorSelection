@@ -25,6 +25,7 @@ export {
   normalizeMachineSectionImages,
   normalizeMachineSectionRows,
   normalizeMachineSections,
+  normalizeMachineNodeRef,
   normalizeMachineTabs,
   normalizeProcessSteps,
   normalizeSensorItems,

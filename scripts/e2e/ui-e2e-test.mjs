@@ -23,6 +23,7 @@ const NAMES = {
   region: `${TAG}区域`,
   customer: `${TAG}客户`,
   machineCategory: `${TAG}机型分类`,
+  machineLeafCategory: `${TAG}空分类`,
   machine: `${TAG}机型`,
   sensorModel: `${TAG}-SN-001`,
   processStep: `${TAG}工艺`,
@@ -996,11 +997,35 @@ async function runMachineCrud() {
     assert((await names()).includes(PAGE_NAME), 'remaining second-level tab missing')
   })
 
-  await check('Machine: a tree machine shows its own content outside the tabs', async () => {
-    await page.locator(`.entity-tree__node[data-node-kind="item"][data-item="${NAMES.machine}"]`).first().click()
-    await page.locator('.machine-tree-content__title', { hasText: NAMES.machine }).waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await page.locator('.machine-section-tabs .ant-tabs-tab-active').count(), 0, 'a tab is still active')
-    assert(await page.getByRole('button', { name: '新增选型', exact: true }).first().isVisible(), 'tree machine has no content table')
+  // 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单
+  await check('Machine: an empty category owns second-level tabs and then refuses new machines', async () => {
+    await page.getByRole('button', { name: '新建分类', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '分类名称', NAMES.machineLeafCategory)
+    await saveSheet()
+    await expectToast('分类已新增')
+    await page.getByPlaceholder('搜索分类或机型…').fill(NAMES.machineLeafCategory)
+    await settle()
+    await page.locator(`.entity-tree__node[data-node-kind="group"][data-category="${NAMES.machineLeafCategory}"]`).first().click()
+    await page.waitForURL((url) => decodeURIComponent(String(url)).includes(`category=${NAMES.machineLeafCategory}`), { timeout: 8000 })
+    // 换选单节点时留在当前一级 Tab（这次运行自己的「E2E机构」），别在真实 Tab 下留东西
+    await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}机构` }).waitFor({ state: 'visible', timeout: 8000 })
+    await addPage(`${TAG}分类页`)
+    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
+    const create = page.getByRole('menuitem', { name: '新建机型（已有二级 Tab）', exact: true })
+    await create.waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await create.getAttribute('aria-disabled'), 'true', 'new machine is not disabled')
+    // 再点一次触发按钮收起下拉菜单
+    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
+    await create.waitFor({ state: 'hidden', timeout: 8000 })
+  })
+
+  await check('Machine: a menu node with sub-menus shows no second-level tabs', async () => {
+    await page.goto(`${BASE_URL}/selection/machine?category=${encodeURIComponent(NAMES.machineCategory)}`, {
+      waitUntil: 'domcontentloaded',
+    })
+    await page.getByText(`「${NAMES.machineCategory}」下有子选单`).waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await page.locator('.machine-sub-tabs').count(), 0, 'second-level tabs shown for a branch')
   })
 }
 
@@ -1663,6 +1688,7 @@ async function teardown() {
       await deleteEntity(token, 'customer', customer, NAMES.region)
     }
     await deleteEntity(token, 'machine', NAMES.machineCategory, NAMES.machine)
+    await deleteEntity(token, 'machine', NAMES.machineLeafCategory, '')
     await deleteMachineTabs(token)
     await cleanupStoreKeys(token)
     await cleanupRbac(token)
@@ -1725,20 +1751,24 @@ async function deleteEntity(token, kind, groupName, itemName) {
   if (res.status !== 200) throw new Error(`failed to prune ${kind} groups: ${res.status} ${JSON.stringify(res.data)}`)
 }
 
-// 这次运行新建的机型 Tab（名字带 TAG）
+// 这次运行新建的机型 Tab（名字带 TAG），以及挂在 TAG 选单节点下的二级 Tab
 async function deleteMachineTabs(token) {
   const key = 'machine-tabs:all'
   const current = await api('GET', storeRoute(key), token)
   if (current.status !== 200 || !Array.isArray(current.data)) return
-  const next = current.data.filter((tab) => !String(tab.name).startsWith(TAG))
-  if (next.length === current.data.length) return
+  const ownTab = (tab) => String(tab.name).startsWith(TAG)
+  const ownPage = (page) => String(page.node?.category ?? '').startsWith(TAG) || String(page.node?.item ?? '').startsWith(TAG)
+  const removedPageIds = current.data.flatMap((tab) =>
+    (tab.pages ?? []).filter((page) => ownTab(tab) || ownPage(page)).map((page) => page.id),
+  )
+  const next = current.data
+    .filter((tab) => !ownTab(tab))
+    .map((tab) => (tab.pages ? { ...tab, pages: tab.pages.filter((page) => !ownPage(page)) } : tab))
+  if (JSON.stringify(next) === JSON.stringify(current.data)) return
   const res = await api('PUT', storeRoute(key), token, next)
   if (res.status !== 200) throw new Error(`failed to prune machine tabs: ${res.status}`)
-  // 删掉的 Tab 下二级 Tab 的内容
-  const pageIds = current.data
-    .filter((tab) => String(tab.name).startsWith(TAG))
-    .flatMap((tab) => (tab.pages ?? []).map((page) => page.id))
-  for (const id of pageIds) {
+  // 删掉的二级 Tab 的内容
+  for (const id of removedPageIds) {
     for (const prefix of ['machine-section-rows', 'machine-section-images']) {
       await api('DELETE', storeRoute(`${prefix}:${id}:@tab-page`), token)
     }

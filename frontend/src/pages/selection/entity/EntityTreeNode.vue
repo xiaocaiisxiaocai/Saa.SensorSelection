@@ -10,7 +10,12 @@ import type { EntityNode } from './entity-tree-data';
 defineProps<{
   node: EntityNode;
   editable: boolean;
-  actions: readonly { key: string; label: string; danger?: boolean }[];
+  actions: readonly {
+    key: string;
+    label: string;
+    danger?: boolean;
+    disabled?: boolean;
+  }[];
 }>();
 const emit = defineEmits<{ toggle: []; action: [key: string] }>();
 </script>
@@ -58,6 +63,7 @@ const emit = defineEmits<{ toggle: []; action: [key: string] }>();
             v-for="action in actions"
             :key="action.key"
             :danger="action.danger"
+            :disabled="action.disabled"
           >
             {{ action.label }}
           </a-menu-item>

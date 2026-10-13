@@ -68,6 +68,7 @@ function save() {
   if (
     notifyResult(result, editing.value ? '配置已更新' : '配置已新增', {
       duplicate: '该配置已存在',
+      'not-empty': '该分类已有二级 Tab，不能再添加配置',
     })
   ) {
     visible.value = false;

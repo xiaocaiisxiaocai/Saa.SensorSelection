@@ -7,8 +7,6 @@ import {
   buildSearchIndex,
   createSelectionRepository,
   CRUD_DEFAULTS,
-  listEntityTreeItems,
-  MACHINE_CONTENT_SECTION_ID,
   MACHINE_TAB_PAGE_OWNER,
   SENSOR_DATA,
   type BackendSyncStatus,
@@ -22,7 +20,7 @@ import {
   type MachineSectionItem,
   type MachineSectionRow,
   type MachineTab,
-  type MachineTabPage,
+  type MachineNodeRef,
   type ProcessStepItem,
   type SaveFailure,
   type SearchItem,
@@ -119,28 +117,6 @@ export const useSelectionStore = defineStore('selection', () => {
   function buildFullSearchIndex(): SearchItem[] {
     const machineGroups = repository.getEntityGroups('machine');
     const machineSectionHits: SearchItem[] = [];
-    // 目录树里机型自己的内容
-    for (const item of listEntityTreeItems(machineGroups)) {
-      for (const row of repository.getMachineSectionRows(
-        MACHINE_CONTENT_SECTION_ID,
-        item.name,
-      )) {
-        machineSectionHits.push({
-          type: 'machine',
-          title: row.sensorType || row.name || row.role,
-          category: item.category,
-          sub: [item.name, row.role].filter(Boolean).join(' · '),
-          path: '/selection/machine',
-          query: {
-            category: item.category,
-            ...(item.configuration
-              ? { configuration: item.configuration }
-              : {}),
-            item: item.name,
-          },
-        });
-      }
-    }
     // Tab 下的二级 Tab
     for (const tab of repository.getMachineTabs()) {
       for (const page of tab.pages) {
@@ -151,11 +127,24 @@ export const useSelectionStore = defineStore('selection', () => {
           machineSectionHits.push({
             type: 'machine',
             title: row.sensorType || row.name || row.role,
-            category: tab.name,
-            sub: [tab.name, page.name, row.role].filter(Boolean).join(' · '),
+            category: page.node.category,
+            sub: [
+              page.node.configuration,
+              page.node.item,
+              tab.name,
+              page.name,
+              row.role,
+            ]
+              .filter(Boolean)
+              .join(' · '),
             path: '/selection/machine',
             query: {
               ...(tab.catalog === 'project' ? { catalog: 'project' } : {}),
+              category: page.node.category,
+              ...(page.node.configuration
+                ? { configuration: page.node.configuration }
+                : {}),
+              ...(page.node.item ? { item: page.node.item } : {}),
               tab: String(tab.id),
               page: String(page.id),
             },
@@ -530,7 +519,7 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() => repository.moveMachineTabPage(tabId, pageId, offset)),
     saveMachineTabPage: (
       tabId: number,
-      payload: Partial<Pick<MachineTabPage, 'name'>>,
+      payload: { name?: string; node?: MachineNodeRef },
       editId?: number,
     ) => mutate(() => repository.saveMachineTabPage(tabId, payload, editId)),
     machineTabs,

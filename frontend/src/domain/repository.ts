@@ -10,6 +10,7 @@ import {
   detectControlledFileKind,
   formatLocalDate,
   isRecord,
+  normalizeMachineNodeRef,
   isStoredFileSource,
   nextAvailableId,
   normalizeControlledDocuments,
@@ -33,7 +34,7 @@ import {
   createDefaultControlledDocuments,
   createSensorCatalogDefaults,
 } from './normalize';
-import { entityDataName } from './entity-tree';
+import { entityDataName, machineCatalogKind } from './entity-tree';
 import { migrateSelectionSeedStore } from './seed-migration';
 import { findSensorStatusName, isSensorStatus } from './sensor-status';
 import {
@@ -66,6 +67,7 @@ import type {
   MachineCatalogKind,
   MachineSectionItem,
   MachineSectionRow,
+  MachineNodeRef,
   MachineTab,
   MachineTabPage,
   PersistedStore,
@@ -1324,7 +1326,8 @@ export function createSelectionRepository({
   }
 
   // ── 机型 Tab ─────────────────────────────────────────────────────
-  // Tab 是按目录共用的容器，Tab 下直接新建二级 Tab（页），和目录树里的机型无关。
+  // Tab 是按目录共用的容器；二级 Tab（页）属于「选单节点 × Tab」。
+  // 选单节点的下一层只能二选一：有子选单就不能有二级 Tab，有二级 Tab 就不能再加子选单。
   // 页内容按页 id 存在 machine-section-rows:{页 id}:MACHINE_TAB_PAGE_OWNER，
   // 读写走机型分区同一套函数（sectionId 传页 id、machineName 传所有者位）。
 
@@ -1335,9 +1338,69 @@ export function createSelectionRepository({
   const pageImagesKey = (pageId: number) =>
     machineSectionImagesKey(pageId, MACHINE_TAB_PAGE_OWNER);
 
+  const sameNode = (left: MachineNodeRef, right: MachineNodeRef) =>
+    left.category === right.category &&
+    left.configuration === right.configuration &&
+    left.item === right.item;
+
+  /** 节点所在分组；节点不存在时为 null */
+  function machineNodeGroup(node: MachineNodeRef): EntityGroup | null {
+    const group = getEntityGroups('machine').find(
+      (candidate) => candidate.name === node.category,
+    );
+    if (!group) return null;
+    const configuration = node.configuration
+      ? group.configurations?.find((item) => item.name === node.configuration)
+      : null;
+    if (node.configuration && !configuration) return null;
+    if (node.item) {
+      const items = configuration ? configuration.items : group.items;
+      if (!items.includes(node.item)) return null;
+    }
+    return group;
+  }
+
+  /** 节点下面有没有子选单（配置或机型）；机型节点永远没有 */
+  function machineNodeHasChildren(node: MachineNodeRef): boolean {
+    if (node.item) return false;
+    const group = machineNodeGroup(node);
+    if (!group) return false;
+    if (node.configuration) {
+      return (
+        (group.configurations?.find((item) => item.name === node.configuration)
+          ?.items.length ?? 0) > 0
+      );
+    }
+    return group.items.length > 0 || (group.configurations?.length ?? 0) > 0;
+  }
+
+  /** 节点在任一 Tab 下有没有二级 Tab；只读，Tab 列表还没建立时不写 store */
+  function machineNodeHasPages(node: MachineNodeRef): boolean {
+    if (!Array.isArray(store[machineTabsKey()])) return false;
+    return getMachineTabs().some((tab) =>
+      tab.pages.some((page) => sameNode(page.node, node)),
+    );
+  }
+
+  /** 改名 / 移动选单节点时，让二级 Tab 跟着走 */
+  function remapPageNodes(
+    matches: (node: MachineNodeRef) => boolean,
+    remap: (node: MachineNodeRef) => MachineNodeRef,
+  ) {
+    if (!Array.isArray(store[machineTabsKey()])) return;
+    writeMachineTabs(
+      getMachineTabs().map((tab) => ({
+        ...tab,
+        pages: tab.pages.map((page) =>
+          matches(page.node) ? { ...page, node: remap(page.node) } : page,
+        ),
+      })),
+    );
+  }
+
   /**
    * 旧格式：Tab 里记的是机型名（machines），内容在机型的 1000 分区。
-   * 读出时转成同名的页，内容搬到页下面，机型留在目录树里。
+   * 读出时转成同名的二级 Tab，内容搬到页下面。
    * 只改内存，随下一次写入一并提交；转换结果是确定的，提交前重复读也一样。
    */
   function migrateLegacyTabMembers(source: unknown[]): unknown[] {
@@ -1388,11 +1451,46 @@ export function createSelectionRepository({
     return migrated;
   }
 
+  /**
+   * 还没归属节点的二级 Tab（旧数据）：挂到本目录里同名的机型节点上；
+   * 找不到同名机型的留着不显示。
+   */
+  function assignLegacyPageNodes(tabs: MachineTab[]) {
+    if (!tabs.some((tab) => tab.pages.some((page) => !page.node.category))) {
+      return;
+    }
+    const groups = getEntityGroups('machine');
+    for (const tab of tabs) {
+      for (const page of tab.pages) {
+        if (page.node.category) continue;
+        for (const group of groups) {
+          if (machineCatalogKind(group) !== tab.catalog) continue;
+          if (group.items.includes(page.name)) {
+            page.node = { category: group.name, configuration: null, item: page.name };
+            break;
+          }
+          const configuration = group.configurations?.find((item) =>
+            item.items.includes(page.name),
+          );
+          if (configuration) {
+            page.node = {
+              category: group.name,
+              configuration: configuration.name,
+              item: page.name,
+            };
+            break;
+          }
+        }
+      }
+    }
+  }
+
   function getMachineTabs(catalog?: MachineCatalogKind): MachineTab[] {
     const key = machineTabsKey();
     const source = Array.isArray(store[key]) ? store[key] : [];
     // 迁移可能换掉 store 对象，先算出结果再写回
     const tabs = normalizeMachineTabs(migrateLegacyTabMembers(source));
+    assignLegacyPageNodes(tabs);
     store[key] = tabs;
     return catalog ? tabs.filter((tab) => tab.catalog === catalog) : tabs;
   }
@@ -1489,7 +1587,7 @@ export function createSelectionRepository({
     return { ok: true, item: saved };
   }
 
-  /** 删除 Tab：连同它下面所有页和页内容 */
+  /** 删除 Tab：连同它下面所有节点的二级 Tab 和内容 */
   function deleteMachineTab(id: number): DeleteResult {
     const tabs = getMachineTabs();
     const index = tabs.findIndex((tab) => tab.id === id);
@@ -1501,10 +1599,13 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  /** 新建（不传 editId）或改名二级 Tab；新页排在最后 */
+  /**
+   * 新建（传 node、不传 editId）或改名二级 Tab；新页排在最后。
+   * 节点下已有子选单时不能新建（not-empty）；节点必须属于 Tab 所在的目录。
+   */
   function saveMachineTabPage(
     tabId: number,
-    payload: Partial<Pick<MachineTabPage, 'name'>>,
+    payload: { name?: string; node?: MachineNodeRef },
     editId?: number,
   ): SaveResult<MachineTabPage> {
     const tabs = getMachineTabs();
@@ -1512,24 +1613,41 @@ export function createSelectionRepository({
     if (!tab) return { ok: false, reason: 'stale' };
     const name = storedText(payload.name).trim().slice(0, 40);
     if (!name) return { ok: false, reason: 'validation' };
+    const existing = editId
+      ? tab.pages.find((page) => page.id === editId)
+      : undefined;
+    if (editId && !existing) return { ok: false, reason: 'stale' };
+    const node = existing?.node ?? normalizeMachineNodeRef(payload.node);
+    if (!existing) {
+      const group = machineNodeGroup(node);
+      if (!node.category || !group) return { ok: false, reason: 'stale' };
+      if (machineCatalogKind(group) !== tab.catalog) {
+        return { ok: false, reason: 'validation' };
+      }
+      if (machineNodeHasChildren(node)) {
+        return { ok: false, reason: 'not-empty' };
+      }
+    }
     if (
       tab.pages.some(
-        (page) => page.id !== editId && sameLocaleName(page.name, name),
+        (page) =>
+          page.id !== editId &&
+          sameNode(page.node, node) &&
+          sameLocaleName(page.name, name),
       )
     ) {
       return { ok: false, reason: 'duplicate' };
     }
     const snapshot = cloneStore(store);
     let saved: MachineTabPage;
-    if (editId) {
-      const index = tab.pages.findIndex((page) => page.id === editId);
-      if (index === -1) return { ok: false, reason: 'stale' };
-      saved = { ...tab.pages[index]!, name };
-      tab.pages.splice(index, 1, saved);
+    if (existing) {
+      saved = { ...existing, name };
+      tab.pages.splice(tab.pages.indexOf(existing), 1, saved);
     } else {
       saved = {
         id: nextAvailableId(tabs.flatMap((item) => item.pages)),
         name,
+        node,
       };
       tab.pages.push(saved);
     }
@@ -1551,7 +1669,7 @@ export function createSelectionRepository({
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
-  /** 左移（-1）/ 右移（1）二级 Tab；已在最左 / 最右时不能再移 */
+  /** 在同一节点的二级 Tab 里左移（-1）/ 右移（1）；已在最左 / 最右时不能再移 */
   function moveMachineTabPage(
     tabId: number,
     pageId: number,
@@ -1559,15 +1677,16 @@ export function createSelectionRepository({
   ): DeleteResult {
     const tabs = getMachineTabs();
     const tab = tabs.find((item) => item.id === tabId);
-    const index = tab?.pages.findIndex((page) => page.id === pageId) ?? -1;
-    if (!tab || index === -1) return { ok: false, reason: 'stale' };
-    const target = index + offset;
-    if (target < 0 || target >= tab.pages.length) {
-      return { ok: false, reason: 'validation' };
-    }
+    const page = tab?.pages.find((item) => item.id === pageId);
+    if (!tab || !page) return { ok: false, reason: 'stale' };
+    const siblings = tab.pages.filter((item) => sameNode(item.node, page.node));
+    const neighbour = siblings[siblings.indexOf(page) + offset];
+    if (!neighbour) return { ok: false, reason: 'validation' };
     const snapshot = cloneStore(store);
-    const [page] = tab.pages.splice(index, 1);
-    tab.pages.splice(target, 0, page!);
+    const from = tab.pages.indexOf(page);
+    const to = tab.pages.indexOf(neighbour);
+    tab.pages[from] = neighbour;
+    tab.pages[to] = page;
     writeMachineTabs(tabs);
     return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
@@ -2562,6 +2681,12 @@ export function createSelectionRepository({
         ? Math.max(0, Math.min(groups.length, requested - 1))
         : index;
       groups.splice(targetIndex, 0, moved);
+      if (editName !== name && kind === 'machine') {
+        remapPageNodes(
+          (node) => node.category === editName,
+          (node) => ({ ...node, category: name }),
+        );
+      }
       // 客户改名：其下每个区域的数据键（客户/区域）都要跟着改
       if (editName !== name && kind === 'customer') {
         for (const item of existing.items) {
@@ -2602,7 +2727,9 @@ export function createSelectionRepository({
     if (index === -1) return { ok: false, reason: 'stale' };
     if (
       (groups[index]?.items.length ?? 0) > 0 ||
-      (groups[index]?.configurations?.length ?? 0) > 0
+      (groups[index]?.configurations?.length ?? 0) > 0 ||
+      (kind === 'machine' &&
+        machineNodeHasPages({ category: name, configuration: null, item: null }))
     ) {
       return { ok: false, reason: 'not-empty' };
     }
@@ -2642,12 +2769,24 @@ export function createSelectionRepository({
       const [moved] = group.configurations.splice(index, 1);
       if (!moved) return { ok: false, reason: 'stale' };
       moved.name = name;
+      if (editName !== name) {
+        remapPageNodes(
+          (node) => node.category === category && node.configuration === editName,
+          (node) => ({ ...node, configuration: name }),
+        );
+      }
       const requested = Number(payload.sort);
       const targetIndex = Number.isInteger(requested)
         ? Math.max(0, Math.min(group.configurations.length, requested - 1))
         : index;
       group.configurations.splice(targetIndex, 0, moved);
     } else {
+      // 分组已有二级 Tab，下一层就不能再有子选单
+      if (
+        machineNodeHasPages({ category, configuration: null, item: null })
+      ) {
+        return { ok: false, reason: 'not-empty' };
+      }
       const requested = Number(payload.sort);
       const targetIndex = Number.isInteger(requested)
         ? Math.max(0, Math.min(group.configurations.length, requested - 1))
@@ -2674,7 +2813,10 @@ export function createSelectionRepository({
     if (!group || !group.configurations || index === -1) {
       return { ok: false, reason: 'stale' };
     }
-    if ((group.configurations[index]?.items.length ?? 0) > 0) {
+    if (
+      (group.configurations[index]?.items.length ?? 0) > 0 ||
+      machineNodeHasPages({ category, configuration: name, item: null })
+    ) {
       return { ok: false, reason: 'not-empty' };
     }
     const snapshot = cloneStore(store);
@@ -2742,14 +2884,44 @@ export function createSelectionRepository({
 
     const snapshot = cloneStore(store);
     const dataName = entityDataName(kind, category, name);
-    if (editName) {
-      const location = findEntityLocation(
-        groups,
-        editName,
-        payload.previousCategory,
-        payload.previousConfiguration,
-      );
-      if (!location) return { ok: false, reason: 'stale' };
+    const location = editName
+      ? findEntityLocation(
+          groups,
+          editName,
+          payload.previousCategory,
+          payload.previousConfiguration,
+        )
+      : null;
+    if (editName && !location) return { ok: false, reason: 'stale' };
+    // 目标分组 / 配置已有二级 Tab，下一层就不能再有机型（留在原处改名不算）
+    const parentNode = {
+      category,
+      configuration: configuration || null,
+      item: null,
+    };
+    const sameParent =
+      location !== null &&
+      location.group.name === category &&
+      (location.configuration?.name ?? null) === parentNode.configuration;
+    if (
+      kind === 'machine' &&
+      !sameParent &&
+      machineNodeHasPages(parentNode)
+    ) {
+      return { ok: false, reason: 'not-empty' };
+    }
+    if (editName && location) {
+      if (kind === 'machine') {
+        const from = {
+          category: location.group.name,
+          configuration: location.configuration?.name ?? null,
+          item: editName,
+        };
+        remapPageNodes(
+          (node) => sameNode(node, from),
+          () => ({ ...parentNode, item: name }),
+        );
+      }
       location.items.splice(location.index, 1);
       const previousDataName = entityDataName(
         kind,
@@ -2804,6 +2976,16 @@ export function createSelectionRepository({
     if (!location) return { ok: false, reason: 'stale' };
     const dataName = entityDataName(kind, location.group.name, name);
     if (entityHasData(kind, dataName)) {
+      return { ok: false, reason: 'not-empty' };
+    }
+    if (
+      kind === 'machine' &&
+      machineNodeHasPages({
+        category: location.group.name,
+        configuration: location.configuration?.name ?? null,
+        item: name,
+      })
+    ) {
       return { ok: false, reason: 'not-empty' };
     }
 

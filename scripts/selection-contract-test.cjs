@@ -1558,27 +1558,37 @@ async function run() {
   assert.deepEqual(transport11.calls.writes, [])
   assert.equal(transport11.calls.writeAlls, 0)
 
-  // 机型 Tab：按目录（结构 / 专案机型）共用；每个 Tab 下直接新建二级 Tab（页），
-  // 页有自己的内容，和左侧目录里的机型无关。同名页可以出现在不同 Tab 里，各自一份内容。
+  // 机型 Tab：按目录（结构 / 专案机型）共用；二级 Tab 属于「选单节点 × Tab」。
+  // 选单节点的下一层只能二选一：有子选单就不能有二级 Tab，有二级 Tab 就不能再加子选单。
   {
     const memoryTabs = new Map()
-    const memoryStorage = (map) => ({
-      getItem: (key) => map.get(key) ?? null,
-      setItem: (key, value) => map.set(key, value),
-    })
     const tabsRepo = domain.createSelectionRepository({
       crudDefaults: data.CRUD_DEFAULTS,
       sensorData: data.SENSOR_DATA,
-      storage: memoryStorage(memoryTabs),
+      storage: {
+        getItem: (key) => memoryTabs.get(key) ?? null,
+        setItem: (key, value) => memoryTabs.set(key, value),
+      },
     })
     const owner = domain.MACHINE_TAB_PAGE_OWNER
     const sensor = tabsRepo.getSensors()[0]
     assert.deepEqual(tabsRepo.getMachineTabs('mechanism'), [])
 
-    const conveyor = tabsRepo.saveMachineTab('mechanism', {
-      kind: 'structure',
-      name: '输送机构',
-    })
+    // 选单：契约分类 → 空配置（叶子） / 带机型配置 → 契约机型
+    const GROUP = '契约分类'
+    assert.equal(tabsRepo.saveEntityGroup('machine', { name: GROUP, machineType: 'mechanism' }).ok, true)
+    assert.equal(tabsRepo.saveMachineConfiguration(GROUP, { name: '空配置' }).ok, true)
+    assert.equal(tabsRepo.saveMachineConfiguration(GROUP, { name: '带机型配置' }).ok, true)
+    assert.equal(
+      tabsRepo.saveEntityItem('machine', { category: GROUP, configuration: '带机型配置', name: '契约机型' }).ok,
+      true,
+    )
+    const leafConfig = { category: GROUP, configuration: '空配置', item: null }
+    const busyConfig = { category: GROUP, configuration: '带机型配置', item: null }
+    const machineNode = { category: GROUP, configuration: '带机型配置', item: '契约机型' }
+    const groupNode = { category: GROUP, configuration: null, item: null }
+
+    const conveyor = tabsRepo.saveMachineTab('mechanism', { kind: 'structure', name: '输送机构' })
     assert.equal(conveyor.ok, true)
     assert.deepEqual(conveyor.item.pages, [])
     assert.deepEqual(
@@ -1586,45 +1596,150 @@ async function run() {
       { ok: false, reason: 'duplicate' },
     )
     // 两个目录的 Tab 各自独立，同名不冲突
-    assert.equal(
-      tabsRepo.saveMachineTab('project', { kind: 'structure', name: '输送机构' }).ok,
-      true,
-    )
-    const lifter = tabsRepo.saveMachineTab('mechanism', {
-      kind: 'structure',
-      name: '收板机构',
-    })
+    const projectTab = tabsRepo.saveMachineTab('project', { kind: 'structure', name: '输送机构' })
+    assert.equal(projectTab.ok, true)
+    const lifter = tabsRepo.saveMachineTab('mechanism', { kind: 'structure', name: '收板机构' })
     assert.equal(lifter.ok, true)
 
-    // 二级 Tab：名称只在同一个 Tab 内不重复
-    const page = tabsRepo.saveMachineTabPage(conveyor.item.id, {
-      name: '入料输送（L-RACK）',
-    })
-    assert.equal(page.ok, true)
+    // 有子选单的节点（分组、带机型的配置）不能有二级 Tab；叶子节点（空配置、机型）可以
     assert.deepEqual(
-      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '入料输送（l-rack）' }),
-      { ok: false, reason: 'duplicate' },
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '页', node: groupNode }),
+      { ok: false, reason: 'not-empty' },
     )
-    assert.deepEqual(tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '  ' }), {
-      ok: false,
-      reason: 'validation',
-    })
-    assert.deepEqual(tabsRepo.saveMachineTabPage(9999, { name: '无主页' }), {
+    assert.deepEqual(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '页', node: busyConfig }),
+      { ok: false, reason: 'not-empty' },
+    )
+    // 节点要属于 Tab 所在的目录；不存在的节点 / Tab 是 stale
+    assert.deepEqual(
+      tabsRepo.saveMachineTabPage(projectTab.item.id, { name: '页', node: leafConfig }),
+      { ok: false, reason: 'validation' },
+    )
+    assert.deepEqual(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, {
+        name: '页',
+        node: { category: GROUP, configuration: '不存在', item: null },
+      }),
+      { ok: false, reason: 'stale' },
+    )
+    assert.deepEqual(tabsRepo.saveMachineTabPage(9999, { name: '页', node: leafConfig }), {
       ok: false,
       reason: 'stale',
     })
+
+    const page = tabsRepo.saveMachineTabPage(conveyor.item.id, {
+      name: '01 单段输送段（搭配）',
+      node: leafConfig,
+    })
+    assert.equal(page.ok, true)
+    assert.deepEqual(page.item.node, leafConfig)
+    // 名称在同一 Tab、同一节点内不重复；别的节点 / 别的 Tab 可以同名
+    assert.deepEqual(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '01 单段输送段（搭配）', node: leafConfig }),
+      { ok: false, reason: 'duplicate' },
+    )
+    assert.deepEqual(tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '  ', node: leafConfig }), {
+      ok: false,
+      reason: 'validation',
+    })
+    const onMachine = tabsRepo.saveMachineTabPage(conveyor.item.id, {
+      name: '01 单段输送段（搭配）',
+      node: machineNode,
+    })
+    assert.equal(onMachine.ok, true)
     const samePage = tabsRepo.saveMachineTabPage(lifter.item.id, {
-      name: '入料输送（L-RACK）',
+      name: '01 单段输送段（搭配）',
+      node: leafConfig,
     })
     assert.equal(samePage.ok, true)
-    assert.notEqual(samePage.item.id, page.item.id)
+
+    // 有二级 Tab 的节点不能再加子选单：配置下不能加机型，分组（叶子时）下不能加配置 / 机型
+    assert.deepEqual(
+      tabsRepo.saveEntityItem('machine', { category: GROUP, configuration: '空配置', name: '新机型' }),
+      { ok: false, reason: 'not-empty' },
+    )
+    // 机型也不能移进有二级 Tab 的配置
+    assert.deepEqual(
+      tabsRepo.saveEntityItem(
+        'machine',
+        {
+          category: GROUP,
+          configuration: '空配置',
+          name: '契约机型',
+          previousCategory: GROUP,
+          previousConfiguration: '带机型配置',
+        },
+        '契约机型',
+      ),
+      { ok: false, reason: 'not-empty' },
+    )
+    const LEAF_GROUP = '契约空分类'
+    assert.equal(tabsRepo.saveEntityGroup('machine', { name: LEAF_GROUP, machineType: 'mechanism' }).ok, true)
+    const leafGroupNode = { category: LEAF_GROUP, configuration: null, item: null }
+    assert.equal(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '分类页', node: leafGroupNode }).ok,
+      true,
+    )
+    assert.deepEqual(tabsRepo.saveMachineConfiguration(LEAF_GROUP, { name: '配置' }), {
+      ok: false,
+      reason: 'not-empty',
+    })
+    assert.deepEqual(
+      tabsRepo.saveEntityItem('machine', { category: LEAF_GROUP, name: '机型' }),
+      { ok: false, reason: 'not-empty' },
+    )
+    // 有二级 Tab 的节点不能删
+    assert.deepEqual(tabsRepo.deleteEntityGroup('machine', LEAF_GROUP), {
+      ok: false,
+      reason: 'not-empty',
+    })
+    assert.deepEqual(tabsRepo.deleteMachineConfiguration(GROUP, '空配置'), {
+      ok: false,
+      reason: 'not-empty',
+    })
+    assert.deepEqual(tabsRepo.deleteEntityItem('machine', '契约机型', GROUP, '带机型配置'), {
+      ok: false,
+      reason: 'not-empty',
+    })
+
+    // 改名时二级 Tab 跟着节点走
+    assert.equal(tabsRepo.saveMachineConfiguration(GROUP, { name: '空配置改' }, '空配置').ok, true)
+    assert.equal(
+      tabsRepo
+        .getMachineTabs('mechanism')
+        .flatMap((tab) => tab.pages)
+        .filter((item) => item.node.configuration === '空配置改').length,
+      2,
+    )
+    assert.equal(
+      tabsRepo.saveEntityItem(
+        'machine',
+        {
+          category: GROUP,
+          configuration: '带机型配置',
+          name: '契约机型改',
+          previousCategory: GROUP,
+          previousConfiguration: '带机型配置',
+        },
+        '契约机型',
+      ).ok,
+      true,
+    )
+    assert.equal(
+      tabsRepo.getMachineTabs('mechanism').flatMap((tab) => tab.pages).find((item) => item.id === onMachine.item.id)
+        .node.item,
+      '契约机型改',
+    )
+    assert.equal(tabsRepo.saveEntityGroup('machine', { name: '契约分类改' }, GROUP).ok, true)
+    assert.equal(
+      tabsRepo.getMachineTabs('mechanism').flatMap((tab) => tab.pages).find((item) => item.id === page.item.id)
+        .node.category,
+      '契约分类改',
+    )
 
     // 内容按页 id 存放，两个同名页互不影响
     assert.equal(
-      tabsRepo.saveMachineSectionRow(page.item.id, owner, {
-        role: '入料确认',
-        sensorIds: [sensor.id],
-      }).ok,
+      tabsRepo.saveMachineSectionRow(page.item.id, owner, { role: '入料确认', sensorIds: [sensor.id] }).ok,
       true,
     )
     assert.deepEqual(
@@ -1634,86 +1749,72 @@ async function run() {
     assert.deepEqual(tabsRepo.getMachineSectionRows(samePage.item.id, owner), [])
     assert.equal(
       Array.isArray(
-        JSON.parse(memoryTabs.get(domain.STORAGE_KEY))[
-          `machine-section-rows:${page.item.id}:${owner}`
-        ],
+        JSON.parse(memoryTabs.get(domain.STORAGE_KEY))[`machine-section-rows:${page.item.id}:${owner}`],
       ),
       true,
     )
 
-    // 改名不动内容；左移 / 右移调整顺序，到头了不能再移
-    const second = tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '出料确认段' })
+    // 左移 / 右移只在同一节点的二级 Tab 之间；改名不动内容
+    const second = tabsRepo.saveMachineTabPage(conveyor.item.id, {
+      name: '出料确认段',
+      node: tabsRepo.getMachineTabs('mechanism').flatMap((tab) => tab.pages).find((item) => item.id === page.item.id).node,
+    })
     assert.equal(second.ok, true)
-    assert.equal(
-      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '入料输送（改）' }, page.item.id)
-        .ok,
-      true,
-    )
-    assert.equal(tabsRepo.getMachineSectionRows(page.item.id, owner).length, 1)
-    const pageNames = () =>
-      tabsRepo
-        .getMachineTabs('mechanism')
-        .find((tab) => tab.id === conveyor.item.id)
-        .pages.map((item) => item.name)
-    assert.deepEqual(pageNames(), ['入料输送（改）', '出料确认段'])
+    const nodePages = () => {
+      const tab = tabsRepo.getMachineTabs('mechanism').find((item) => item.id === conveyor.item.id)
+      const node = tab.pages.find((item) => item.id === page.item.id).node
+      return tab.pages
+        .filter((item) => JSON.stringify(item.node) === JSON.stringify(node))
+        .map((item) => item.name)
+    }
+    assert.deepEqual(nodePages(), ['01 单段输送段（搭配）', '出料确认段'])
     assert.equal(tabsRepo.moveMachineTabPage(conveyor.item.id, second.item.id, -1).ok, true)
-    assert.deepEqual(pageNames(), ['出料确认段', '入料输送（改）'])
+    assert.deepEqual(nodePages(), ['出料确认段', '01 单段输送段（搭配）'])
     assert.deepEqual(tabsRepo.moveMachineTabPage(conveyor.item.id, second.item.id, -1), {
       ok: false,
       reason: 'validation',
     })
+    assert.equal(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '入料输送（改）' }, page.item.id).ok,
+      true,
+    )
+    assert.equal(tabsRepo.getMachineSectionRows(page.item.id, owner).length, 1)
 
     // 有内容时不能换 Tab 类型；注意事项 Tab 的页不能放示意图
     assert.deepEqual(
-      tabsRepo.saveMachineTab(
-        'mechanism',
-        { kind: 'notes', name: '输送机构' },
-        conveyor.item.id,
-      ),
+      tabsRepo.saveMachineTab('mechanism', { kind: 'notes', name: '输送机构' }, conveyor.item.id),
       { ok: false, reason: 'not-empty' },
     )
     const notes = tabsRepo.saveMachineTab('mechanism', { kind: 'notes', name: '机型注意事项' })
-    const notePage = tabsRepo.saveMachineTabPage(notes.item.id, { name: '电镀区' })
+    const notePage = tabsRepo.saveMachineTabPage(notes.item.id, { name: '电镀区', node: leafGroupNode })
+    assert.equal(notePage.ok, true)
     assert.equal(
-      tabsRepo.saveMachineSectionRow(notePage.item.id, owner, {
-        role: '防护',
-        name: '传感器防腐',
-        desc: 'IP67',
-      }).ok,
+      tabsRepo.saveMachineSectionRow(notePage.item.id, owner, { role: '防护', name: '传感器防腐', desc: 'IP67' }).ok,
       true,
     )
     assert.deepEqual(tabsRepo.getMachineSectionImages(notePage.item.id, owner), [])
 
-    // 删页 / 删 Tab 会连同内容一起删
-    assert.deepEqual(tabsRepo.deleteMachineTabPage(conveyor.item.id, second.item.id), {
-      ok: true,
-    })
-    assert.deepEqual(pageNames(), ['入料输送（改）'])
+    // 删页 / 删 Tab 会连同内容一起删；删光二级 Tab 后节点又能加子选单
+    assert.deepEqual(tabsRepo.deleteMachineTabPage(conveyor.item.id, second.item.id), { ok: true })
     assert.deepEqual(tabsRepo.deleteMachineTab(conveyor.item.id), { ok: true })
     const persisted = JSON.parse(memoryTabs.get(domain.STORAGE_KEY))
-    assert.equal(
-      persisted['machine-tabs:all'].some((tab) => tab.id === conveyor.item.id),
-      false,
-    )
+    assert.equal(persisted['machine-tabs:all'].some((tab) => tab.id === conveyor.item.id), false)
     assert.equal(persisted[`machine-section-rows:${page.item.id}:${owner}`], undefined)
+    assert.equal(Array.isArray(persisted[`machine-section-rows:${notePage.item.id}:${owner}`]), true)
+    assert.deepEqual(tabsRepo.deleteMachineTab(lifter.item.id), { ok: true })
     assert.equal(
-      Array.isArray(persisted[`machine-section-rows:${notePage.item.id}:${owner}`]),
+      tabsRepo.saveEntityItem('machine', { category: '契约分类改', configuration: '空配置改', name: '新机型' }).ok,
       true,
     )
 
     // 拖放那一套已经拿掉：机型不再「放进」Tab
-    for (const removed of [
-      'placeMachineInTab',
-      'removeMachineFromTab',
-      'moveMachineToCatalog',
-      'machineTabOf',
-    ]) {
+    for (const removed of ['placeMachineInTab', 'removeMachineFromTab', 'moveMachineToCatalog', 'machineTabOf']) {
       assert.equal(removed in tabsRepo, false, removed)
     }
   }
 
   // 旧格式（Tab 里记的是机型名，内容在机型的 1000 分区）读出时转成同名二级 Tab，
-  // 内容搬到页下面，机型留在目录里
+  // 挂在同名的机型节点下，内容搬到页下面
   {
     const memoryOld = new Map()
     const oldRepo = domain.createSelectionRepository({
@@ -1724,10 +1825,11 @@ async function run() {
         setItem: (key, value) => memoryOld.set(key, value),
       },
     })
-    const machine = oldRepo
+    const group = oldRepo
       .getEntityGroups('machine')
-      .filter((group) => domain.machineCatalogKind(group) === 'mechanism')
-      .flatMap((group) => domain.listEntityGroupItems(group))[0]
+      .find((item) => domain.machineCatalogKind(item) === 'mechanism' && item.configurations?.some((c) => c.items.length))
+    const configuration = group.configurations.find((item) => item.items.length)
+    const machine = configuration.items[0]
     const contentId = domain.MACHINE_CONTENT_SECTION_ID
     assert.equal(
       oldRepo.saveMachineSectionRow(contentId, machine, {
@@ -1738,42 +1840,24 @@ async function run() {
     )
     const legacyStore = JSON.parse(memoryOld.get(domain.STORAGE_KEY))
     legacyStore['machine-tabs:all'] = [
-      {
-        id: 1,
-        catalog: 'mechanism',
-        name: '输送机构',
-        sort: 1,
-        kind: 'structure',
-        machines: [machine],
-      },
+      { id: 1, catalog: 'mechanism', name: '输送机构', sort: 1, kind: 'structure', machines: [machine] },
     ]
     const migrated = domain.createSelectionRepository({
       crudDefaults: data.CRUD_DEFAULTS,
       sensorData: data.SENSOR_DATA,
-      storage: {
-        getItem: () => JSON.stringify(legacyStore),
-        setItem: () => true,
-      },
+      storage: { getItem: () => JSON.stringify(legacyStore), setItem: () => true },
     })
     const [tab] = migrated.getMachineTabs('mechanism')
     assert.deepEqual(
-      tab.pages.map((item) => item.name),
-      [machine],
+      tab.pages.map((item) => [item.name, item.node]),
+      [[machine, { category: group.name, configuration: configuration.name, item: machine }]],
     )
     assert.equal('machines' in tab, false)
     assert.deepEqual(
-      migrated
-        .getMachineSectionRows(tab.pages[0].id, domain.MACHINE_TAB_PAGE_OWNER)
-        .map((row) => row.role),
+      migrated.getMachineSectionRows(tab.pages[0].id, domain.MACHINE_TAB_PAGE_OWNER).map((row) => row.role),
       ['旧机型内容'],
     )
     assert.deepEqual(migrated.getMachineSectionRows(contentId, machine), [])
-    assert.equal(
-      migrated
-        .getEntityGroups('machine')
-        .some((group) => domain.listEntityGroupItems(group).includes(machine)),
-      true,
-    )
   }
 
   // 内置基础数据物化：buildDefaultStore 覆盖字典/分组/制程/Sensor 目录；机型 Tab 由用户维护

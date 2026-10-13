@@ -12,6 +12,8 @@ export interface EntityNode {
   item?: string;
   /** 分组 / 配置下的叶子总数 */
   count?: number;
+  /** 分组 / 配置下有没有子节点（按存储算，不受搜索过滤影响） */
+  hasChildren?: boolean;
   selectable: boolean;
   checkable: boolean;
   isLeaf?: boolean;
@@ -24,8 +26,8 @@ export interface ItemPayload {
   item: string;
 }
 
-const groupKey = (category: string) => `group:${category}`;
-const configurationKey = (category: string, configuration: string) =>
+export const groupKey = (category: string) => `group:${category}`;
+export const configurationKey = (category: string, configuration: string) =>
   `configuration:${JSON.stringify([category, configuration])}`;
 
 function itemNode(
@@ -49,10 +51,12 @@ function itemNode(
 /**
  * 把分组列表转成 a-tree 的 treeData。keyword（已小写）非空时只保留命中的节点：
  * 分组或配置名命中就带上它下面的全部叶子，否则只带命中的叶子。
+ * selectableBranches 时，没有子节点的分组 / 配置也能选中（机型选单的末级节点）。
  */
 export function buildEntityTree(
   groups: readonly EntityGroup[],
   keyword: string,
+  selectableBranches = false,
 ): EntityNode[] {
   const matches = (text: string) =>
     !keyword || text.toLocaleLowerCase('zh-CN').includes(keyword);
@@ -73,7 +77,8 @@ export function buildEntityTree(
             category: group.name,
             configuration: configuration.name,
             count: configuration.items.length,
-            selectable: false,
+            hasChildren: configuration.items.length > 0,
+            selectable: selectableBranches && configuration.items.length === 0,
             checkable: false,
             children: items.map((item) =>
               itemNode(group.name, configuration.name, item),
@@ -99,7 +104,12 @@ export function buildEntityTree(
             (sum, configuration) => sum + configuration.items.length,
             0,
           ),
-        selectable: false,
+        hasChildren:
+          group.items.length > 0 || (group.configurations?.length ?? 0) > 0,
+        selectable:
+          selectableBranches &&
+          group.items.length === 0 &&
+          (group.configurations?.length ?? 0) === 0,
         checkable: false,
         children: [
           ...configurations,

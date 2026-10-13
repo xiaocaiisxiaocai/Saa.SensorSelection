@@ -8,7 +8,7 @@ type SelectionStore = ReturnType<typeof useSelectionStore>;
 /**
  * 「条件查找」的索引：遍历结构目录里结构类 Tab 下每个二级 Tab 的每一行选型，
  * 把机型型号 / 工序 / 板件特性的名称和 Sensor 文字摊平成一条文档。
- * 文档的 sectionId 是二级 Tab 的 id，category / sectionName 是所属 Tab 名。
+ * 文档的 sectionId 是二级 Tab 的 id，路径是它所属的选单节点，sectionName 是所属 Tab 名。
  * 调用方应包在 store.batchRead 里，让归一化结果在一次构建内只算一次。
  */
 export function buildMachineSearchDocuments(
@@ -56,11 +56,11 @@ export function buildMachineSearchDocuments(
         documents.push({
           boardCharacteristicId: row.boardCharacteristicId,
           boardCharacteristicName: boardCharacteristic?.name ?? '',
-          category: tab.name,
-          configuration: '',
+          category: page.node.category,
+          configuration: page.node.configuration ?? '',
           machineModelId: row.machineModelId,
           machineModelName: machineModel?.name ?? '',
-          machineName: page.name,
+          machineName: [page.node.item, page.name].filter(Boolean).join(' / '),
           processStepId: row.processStepId,
           processStepName: processStep
             ? `${processStep.layer} · ${processStep.name}`

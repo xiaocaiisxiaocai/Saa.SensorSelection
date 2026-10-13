@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 
-import type { MachineTab, MachineTabPage } from '@/domain';
+import type { MachineNodeRef, MachineTab, MachineTabPage } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import { notifyResult } from '@/pages/shared/save-feedback';
 import { useSelectionStore } from '@/stores/selection';
 
 /**
- * 新建 / 改名二级 Tab；父组件调用 openAdd(tab) / openEdit(tab, page) 打开。
+ * 新建 / 改名二级 Tab；父组件调用 openAdd(tab, 选单节点) / openEdit(tab, page) 打开。
  * 保存成功后发出 saved，带上二级 Tab 的 id，新建时页面据此切过去。
  */
 const emit = defineEmits<{ saved: [pageId: number] }>();
@@ -16,23 +16,30 @@ const store = useSelectionStore();
 
 const visible = ref(false);
 const tab = ref<MachineTab | null>(null);
+const node = ref<MachineNodeRef | null>(null);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const form = reactive({ name: '' });
 const dirtyGuard = useDirtyGuard(form);
 
-function show(target: MachineTab, page?: MachineTabPage) {
+function show(
+  target: MachineTab,
+  owner: MachineNodeRef,
+  page?: MachineTabPage,
+) {
   validationAttempted.value = false;
   tab.value = target;
+  node.value = owner;
   editId.value = page?.id;
   form.name = page?.name ?? '';
   dirtyGuard.markClean();
   visible.value = true;
 }
 
-const openAdd = (target: MachineTab) => show(target);
+const openAdd = (target: MachineTab, owner: MachineNodeRef) =>
+  show(target, owner);
 const openEdit = (target: MachineTab, page: MachineTabPage) =>
-  show(target, page);
+  show(target, page.node, page);
 
 async function cancel() {
   if (await dirtyGuard.confirmClose()) {
@@ -41,18 +48,19 @@ async function cancel() {
 }
 
 function save() {
-  if (!tab.value) return;
+  if (!tab.value || !node.value) return;
   validationAttempted.value = true;
   if (!form.name.trim()) return;
   const result = store.saveMachineTabPage(
     tab.value.id,
-    { name: form.name.trim() },
+    { name: form.name.trim(), node: node.value },
     editId.value,
   );
   if (
     notifyResult(result, editId.value ? '已改名' : '二级 Tab 已新建', {
-      duplicate: `「${tab.value.name}」下已有同名的二级 Tab`,
-      stale: '该 Tab 已被删除，请刷新后重试',
+      duplicate: '这里已有同名的二级 Tab',
+      'not-empty': '这个选单下已有子选单，不能再新建二级 Tab',
+      stale: '该 Tab 或选单已被删除，请刷新后重试',
     })
   ) {
     visible.value = false;

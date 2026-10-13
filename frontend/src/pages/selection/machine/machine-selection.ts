@@ -6,8 +6,11 @@ import {
   type EntityGroup,
   type MachineCatalogKind,
   type MachineTab,
+  type MachineNodeRef,
   type MachineTabPage,
 } from '@/domain';
+
+import { pagesOf } from './machine-nodes';
 
 type Query = Record<string, unknown>;
 
@@ -76,36 +79,31 @@ export function resolveMachineSelection(
 }
 
 export interface MachineTabSelection {
-  /** 当前显示的 Tab；选中目录机型或当前目录还没有 Tab 时为 null */
+  /** 当前显示的 Tab；当前目录还没有 Tab 时为 null */
   tab: MachineTab | null;
-  /** Tab 下选中的二级 Tab；Tab 还没有二级 Tab 时为 null */
+  /** 选中节点在这个 Tab 下的二级 Tab；还没有时为 null */
   page: MachineTabPage | null;
-  /** 选中的是左侧目录里的机型（看它自己的内容） */
-  treeMachine: string;
 }
 
 /**
- * 地址栏指向的位置：?item= 是当前目录里的机型就看它自己的内容；
- * 否则按 ?tab=（找不到用第一个 Tab）和 ?page=（找不到用它的第一个二级 Tab）。
+ * 选中节点下的 Tab 与二级 Tab：按 ?tab=（找不到用第一个 Tab）
+ * 和 ?page=（找不到用这个节点在该 Tab 下的第一个二级 Tab）。
  */
 export function resolveTabSelection(
   tabs: readonly MachineTab[],
-  catalogMachines: ReadonlySet<string>,
+  node: MachineNodeRef | null,
   query: Query,
 ): MachineTabSelection {
-  const item = text(query.item);
-  if (item && catalogMachines.has(item)) {
-    return { tab: null, page: null, treeMachine: item };
-  }
   const tab =
     tabs.find((candidate) => String(candidate.id) === text(query.tab)) ??
     tabs[0] ??
     null;
+  const pages = tab && node ? pagesOf(tab, node) : [];
   const page =
-    tab?.pages.find((candidate) => String(candidate.id) === text(query.page)) ??
-    tab?.pages[0] ??
+    pages.find((candidate) => String(candidate.id) === text(query.page)) ??
+    pages[0] ??
     null;
-  return { tab, page, treeMachine: '' };
+  return { tab, page };
 }
 
 /** 二级 Tab 所在的 Tab */

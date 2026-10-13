@@ -23,6 +23,8 @@ const props = defineProps<{
   selectedKey?: string;
   checkedItems?: string[];
   machineType?: MachineCatalogKind;
+  /** 机型：已有二级 Tab 的分组 / 配置 key，不能再加子节点 */
+  lockedBranches?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
@@ -119,7 +121,7 @@ async function removeConfiguration(payload: {
   notifyResult(
     store.deleteMachineConfiguration(payload.category, payload.configuration),
     '配置已删除',
-    { 'not-empty': '请先清空该配置下的全部机型' },
+    { 'not-empty': '请先清空该配置下的全部机型和二级 Tab' },
   );
 }
 
@@ -133,7 +135,10 @@ async function removeGroup(name: string) {
     store.deleteEntityGroup(props.kind, name),
     `${groupLabel.value}已删除`,
     {
-      'not-empty': `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
+      'not-empty':
+        props.kind === 'machine'
+          ? `请先清空该${groupLabel.value}下的全部${itemLabel.value}和二级 Tab`
+          : `请先清空该${groupLabel.value}下的全部${itemLabel.value}`,
     },
   );
 }
@@ -159,6 +164,10 @@ async function removeItem(payload: {
     `${itemLabel.value}已删除`,
     {
       'in-use': `请先清空该${itemLabel.value}下的业务数据`,
+      'not-empty':
+        props.kind === 'machine'
+          ? `请先删除该${itemLabel.value}的二级 Tab 和内容`
+          : `请先清空该${itemLabel.value}下的业务数据`,
     },
   );
 }
@@ -226,6 +235,8 @@ function onReorderItems(payload: {
       :allow-configurations="kind === 'machine' && machineType !== 'project'"
       :group-label="groupLabel"
       :item-label="itemLabel"
+      :selectable-branches="kind === 'machine'"
+      :locked-branches="lockedBranches"
       @select="onSelect"
       @toggle-check="emit('toggleCheck', $event)"
       @create-group="groupDialog?.openCreate()"

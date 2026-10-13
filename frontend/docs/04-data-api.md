@@ -53,9 +53,9 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | `sensor-sop-file:all` | Sensor SOP 文件库（PDF，不参与型号关联） |
 | `sensor-sop:all` | Sensor 资料文件（历史兼容键，当前为 PDF 资料） |
 | `sensor-3d:all` | Sensor 3D 文件（暂为 PDF） |
-| `machine-tabs:all` | 机型 Tab：`{ id, catalog: mechanism\|project, name, sort, kind: structure\|notes, pages: { id, name }[] }`；`pages` 是二级 Tab，名称在同一 Tab 内不重复，id 在所有 Tab 间唯一。旧格式的 `machines: 机型名[]` 读出时转成同名二级 Tab |
+| `machine-tabs:all` | 机型一级 Tab：`{ id, catalog: mechanism\|project, name, sort, kind: structure\|notes, pages: { id, name, node: { category, configuration, item } }[] }`；`pages` 是二级 Tab，`node` 是它所属的选单节点（只有 category 为分类，带 configuration 为配置，带 item 为机型），名称在同一 Tab、同一节点内不重复，id 在所有 Tab 间唯一。有子选单的节点不能有二级 Tab，有二级 Tab 的节点不能再加子选单。旧格式的 `machines: 机型名[]` 读出时转成同名二级 Tab，挂在同名机型节点下 |
 | `machine-section-rows:{二级 Tab id}:@tab-page` / `machine-section-images:{二级 Tab id}:@tab-page` | 二级 Tab 的内容（所有者位固定为 `MACHINE_TAB_PAGE_OWNER`，机型名不能取这个值）；删除二级 Tab / Tab 时一起删除 |
-| `machine-section-rows:1000:{机型名}` / `machine-section-images:1000:{机型名}` | 目录里机型自己的内容（`MACHINE_CONTENT_SECTION_ID`，结构选型表） |
+| `machine-section-rows:1000:{机型名}` / `machine-section-images:1000:{机型名}` | 旧模型里机型自己的内容（`MACHINE_CONTENT_SECTION_ID`），读旧格式 Tab 时搬到二级 Tab 下；页面不再直接显示 |
 | `machine-extra-sections:{机型名}` | 旧模型里机型自建的 Tab（页面不再显示，数据保留） |
 | `machine-section-rows:{sectionId}:{机型名}` | 旧模型的结构/注意事项行（`sectionId` 为上一行旧 Tab 的 id） |
 | `machine-section-images:{sectionId}:{机型名}` | 结构示意图（最多 2 张） |

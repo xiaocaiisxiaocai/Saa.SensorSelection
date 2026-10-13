@@ -41,13 +41,6 @@
   display: none;
 }
 
-/* 看目录机型时，选型表上方显示机型名 */
-.machine-tree-content__title {
-  flex-shrink: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
 @media (width <= 60rem) {
   .machine-source-stack,
   .selection-split--global-search {

@@ -163,7 +163,7 @@ export type MachineSectionKind = 'notes' | 'structure';
 
 /**
  * 机型页顶部的 Tab：按目录（结构 / 专案机型）共用的一组容器。
- * Tab 下直接新建二级 Tab（页），和左侧目录里的机型无关。
+ * 二级 Tab（页）属于「左侧选单节点 × Tab」：选中某个节点时只显示它自己的二级 Tab。
  */
 export interface MachineTab {
   id: number;
@@ -176,10 +176,25 @@ export interface MachineTab {
   pages: MachineTabPage[];
 }
 
-/** 二级 Tab：名称只在所属 Tab 内不重复；id 在所有 Tab 间唯一，内容按 id 存放 */
+/**
+ * 左侧选单里的一个节点：分类（只有 category）、配置（再带 configuration）
+ * 或机型（再带 item）。
+ */
+export interface MachineNodeRef {
+  category: string;
+  configuration: string | null;
+  item: string | null;
+}
+
+/**
+ * 二级 Tab：属于某个选单节点（node）。节点的下一层只能二选一——
+ * 有子选单就不能有二级 Tab，有二级 Tab 就不能再加子选单。
+ * 名称在同一 Tab、同一节点内不重复；id 在所有 Tab 间唯一，内容按 id 存放。
+ */
 export interface MachineTabPage {
   id: number;
   name: string;
+  node: MachineNodeRef;
 }
 
 export interface MachineSectionItem {

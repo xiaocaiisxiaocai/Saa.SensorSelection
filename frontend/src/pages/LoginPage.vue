@@ -106,13 +106,7 @@ onMounted(async () => {
     await enter();
     return;
   }
-  // 带着 token 来到登录页却换不回身份，说明这次是「做着做着被踢出来」——
-  // 账号被停用/删除、或 token 过期。不说明原因的话，用户只会看到自己突然
-  // 回到了登录页，完全不知道发生了什么。
-  if (auth.sessionExpired) {
-    loginError.value =
-      '登录已失效，请重新登录（账号可能已被停用或长时间未操作）';
-  }
+  // 登录失效回到登录页时不额外提示，直接让用户重新登录
   usernameField.value?.focus();
 });
 </script>

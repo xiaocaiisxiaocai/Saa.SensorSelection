@@ -13,14 +13,7 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
-import type { ItemPayload } from '@/pages/selection/entity/entity-tree-data';
-
 import EntityTree from './EntityTree.vue';
-
-type ExternalDropTarget = {
-  node: ItemPayload & { kind: 'configuration' | 'group' | 'item' };
-  position: 'after' | 'before' | 'inside';
-};
 
 const props = defineProps<{
   kind: EntityKind;
@@ -30,12 +23,6 @@ const props = defineProps<{
   selectedKey?: string;
   checkedItems?: string[];
   machineType?: MachineCatalogKind;
-  /** 不在目录树里显示的叶子（已放进机型 Tab 的机型） */
-  hiddenItems?: readonly string[];
-  /** 叶子可拖出树、树接收拖回来的叶子 */
-  externalDrag?: boolean;
-  /** 叶子「更多」菜单里额外的操作 */
-  extraItemActions?: readonly { key: string; label: string }[];
 }>();
 
 const emit = defineEmits<{
@@ -50,8 +37,6 @@ const emit = defineEmits<{
       checked: boolean;
     },
   ];
-  itemAction: [key: string, payload: ItemPayload];
-  externalDrop: [name: string, target: ExternalDropTarget | null];
 }>();
 
 const store = useSelectionStore();
@@ -68,40 +53,13 @@ const configurationDialog =
   ref<InstanceType<typeof EntityConfigurationDialog>>();
 const itemDialog = ref<InstanceType<typeof EntityItemDialog>>();
 
-const catalogGroups = computed(() =>
+const treeGroups = computed(() =>
   visibleEntityGroups(
     store.entityGroups(props.kind),
     props.kind,
     props.machineType,
   ),
 );
-const hidden = computed(() => new Set(props.hiddenItems ?? []));
-// 已放进 Tab 的机型不在树里显示（数据仍在分组里）
-const treeGroups = computed(() =>
-  hidden.value.size === 0
-    ? catalogGroups.value
-    : catalogGroups.value.map((group) => ({
-        ...group,
-        items: group.items.filter((item) => !hidden.value.has(item)),
-        configurations: group.configurations?.map((configuration) => ({
-          ...configuration,
-          items: configuration.items.filter((item) => !hidden.value.has(item)),
-        })),
-      })),
-);
-
-/** 分组（或分组下某个配置）在存储里的完整叶子列表（含隐藏的） */
-function storedSiblings(category: string, configuration: string | null) {
-  const group = store
-    .entityGroups(props.kind)
-    .find((candidate) => candidate.name === category);
-  return (
-    (configuration
-      ? group?.configurations?.find((item) => item.name === configuration)
-          ?.items
-      : group?.items) ?? []
-  );
-}
 
 function isSelectedLeaf(category: string | undefined, item: string) {
   return (
@@ -201,7 +159,6 @@ async function removeItem(payload: {
     `${itemLabel.value}已删除`,
     {
       'in-use': `请先清空该${itemLabel.value}下的业务数据`,
-      'not-empty': `请先清空该${itemLabel.value}下的业务数据`,
     },
   );
 }
@@ -244,38 +201,17 @@ function onReorderItems(payload: {
   oldIndex: number;
   newIndex: number;
 }) {
-  // 树里看到的是去掉隐藏机型后的列表，下标要换算回存储里的完整列表
-  const visible = treeGroups.value.find(
-    (group) => group.name === payload.category,
-  );
-  const visibleItems =
-    (payload.configuration
-      ? visible?.configurations?.find(
-          (item) => item.name === payload.configuration,
-        )?.items
-      : visible?.items) ?? [];
-  const full = storedSiblings(payload.category, payload.configuration);
-  const oldIndex = full.indexOf(visibleItems[payload.oldIndex] ?? '');
-  const newIndex = full.indexOf(visibleItems[payload.newIndex] ?? '');
-  if (oldIndex < 0 || newIndex < 0) return;
   notifyResult(
     store.reorderEntityItems(
       props.kind,
       payload.category,
-      oldIndex,
-      newIndex,
+      payload.oldIndex,
+      payload.newIndex,
       payload.configuration,
     ),
     '',
   );
 }
-
-defineExpose({
-  /** 改名（机型 Tab 下的机型也用目录的编辑对话框） */
-  editItem: (payload: ItemPayload) => itemDialog.value?.openEdit(payload),
-  removeItem,
-  storedSiblings,
-});
 </script>
 
 <template>
@@ -290,8 +226,6 @@ defineExpose({
       :allow-configurations="kind === 'machine' && machineType !== 'project'"
       :group-label="groupLabel"
       :item-label="itemLabel"
-      :external-drag="externalDrag"
-      :extra-item-actions="extraItemActions"
       @select="onSelect"
       @toggle-check="emit('toggleCheck', $event)"
       @create-group="groupDialog?.openCreate()"
@@ -306,8 +240,6 @@ defineExpose({
       @reorder-groups="onReorderGroups"
       @reorder-configurations="onReorderConfigurations"
       @reorder-items="onReorderItems"
-      @item-action="(key, payload) => emit('itemAction', key, payload)"
-      @external-drop="(name, target) => emit('externalDrop', name, target)"
     />
 
     <EntityGroupDialog

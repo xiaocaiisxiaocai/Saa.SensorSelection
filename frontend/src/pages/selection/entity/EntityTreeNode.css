@@ -38,17 +38,3 @@
     opacity: 1;
   }
 }
-
-/* 从机型 Tab 拖回来时的落点提示 */
-.entity-tree__node--drop-inside {
-  border-radius: var(--radius-sm);
-  outline: 1px dashed var(--color-primary);
-}
-
-.entity-tree__node--drop-before {
-  box-shadow: inset 0 2px 0 var(--color-primary);
-}
-
-.entity-tree__node--drop-after {
-  box-shadow: inset 0 -2px 0 var(--color-primary);
-}

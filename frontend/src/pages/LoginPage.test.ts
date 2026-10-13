@@ -1,5 +1,5 @@
 import { message } from 'ant-design-vue';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,9 +200,7 @@ describe('LoginPage', () => {
     wrapper.unmount();
   });
 
-  it('explains why the user landed back on the login page after being revoked', async () => {
-    // 账号被停用/删除后，后端会逐请求拒绝，用户是「做着做着被踢出来」的。
-    // 不给原因的话，他只会看到自己突然回到登录页，完全不知道发生了什么。
+  it('shows no error banner when an expired session lands on the login page', async () => {
     window.localStorage.setItem('symtek_token', 'stale-token');
     vi.spyOn(api, 'me').mockRejectedValue(
       new (await import('@/api')).ApiError(
@@ -213,9 +211,10 @@ describe('LoginPage', () => {
 
     const wrapper = await mountLogin();
     await vi.waitFor(() => {
-      expect(wrapper.find('.login__error').exists()).toBe(true);
+      expect(api.me).toHaveBeenCalled();
     });
-    expect(wrapper.get('.login__error').text()).toContain('登录已失效');
+    await flushPromises();
+    expect(wrapper.find('.login__error').exists()).toBe(false);
     wrapper.unmount();
   });
 });

@@ -1,0 +1,4 @@
+.machine-row-dialog__upload {
+  display: block;
+  margin-top: var(--space-2);
+}

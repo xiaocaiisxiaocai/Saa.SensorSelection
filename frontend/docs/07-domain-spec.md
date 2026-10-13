@@ -53,7 +53,7 @@ interface StorageLike {
 6. ID 分配：正整数、跳过已占用、损坏/重复 id 重分配。
 7. 文本字段经 `storedText`：只接受 boolean / number / string，其余变 `''`。
 8. 名称比较用 `toLocaleLowerCase('zh-CN')`（去重、排序、查重）。
-9. 受控文档：PDF 与 Word 各 8 MB；机型示意图：jpg/png/webp、2 MB、每结构最多 2 张。
+9. 受控文档：PDF 与 Word 各 8 MB；机型示意图：jpg/png/webp、2 MB，挂在结构记录上（每条记录一张，相邻记录可共用同一张）。
 10. 旧 key 只读迁移、不再写入：见 §4。
 
 失败原因枚举（与旧类型一致）：
@@ -130,7 +130,7 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 | `machine-tabs:all` | | 机型 Tab（按目录共用的容器，`normalizeMachineTabs`：同目录不重名、一个机型只在一个 Tab） |
 | `machine-extra-sections:{机型名}` | | 旧模型里机型自建的 Tab（放进同名同类型 Tab 时并入机型内容） |
 | `machine-section-rows:{sectionId}:{机型名}` | 专用函数，**不用** `keyFor` | 结构/注意事项行 |
-| `machine-section-images:{sectionId}:{机型名}` | 专用函数 | 结构示意图（最多 2 张） |
+| `machine-section-images:{sectionId}:{机型名}` | 专用函数 | 旧的分区示意图（已不再写入；读行时挂到记录上并清空） |
 | `meta:seed-version` | | `[{ version: number }]` |
 
 只读迁移、读取后不再写入：
@@ -622,11 +622,15 @@ toName 空 → `validation`。找不到 from → `ensureGeneralStructureSection(
 
 #### `getMachineSectionRows(sectionId, machineName)`
 
-先迁移，再按 `allowImage` + 当前目录归一化。
+先迁移，再按 `allowImage` + 当前目录归一化。结构分区里如果还有旧的分区示意图（`machine-section-images`，最多 2 张）且已有记录：没有任何记录带图时，第一张给全部记录（相邻同图合并成一格），有第二张且不止一条记录时给最后一条；然后把分区示意图清空。只改内存，随下一次写入提交；还没有记录时先留着。
 
 #### `getMachineSectionImages(sectionId, machineName)`
 
-新 key 已存在 → 归一化。否则从行上的遗留 `row.image` 抽出，写入新 key（最多 2）。
+旧的分区示意图：key 存在 → 归一化；不存在 → `[]`（不再从 `row.image` 反推，记录的图直接显示在表格里）。
+
+#### `saveMachineRowsImage(sectionId, machineName, rowIds, image | null)`
+
+一次给多条记录设或清示意图（表格里合并格的「更换 / 删除」、「沿用上一笔的图」都靠同一张图的 `dataUrl` 相同）。注意事项分区或图片不合规 → `validation`；有记录 id 不存在或 `rowIds` 为空 → `stale`。
 
 #### `saveMachineSectionImages(sectionId, machineName, images)`
 

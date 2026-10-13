@@ -1,0 +1,23 @@
+.machine-row-image {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+
+/* 有图时图片与操作按钮在格子里水平居中；空格仍靠左 */
+.machine-row-image--filled {
+  justify-items: center;
+}
+
+.machine-row-image__frame {
+  justify-self: stretch;
+  width: 100%;
+}
+
+/* antd 把 class 放在 <img> 本身上，而它不带本组件的 scoped 属性 */
+.machine-row-image :deep(.machine-row-image__media) {
+  max-height: 120px;
+  object-fit: contain;
+  background: var(--color-fill-alter);
+  border-radius: var(--radius-sm);
+}

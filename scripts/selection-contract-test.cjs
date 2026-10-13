@@ -1780,6 +1780,77 @@ async function run() {
     )
     assert.equal(tabsRepo.getMachineSectionRows(page.item.id, owner).length, 1)
 
+    // 示意图挂在记录上：表格最后一列显示，相邻记录用同一张图（「沿用上一笔的图」）时合并成一格。
+    // saveMachineRowsImage 一次给多条记录设 / 清示意图
+    {
+      const imageA = {
+        dataUrl: 'data:image/png;base64,QQ==',
+        fileName: 'a.png',
+        mimeType: 'image/png',
+        size: 1,
+      }
+      const second = tabsRepo.saveMachineSectionRow(page.item.id, owner, {
+        role: '入料减速',
+        sensorIds: [sensor.id],
+        image: imageA,
+      })
+      assert.equal(second.ok, true)
+      assert.deepEqual(second.item.image, imageA)
+      const ids = tabsRepo.getMachineSectionRows(page.item.id, owner).map((row) => row.id)
+      assert.deepEqual(tabsRepo.saveMachineRowsImage(page.item.id, owner, ids, imageA), { ok: true })
+      assert.deepEqual(
+        tabsRepo.getMachineSectionRows(page.item.id, owner).map((row) => row.image?.fileName),
+        ['a.png', 'a.png'],
+      )
+      assert.deepEqual(tabsRepo.saveMachineRowsImage(page.item.id, owner, [ids[0]], null), { ok: true })
+      assert.deepEqual(
+        tabsRepo.getMachineSectionRows(page.item.id, owner).map((row) => row.image?.fileName ?? null),
+        [null, 'a.png'],
+      )
+      assert.deepEqual(tabsRepo.saveMachineRowsImage(page.item.id, owner, [9999], imageA), {
+        ok: false,
+        reason: 'stale',
+      })
+      assert.deepEqual(
+        tabsRepo.saveMachineRowsImage(page.item.id, owner, ids, { ...imageA, mimeType: 'image/gif', fileName: 'a.gif' }),
+        { ok: false, reason: 'validation' },
+      )
+      assert.deepEqual(tabsRepo.deleteMachineSectionRow(page.item.id, owner, second.item.id), { ok: true })
+    }
+
+    // 旧的分区示意图（右侧示意图栏，最多 2 张）读出时挂到记录上：第一张给全部记录（合并成一格），
+    // 有第二张且不止一条记录时给最后一条
+    {
+      const legacyPage = tabsRepo.saveMachineTabPage(conveyor.item.id, {
+        name: '旧示意图页',
+        node: tabsRepo.getMachineTabs('mechanism').flatMap((tab) => tab.pages).find((item) => item.id === page.item.id).node,
+      })
+      assert.equal(legacyPage.ok, true)
+      for (const role of ['甲', '乙', '丙']) {
+        assert.equal(
+          tabsRepo.saveMachineSectionRow(legacyPage.item.id, owner, { role, sensorIds: [sensor.id] }).ok,
+          true,
+        )
+      }
+      const legacyImages = [
+        { dataUrl: 'data:image/png;base64,MQ==', fileName: '1.png', mimeType: 'image/png', size: 1 },
+        { dataUrl: 'data:image/png;base64,Mg==', fileName: '2.png', mimeType: 'image/png', size: 1 },
+      ]
+      assert.equal(tabsRepo.saveMachineSectionImages(legacyPage.item.id, owner, legacyImages).ok, true)
+      const legacyStore = JSON.parse(memoryTabs.get(domain.STORAGE_KEY))
+      const reread = domain.createSelectionRepository({
+        crudDefaults: data.CRUD_DEFAULTS,
+        sensorData: data.SENSOR_DATA,
+        storage: { getItem: () => JSON.stringify(legacyStore), setItem: () => true },
+      })
+      assert.deepEqual(
+        reread.getMachineSectionRows(legacyPage.item.id, owner).map((row) => row.image?.fileName),
+        ['1.png', '1.png', '2.png'],
+      )
+      assert.deepEqual(reread.getMachineSectionImages(legacyPage.item.id, owner), [])
+      assert.deepEqual(tabsRepo.deleteMachineTabPage(conveyor.item.id, legacyPage.item.id), { ok: true })
+    }
+
     // 有内容时不能换 Tab 类型；注意事项 Tab 的页不能放示意图
     assert.deepEqual(
       tabsRepo.saveMachineTab('mechanism', { kind: 'notes', name: '输送机构' }, conveyor.item.id),

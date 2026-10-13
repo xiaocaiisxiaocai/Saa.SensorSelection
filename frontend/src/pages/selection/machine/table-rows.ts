@@ -18,10 +18,44 @@ export interface MachineTableRow extends MachineSectionRow {
   boardCharacteristicName: string;
   sensor: SensorItem | null;
   source: MachineSectionRow;
+  /**
+   * 示意图格占几行：相邻记录用同一张图时合并成一格，由第一行占满整组，
+   * 组里其余行为 0；没有图的记录各自一格
+   */
+  imageSpan: number;
+  /** 共用这一格示意图的记录（只在 imageSpan > 0 的行上有值） */
+  imageRows: MachineSectionRow[];
+  /**
+   * 这一格还没有图、而紧挨在上面的记录有图时，就是那条记录；
+   * 格子里据此提供「沿用上一笔的图」
+   */
+  previousRow: MachineSectionRow | null;
 }
 
 function sensorSpec(sensor: SensorItem): string {
   return `${sensor.brand} ${sensor.model} · ${sensor.spec || '未填写规格'}`.trim();
+}
+
+/** 把相邻、示意图相同的记录分成一组；没有图的记录各自一组 */
+export function imageGroups(
+  items: readonly MachineSectionRow[],
+): MachineSectionRow[][] {
+  const groups: MachineSectionRow[][] = [];
+  for (const item of items) {
+    const last = groups[groups.length - 1];
+    const previous = last?.[last.length - 1];
+    if (
+      last &&
+      item.image &&
+      previous?.image &&
+      previous.image.dataUrl === item.image.dataUrl
+    ) {
+      last.push(item);
+    } else {
+      groups.push([item]);
+    }
+  }
+  return groups;
 }
 
 export function buildMachineTableRows(
@@ -32,6 +66,41 @@ export function buildMachineTableRows(
   machineModels: DictionaryItem[] = [],
   boardCharacteristics: DictionaryItem[] = [],
 ): MachineTableRow[] {
+  const sensorCount = (item: MachineSectionRow) =>
+    isStructure
+      ? Math.max(
+          1,
+          (item.sensorIds ?? []).filter((id) =>
+            sensors.some((sensor) => sensor.id === id),
+          ).length,
+        )
+      : 1;
+  // 每条记录在示意图列上的位置：组首记录的第一行占满整组的行数
+  const imageCell = new Map<
+    MachineSectionRow,
+    {
+      span: number;
+      rows: MachineSectionRow[];
+      previous: MachineSectionRow | null;
+    }
+  >();
+  let previous: MachineSectionRow | null = null;
+  for (const group of imageGroups(items)) {
+    group.forEach((item, index) =>
+      imageCell.set(
+        item,
+        index === 0
+          ? {
+              span: group.reduce((sum, row) => sum + sensorCount(row), 0),
+              rows: group,
+              // 只有没图的格子才需要「沿用上一笔」
+              previous: !item.image && previous?.image ? previous : null,
+            }
+          : { span: 0, rows: [], previous: null },
+      ),
+    );
+    previous = group[group.length - 1] ?? null;
+  }
   return items.flatMap((item) => {
     const records = isStructure
       ? (item.sensorIds ?? [])
@@ -68,6 +137,9 @@ export function buildMachineTableRows(
       source: item,
       sensorType: sensor?.sensorType ?? item.sensorType,
       spec: sensor ? sensorSpec(sensor) : item.spec,
+      imageSpan: index === 0 ? (imageCell.get(item)?.span ?? 0) : 0,
+      imageRows: index === 0 ? (imageCell.get(item)?.rows ?? []) : [],
+      previousRow: index === 0 ? (imageCell.get(item)?.previous ?? null) : null,
     }));
   });
 }
@@ -81,8 +153,9 @@ export function sensorTypeList(row: MachineTableRow): string[] {
 type Column = TableColumnType<MachineTableRow>;
 
 /**
- * 分区表格的列。结构分区一条记录按传感器展开成多行，除传感器两列外都合并单元格
- * （合并后 antd 不能排序，所以结构分区不提供排序）；注意事项分区按分类 / 名称排序。
+ * 分区表格的列。结构分区一条记录按传感器展开成多行，除传感器两列外都合并单元格，
+ * 示意图列再把相邻同图的记录合并（合并后 antd 不能排序，所以结构分区不提供排序）；
+ * 注意事项分区按分类 / 名称排序。
  */
 export function sectionColumns(options: {
   structure: boolean;
@@ -139,6 +212,19 @@ export function sectionColumns(options: {
           ...merged,
         },
         { key: 'note', dataIndex: 'note', title: '备注', width: 96, ...merged },
+        // 示意图放在操作列前；相邻记录同图时合并成一格
+        {
+          key: 'image',
+          title: '示意图',
+          width: 152,
+          customCell: (row) => ({
+            rowSpan: row.imageSpan,
+            // 只有多条记录共用一张图才标记；单笔（含多个传感器展开）与空格都不加
+            ...(row.imageRows.length > 1
+              ? { class: 'machine-image-cell--shared' }
+              : {}),
+          }),
+        },
       ]
     : [
         {

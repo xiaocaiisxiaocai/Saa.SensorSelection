@@ -262,9 +262,9 @@ async function runMachineImage() {
   await saveSheet()
   await page.locator('.machine-sub-tab', { hasText: machine }).first().waitFor({ state: 'visible' })
 
-  await check('机型结构: image upload stays hidden until the Tab has content', async () => {
-    assert((await page.locator('.machine-images .ant-upload-drag').count()) === 0, 'image upload is visible before the Tab has content')
-    await page.getByText('请先新增内容后再添加图片', { exact: true }).waitFor({ state: 'visible' })
+  // 示意图在表格「操作」前一列，挂在记录上：先有记录才有格子
+  await check('机型结构: the schematic column appears with the first record', async () => {
+    assert((await page.locator('.machine-row-image').count()) === 0, 'schematic cell exists before any record')
   })
 
   await page.getByRole('button', { name: '新增选型', exact: true }).first().click()
@@ -273,25 +273,26 @@ async function runMachineImage() {
   await saveSheet()
   await page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first().waitFor({ state: 'visible' })
 
-  await check('机型结构: upload, preview and delete a real image', async () => {
-    await upload(IMAGE_PATH)
+  await check('机型结构: upload, preview and delete a real image in the table', async () => {
+    const cell = page.locator('.machine-row-image').first()
+    await cell.getByRole('button', { name: `给 ${role} 新增示意图`, exact: true }).waitFor({ state: 'visible' })
+    await cell.locator('input[type="file"]').setInputFiles(IMAGE_PATH)
     await expectToast('示意图已更新')
-    const card = page.locator('.image-card', { hasText: IMAGE_NAME }).first()
-    await card.waitFor({ state: 'visible', timeout: 15000 })
-    const image = card.locator('img')
+    await cell.getByText(IMAGE_NAME, { exact: true }).waitFor({ state: 'visible', timeout: 15000 })
+    const image = cell.locator('img')
     assert(await image.isVisible(), 'uploaded image is not visible')
-    const box = await image.boundingBox()
-    assert(box && box.width >= 160, `uploaded image is still too narrow (${box?.width ?? 0}px)`)
     // a-image 自带的点击放大预览（悬停时的遮罩层接收点击）
-    await card.locator('.ant-image').click()
+    await cell.locator('.ant-image').click()
     await page.locator('.ant-image-preview-img').waitFor({ state: 'visible' })
     // 预览工具栏的第一个按钮是关闭
     await page.locator('.ant-image-preview-operations-operation').first().click()
     await page.locator('.ant-image-preview-img').waitFor({ state: 'hidden' })
-    await card.getByRole('button', { name: `删除 ${IMAGE_NAME}`, exact: true }).click()
+    // 预览、按钮都不能打开整行编辑
+    assert((await page.locator('.ant-modal:visible').count()) === 0, 'clicking the image opened the row editor')
+    await cell.getByRole('button', { name: `删除 ${role} 的示意图`, exact: true }).click()
     await confirmDelete()
     await expectToast('示意图已删除')
-    await card.waitFor({ state: 'detached' })
+    await cell.getByRole('button', { name: `给 ${role} 新增示意图`, exact: true }).waitFor({ state: 'visible' })
   })
 
   const contentRow = page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first()

@@ -17,7 +17,7 @@ import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
 import MachineRowDialog from './MachineRowDialog.vue';
-import MachineSectionImages from './MachineSectionImages.vue';
+import MachineRowImageCell from './MachineRowImageCell.vue';
 import {
   buildMachineTableRows,
   filterSectionRows,
@@ -41,7 +41,6 @@ const sensorTypeFilters = ref<Array<string | number>>([]);
 const machineModelFilter = ref<string | number | null>(null);
 const processStepFilter = ref<string | number | null>(null);
 const boardCharacteristicFilter = ref<string | number | null>(null);
-const imagesCollapsed = ref(false);
 const page = ref(1);
 const pageSize = ref(20);
 const sort = ref<TableSortState | null>(null);
@@ -82,7 +81,6 @@ const sensorById = computed(
 const items = computed(() =>
   store.machineSectionRows(props.section.id, props.machineName),
 );
-const hasTabContent = computed(() => items.value.length > 0);
 const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
@@ -258,13 +256,7 @@ const customRow = computed(() =>
 </script>
 
 <template>
-  <div
-    class="machine-body"
-    :class="{
-      'machine-body--with-images': isStructure,
-      'machine-body--images-collapsed': isStructure && imagesCollapsed,
-    }"
-  >
+  <div class="machine-body">
     <div ref="tableHost" class="selection-panel">
       <div class="selection-toolbar">
         <a-select
@@ -424,6 +416,14 @@ const customRow = computed(() =>
               </template>
             </div>
           </template>
+          <MachineRowImageCell
+            v-else-if="column.key === 'image'"
+            :rows="row.imageRows"
+            :previous-row="row.previousRow"
+            :section-id="section.id"
+            :machine-name="machineName"
+            :writable="writable"
+          />
           <template v-else-if="column.key === 'actions'">
             <a-space :size="4">
               <a-tooltip title="编辑">
@@ -460,13 +460,6 @@ const customRow = computed(() =>
         v-bind="PAGINATION_PROPS"
       />
     </div>
-    <MachineSectionImages
-      v-if="isStructure"
-      v-model:collapsed="imagesCollapsed"
-      :section-id="section.id"
-      :machine-name="machineName"
-      :has-content="hasTabContent"
-    />
   </div>
   <MachineRowDialog
     ref="rowDialog"

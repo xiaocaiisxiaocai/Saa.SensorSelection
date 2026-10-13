@@ -58,7 +58,7 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | `machine-section-rows:1000:{机型名}` / `machine-section-images:1000:{机型名}` | 旧模型里机型自己的内容（`MACHINE_CONTENT_SECTION_ID`），读旧格式 Tab 时搬到二级 Tab 下；页面不再直接显示 |
 | `machine-extra-sections:{机型名}` | 旧模型里机型自建的 Tab（页面不再显示，数据保留） |
 | `machine-section-rows:{sectionId}:{机型名}` | 旧模型的结构/注意事项行（`sectionId` 为上一行旧 Tab 的 id） |
-| `machine-section-images:{sectionId}:{机型名}` | 结构示意图（最多 2 张） |
+| `machine-section-images:{sectionId}:{机型名}` | 旧的分区示意图（最多 2 张，已不再写入）：读到时挂到该分区的记录上并清空。示意图现在是记录的 `image` 字段（`machine-section-rows` 里每行一张，相邻同图在表格里合并） |
 
 文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF、图片和 3D 文件仅在预览或下载时按需请求，避免登录阶段传输文件正文。
 | `meta:seed-version` | 种子版本号 |

@@ -732,7 +732,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true, true);
     const widths = Object.values(columnWidths(wrapper));
 
-    expect(widths).toEqual([104, 100, 110, 120, 116, 220, 120, 96, 72]);
+    expect(widths).toEqual([104, 100, 110, 120, 116, 220, 120, 96, 152, 72]);
 
     wrapper.unmount();
   });
@@ -759,28 +759,47 @@ describe('MachinePage', () => {
     );
   });
 
-  it('auto-collapses the schematic rail on compact desktop widths and lets users reopen it', async () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query.includes('1439px'),
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: () => true,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    }));
+  it('puts the schematic in the column before 操作 and merges rows that share an image', async () => {
     const wrapper = await mountPage(true, true);
+    const selectionStore = useSelectionStore();
     const panel = wrapper.getComponent(MachineSectionPanel);
+    const machineName = panel.props('machineName') as string;
+    const section = panel.props('section') as { id: number };
+    const sensor = selectionStore.sensors[0]!;
+    const image = {
+      dataUrl: 'data:image/png;base64,QQ==',
+      fileName: '入料段.png',
+      mimeType: 'image/png',
+      size: 1,
+    };
+    // 前两笔共用一张图（第二笔「沿用上一笔的图」），第三笔没有图
+    for (const [role, withImage] of [
+      ['入料确认', true],
+      ['入料减速', true],
+      ['入料停止', false],
+    ] as const) {
+      expect(
+        selectionStore.saveMachineSectionRow(section.id, machineName, {
+          role,
+          sensorIds: [sensor.id],
+          ...(withImage ? { image } : {}),
+        }).ok,
+      ).toBe(true);
+    }
+    await flushPromises();
 
-    expect(panel.get('.machine-body').classes()).toContain(
-      'machine-body--images-collapsed',
-    );
-    await panel.get('[aria-label="展开结构示意图"]').trigger('click');
-    expect(panel.get('.machine-body').classes()).not.toContain(
-      'machine-body--images-collapsed',
-    );
-    expect(panel.get('[aria-label="折叠结构示意图"]')).toBeTruthy();
+    const headers = panel
+      .findAll('.ant-table-thead th')
+      .map((th) => th.text().trim())
+      .filter(Boolean);
+    expect(headers.slice(-2)).toEqual(['示意图', '操作']);
+    const cells = panel.findAll('td:has(.machine-row-image)');
+    expect(cells).toHaveLength(2);
+    expect(cells[0]!.attributes('rowspan')).toBe('2');
+    expect(cells[0]!.get('img').attributes('alt')).toBe('入料段.png');
+    expect(cells[1]!.text()).toContain('新增图片');
+    // 右侧示意图栏已经拿掉
+    expect(panel.find('.machine-images').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -795,35 +814,21 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('shows the schematic upload only after the current tab has content', async () => {
-    const wrapper = await mountPage(true, true);
-    const selectionStore = useSelectionStore();
-    const panel = wrapper.getComponent(MachineSectionPanel);
-    const machineName = panel.props('machineName') as string;
-    const section = panel.props('section') as { id: number; kind: string };
-    const sensor = selectionStore.sensors[0];
-
-    const expandImages = panel.find('[aria-label="展开结构示意图"]');
-    if (expandImages.exists()) await expandImages.trigger('click');
-
-    expect(panel.find('.ant-upload-drag').exists()).toBe(false);
-    expect(panel.text()).toContain('请先新增内容后再添加图片');
-    expect(sensor).toBeDefined();
-    if (!sensor) return;
-
+  it('offers the image actions only to writers', async () => {
+    const reader = await mountPage(true, false);
+    const store = useSelectionStore();
+    const panel = reader.getComponent(MachineSectionPanel);
     expect(
-      selectionStore.saveMachineSectionRow(section.id, machineName, {
-        note: '',
-        purpose: '',
-        role: '上传前置内容',
-        sensorIds: [sensor.id],
-      }).ok,
+      store.saveMachineSectionRow(
+        (panel.props('section') as { id: number }).id,
+        panel.props('machineName') as string,
+        { role: '只读行', sensorIds: [store.sensors[0]!.id] },
+      ).ok,
     ).toBe(true);
     await flushPromises();
-
-    expect(panel.find('.ant-upload-drag').exists()).toBe(true);
-    expect(panel.text()).not.toContain('请先新增内容后再添加图片');
-    wrapper.unmount();
+    expect(panel.find('.machine-row-image').text()).toBe('—');
+    expect(panel.find('.machine-row-image button').exists()).toBe(false);
+    reader.unmount();
   });
 
   it('filters machine structure rows by any of multiple sensor types', async () => {

@@ -527,6 +527,15 @@ export const useSelectionStore = defineStore('selection', () => {
       payload: Partial<MachineSectionItem>,
       editId?: number,
     ) => mutate(() => repository.saveGlobalMachineSection(payload, editId)),
+    saveMachineRowsImage: (
+      sectionId: number,
+      machineName: string,
+      rowIds: readonly number[],
+      image: MachineRowImage | null,
+    ) =>
+      mutate(() =>
+        repository.saveMachineRowsImage(sectionId, machineName, rowIds, image),
+      ),
     saveMachineSectionImages: (
       sectionId: number,
       machineName: string,

@@ -1754,7 +1754,69 @@ export function createSelectionRepository({
         sensorItems: getSensors(),
       },
     );
-    return store[key] as MachineSectionRow[];
+    const rows = store[key] as MachineSectionRow[];
+    if (allowImage) adoptSectionImages(numericId, machineName, rows);
+    return rows;
+  }
+
+  /**
+   * 旧的分区示意图（右侧示意图栏，最多 2 张）挂到记录上：第一张给全部记录
+   * （相邻同图合并成一格），有第二张且不止一条记录时给最后一条。记录已经有
+   * 示意图时不再覆盖。只改内存，随下一次写入提交；还没有记录时先留着。
+   */
+  function adoptSectionImages(
+    sectionId: number,
+    machineName: string,
+    rows: MachineSectionRow[],
+  ) {
+    const imagesKey = machineSectionImagesKey(sectionId, machineName);
+    const legacy = store[imagesKey];
+    if (!Array.isArray(legacy) || legacy.length === 0 || rows.length === 0) {
+      return;
+    }
+    const [first, second] = normalizeMachineSectionImages(legacy);
+    if (first && !rows.some((row) => row.image)) {
+      rows.forEach((row) => {
+        row.image = first;
+      });
+      if (second && rows.length > 1) rows[rows.length - 1]!.image = second;
+    }
+    store[imagesKey] = [];
+  }
+
+  /** 一次给多条记录设（image）或清（null）示意图；「沿用上一笔的图」就是同一张图 */
+  function saveMachineRowsImage(
+    sectionId: number,
+    machineName: string,
+    rowIds: readonly number[],
+    image: MachineRowImage | null,
+  ): DeleteResult {
+    const numericId = Number(sectionId);
+    if (!sectionAllowsImage(numericId, machineName)) {
+      return { ok: false, reason: 'validation' };
+    }
+    let normalized: MachineRowImage | null = null;
+    if (image) {
+      if (
+        !validateMachineRowImage(image.fileName, image.mimeType, image.size).ok
+      ) {
+        return { ok: false, reason: 'validation' };
+      }
+      normalized = normalizeMachineRowImage(image);
+      if (!normalized) return { ok: false, reason: 'validation' };
+    }
+    const rows = getMachineSectionRows(numericId, machineName);
+    const targets = rowIds.map((id) => rows.find((row) => row.id === id));
+    if (targets.length === 0 || targets.some((row) => !row)) {
+      return { ok: false, reason: 'stale' };
+    }
+    const snapshot = cloneStore(store);
+    for (const row of targets) {
+      if (normalized) row!.image = normalized;
+      else delete row!.image;
+    }
+    store[machineSectionRowsKey(numericId, machineName)] = rows;
+    return persist(snapshot) ? { ok: true } : { ok: false, reason: 'storage' };
   }
 
   function getMachineSectionImages(
@@ -1764,14 +1826,8 @@ export function createSelectionRepository({
     const numericId = Number(sectionId);
     if (!sectionAllowsImage(numericId, machineName)) return [];
     const key = machineSectionImagesKey(numericId, machineName);
-    if (Object.hasOwn(store, key)) {
-      store[key] = normalizeMachineSectionImages(store[key]);
-    } else {
-      const legacyImages = getMachineSectionRows(numericId, machineName)
-        .map((row) => row.image)
-        .filter((image): image is MachineRowImage => Boolean(image));
-      store[key] = normalizeMachineSectionImages(legacyImages);
-    }
+    if (!Object.hasOwn(store, key)) return [];
+    store[key] = normalizeMachineSectionImages(store[key]);
     return store[key] as MachineRowImage[];
   }
 
@@ -3101,6 +3157,7 @@ export function createSelectionRepository({
     saveGlobalMachineSection,
     saveMachineSectionRow,
     saveMachineSectionImages,
+    saveMachineRowsImage,
     saveMachineTab,
     saveMachineTabPage,
     saveProcessIntroFile,

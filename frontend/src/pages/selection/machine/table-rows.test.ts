@@ -5,6 +5,7 @@ import type { MachineSectionRow, ProcessStepItem, SensorItem } from '@/domain';
 import {
   buildMachineTableRows,
   filterSectionRows,
+  imageGroups,
   sectionColumns,
 } from './table-rows';
 
@@ -222,5 +223,44 @@ describe('sectionColumns', () => {
       notes.filter((column) => column.sorter).map((column) => column.key),
     ).toEqual(['role', 'name']);
     expect(notes.some((column) => column.key === 'actions')).toBe(false);
+  });
+
+  it('merges the schematic cell over neighbouring records that share an image', () => {
+    const image = (name: string) => ({
+      dataUrl: `data:image/png;base64,${name}`,
+      fileName: `${name}.png`,
+      mimeType: 'image/png',
+      size: 1,
+    });
+    // a、b 共用 X（a 有三个传感器，占三行）；c 没有图；d 用 X 但不相邻，单独一格
+    const items: MachineSectionRow[] = [
+      { ...row, id: 1, image: image('X') },
+      { ...row, id: 2, sensorIds: [11], image: image('X') },
+      { ...row, id: 3, sensorIds: [11] },
+      { ...row, id: 4, sensorIds: [11], image: image('X') },
+    ];
+    expect(imageGroups(items).map((group) => group.map((item) => item.id))).toEqual([
+      [1, 2],
+      [3],
+      [4],
+    ]);
+    const rows = buildMachineTableRows(items, sensors, true);
+    expect(rows.map((item) => item.imageSpan)).toEqual([4, 0, 0, 0, 1, 1]);
+    expect(rows[0]!.imageRows.map((item) => item.id)).toEqual([1, 2]);
+    // 没图的 c 紧挨在有图的 b 下面：可以沿用 b 的图；d 自己有图，不提供
+    expect(rows.map((item) => item.previousRow?.id ?? null)).toEqual([
+      null, null, null, null, 2, null,
+    ]);
+    const columns = sectionColumns({ structure: true, sort: null, writable: true });
+    expect(columns.slice(-2).map((column) => column.key)).toEqual(['image', 'actions']);
+    // 展开列：a 的 3 个传感器是 rows[0..2]，b 是 rows[3]，没图的 c 是 rows[4]，
+    // 不相邻、自己一张 X 的 d 是 rows[5]
+    const imageColumn = columns.find((column) => column.key === 'image');
+    expect(imageColumn?.customCell?.(rows[0]!)).toEqual({
+      rowSpan: 4,
+      class: 'machine-image-cell--shared',
+    });
+    expect(imageColumn?.customCell?.(rows[5]!)).toEqual({ rowSpan: 1 });
+    expect(imageColumn?.customCell?.(rows[4]!)).toEqual({ rowSpan: 1 });
   });
 });

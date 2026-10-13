@@ -3,6 +3,7 @@ import { message } from 'ant-design-vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { dialogs } from '@/pages/shared/confirm';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import MachineSectionPanel from './MachineSectionPanel.vue';
@@ -143,29 +144,16 @@ describe('MachineSectionPanel', () => {
     wrapper.unmount();
   });
 
-  it('saves uploaded images to the section that started the upload and locks the drop zone', async () => {
+  it('saves an uploaded image to the rows that started the upload and locks the button', async () => {
     const { pinia, section, store } = setup('structure');
     const sensor = store.sensors[0];
     if (!sensor) throw new Error('sensor fixture missing');
-    expect(
-      store.saveMachineSectionRow(section.id, MACHINE, {
-        role: '定位',
-        sensorIds: [sensor.id],
-      }).ok,
-    ).toBe(true);
-    const saveSpy = vi.spyOn(store, 'saveMachineSectionImages');
-    // 中等宽度下示意图栏默认折叠，测试里固定为展开。
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({
-        addEventListener: vi.fn(),
-        addListener: vi.fn(),
-        matches: false,
-        media: '',
-        removeEventListener: vi.fn(),
-        removeListener: vi.fn(),
-      })),
-    );
+    const saved = store.saveMachineSectionRow(section.id, MACHINE, {
+      role: '定位',
+      sensorIds: [sensor.id],
+    });
+    if (!saved.ok) throw new Error('row fixture failed');
+    const saveSpy = vi.spyOn(store, 'saveMachineRowsImage');
 
     let resolveUpload!: (value: string) => void;
     uploadFileMock.mockImplementation(
@@ -181,29 +169,114 @@ describe('MachineSectionPanel', () => {
     });
     await flushPromises();
 
-    const dragger = () => wrapper.getComponent({ name: 'AUploadDragger' });
+    const upload = () =>
+      wrapper
+        .getComponent({ name: 'MachineRowImageCell' })
+        .getComponent({ name: 'AUpload' });
     const file = new File(['x'], 'a.png', { type: 'image/png' });
     const pick = async () => {
-      (dragger().props('beforeUpload') as (file: File) => boolean)(file);
+      (upload().props('beforeUpload') as (file: File) => boolean)(file);
       // createFilePicker 用 setTimeout 把同一次选择的文件合成一批
       await new Promise((resolve) => setTimeout(resolve, 0));
       await flushPromises();
     };
     await pick();
-    expect(dragger().props('disabled')).toBe(true);
+    expect(upload().props('disabled')).toBe(true);
 
-    // 上传中的第二次拖放直接被锁拒绝，不会再发起上传。
+    // 上传中再选一次直接被锁拒绝，不会再发起上传。
     await pick();
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
 
-    // 上传途中切到别的机型，图片仍要写进发起上传时的分区。
+    // 上传途中切到别的机型，图片仍要写进发起上传时的记录。
     await wrapper.setProps({ machineName: '02 多段输送段（搭配）' });
     resolveUpload('/api/files/1/content');
     await flushPromises();
 
     expect(saveSpy).toHaveBeenCalledTimes(1);
-    expect(saveSpy.mock.calls[0]?.[0]).toBe(section.id);
-    expect(saveSpy.mock.calls[0]?.[1]).toBe(MACHINE);
+    expect(saveSpy.mock.calls[0]?.slice(0, 3)).toEqual([
+      section.id,
+      MACHINE,
+      [saved.item.id],
+    ]);
+    wrapper.unmount();
+  });
+
+  it('marks a merged schematic cell as shared and leaves a single image plain', async () => {
+    const { pinia, section, store } = setup('structure');
+    const sensor = store.sensors[0];
+    if (!sensor) throw new Error('sensor fixture missing');
+    const sharedImage = {
+      dataUrl: 'data:image/png;base64,QQ==',
+      fileName: '共用.png',
+      mimeType: 'image/png',
+      size: 1,
+    };
+    const aloneImage = {
+      ...sharedImage,
+      dataUrl: 'data:image/png;base64,Qg==',
+      fileName: '单独.png',
+    };
+    for (const [role, image] of [
+      ['入料确认', sharedImage],
+      ['入料减速', sharedImage],
+      ['出料确认', aloneImage],
+    ] as const) {
+      expect(
+        store.saveMachineSectionRow(section.id, MACHINE, {
+          role,
+          sensorIds: [sensor.id],
+          image,
+        }).ok,
+      ).toBe(true);
+    }
+    expect(
+      store.saveMachineSectionRow(section.id, MACHINE, {
+        role: '出料停止',
+        sensorIds: [sensor.id],
+      }).ok,
+    ).toBe(true);
+
+    const wrapper = mount(MachineSectionPanel, {
+      props: { machineName: MACHINE, section },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+
+    const cells = wrapper.findAll('td:has(.machine-row-image)');
+    expect(cells).toHaveLength(3);
+
+    const sharedCell = cells[0]!;
+    expect(sharedCell.attributes('rowspan')).toBe('2');
+    expect(sharedCell.classes()).toContain('machine-image-cell--shared');
+    expect(sharedCell.get('img').attributes('alt')).toBe('共用.png');
+    expect(sharedCell.get('.machine-row-image__frame').attributes('title')).toBe(
+      '共用.png',
+    );
+    expect(sharedCell.find('.ant-tag').exists()).toBe(false);
+    expect(sharedCell.text()).not.toContain('共用.png');
+    expect(sharedCell.text()).not.toContain('笔共用');
+
+    const aloneCell = cells[1]!;
+    expect(aloneCell.classes()).not.toContain('machine-image-cell--shared');
+    expect(aloneCell.find('.ant-tag').exists()).toBe(false);
+    expect(aloneCell.get('img').attributes('alt')).toBe('单独.png');
+    expect(aloneCell.text()).not.toContain('单独.png');
+
+    expect(
+      cells[2]!.find('button[aria-label="出料停止 沿用上一笔的图"]').exists(),
+    ).toBe(true);
+
+    const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValue(false);
+    await sharedCell
+      .get('button[aria-label="删除 入料确认、入料减速 的示意图"]')
+      .trigger('click');
+    expect(confirm).toHaveBeenCalledWith({
+      title: '删除示意图',
+      content: '确认删除“共用.png”吗？（2 笔记录共用，会一起删除）',
+      okText: '删除',
+      danger: true,
+    });
+
     wrapper.unmount();
   });
 });

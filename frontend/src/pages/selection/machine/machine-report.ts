@@ -34,8 +34,15 @@ export function buildReportSections(
                 : '',
             };
           }),
+          // 示意图挂在记录上；共用同一张图的记录只放一次
           images: structure
-            ? store.machineSectionImages(page.id, MACHINE_TAB_PAGE_OWNER)
+            ? [
+                ...new Map(
+                  rows
+                    .flatMap((row) => (row.image ? [row.image] : []))
+                    .map((image) => [image.dataUrl, image] as const),
+                ).values(),
+              ]
             : [],
           sensors: structure
             ? store.sensors.filter((sensor) =>

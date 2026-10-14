@@ -132,7 +132,7 @@ export const useSelectionStore = defineStore('selection', () => {
               page.node.configuration,
               page.node.item,
               tab.name,
-              page.name,
+              page.direct ? '' : page.name,
               row.role,
             ]
               .filter(Boolean)
@@ -514,6 +514,8 @@ export const useSelectionStore = defineStore('selection', () => {
       payload: Partial<Pick<MachineTab, 'kind' | 'name' | 'sort'>>,
       editId?: number,
     ) => mutate(() => repository.saveMachineTab(catalog, payload, editId)),
+    ensureMachineDirectPage: (tabId: number, node: MachineNodeRef) =>
+      mutate(() => repository.ensureMachineDirectPage(tabId, node)),
     deleteMachineTabPage: (tabId: number, pageId: number) =>
       mutate(() => repository.deleteMachineTabPage(tabId, pageId)),
     moveMachineTabPage: (tabId: number, pageId: number, offset: -1 | 1) =>

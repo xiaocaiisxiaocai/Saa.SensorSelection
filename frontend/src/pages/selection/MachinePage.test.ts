@@ -40,7 +40,6 @@ const machineSectionPanelCss = readFileSync(
   'utf8',
 );
 
-const FIRST_PAGE = '入料输送（L-RACK）';
 
 async function mountPage(
   authenticated = false,
@@ -63,19 +62,17 @@ async function mountPage(
     sort: 1,
   });
   if (!conveyor.ok) throw new Error('tab fixture failed');
-  // 二级 Tab 挂在打开页面时默认选中的节点（结构目录的第一个机型）上
+  // 打开页面时默认选中结构目录的第一个机型：机型没有二级 Tab，
+  // 它在「输送机构」下有一张直属表格
   const first = resolveMachineSelection(
     filterMachineGroups(selectionStore.entityGroups('machine'), 'mechanism'),
     {},
   );
   expect(
-    selectionStore.saveMachineTabPage(conveyor.item.id, {
-      name: FIRST_PAGE,
-      node: {
-        category: first.category,
-        configuration: first.configuration || null,
-        item: first.item,
-      },
+    selectionStore.ensureMachineDirectPage(conveyor.item.id, {
+      category: first.category,
+      configuration: first.configuration || null,
+      item: first.item,
     }).ok,
   ).toBe(true);
   if (authenticated) {
@@ -343,37 +340,40 @@ describe('MachinePage', () => {
       '生成并下载报告（请先勾选）',
       '预览 / 打印 PDF（请先勾选）',
     ]);
-    // 报告勾的是二级 Tab；目录树上有二级 Tab 的节点也能勾（勾它下面的全部二级 Tab）
-    expect(wrapper.find('.machine-sub-tab .ant-checkbox').exists()).toBe(true);
+    // 选中的是机型：没有二级 Tab，报告在目录树上勾
+    expect(wrapper.find('.machine-sub-tab').exists()).toBe(false);
     expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it('checks every second-level tab under a tree node from the tree', async () => {
+  it('checks every machine under a tree node from the tree', async () => {
     const wrapper = await mountPage(true);
-    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
+    // 「已选 N / M」按机型（目录树末级节点）计数，没有二级 Tab 的机型也能勾
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
     await wrapper.get('.ant-tree-checkbox').trigger('click');
-    expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+1/);
+    expect(wrapper.text()).toMatch(/已选\s+29\s+\/\s+101/);
+    expect(wrapper.find('.ant-tree-checkbox-disabled').exists()).toBe(false);
     expect(
-      wrapper.get<HTMLInputElement>('.machine-sub-tab input[type="checkbox"]')
-        .element.checked,
-    ).toBe(true);
+      wrapper.get('.ant-tree-treenode-selected .ant-tree-checkbox').classes(),
+    ).toContain('ant-tree-checkbox-checked');
     await wrapper.get('.ant-tree-checkbox').trigger('click');
-    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
     wrapper.unmount();
   });
 
-  it('checks second-level tabs for the report and selects all of them', async () => {
+  it('checks one machine for the report and selects all of them', async () => {
     const wrapper = await mountPage(true);
-    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
-    await wrapper.get('.machine-sub-tab input[type="checkbox"]').setValue(true);
-    expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+1/);
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
+    await wrapper
+      .get('.ant-tree-treenode-selected .ant-tree-checkbox')
+      .trigger('click');
+    expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+101/);
     await openReportMenu(wrapper);
     expect(reportMenuItems()).toContain('生成并下载报告');
     await clickReportMenu('清空');
     expect(wrapper.text()).toMatch(/已选\s+0\s+\//);
     await clickReportMenu('全选');
-    expect(wrapper.text()).toMatch(/已选\s+1\s+\//);
+    expect(wrapper.text()).toMatch(/已选\s+101\s+\/\s+101/);
     wrapper.unmount();
   });
 
@@ -415,7 +415,9 @@ describe('MachinePage', () => {
 
   it('explains why a selected page with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
-    await wrapper.get('.machine-sub-tab input[type="checkbox"]').setValue(true);
+    await wrapper
+      .get('.ant-tree-treenode-selected .ant-tree-checkbox')
+      .trigger('click');
 
     const openSpy = vi.spyOn(window, 'open');
     const warning = vi.spyOn(message, 'warning');
@@ -423,7 +425,7 @@ describe('MachinePage', () => {
     await clickReportMenu('预览 / 打印 PDF');
 
     expect(openSpy).not.toHaveBeenCalled();
-    expect(warning).toHaveBeenLastCalledWith('所选二级 Tab 暂无可生成的内容');
+    expect(warning).toHaveBeenLastCalledWith('所选机型暂无可生成的内容');
     wrapper.unmount();
   });
 
@@ -1005,40 +1007,54 @@ describe('MachinePage machine tabs', () => {
     await flushPromises();
   }
 
-  it('shows the selected node’s second-level tabs under the shared tab', async () => {
+  /** 在第一个有配置的分类下新建一个空配置并选中它：没有子选单的配置才能建二级 Tab */
+  async function openEmptyConfiguration(wrapper: VueWrapper, name = '空配置') {
+    const store = useSelectionStore();
+    const category = store
+      .entityGroups('machine')
+      .find((group) => group.configurations?.length)!.name;
+    expect(store.saveMachineConfiguration(category, { name }).ok).toBe(true);
+    await goTo(wrapper, { category, configuration: name });
+    return { category, configuration: name, item: null };
+  }
+
+  it('shows a machine’s own table directly under the first-level tab, without second-level tabs', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const tab = useSelectionStore().machineTabs[0]!;
-    const page = tab.pages[0]!;
+    const direct = tab.pages[0]!;
+    expect(direct.direct).toBe(true);
 
-    expect(tabCount(wrapper, '输送机构')).toBe('1');
-    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
-    expect(wrapper.vm.$route.query).toMatchObject({
-      category: page.node.category,
-      item: page.node.item,
-      tab: String(tab.id),
-      page: String(page.id),
-    });
+    // 徽标是机型直属表格的记录数
+    expect(tabCount(wrapper, '输送机构')).toBe('0');
+    expect(wrapper.find('.machine-sub-tabs').exists()).toBe(false);
     expect(wrapper.getComponent(MachineSectionPanel).props()).toMatchObject({
       machineName: MACHINE_TAB_PAGE_OWNER,
-      section: { id: page.id, kind: 'structure' },
+      section: { id: direct.id, kind: 'structure' },
+      ensureSection: undefined,
     });
-    expect(wrapper.find('[draggable="true"].machine-sub-tab').exists()).toBe(
-      false,
-    );
 
-    // 换一个机型：同一个一级 Tab，二级 Tab 是那个机型自己的（还没有）
+    // 换一个还没有表格的机型：同样直接显示（空）表格，第一次新增记录时才建表
     await clickTreeNode(wrapper, OTHER_MACHINE);
     expect(wrapper.vm.$route.query).toMatchObject({
       item: OTHER_MACHINE,
       tab: String(tab.id),
     });
-    expect(tabCount(wrapper, '输送机构')).toBe('0');
-    expect(pageNames(wrapper)).toEqual([]);
-    expect(wrapper.text()).toContain(
-      `「${OTHER_MACHINE}」在「输送机构」下还没有二级 Tab`,
+    expect(wrapper.find('.machine-sub-tabs').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('还没有二级 Tab');
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    expect(panel.props('section').id).toBe(0);
+    const ensure = panel.props('ensureSection') as () => number | null;
+    const created = ensure();
+    expect(
+      useSelectionStore().machineTabs[0]!.pages.find(
+        (page) => page.id === created,
+      ),
+    ).toMatchObject({ direct: true, node: { item: OTHER_MACHINE } });
+    await flushPromises();
+    expect(wrapper.getComponent(MachineSectionPanel).props('section').id).toBe(
+      created,
     );
-    expect(wrapper.findComponent(MachineSectionPanel).exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -1097,52 +1113,66 @@ describe('MachinePage machine tabs', () => {
     wrapper.unmount();
   });
 
-  it('creates, reorders, renames and deletes second-level tabs', async () => {
+  it('creates, reorders, renames and deletes second-level tabs on an empty configuration', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const store = useSelectionStore();
+    await openEmptyConfiguration(wrapper);
 
+    await createPage(wrapper, '入料段');
     await createPage(wrapper, '出料确认');
-    expect(pageNames(wrapper)).toEqual([FIRST_PAGE, '出料确认']);
-    const created = store.machineTabs[0]!.pages[1]!;
+    expect(pageNames(wrapper)).toEqual(['入料段', '出料确认']);
+    const created = store.machineTabs[0]!.pages.find(
+      (page) => page.name === '出料确认',
+    )!;
     expect(wrapper.vm.$route.query.page).toBe(String(created.id));
 
     await runPageAction(wrapper, '出料确认', '左移');
-    expect(pageNames(wrapper)).toEqual(['出料确认', FIRST_PAGE]);
+    expect(pageNames(wrapper)).toEqual(['出料确认', '入料段']);
 
     await runPageAction(wrapper, '出料确认', '改名');
     expect(
       document.querySelector<HTMLInputElement>('#machine-tab-page-name')!.value,
     ).toBe('出料确认');
     await fillPageDialog('出料确认（改）');
-    expect(pageNames(wrapper)).toEqual(['出料确认（改）', FIRST_PAGE]);
+    expect(pageNames(wrapper)).toEqual(['出料确认（改）', '入料段']);
 
     vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
     await runPageAction(wrapper, '出料确认（改）', '删除');
-    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
+    expect(pageNames(wrapper)).toEqual(['入料段']);
     wrapper.unmount();
   });
 
-  it('allows the same page name under different tabs and nodes', async () => {
+  it('allows the same page name under different tabs and nodes, never on a machine', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const store = useSelectionStore();
-    const node = store.machineTabs[0]!.pages[0]!.node;
+    const node = await openEmptyConfiguration(wrapper);
+    const conveyor = store.machineTabs[0]!;
     const lifter = store.saveMachineTab('mechanism', {
       kind: 'structure',
       name: '收板机构',
     });
     if (!lifter.ok) throw new Error('tab fixture failed');
+    for (const tabId of [conveyor.id, lifter.item.id]) {
+      expect(store.saveMachineTabPage(tabId, { name: '入料段', node }).ok).toBe(
+        true,
+      );
+    }
     expect(
-      store.saveMachineTabPage(lifter.item.id, { name: FIRST_PAGE, node }).ok,
-    ).toBe(true);
-    expect(
-      store.saveMachineTabPage(lifter.item.id, { name: FIRST_PAGE, node }),
+      store.saveMachineTabPage(lifter.item.id, { name: '入料段', node }),
     ).toEqual({ ok: false, reason: 'duplicate' });
+    // 机型没有二级 Tab
+    expect(
+      store.saveMachineTabPage(lifter.item.id, {
+        name: '入料段',
+        node: conveyor.pages[0]!.node,
+      }),
+    ).toEqual({ ok: false, reason: 'validation' });
     wrapper.unmount();
   });
 
-  it('deletes a tab together with its second-level tabs', async () => {
+  it('deletes a tab together with its tables and second-level tabs', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
@@ -1150,7 +1180,7 @@ describe('MachinePage machine tabs', () => {
     await wrapper.get('.ant-tabs-tab-remove').trigger('click');
     await flushPromises();
 
-    expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个二级 Tab');
+    expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个机型的选型表');
     expect(useSelectionStore().machineTabs).toEqual([]);
     expect(wrapper.text()).toContain('还没有 Tab');
     expect(findButton(wrapper, '新建Tab')).toBeDefined();
@@ -1160,12 +1190,19 @@ describe('MachinePage machine tabs', () => {
   it('offers no page menus or 新建 to read-only users', async () => {
     const wrapper = await mountPage(true, false);
     await flushPromises();
-
-    expect(pageNames(wrapper)).toEqual([FIRST_PAGE]);
+    const store = useSelectionStore();
+    const node = await openEmptyConfiguration(wrapper);
     expect(
-      wrapper
-        .find(`button[aria-label="二级 Tab ${FIRST_PAGE} 的更多操作"]`)
-        .exists(),
+      store.saveMachineTabPage(store.machineTabs[0]!.id, {
+        name: '入料段',
+        node,
+      }).ok,
+    ).toBe(true);
+    await flushPromises();
+
+    expect(pageNames(wrapper)).toEqual(['入料段']);
+    expect(
+      wrapper.find('button[aria-label="二级 Tab 入料段 的更多操作"]').exists(),
     ).toBe(false);
     expect(wrapper.find('button[aria-label="新建二级 Tab"]').exists()).toBe(
       false,

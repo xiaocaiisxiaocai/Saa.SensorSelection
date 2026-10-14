@@ -603,11 +603,15 @@ export function normalizeMachineTabs(source: unknown): MachineTab[] {
       for (const page of asList(item.pages).filter(isRecord)) {
         const pageName = storedText(page.name).trim().slice(0, 40);
         const node = normalizeMachineNodeRef(page.node);
+        // 机型只有直属表格（每个 Tab 一个），机型上的二级 Tab（旧数据）丢弃；
+        // 直属表格只属于机型
+        const direct = page.direct === true;
+        if (direct !== Boolean(node.item)) continue;
         const pageKey = JSON.stringify([
           node.category,
           node.configuration,
           node.item,
-          pageName.toLocaleLowerCase('zh-CN'),
+          direct ? '@direct' : pageName.toLocaleLowerCase('zh-CN'),
         ]);
         if (!pageName || pageNames.has(pageKey)) continue;
         pageNames.add(pageKey);
@@ -615,6 +619,7 @@ export function normalizeMachineTabs(source: unknown): MachineTab[] {
           id: allocateId(page.id, usedPageIds, nextPageIdRef),
           name: pageName,
           node,
+          ...(direct ? { direct: true as const } : {}),
         });
       }
       tabs.push({

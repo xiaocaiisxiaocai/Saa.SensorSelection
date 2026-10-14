@@ -1963,6 +1963,61 @@ async function run() {
   assert.deepEqual(transport11.calls.writes, [])
   assert.equal(transport11.calls.writeAlls, 0)
 
+  // 机型上的旧二级 Tab（不是直属表格）一律不再显示，下次写入 Tab 时连同内容删掉；
+  // 直属表格保留。删除机型时，空的直属表格跟着删掉
+  {
+    const memory = new Map()
+    const rowsKey = (id) => `machine-section-rows:${id}:${domain.MACHINE_TAB_PAGE_OWNER}`
+    const machineAt = { category: '旧分类', configuration: null, item: '旧机型' }
+    memory.set(
+      domain.STORAGE_KEY,
+      JSON.stringify({
+        'entity-groups:machine': [
+          { name: '旧分类', machineType: 'mechanism', items: ['旧机型', '空机型'], configurations: [] },
+        ],
+        'machine-tabs:all': [
+          {
+            id: 1,
+            catalog: 'mechanism',
+            name: '旧 Tab',
+            sort: 1,
+            kind: 'structure',
+            pages: [
+              { id: 1, name: '入料段', node: machineAt },
+              { id: 2, name: '出料段', node: machineAt },
+              { id: 3, name: '旧 Tab', node: machineAt, direct: true },
+              { id: 4, name: '旧 Tab', node: { ...machineAt, item: '空机型' }, direct: true },
+            ],
+          },
+        ],
+        [rowsKey(1)]: [],
+        [rowsKey(2)]: [],
+        [rowsKey(3)]: [],
+      }),
+    )
+    const legacyRepo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: { getItem: (key) => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value) },
+    })
+    assert.deepEqual(
+      legacyRepo.getMachineTabs('mechanism')[0].pages.map((page) => page.id),
+      [3, 4],
+      'second-level tabs on machines are dropped, direct tables stay',
+    )
+    assert.equal(legacyRepo.saveMachineTab('mechanism', { kind: 'structure', name: '新 Tab' }).ok, true)
+    const stored = JSON.parse(memory.get(domain.STORAGE_KEY))
+    assert.equal(Object.hasOwn(stored, rowsKey(1)), false, 'dropped page content is removed on write')
+    assert.equal(Object.hasOwn(stored, rowsKey(2)), false)
+    assert.equal(Object.hasOwn(stored, rowsKey(3)), true)
+    // 空机型的直属表格是空的：机型可以删，直属表格跟着删
+    assert.equal(legacyRepo.deleteEntityItem('machine', '空机型', '旧分类', null).ok, true)
+    assert.deepEqual(
+      legacyRepo.getMachineTabs('mechanism').find((tab) => tab.id === 1).pages.map((page) => page.id),
+      [3],
+    )
+  }
+
   // 机型 Tab：按目录（结构 / 专案机型）共用；二级 Tab 属于「选单节点 × Tab」。
   // 选单节点的下一层只能二选一：有子选单就不能有二级 Tab，有二级 Tab 就不能再加子选单。
   {
@@ -2006,7 +2061,8 @@ async function run() {
     const lifter = tabsRepo.saveMachineTab('mechanism', { kind: 'structure', name: '收板机构' })
     assert.equal(lifter.ok, true)
 
-    // 有子选单的节点（分组、带机型的配置）不能有二级 Tab；叶子节点（空配置、机型）可以
+    // 有子选单的节点（分组、带机型的配置）不能有二级 Tab；没有子选单的分组 / 配置可以。
+    // 机型（最末一层）不能有二级 Tab：它在每个一级 Tab 下只有一张直属表格（direct 页）
     assert.deepEqual(
       tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '页', node: groupNode }),
       { ok: false, reason: 'not-empty' },
@@ -2047,11 +2103,30 @@ async function run() {
       ok: false,
       reason: 'validation',
     })
-    const onMachine = tabsRepo.saveMachineTabPage(conveyor.item.id, {
-      name: '01 单段输送段（搭配）',
-      node: machineNode,
-    })
+    assert.deepEqual(
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '01 单段输送段（搭配）', node: machineNode }),
+      { ok: false, reason: 'validation' },
+    )
+    // 机型的直属表格按需创建：一个机型在一个一级 Tab 下只有一个，名称跟 Tab 一致
+    const onMachine = tabsRepo.ensureMachineDirectPage(conveyor.item.id, machineNode)
     assert.equal(onMachine.ok, true)
+    assert.equal(onMachine.item.direct, true)
+    assert.equal(onMachine.item.name, '输送机构')
+    assert.deepEqual(onMachine.item.node, machineNode)
+    assert.equal(tabsRepo.ensureMachineDirectPage(conveyor.item.id, machineNode).item.id, onMachine.item.id)
+    // 只有机型有直属表格；分组 / 配置走二级 Tab
+    assert.deepEqual(tabsRepo.ensureMachineDirectPage(conveyor.item.id, leafConfig), {
+      ok: false,
+      reason: 'validation',
+    })
+    assert.deepEqual(
+      tabsRepo.ensureMachineDirectPage(conveyor.item.id, { ...machineNode, item: '不存在' }),
+      { ok: false, reason: 'stale' },
+    )
+    assert.equal(
+      tabsRepo.saveMachineSectionRow(onMachine.item.id, owner, { role: '机型直属', sensorIds: [sensor.id] }).ok,
+      true,
+    )
     const samePage = tabsRepo.saveMachineTabPage(lifter.item.id, {
       name: '01 单段输送段（搭配）',
       node: leafConfig,
@@ -2093,7 +2168,7 @@ async function run() {
       tabsRepo.saveEntityItem('machine', { category: LEAF_GROUP, name: '机型' }),
       { ok: false, reason: 'not-empty' },
     )
-    // 有二级 Tab 的节点不能删
+    // 有二级 Tab 的节点不能删；机型的直属表格有内容时也不能删
     assert.deepEqual(tabsRepo.deleteEntityGroup('machine', LEAF_GROUP), {
       ok: false,
       reason: 'not-empty',
@@ -2324,9 +2399,10 @@ async function run() {
       storage: { getItem: () => JSON.stringify(legacyStore), setItem: () => true },
     })
     const [tab] = migrated.getMachineTabs('mechanism')
+    // 旧数据里机型自己的内容变成该机型在这个 Tab 下的直属表格（名称同 Tab）
     assert.deepEqual(
-      tab.pages.map((item) => [item.name, item.node]),
-      [[machine, { category: group.name, configuration: configuration.name, item: machine }]],
+      tab.pages.map((item) => [item.name, item.node, item.direct]),
+      [['输送机构', { category: group.name, configuration: configuration.name, item: machine }, true]],
     )
     assert.equal('machines' in tab, false)
     assert.deepEqual(

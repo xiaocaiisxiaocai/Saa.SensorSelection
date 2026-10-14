@@ -8,8 +8,9 @@ import {
   nodeHasChildren,
   nodeLabel,
   nodeTreeKey,
-  pageIdsByTreeKey,
+  machineTreeSelection,
   pagesOf,
+  selectedLeafCount,
   treeCheckState,
 } from './machine-nodes';
 
@@ -104,7 +105,7 @@ describe('machine-nodes', () => {
     expect(nodeLabel(empty)).toBe('空配置');
   });
 
-  it('maps tree nodes to the second-level tabs under them for checking', () => {
+  it('lets every tree node be checked, empty machines included', () => {
     const tab: MachineTab = {
       id: 1,
       catalog: 'mechanism',
@@ -112,7 +113,6 @@ describe('machine-nodes', () => {
       sort: 1,
       kind: 'structure',
       pages: [
-        { id: 1, name: 'A', node: empty },
         { id: 2, name: 'B', node: machine },
         { id: 3, name: 'C', node: machine },
       ],
@@ -122,29 +122,49 @@ describe('machine-nodes', () => {
       configuration: null,
       item: null,
     });
-    const ids = pageIdsByTreeKey([tab]);
-    expect(ids.get(nodeTreeKey(machine))).toEqual([2, 3]);
-    expect(ids.get(nodeTreeKey(sfc))).toEqual([2, 3]);
-    expect(ids.get(nodeTreeKey(empty))).toEqual([1]);
-    expect(ids.get(group)).toEqual([1, 2, 3]);
-    // 下面没有二级 Tab 的节点不出现（勾选框禁用）
-    expect(
-      ids.has(
-        nodeTreeKey({ category: '空分类', configuration: null, item: null }),
-      ),
-    ).toBe(false);
+    const emptyGroup = nodeTreeKey({
+      category: '空分类',
+      configuration: null,
+      item: null,
+    });
+    const selection = machineTreeSelection(groups, [tab]);
+    // 末级节点：机型、没有机型的配置、没有子节点的分类；没有二级 Tab 的也在
+    expect([...selection.leafPages]).toEqual([
+      [nodeTreeKey(machine), [2, 3]],
+      [nodeTreeKey(empty), []],
+      [emptyGroup, []],
+    ]);
+    expect(selection.units.get(group)).toEqual({
+      leaves: [nodeTreeKey(machine), nodeTreeKey(empty)],
+      pageIds: [2, 3],
+    });
+    expect(selection.units.get(nodeTreeKey(sfc))?.leaves).toEqual([
+      nodeTreeKey(machine),
+    ]);
 
+    const none = new Set<number>();
+    const noLeaves = new Set<string>();
     const sorted = (state: { checked: string[]; halfChecked: string[] }) => ({
       checked: [...state.checked].sort(),
       halfChecked: [...state.halfChecked].sort(),
     });
-    expect(sorted(treeCheckState(ids, new Set([2])))).toEqual({
+    // 勾了机型的一个二级 Tab：机型、配置、分类都是半选
+    expect(sorted(treeCheckState(selection, new Set([2]), noLeaves))).toEqual({
       checked: [],
       halfChecked: [nodeTreeKey(machine), nodeTreeKey(sfc), group].sort(),
     });
-    expect(sorted(treeCheckState(ids, new Set([2, 3])))).toEqual({
-      checked: [nodeTreeKey(machine), nodeTreeKey(sfc)].sort(),
-      halfChecked: [group],
+    // 机型的二级 Tab 全勾 + 单独勾了空配置：整个分类都勾上
+    const leaves = new Set([nodeTreeKey(empty)]);
+    expect(sorted(treeCheckState(selection, new Set([2, 3]), leaves))).toEqual({
+      checked: [
+        nodeTreeKey(machine),
+        nodeTreeKey(sfc),
+        nodeTreeKey(empty),
+        group,
+      ].sort(),
+      halfChecked: [],
     });
+    expect(selectedLeafCount(selection, new Set([2]), leaves)).toBe(2);
+    expect(selectedLeafCount(selection, none, noLeaves)).toBe(0);
   });
 });

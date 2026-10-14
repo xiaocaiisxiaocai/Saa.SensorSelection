@@ -64,19 +64,11 @@ describe('ProcessPage', () => {
     wrapper.unmount();
   });
 
-  it('explains what the intro tab is for before anything is uploaded', async () => {
+  it('shows no explanatory banner above the upload box when the intro is empty', async () => {
     const wrapper = await mountPage(true);
-    expect(wrapper.find('.ant-alert').text()).toContain('还没有制程介绍资料');
-
-    useSelectionStore().saveProcessIntroFile({
-      fileName: '工艺规范.pdf',
-      mimeType: 'application/pdf',
-      dataUrl: 'data:application/pdf;base64,YQ==',
-      size: 2048,
-      uploadedAt: '2024-01-01T00:00:00.000Z',
-    });
-    await nextTick();
+    expect(wrapper.find('.ant-alert').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('还没有制程介绍资料');
+    expect(wrapper.find('.ant-upload-drag').exists()).toBe(true);
     wrapper.unmount();
   });
 

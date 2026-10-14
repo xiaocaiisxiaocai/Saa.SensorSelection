@@ -22,7 +22,10 @@ export function buildReportSections(
         const rows = store.machineSectionRows(page.id, MACHINE_TAB_PAGE_OWNER);
         return {
           // 报告里写明是哪个选单节点下的二级 Tab
-          machineName: `${nodeLabel(page.node)} / ${page.name}`,
+          // 机型的直属表格没有二级 Tab 名，标题只写机型名
+          machineName: page.direct
+            ? nodeLabel(page.node)
+            : `${nodeLabel(page.node)} / ${page.name}`,
           rows: rows.map((row) => {
             const processStep = store.processSteps.find(
               (item) => item.id === row.processStepId,

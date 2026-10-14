@@ -1502,8 +1502,8 @@ export function createSelectionRepository({
   }
 
   /**
-   * 还没归属节点的二级 Tab（旧数据）：挂到本目录里同名的机型节点上；
-   * 找不到同名机型的留着不显示。
+   * 还没归属节点的二级 Tab（旧数据）：挂到本目录里同名的机型节点上，
+   * 成为该机型在这个 Tab 下的直属表格；找不到同名机型的留着不显示。
    */
   function assignLegacyPageNodes(tabs: MachineTab[]) {
     if (!tabs.some((tab) => tab.pages.some((page) => !page.node.category))) {
@@ -1517,6 +1517,8 @@ export function createSelectionRepository({
           if (machineCatalogKind(group) !== tab.catalog) continue;
           if (group.items.includes(page.name)) {
             page.node = { category: group.name, configuration: null, item: page.name };
+            page.name = tab.name;
+            page.direct = true;
             break;
           }
           const configuration = group.configurations?.find((item) =>
@@ -1528,6 +1530,8 @@ export function createSelectionRepository({
               configuration: configuration.name,
               item: page.name,
             };
+            page.name = tab.name;
+            page.direct = true;
             break;
           }
         }
@@ -1570,7 +1574,19 @@ export function createSelectionRepository({
   }
 
   function writeMachineTabs(tabs: MachineTab[]) {
-    store[machineTabsKey()] = normalizeMachineTabs(tabs);
+    const normalized = normalizeMachineTabs(tabs);
+    store[machineTabsKey()] = normalized;
+    // 归一化会丢掉不再合法的页（如机型上的旧二级 Tab），它们的内容一并删掉
+    const pageIds = new Set(
+      normalized.flatMap((tab) => tab.pages.map((page) => page.id)),
+    );
+    const owner = `:${MACHINE_TAB_PAGE_OWNER}`;
+    const orphans = Object.keys(store).filter((key) => {
+      if (!key.endsWith(owner)) return false;
+      const match = /^machine-section-(?:rows|images):(\d+):/.exec(key);
+      return Boolean(match) && !pageIds.has(Number(match![1]));
+    });
+    if (orphans.length) store = omitStoreKeys(store, orphans);
   }
 
   function dropPageContent(pageIds: number[]) {
@@ -1677,7 +1693,10 @@ export function createSelectionRepository({
       if (machineNodeHasChildren(node)) {
         return { ok: false, reason: 'not-empty' };
       }
+      // 机型没有二级 Tab，内容在直属表格里（ensureMachineDirectPage）
+      if (node.item) return { ok: false, reason: 'validation' };
     }
+    if (existing?.direct) return { ok: false, reason: 'validation' };
     if (
       tab.pages.some(
         (page) =>
@@ -1701,6 +1720,41 @@ export function createSelectionRepository({
       };
       tab.pages.push(saved);
     }
+    writeMachineTabs(tabs);
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return { ok: true, item: saved };
+  }
+
+  /**
+   * 机型在一级 Tab 下的直属表格：已有就返回，没有就新建（名称同一级 Tab）。
+   * 第一次往表格里写内容前调用，浏览时不建。只有机型节点有直属表格。
+   */
+  function ensureMachineDirectPage(
+    tabId: number,
+    node: MachineNodeRef,
+  ): SaveResult<MachineTabPage> {
+    const tabs = getMachineTabs();
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return { ok: false, reason: 'stale' };
+    const target = normalizeMachineNodeRef(node);
+    if (!target.item) return { ok: false, reason: 'validation' };
+    const group = machineNodeGroup(target);
+    if (!group) return { ok: false, reason: 'stale' };
+    if (machineCatalogKind(group) !== tab.catalog) {
+      return { ok: false, reason: 'validation' };
+    }
+    const existing = tab.pages.find(
+      (page) => page.direct && sameNode(page.node, target),
+    );
+    if (existing) return { ok: true, item: existing };
+    const snapshot = cloneStore(store);
+    const saved: MachineTabPage = {
+      id: nextAvailableId(tabs.flatMap((item) => item.pages)),
+      name: tab.name,
+      node: target,
+      direct: true,
+    };
+    tab.pages.push(saved);
     writeMachineTabs(tabs);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: saved };
@@ -3084,14 +3138,21 @@ export function createSelectionRepository({
     if (entityHasData(kind, dataName)) {
       return { ok: false, reason: 'not-empty' };
     }
-    if (
-      kind === 'machine' &&
-      machineNodeHasPages({
-        category: location.group.name,
-        configuration: location.configuration?.name ?? null,
-        item: name,
-      })
-    ) {
+    // 机型的直属表格有内容时不能删；空的直属表格随机型一起删掉
+    const machineNode: MachineNodeRef = {
+      category: location.group.name,
+      configuration: location.configuration?.name ?? null,
+      item: name,
+    };
+    const directPageIds =
+      kind === 'machine' && Array.isArray(store[machineTabsKey()])
+        ? getMachineTabs().flatMap((tab) =>
+            tab.pages
+              .filter((page) => sameNode(page.node, machineNode))
+              .map((page) => page.id),
+          )
+        : [];
+    if (directPageIds.some((id) => pageHasContent(id))) {
       return { ok: false, reason: 'not-empty' };
     }
 
@@ -3127,6 +3188,15 @@ export function createSelectionRepository({
     location.items.splice(location.index, 1);
     clearEntityDataKeys(kind, dataName);
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
+    if (directPageIds.length) {
+      const removed = new Set(directPageIds);
+      writeMachineTabs(
+        getMachineTabs().map((tab) => ({
+          ...tab,
+          pages: tab.pages.filter((page) => !removed.has(page.id)),
+        })),
+      );
+    }
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
 
     if (
@@ -3163,6 +3233,7 @@ export function createSelectionRepository({
     deleteGlobalMachineSection,
     deleteMachineSectionRow,
     deleteMachineTab,
+    ensureMachineDirectPage,
     deleteMachineTabPage,
     deleteProcessIntroFile,
     deleteProcessStep,

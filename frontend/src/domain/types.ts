@@ -9,8 +9,7 @@ export type SaveFailure =
   | 'validation';
 
 export type SaveResult<T> =
-  | { item: T; ok: true }
-  | { ok: false; reason: SaveFailure; message?: string };
+  { item: T; ok: true } | { ok: false; reason: SaveFailure; message?: string };
 
 export type DeleteResult =
   | {
@@ -195,12 +194,16 @@ export interface MachineNodeRef {
 /**
  * 二级 Tab：属于某个选单节点（node）。节点的下一层只能二选一——
  * 有子选单就不能有二级 Tab，有二级 Tab 就不能再加子选单。
+ * 机型（最末一层）没有二级 Tab：它在每个一级 Tab 下只有一张直属表格，
+ * 也用这个结构存（direct: true，名称同一级 Tab，界面上不显示成二级 Tab）。
  * 名称在同一 Tab、同一节点内不重复；id 在所有 Tab 间唯一，内容按 id 存放。
  */
 export interface MachineTabPage {
   id: number;
   name: string;
   node: MachineNodeRef;
+  /** 机型在该一级 Tab 下的直属表格 */
+  direct?: true;
 }
 
 export interface MachineSectionItem {

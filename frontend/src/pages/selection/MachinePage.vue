@@ -27,8 +27,9 @@ import {
   nodeHasChildren,
   nodeLabel,
   nodeTreeKey,
-  pageIdsByTreeKey,
+  machineTreeSelection,
   pagesOf,
+  selectedLeafCount,
   treeCheckState,
 } from '@/pages/selection/machine/machine-nodes';
 import {
@@ -65,6 +66,8 @@ const writable = computed(() => canWrite('selection:write'));
 const tabDialog = ref<InstanceType<typeof MachineTabDialog>>();
 const pageDialog = ref<InstanceType<typeof MachineTabPageDialog>>();
 const checkedPageIds = ref<number[]>([]);
+/** 勾选的、还没有二级 Tab 的末级节点 key（有二级 Tab 的节点勾的是它的二级 Tab） */
+const checkedLeafKeys = ref<string[]>([]);
 
 const groups = computed(() => store.entityGroups('machine'));
 const activeMachineType = computed<MachineCatalogKind>(() =>
@@ -107,13 +110,33 @@ const availablePageIds = computed(() =>
   tabs.value.flatMap((tab) => tab.pages.map((page) => page.id)),
 );
 const checkedPages = computed(() => new Set(checkedPageIds.value));
-// 目录树勾选：勾一个节点 = 勾它（含子孙）下面的全部二级 Tab，部分勾选时显示半选
-const treePageIds = computed(() => pageIdsByTreeKey(tabs.value));
+// 目录树勾选：每个节点都能勾。勾一个节点 = 勾它下面的全部末级节点（机型）：
+// 有二级 Tab 的勾它的二级 Tab，没有的单独记一个勾（报告里是空的）；部分勾选时显示半选
+const treeSelection = computed(() =>
+  machineTreeSelection(catalogGroups.value, tabs.value),
+);
+const checkedLeaves = computed(() => new Set(checkedLeafKeys.value));
+const emptyLeafKeys = computed(() =>
+  [...treeSelection.value.leafPages]
+    .filter(([, pages]) => pages.length === 0)
+    .map(([key]) => key),
+);
+const selectedCount = computed(() =>
+  selectedLeafCount(
+    treeSelection.value,
+    checkedPages.value,
+    checkedLeaves.value,
+  ),
+);
 const treeChecks = computed(() =>
   auth.isAuthenticated
     ? {
-        ...treeCheckState(treePageIds.value, checkedPages.value),
-        checkable: new Set(treePageIds.value.keys()),
+        ...treeCheckState(
+          treeSelection.value,
+          checkedPages.value,
+          checkedLeaves.value,
+        ),
+        checkable: new Set(treeSelection.value.units.keys()),
       }
     : undefined,
 );
@@ -125,9 +148,20 @@ const activePage = computed(() => current.value.page);
 const nodePages = computed(() =>
   activeTab.value && node.value ? pagesOf(activeTab.value, node.value) : [],
 );
+/**
+ * 机型（最末一层）没有二级 Tab：一级 Tab 下直接是它的直属表格。
+ * 分类 / 配置只有在没有子选单时才能建二级 Tab（nodeIsBranch 时整块不显示）。
+ */
+const nodeIsMachine = computed(() => Boolean(node.value?.item));
+/** 一级 Tab 的徽标：机型显示直属表格的记录数，其它节点显示二级 Tab 数 */
 const pageCount = (tabId: number) => {
   const tab = tabs.value.find((item) => item.id === tabId);
-  return tab && node.value ? pagesOf(tab, node.value).length : 0;
+  if (!tab || !node.value) return 0;
+  const pages = pagesOf(tab, node.value);
+  if (!nodeIsMachine.value) return pages.length;
+  return pages[0]
+    ? store.machineSectionRows(pages[0].id, MACHINE_TAB_PAGE_OWNER).length
+    : 0;
 };
 /** 二级 Tab 的内容按页 id 存放，格式跟着所在 Tab 的类型 */
 const pageSection = computed<MachineSectionItem | null>(() =>
@@ -141,6 +175,29 @@ const pageSection = computed<MachineSectionItem | null>(() =>
       }
     : null,
 );
+
+/** 机型在当前 Tab 下还没有直属表格：先显示空表，第一次新增记录时再建 */
+const placeholderSection = computed<MachineSectionItem | null>(() =>
+  activeTab.value
+    ? {
+        id: 0,
+        name: activeTab.value.name,
+        sort: activeTab.value.sort,
+        kind: activeTab.value.kind,
+        scope: 'machine',
+      }
+    : null,
+);
+
+function ensureDirectSection(): number | null {
+  if (!activeTab.value || !node.value) return null;
+  const result = store.ensureMachineDirectPage(activeTab.value.id, node.value);
+  if (!result.ok) {
+    notifyResult(result, '');
+    return null;
+  }
+  return result.item.id;
+}
 
 const machineModelOptions = computed(() =>
   store
@@ -238,10 +295,22 @@ watch(
   { immediate: true },
 );
 
+// 节点被删 / 改名、换目录，或节点有了二级 Tab 之后，单独的勾不再有效
+watch(
+  () => emptyLeafKeys.value.join('\n'),
+  () => {
+    const empty = new Set(emptyLeafKeys.value);
+    checkedLeafKeys.value = checkedLeafKeys.value.filter((key) =>
+      empty.has(key),
+    );
+  },
+  { immediate: true },
+);
+
 watch(
   () => auth.isAuthenticated,
   (isAuthenticated) => {
-    if (!isAuthenticated) checkedPageIds.value = [];
+    if (!isAuthenticated) clearChecks();
   },
 );
 
@@ -313,12 +382,31 @@ function openGlobalSearchResult(result: MachineStructureSearchResult) {
 
 function onTreeCheck({ key, checked }: { key: string; checked: boolean }) {
   if (!auth.isAuthenticated) return;
-  const next = new Set(checkedPageIds.value);
-  for (const id of treePageIds.value.get(key) ?? []) {
-    if (checked) next.add(id);
-    else next.delete(id);
+  const unit = treeSelection.value.units.get(key);
+  if (!unit) return;
+  const pages = new Set(checkedPageIds.value);
+  const leaves = new Set(checkedLeafKeys.value);
+  for (const id of unit.pageIds) {
+    if (checked) pages.add(id);
+    else pages.delete(id);
   }
-  checkedPageIds.value = [...next];
+  for (const leaf of unit.leaves) {
+    if (treeSelection.value.leafPages.get(leaf)?.length) continue;
+    if (checked) leaves.add(leaf);
+    else leaves.delete(leaf);
+  }
+  checkedPageIds.value = [...pages];
+  checkedLeafKeys.value = [...leaves];
+}
+
+function selectAll() {
+  checkedPageIds.value = [...availablePageIds.value];
+  checkedLeafKeys.value = [...emptyLeafKeys.value];
+}
+
+function clearChecks() {
+  checkedPageIds.value = [];
+  checkedLeafKeys.value = [];
 }
 
 function setChecked(pageId: number, checked: boolean) {
@@ -383,10 +471,17 @@ function onTabSaved(tabId: number) {
 async function removeTab(tabId: number) {
   const tab = tabs.value.find((item) => item.id === tabId);
   if (!tab) return;
+  // 机型的直属表格和分类 / 配置的二级 Tab 分开说
+  const tables = tab.pages.filter((page) => page.direct).length;
+  const subTabs = tab.pages.length - tables;
+  const parts = [
+    subTabs ? `${subTabs} 个二级 Tab` : '',
+    tables ? `${tables} 个机型的选型表` : '',
+  ].filter(Boolean);
   const ok = await confirmDelete(
     '删除 Tab',
-    tab.pages.length
-      ? `确认删除“${tab.name}”吗？所有选单在它下面的 ${tab.pages.length} 个二级 Tab 和内容会一起删除。`
+    parts.length
+      ? `确认删除“${tab.name}”吗？它下面的${parts.join('和')}及内容会一起删除。`
       : `确认删除“${tab.name}”吗？`,
   );
   if (!ok) return;
@@ -497,9 +592,10 @@ async function removeTab(tabId: number) {
             <template v-if="auth.isAuthenticated" #rightExtra>
               <MachineReportBar
                 :page-ids="checkedPageIds"
-                :available-count="availablePageIds.length"
-                @select-all="checkedPageIds = [...availablePageIds]"
-                @clear="checkedPageIds = []"
+                :selected-count="selectedCount"
+                :available-count="treeSelection.leafPages.size"
+                @select-all="selectAll"
+                @clear="clearChecks"
               />
             </template>
           </a-tabs>
@@ -508,7 +604,11 @@ async function removeTab(tabId: number) {
             <template #description>
               <div>还没有 Tab</div>
               <div class="empty-hint">
-                新建 Tab（如「输送机构」），再在 Tab 下新建二级 Tab
+                {{
+                  nodeIsMachine
+                    ? '新建 Tab（如「输送机构」）后，就能在 Tab 下维护这个机型的选型表'
+                    : '新建 Tab（如「输送机构」），再在 Tab 下新建二级 Tab'
+                }}
               </div>
             </template>
             <template v-if="writable" #default>
@@ -517,6 +617,15 @@ async function removeTab(tabId: number) {
               </a-button>
             </template>
           </a-empty>
+          <!-- 机型：一级 Tab 下直接是表格，没有二级 Tab -->
+          <MachineSectionPanel
+            v-else-if="activeTab && nodeIsMachine && placeholderSection"
+            :key="`${activeTab.id}:${nodeName}`"
+            :machine-name="MACHINE_TAB_PAGE_OWNER"
+            :section="pageSection ?? placeholderSection"
+            :ensure-section="pageSection ? undefined : ensureDirectSection"
+            :focus-row-id="Number(route.query.focusRow) || undefined"
+          />
           <template v-else-if="activeTab">
             <MachineTabPages
               :tab="activeTab"

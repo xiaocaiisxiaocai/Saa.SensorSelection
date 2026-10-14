@@ -10,22 +10,24 @@ import { useSelectionStore } from '@/stores/selection';
 import { buildReportSections, hasReportContent } from './machine-report';
 
 /**
- * 机型结构示意图报告：显示已勾选的二级 Tab 数，「报告」下拉里提供全选 / 清空、
+ * 机型结构示意图报告：显示已勾选的机型数，「报告」下拉里提供全选 / 清空、
  * 后端生成下载和浏览器预览打印（收进下拉，给同一行的一级 Tab 让出位置）。
  * 勾选状态由父页面持有。
  */
 const props = defineProps<{
-  /** 勾选的二级 Tab id */
+  /** 勾选的二级 Tab id（报告内容来自这些二级 Tab） */
   pageIds: readonly number[];
-  /** 当前目录可勾选的二级 Tab 总数 */
+  /** 勾选的机型（目录树末级节点）数 */
+  selectedCount: number;
+  /** 当前目录的机型（目录树末级节点）总数 */
   availableCount: number;
 }>();
 const emit = defineEmits<{ selectAll: []; clear: [] }>();
 
 const store = useSelectionStore();
 const generating = ref(false);
-const noneSelected = computed(() => props.pageIds.length === 0);
-const NONE_SELECTED_HINT = '请先勾选至少一个二级 Tab';
+const noneSelected = computed(() => props.selectedCount === 0);
+const NONE_SELECTED_HINT = '请先勾选至少一个机型或二级 Tab';
 // 菜单项禁用时原因直接写在菜单文字里
 const NONE_SELECTED_SUFFIX = '（请先勾选）';
 
@@ -45,7 +47,8 @@ function ready() {
     return false;
   }
   if (!hasReportContent(reportSections.value)) {
-    message.warning('所选二级 Tab 暂无可生成的内容');
+    // 勾的机型可能还没有二级 Tab，或二级 Tab 里没有内容
+    message.warning('所选机型暂无可生成的内容');
     return false;
   }
   return true;
@@ -99,7 +102,7 @@ async function generate() {
 <template>
   <div class="machine-report">
     <span class="selection-toolbar__count">
-      已选 {{ pageIds.length }} / {{ availableCount }}
+      已选 {{ selectedCount }} / {{ availableCount }}
     </span>
     <a-dropdown :trigger="['click']">
       <a-button size="small" :loading="generating" aria-label="报告操作">

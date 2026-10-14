@@ -28,6 +28,11 @@ const props = defineProps<{
   sectionId: number;
   machineName: string;
   structure: boolean;
+  /**
+   * 表格还没建（机型的直属表格按需创建）时传入：第一次保存前调用，
+   * 返回新表格的 id，失败返回 null（已提示）
+   */
+  ensureSection?: () => number | null;
 }>();
 
 const store = useSelectionStore();
@@ -75,7 +80,9 @@ async function uploadImage(file: File | undefined) {
 }
 
 const rows = computed(() =>
-  store.machineSectionRows(props.sectionId, props.machineName),
+  props.ensureSection
+    ? []
+    : store.machineSectionRows(props.sectionId, props.machineName),
 );
 const currentImage = computed(
   () => rows.value.find((row) => row.id === editId.value)?.image ?? null,
@@ -216,8 +223,12 @@ function save() {
   const structure = props.structure;
   if (structure && imageError.value) return;
   const image = structure ? imagePayload() : undefined;
+  const sectionId = props.ensureSection
+    ? props.ensureSection()
+    : props.sectionId;
+  if (sectionId === null) return;
   const result = store.saveMachineSectionRow(
-    props.sectionId,
+    sectionId,
     props.machineName,
     {
       desc: form.desc.trim(),

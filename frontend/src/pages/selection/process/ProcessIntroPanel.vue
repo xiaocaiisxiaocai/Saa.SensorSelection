@@ -111,14 +111,6 @@ const { listPagination } = useTablePagination(
         <template #prefix><Search :size="14" /></template>
       </a-input>
     </div>
-    <!-- 还没有任何文件时，整页只剩一个上传框，看不出这里是放什么的 -->
-    <a-alert
-      v-if="writable && files.length === 0"
-      type="info"
-      show-icon
-      message="还没有制程介绍资料"
-      description="上传工艺说明、制程培训或规范文件，团队成员可在此查阅；PDF 支持在线预览。"
-    />
     <a-upload-dragger
       v-if="writable"
       :accept="pickerRule.accept"

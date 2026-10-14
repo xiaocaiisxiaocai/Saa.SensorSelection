@@ -98,41 +98,125 @@ export function nodeFromQuery(
   return nodeHasChildren(groups, node) === null ? null : node;
 }
 
-/**
- * 目录树节点 key → 它自己和子孙节点下全部二级 Tab 的 id。
- * 目录树勾选一个节点就是勾选这里的全部二级 Tab；不在表里的节点勾选框禁用。
- */
-export function pageIdsByTreeKey(
-  tabs: readonly MachineTab[],
-): Map<string, number[]> {
-  const map = new Map<string, number[]>();
-  const add = (key: string, id: number) => {
-    const ids = map.get(key);
-    if (ids) ids.push(id);
-    else map.set(key, [id]);
-  };
-  for (const tab of tabs) {
-    for (const page of tab.pages) {
-      const { category, configuration, item } = page.node;
-      add(nodeTreeKey(page.node), page.id);
-      if (item && configuration)
-        add(configurationKey(category, configuration), page.id);
-      if (item || configuration) add(groupKey(category), page.id);
-    }
-  }
-  return map;
+/** 目录树一个节点下（含自身）的末级节点和二级 Tab */
+export interface TreeSelectionUnit {
+  /** 末级节点（机型，或没有子节点的分类 / 配置）的 key */
+  leaves: string[];
+  /** 这些末级节点下全部二级 Tab 的 id */
+  pageIds: number[];
 }
 
-/** 按已勾选的二级 Tab 算目录树的勾选 / 半选节点 */
+export interface MachineTreeSelection {
+  /** 目录树节点 key → 它下面的末级节点与二级 Tab；每个节点都能勾 */
+  units: Map<string, TreeSelectionUnit>;
+  /** 末级节点 key → 它的二级 Tab id（没有二级 Tab 时为空数组） */
+  leafPages: Map<string, number[]>;
+}
+
+/**
+ * 报告勾选的单位：每个末级节点都能勾。有二级 Tab 的末级节点勾的是它的二级 Tab，
+ * 没有二级 Tab 的单独记一个勾（报告里是空的）。勾分支 = 勾它下面全部末级节点。
+ */
+export function machineTreeSelection(
+  groups: readonly EntityGroup[],
+  tabs: readonly MachineTab[],
+): MachineTreeSelection {
+  const leafAncestors = new Map<string, string[]>();
+  for (const group of groups) {
+    const groupNode = groupKey(group.name);
+    const configurations = group.configurations ?? [];
+    if (group.items.length === 0 && configurations.length === 0) {
+      leafAncestors.set(groupNode, []);
+    }
+    for (const configuration of configurations) {
+      const configurationNode = configurationKey(
+        group.name,
+        configuration.name,
+      );
+      if (configuration.items.length === 0) {
+        leafAncestors.set(configurationNode, [groupNode]);
+      }
+      for (const item of configuration.items) {
+        leafAncestors.set(
+          nodeTreeKey({
+            category: group.name,
+            configuration: configuration.name,
+            item,
+          }),
+          [groupNode, configurationNode],
+        );
+      }
+    }
+    for (const item of group.items) {
+      leafAncestors.set(
+        nodeTreeKey({ category: group.name, configuration: null, item }),
+        [groupNode],
+      );
+    }
+  }
+
+  const leafPages = new Map<string, number[]>(
+    [...leafAncestors.keys()].map((key) => [key, []]),
+  );
+  for (const tab of tabs) {
+    for (const page of tab.pages) {
+      leafPages.get(nodeTreeKey(page.node))?.push(page.id);
+    }
+  }
+
+  const units = new Map<string, TreeSelectionUnit>();
+  for (const [leaf, ancestors] of leafAncestors) {
+    for (const key of [...ancestors, leaf]) {
+      const unit = units.get(key) ?? { leaves: [], pageIds: [] };
+      unit.leaves.push(leaf);
+      unit.pageIds.push(...(leafPages.get(leaf) ?? []));
+      units.set(key, unit);
+    }
+  }
+  return { units, leafPages };
+}
+
+/** 末级节点的勾选程度：有二级 Tab 的看勾了几个，没有的看是否单独勾了 */
+function leafCoverage(
+  selection: MachineTreeSelection,
+  leaf: string,
+  checkedPages: ReadonlySet<number>,
+  checkedLeaves: ReadonlySet<string>,
+): 'all' | 'some' | 'none' {
+  const pages = selection.leafPages.get(leaf) ?? [];
+  if (pages.length === 0) return checkedLeaves.has(leaf) ? 'all' : 'none';
+  const count = pages.filter((id) => checkedPages.has(id)).length;
+  if (count === pages.length) return 'all';
+  return count > 0 ? 'some' : 'none';
+}
+
+/** 已勾选的末级节点数（有二级 Tab 的勾了任意一个就算） */
+export function selectedLeafCount(
+  selection: MachineTreeSelection,
+  checkedPages: ReadonlySet<number>,
+  checkedLeaves: ReadonlySet<string>,
+): number {
+  return [...selection.leafPages.keys()].filter(
+    (leaf) =>
+      leafCoverage(selection, leaf, checkedPages, checkedLeaves) !== 'none',
+  ).length;
+}
+
+/** 目录树的勾选 / 半选节点 */
 export function treeCheckState(
-  pageIds: ReadonlyMap<string, readonly number[]>,
-  checked: ReadonlySet<number>,
+  selection: MachineTreeSelection,
+  checkedPages: ReadonlySet<number>,
+  checkedLeaves: ReadonlySet<string>,
 ): { checked: string[]; halfChecked: string[] } {
   const state = { checked: [] as string[], halfChecked: [] as string[] };
-  for (const [key, ids] of pageIds) {
-    const count = ids.filter((id) => checked.has(id)).length;
-    if (count === ids.length) state.checked.push(key);
-    else if (count > 0) state.halfChecked.push(key);
+  for (const [key, unit] of selection.units) {
+    const coverage = unit.leaves.map((leaf) =>
+      leafCoverage(selection, leaf, checkedPages, checkedLeaves),
+    );
+    if (coverage.every((value) => value === 'all')) state.checked.push(key);
+    else if (coverage.some((value) => value !== 'none')) {
+      state.halfChecked.push(key);
+    }
   }
   return state;
 }

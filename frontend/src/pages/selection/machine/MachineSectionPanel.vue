@@ -32,6 +32,8 @@ const props = defineProps<{
   focusRowId?: number;
   machineName: string;
   section: MachineSectionItem;
+  /** 表格还没建时传入（机型的直属表格按需创建）：显示空表，第一次新增前调用 */
+  ensureSection?: () => number | null;
 }>();
 
 const store = useSelectionStore();
@@ -80,7 +82,9 @@ const sensorById = computed(
   () => new Map(store.sensors.map((sensor) => [sensor.id, sensor])),
 );
 const items = computed(() =>
-  store.machineSectionRows(props.section.id, props.machineName),
+  props.ensureSection
+    ? []
+    : store.machineSectionRows(props.section.id, props.machineName),
 );
 const hasActiveFilters = computed(
   () =>
@@ -171,7 +175,6 @@ const columns = computed(() => {
   });
 });
 
-
 watch(
   () => [props.section.id, props.machineName] as const,
   () => {
@@ -225,10 +228,7 @@ function onTableChange(
   extra: { action?: string },
 ) {
   if (!isColumnFilterChange(extra)) return;
-  setColumnFilter(
-    sensorTypeFilters,
-    columnFilterValues(filters, 'sensorType'),
-  );
+  setColumnFilter(sensorTypeFilters, columnFilterValues(filters, 'sensorType'));
   setColumnFilter(
     machineModelFilters,
     columnFilterValues(filters, 'machineModelName'),
@@ -278,9 +278,7 @@ watch(
     // 否则目标行在第 2 页以后时会被拉回第 1 页而定位失败。
     await nextTick();
     if (handledFocusKey !== key) return;
-    const rowIndex = filtered.value.findIndex(
-      (item) => item.id === focusRowId,
-    );
+    const rowIndex = filtered.value.findIndex((item) => item.id === focusRowId);
     if (rowIndex < 0) return;
     page.value = Math.floor(rowIndex / pageSize.value) + 1;
     await nextTick();
@@ -484,6 +482,7 @@ const customRow = computed(() =>
     :section-id="section.id"
     :machine-name="machineName"
     :structure="isStructure"
+    :ensure-section="ensureSection"
   />
 </template>
 

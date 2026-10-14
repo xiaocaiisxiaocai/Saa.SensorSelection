@@ -92,6 +92,11 @@ describe('OrgPage', () => {
       ?.props('options')
       .map((option: { value: unknown }) => String(option.value));
     expect(levels).toEqual(['事业部', '部门', '课别']);
+    // 层级默认是上级的下一级，排序排在已有子组织之后
+    expect(formSelects(wrapper)[0]?.props('value')).toBe('部门');
+    expect(
+      document.querySelector<HTMLInputElement>('#org-sort-order')?.value,
+    ).toBe('2');
     wrapper.unmount();
   });
 

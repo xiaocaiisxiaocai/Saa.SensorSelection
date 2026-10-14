@@ -10,6 +10,8 @@ import {
   canHaveOrgChildren,
   canPlaceOrgLevel,
   collectDescendantLevels,
+  defaultChildOrgLevel,
+  nextOrgSortOrder,
   ORG_LEAF_MESSAGE,
   ORG_LEVEL_INVERTED_MESSAGE,
 } from '@/pages/system/org-tree';
@@ -80,9 +82,15 @@ function show(parent: null | number, node: null | OrgUnitNode) {
   parentId.value = parent;
   editingNode.value = node;
   Object.assign(form, {
-    level: node?.level ?? null,
+    // 新建时层级取上级的下一级、排序排在最后，都还能改
+    level: node
+      ? node.level
+      : defaultChildOrgLevel(
+          props.nodes.find((item) => item.id === parent)?.level,
+          parent === null,
+        ),
     name: node?.name ?? '',
-    sortOrder: node?.sortOrder ?? 0,
+    sortOrder: node ? node.sortOrder : nextOrgSortOrder(props.nodes, parent),
   });
   dirtyGuard.markClean();
   visible.value = true;

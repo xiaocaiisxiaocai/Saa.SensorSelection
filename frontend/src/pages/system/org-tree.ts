@@ -64,6 +64,30 @@ export function canHaveOrgChildren(level: string | null | undefined): boolean {
   return level?.trim() !== ORG_LEAF_LEVEL;
 }
 
+/**
+ * 新建时默认的层级：顶层是事业部，其余取上级的下一级（事业部 → 部门 → 课别）。
+ * 上级没填层级或是自定义层级时不猜，留空。
+ */
+export function defaultChildOrgLevel(
+  parentLevel: string | null | undefined,
+  isRoot: boolean,
+): string | null {
+  if (isRoot) return ORG_LEVELS[0];
+  const index = ORG_LEVELS.findIndex((level) => level === parentLevel);
+  return index >= 0 ? (ORG_LEVELS[index + 1] ?? null) : null;
+}
+
+/** 新建时默认的同级排序：排在同一上级下现有组织的最后 */
+export function nextOrgSortOrder(
+  nodes: readonly OrgUnitNode[],
+  parentId: number | null,
+): number {
+  const siblings = nodes.filter((node) => node.parentId === parentId);
+  return siblings.length
+    ? Math.max(...siblings.map((node) => node.sortOrder)) + 1
+    : 1;
+}
+
 export function canPlaceOrgLevel(
   parentLevel: string | null | undefined,
   childLevel: string | null | undefined,

@@ -5,6 +5,8 @@ import {
   buildOrgTree,
   canHaveOrgChildren,
   canPlaceOrgLevel,
+  defaultChildOrgLevel,
+  nextOrgSortOrder,
   flattenOrgTree,
   toTreeSelectNodes,
 } from './org-tree';
@@ -66,5 +68,28 @@ describe('org-tree', () => {
     expect(canHaveOrgChildren('部门')).toBe(true);
     expect(canHaveOrgChildren(null)).toBe(true);
     expect(canHaveOrgChildren('自定义')).toBe(true);
+  });
+
+  it('defaults a new unit to the next level and the last sort position', () => {
+    expect(defaultChildOrgLevel(null, true)).toBe('事业部');
+    expect(defaultChildOrgLevel('事业部', false)).toBe('部门');
+    expect(defaultChildOrgLevel('部门', false)).toBe('课别');
+    expect(defaultChildOrgLevel('课别', false)).toBeNull();
+    expect(defaultChildOrgLevel(null, false)).toBeNull();
+    expect(defaultChildOrgLevel('自定义', false)).toBeNull();
+
+    const node = (id: number, parentId: number | null, sortOrder: number) => ({
+      childCount: 0,
+      id,
+      level: null,
+      name: String(id),
+      parentId,
+      sortOrder,
+      userCount: 0,
+    });
+    const nodes = [node(1, null, 1), node(2, 1, 3), node(3, 1, 7)];
+    expect(nextOrgSortOrder(nodes, 1)).toBe(8);
+    expect(nextOrgSortOrder(nodes, null)).toBe(2);
+    expect(nextOrgSortOrder(nodes, 2)).toBe(1);
   });
 });

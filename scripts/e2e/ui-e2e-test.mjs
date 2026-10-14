@@ -907,9 +907,11 @@ async function runMachineCrud() {
     await saveSheet()
     await expectToast('分类已新增')
 
-    await page.getByRole('button', { name: '新建机型', exact: true }).click()
+    // 结构目录标题栏只有「新建分类 / 新建配置」，机型从分类的「更多」菜单里建
+    await page.getByPlaceholder('搜索分类或机型…').fill(NAMES.machineCategory)
+    await settle()
+    await sourceListAction(NAMES.machineCategory, '新建机型')
     await sheet().waitFor({ state: 'visible' })
-    await pickSelect(sheet(), '分类', NAMES.machineCategory)
     await fillField(sheet(), '机型名称', NAMES.machine)
     await saveSheet()
     await expectToast('机型已新增')

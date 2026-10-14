@@ -152,6 +152,19 @@ export function ancestorKeys(
   return [];
 }
 
+/** 按 key 找节点（含子孙）；找不到时为 undefined */
+export function findNode(
+  nodes: readonly EntityNode[],
+  key: string,
+): EntityNode | undefined {
+  for (const node of nodes) {
+    if (node.key === key) return node;
+    const child = node.children && findNode(node.children, key);
+    if (child) return child;
+  }
+  return undefined;
+}
+
 /** 按叶子名找节点 key（没有 selectedKey 时的退路） */
 export function findItemKey(
   nodes: readonly EntityNode[],

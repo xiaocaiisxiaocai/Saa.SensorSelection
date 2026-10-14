@@ -18,6 +18,7 @@ import {
   buildEntityTree,
   dropMove,
   findItemKey,
+  findNode,
   payloadOf,
   sameParent,
   type EntityNode,
@@ -175,6 +176,15 @@ watch(
   },
   { immediate: true, flush: 'post' },
 );
+
+// 标题栏的「新建配置」默认放进当前选中节点所在的分类
+function createConfigurationFromHeader() {
+  const key = selectedKeys.value[0];
+  emit(
+    'createConfiguration',
+    key ? findNode(treeData.value, key)?.category : undefined,
+  );
+}
 
 const checkedKeys = computed(() => ({
   checked: props.checkState?.checked ?? [],
@@ -355,7 +365,18 @@ function runAction(node: EntityNode, key: string) {
               <template #icon><FolderPlus :size="14" /></template>
             </a-button>
           </a-tooltip>
-          <a-tooltip :title="`新建${itemLabel}`">
+          <!-- 机型结构目录：标题栏只建分类和配置，机型从配置的「更多」菜单里建 -->
+          <a-tooltip v-if="allowConfigurations" title="新建配置">
+            <a-button
+              type="text"
+              size="small"
+              aria-label="新建配置"
+              @click="createConfigurationFromHeader"
+            >
+              <template #icon><Plus :size="14" /></template>
+            </a-button>
+          </a-tooltip>
+          <a-tooltip v-else :title="`新建${itemLabel}`">
             <a-button
               type="text"
               size="small"

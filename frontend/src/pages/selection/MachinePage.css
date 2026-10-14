@@ -22,10 +22,10 @@
   align-items: center;
 }
 
-/* 选中节点的路径：一级 Tab 下、表格上方，最后一段（当前节点）加粗 */
+/* 选中节点的路径：右侧最上方、一级 Tab 之上，最后一段（当前节点）加粗 */
 .machine-node-path {
   flex-shrink: 0;
-  padding-top: var(--space-3);
+  padding-bottom: var(--space-2);
 }
 
 .machine-node-path :deep(.ant-breadcrumb-item:last-child) {

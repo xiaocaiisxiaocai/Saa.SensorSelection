@@ -566,6 +566,16 @@ async function removeTab(tabId: number): Promise<boolean> {
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">
+        <!-- 最上方：选中节点的路径（树里的选中项可能不在视野内） -->
+        <a-breadcrumb
+          v-if="nodePath.length"
+          class="machine-node-path"
+          aria-label="当前选单节点"
+        >
+          <a-breadcrumb-item v-for="part in nodePath" :key="part">
+            {{ part }}
+          </a-breadcrumb-item>
+        </a-breadcrumb>
         <a-empty v-if="!node" description="暂无机型，请在左侧新建分类和机型" />
         <!-- 有子选单的节点没有二级 Tab -->
         <a-empty v-else-if="nodeIsBranch">
@@ -628,16 +638,6 @@ async function removeTab(tabId: number): Promise<boolean> {
             </template>
           </a-tabs>
 
-          <!-- 右侧标题：选中节点的路径（树里的选中项可能不在视野内） -->
-          <a-breadcrumb
-            v-if="tabs.length && activeTab"
-            class="machine-node-path"
-            aria-label="当前选单节点"
-          >
-            <a-breadcrumb-item v-for="part in nodePath" :key="part">
-              {{ part }}
-            </a-breadcrumb-item>
-          </a-breadcrumb>
           <a-empty v-if="tabs.length === 0">
             <template #description>
               <div>还没有 Tab</div>

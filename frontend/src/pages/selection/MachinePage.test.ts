@@ -169,6 +169,42 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
+  it('offers new category and new configuration in the structure tree header, not new machine', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const headerButtons = () =>
+      wrapper
+        .findAll('.entity-tree .ant-card-extra button')
+        .map((button) => button.attributes('aria-label'));
+    expect(headerButtons()).toContain('新建分类');
+    expect(headerButtons()).toContain('新建配置');
+    expect(headerButtons()).not.toContain('新建机型');
+
+    // 默认放进当前选中机型所在的分类
+    await wrapper.get('button[aria-label="新建配置"]').trigger('click');
+    await flushPromises();
+    expect(document.body.textContent).toContain('新建配置');
+    expect(
+      document.querySelector('.ant-modal .ant-select-selection-item')
+        ?.textContent,
+    ).toBe(String(wrapper.vm.$route.query.category));
+    wrapper.unmount();
+
+    // 专案机型没有配置层：仍是新建机型
+    const project = await mountPage(
+      true,
+      true,
+      '/selection/machine?catalog=project',
+    );
+    await flushPromises();
+    const projectButtons = project
+      .findAll('.entity-tree .ant-card-extra button')
+      .map((button) => button.attributes('aria-label'));
+    expect(projectButtons).toContain('新建机型');
+    expect(projectButtons).not.toContain('新建配置');
+    project.unmount();
+  });
+
   it('has no machine process selector or process manager', async () => {
     const wrapper = await mountPage(true, true);
 
@@ -1047,10 +1083,14 @@ describe('MachinePage machine tabs', () => {
       ensureSection: undefined,
     });
 
-    // 表格上方写出选中节点的完整路径；空表格说明是哪个机型、哪个 Tab，并附新增按钮
+    // 右侧最上方（一级 Tab 之上）写出选中节点的完整路径；
+    // 空表格说明是哪个机型、哪个 Tab，并附新增按钮
     expect(wrapper.get('.machine-node-path').text()).toContain(
       direct.node.item!,
     );
+    expect(
+      wrapper.get('.machine-workspace').element.firstElementChild?.classList,
+    ).toContain('machine-node-path');
     expect(wrapper.getComponent(MachineSectionPanel).props('emptyHint')).toBe(
       `「${direct.node.item}」在「输送机构」下还没有选型记录`,
     );

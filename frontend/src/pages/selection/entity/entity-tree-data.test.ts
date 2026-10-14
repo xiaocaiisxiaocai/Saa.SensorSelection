@@ -63,9 +63,18 @@ describe('entity-tree-data', () => {
 
   it('finds the selected leaf key by name', () => {
     const tree = buildEntityTree(groups, '');
+    // 分类A 下先是直属机型「机型1」，再是「配置X」
     expect(findItemKey(tree, '机型3')).toBe(
-      tree[1]?.children?.[0]?.children?.[1]?.key,
+      tree[1]?.children?.[1]?.children?.[1]?.key,
     );
+  });
+
+  it('lists the direct machines of a category before its configurations', () => {
+    const tree = buildEntityTree(groups, '');
+    expect(tree[1]?.children?.map((node) => node.title)).toEqual([
+      '机型1',
+      '配置X',
+    ]);
   });
 
   it('turns a drop before / after a sibling into an index move', () => {

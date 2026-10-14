@@ -706,7 +706,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 机型 Tab 不属于数据字典；是 `machine-tabs:all` 里按目录共用的一级 Tab。`saveMachineTab`：名称同一目录内不重复（`duplicate`），Tab 下的二级 Tab 有内容时不能换类型（`not-empty`）；`deleteMachineTab` 连同其下所有节点的二级 Tab 和内容一起删除。
 
 二级 Tab 属于「选单节点 × 一级 Tab」（`page.node = { category, configuration, item }`）。**选单节点的下一层只能二选一**：
-- **机型（`node.item` 非空）没有二级 Tab**：它在每个一级 Tab 下只有一张直属表格，也存成一个页，带 `direct: true`、名称同一级 Tab。`ensureMachineDirectPage(tabId, node)` 已有就返回、没有就新建（只用于机型节点，否则 `validation`；节点不存在为 `stale`），界面在第一次新增记录前才调用，浏览时不建。归一化时丢掉机型上不带 `direct` 的页（旧的机型二级 Tab），也丢掉不在机型上的 `direct` 页；`writeMachineTabs` 顺带删掉已不存在的页的内容 key。
+- **机型（`node.item` 非空）没有二级 Tab**：它在每个一级 Tab 下只有一张直属表格，也存成一个页，带 `direct: true`、名称同一级 Tab。`ensureMachineDirectPage(tabId, node)` 已有就返回、没有就新建（只用于机型节点，否则 `validation`；节点不存在为 `stale`），浏览时不建。界面新增第一笔记录走 `saveMachineDirectRow(tabId, node, payload)`：在一个事务里先 `ensureMachineDirectPage` 再写记录，记录不合法（如没关联传感器）时整体回滚，不留下空表格。归一化时丢掉机型上不带 `direct` 的页（旧的机型二级 Tab），也丢掉不在机型上的 `direct` 页；`writeMachineTabs` 顺带删掉已不存在的页的内容 key。
 - `saveMachineTabPage(tabId, { name, node }, editId?)` 新建（排在最后）或改名（改名时 node 不变）。节点不存在 / Tab 不存在为 `stale`；节点不属于 Tab 的目录、节点是机型、或改名直属表格为 `validation`；节点下已有子选单为 `not-empty`；名称在同一 Tab、同一节点内不重复（`duplicate`）。
 - `moveMachineTabPage(tabId, pageId, -1 | 1)` 在同一节点的二级 Tab 之间左移 / 右移，到头为 `validation`；`deleteMachineTabPage` 连同内容删除。
 - 节点有二级 Tab 时：`saveMachineConfiguration` 新建配置、`saveEntityItem` 把机型新建或移到它下面都返回 `not-empty`（机型留在原处改名不算）；`deleteEntityGroup` / `deleteMachineConfiguration` 也返回 `not-empty`。`deleteEntityItem` 在机型的直属表格有内容时返回 `not-empty`，空的直属表格随机型一起删掉。分类 / 配置改名、机型改名或移动时，二级 Tab 的 node 跟着更新。

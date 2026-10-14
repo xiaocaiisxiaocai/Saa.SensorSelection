@@ -920,7 +920,8 @@ async function runMachineCrud() {
     await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.machine }).first().waitFor({ state: 'visible' })
   })
 
-  // 机型 Tab 是结构目录共用的容器：新建两个 Tab，再在 Tab 下直接新建二级 Tab
+  // 机型 Tab 是结构目录共用的容器。机型（最末一层）没有二级 Tab：每个一级 Tab 下直接是它的表格；
+  // 只有没有子选单的分类 / 配置才能挂二级 Tab。
   const subTab = (name) => page.locator('.machine-sub-tab', { hasText: name }).first()
   const PAGE_NAME = `${TAG}页`
 
@@ -955,14 +956,15 @@ async function runMachineCrud() {
     assert(await page.getByRole('tab', { name: new RegExp(`^${TAG}注意事项`) }).isVisible(), 'notes tab missing')
   })
 
-  await check('Machine: create a second-level tab directly under a tab', async () => {
-    // 新建的 Tab 已经选中，还没有二级 Tab
+  await check('Machine: a machine shows its own table under a tab, without second-level tabs', async () => {
+    // 新建的机型仍选中，新建的 Tab 也已选中
     await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}注意事项` }).waitFor({ state: 'visible', timeout: 8000 })
-    await page.getByText(`「${TAG}注意事项」下还没有二级 Tab`).waitFor({ state: 'visible', timeout: 8000 })
-    await addPage(PAGE_NAME)
-    assert(page.url().includes('page='), 'new second-level tab is not selected')
-    // 目录里的机型不受影响，也没有拖放
-    assertEqual(await page.locator('.machine-sub-tab[draggable="true"]').count(), 0, 'second-level tab is draggable')
+    await page.getByText(`「${NAMES.machine}」在「${TAG}注意事项」下还没有`).first().waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await page.locator('.machine-sub-tabs').count(), 0, 'a machine shows second-level tabs')
+    assertEqual(await page.locator('button[aria-label="新建二级 Tab"]').count(), 0, 'a machine offers new second-level tab')
+    // 右侧最上方是选中节点的路径
+    const path = await page.locator('.machine-node-path').innerText()
+    assert(path.includes(NAMES.machineCategory) && path.includes(NAMES.machine), `node path is ${path}`)
   })
 
   // 注意事项 Tab 下的内容是纯文本事项；结构 Tab 另外要求关联传感器。
@@ -995,14 +997,9 @@ async function runMachineCrud() {
     )
   })
 
-  await check('Machine: the same second-level tab name works under another tab', async () => {
+  await check('Machine: a structure row requires an associated sensor', async () => {
     await page.getByRole('tab', { name: new RegExp(`^${TAG}机构`) }).click()
     await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}机构` }).waitFor({ state: 'visible', timeout: 8000 })
-    await addPage(PAGE_NAME)
-    await addPage(`${TAG}页二`)
-  })
-
-  await check('Machine: a structure row requires an associated sensor', async () => {
     await page.getByRole('button', { name: '新增选型', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
     await fillField(sheet(), '功能作用', `${TAG}作用`)
@@ -1011,14 +1008,51 @@ async function runMachineCrud() {
     await cancelSheet()
   })
 
-  await check('Machine: the report toolbar exposes selection and export actions', async () => {
-    for (const label of ['全选', '清空']) {
-      assert(await page.getByRole('button', { name: label, exact: true }).isVisible(), `missing ${label}`)
+  await check('Machine: the report menu shows tree checkboxes only while choosing machines', async () => {
+    const reportMenu = page.getByRole('button', { name: '报告操作', exact: true })
+    assertEqual(await page.locator('.entity-tree .ant-tree-checkbox').count(), 0, 'checkboxes shown before choosing')
+    await reportMenu.click()
+    for (const label of ['选择机型', '全选', '清空']) {
+      await page.getByRole('menuitem', { name: label, exact: true }).waitFor({ state: 'visible', timeout: 8000 })
     }
-    assert(await subTab(PAGE_NAME).locator('.ant-checkbox').isVisible(), 'second-level tab has no report checkbox')
+    await page.getByRole('menuitem', { name: '选择机型', exact: true }).click()
+    await page.locator('.entity-tree .ant-tree-checkbox').first().waitFor({ state: 'visible', timeout: 8000 })
+    await reportMenu.click()
+    await page.getByRole('menuitem', { name: '完成选择', exact: true }).click()
+    await page.waitForFunction(() => document.querySelectorAll('.entity-tree .ant-tree-checkbox').length === 0, null, { timeout: 8000 })
+    // 下拉菜单有收起动画，等它完全消失再进下一项
+    await page.mouse.move(0, 0)
+    await page.locator('.ant-dropdown:visible').first().waitFor({ state: 'hidden', timeout: 8000 })
+  })
+
+  // 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单
+  await check('Machine: an empty category owns second-level tabs and then refuses new machines', async () => {
+    await page.getByRole('button', { name: '新建分类', exact: true }).click()
+    await sheet().waitFor({ state: 'visible' })
+    await fillField(sheet(), '分类名称', NAMES.machineLeafCategory)
+    await saveSheet()
+    await expectToast('分类已新增')
+    await page.getByPlaceholder('搜索分类或机型…').fill(NAMES.machineLeafCategory)
+    await settle()
+    await page.locator(`.entity-tree__node[data-node-kind="group"][data-category="${NAMES.machineLeafCategory}"]`).first().click()
+    await page.waitForURL((url) => decodeURIComponent(String(url)).includes(`category=${NAMES.machineLeafCategory}`), { timeout: 8000 })
+    // 换选单节点时留在当前一级 Tab（这次运行自己的「E2E机构」），别在真实 Tab 下留东西
+    await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}机构` }).waitFor({ state: 'visible', timeout: 8000 })
+    await page.getByText(`「${NAMES.machineLeafCategory}」在「${TAG}机构」下还没有二级 Tab`).waitFor({ state: 'visible', timeout: 8000 })
+    await addPage(PAGE_NAME)
+    assert(page.url().includes('page='), 'new second-level tab is not selected')
+    assertEqual(await page.locator('.machine-sub-tab[draggable="true"]').count(), 0, 'second-level tab is draggable')
+    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
+    const create = page.getByRole('menuitem', { name: '新建机型（已有二级 Tab）', exact: true })
+    await create.waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await create.getAttribute('aria-disabled'), 'true', 'new machine is not disabled')
+    // 再点一次触发按钮收起下拉菜单
+    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
+    await create.waitFor({ state: 'hidden', timeout: 8000 })
   })
 
   await check('Machine: reorder, rename and delete a second-level tab', async () => {
+    await addPage(`${TAG}页二`)
     const names = () => page.locator('.machine-sub-tab__name').allInnerTexts()
     await pageAction(`${TAG}页二`, '左移')
     await page.waitForFunction(
@@ -1041,29 +1075,6 @@ async function runMachineCrud() {
       { timeout: 8000 },
     )
     assert((await names()).includes(PAGE_NAME), 'remaining second-level tab missing')
-  })
-
-  // 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单
-  await check('Machine: an empty category owns second-level tabs and then refuses new machines', async () => {
-    await page.getByRole('button', { name: '新建分类', exact: true }).click()
-    await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '分类名称', NAMES.machineLeafCategory)
-    await saveSheet()
-    await expectToast('分类已新增')
-    await page.getByPlaceholder('搜索分类或机型…').fill(NAMES.machineLeafCategory)
-    await settle()
-    await page.locator(`.entity-tree__node[data-node-kind="group"][data-category="${NAMES.machineLeafCategory}"]`).first().click()
-    await page.waitForURL((url) => decodeURIComponent(String(url)).includes(`category=${NAMES.machineLeafCategory}`), { timeout: 8000 })
-    // 换选单节点时留在当前一级 Tab（这次运行自己的「E2E机构」），别在真实 Tab 下留东西
-    await page.locator('.ant-tabs-tab-active', { hasText: `${TAG}机构` }).waitFor({ state: 'visible', timeout: 8000 })
-    await addPage(`${TAG}分类页`)
-    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
-    const create = page.getByRole('menuitem', { name: '新建机型（已有二级 Tab）', exact: true })
-    await create.waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await create.getAttribute('aria-disabled'), 'true', 'new machine is not disabled')
-    // 再点一次触发按钮收起下拉菜单
-    await page.getByRole('button', { name: `${NAMES.machineLeafCategory} 的更多操作`, exact: true }).click()
-    await create.waitFor({ state: 'hidden', timeout: 8000 })
   })
 
   await check('Machine: a menu node with sub-menus shows no second-level tabs', async () => {
@@ -1219,7 +1230,8 @@ async function runSystemCrud() {
     await sheet().waitFor({ state: 'visible' })
     assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建组织', 'sheet title')
     await fillField(sheet(), '组织名称', NAMES.org)
-    await pickSelect(sheet(), '层级', '事业部')
+    // 层级由位置决定，只显示不让选：顶层是事业部
+    assertEqual((await sheet().locator('.ant-tag').innerText()).trim(), '事业部', 'root level')
     await saveSheet()
     await tableRow(NAMES.org).first().waitFor({ state: 'visible', timeout: 10000 })
   })
@@ -1228,7 +1240,7 @@ async function runSystemCrud() {
     await rowAction(NAMES.org, '新建子节点')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '组织名称', `${NAMES.org}子`)
-    await pickSelect(sheet(), '层级', '部门')
+    assertEqual((await sheet().locator('.ant-tag').innerText()).trim(), '部门', 'child level')
     await saveSheet()
     await tableRow(`${NAMES.org}子`).first().waitFor({ state: 'visible', timeout: 10000 })
   })
@@ -1523,7 +1535,7 @@ async function runUiAudit() {
         await settle()
         // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
         const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
-        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab（机型）的数量会变
+        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab 的数量会变
         for (let i = 0; i < Math.max(1, await tabs.count()) && i < 40; i++) {
           if (i < (await tabs.count())) {
             await tabs.nth(i).locator('[role="tab"]').dispatchEvent('click')
@@ -1592,7 +1604,7 @@ async function runUiAudit() {
         await settle()
         // 只遍历页面卡片里的 Tab；外层「客户 | 制程」是路由 Tab，点了会换页，两页已在 pages 里各自访问
         const tabs = page.locator('.app-shell__content .selection-page .ant-tabs-tab')
-        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab（机型）的数量会变
+        // 每轮重新数：机型页切换一级 Tab 后，二级 Tab 的数量会变
         for (let i = 0; i < Math.max(1, await tabs.count()) && i < 40; i++) {
           if (i < (await tabs.count())) {
             // 窄屏下放不下的标签会收进 antd 的「…」菜单，直接派发点击，不走真实指针

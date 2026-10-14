@@ -37,16 +37,20 @@ describe('SearchPage', () => {
     wrapper.unmount();
   });
 
-  it('does not repeat the category line at the start of the detail line', async () => {
+  it('shows the category and detail on one line without repeating the category', async () => {
     const { wrapper } = await mountSearch('客户');
     const cards = wrapper.findAll('.search-list__item');
     expect(cards.length).toBeGreaterThan(0);
     for (const card of cards) {
-      const meta = card.find('.ant-list-item-meta-description').text().trim();
-      const sub = card.find('.search-list__sub');
-      if (!sub.exists() || !meta) continue;
-      const first = sub.text().split(' · ')[0]?.trim();
-      expect(first === meta || first === `${meta}区域`).toBe(false);
+      // 只有一行说明，不再单独渲染第二段
+      expect(card.findAll('.search-list__sub')).toHaveLength(1);
+      const segments = card
+        .get('.search-list__sub')
+        .text()
+        .split(' · ')
+        .map((segment) => segment.trim());
+      const [category, next] = segments;
+      expect(next === category || next === `${category}区域`).toBe(false);
     }
     wrapper.unmount();
   });

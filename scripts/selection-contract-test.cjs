@@ -2127,6 +2127,29 @@ async function run() {
       tabsRepo.saveMachineSectionRow(onMachine.item.id, owner, { role: '机型直属', sensorIds: [sensor.id] }).ok,
       true,
     )
+    // 机型在某个一级 Tab 下的第一笔记录：直属表格和记录一起写入；记录不合法时不能留下空表格
+    const lifterPages = () =>
+      tabsRepo.getMachineTabs('mechanism').find((tab) => tab.id === lifter.item.id).pages.map((page) => page.id)
+    const lifterBefore = lifterPages()
+    assert.deepEqual(tabsRepo.saveMachineDirectRow(lifter.item.id, machineNode, { role: '缺传感器' }), {
+      ok: false,
+      reason: 'validation',
+    })
+    assert.deepEqual(lifterPages(), lifterBefore)
+    const firstDirectRow = tabsRepo.saveMachineDirectRow(lifter.item.id, machineNode, {
+      role: '收板直属',
+      sensorIds: [sensor.id],
+    })
+    assert.equal(firstDirectRow.ok, true)
+    const lifterDirect = tabsRepo
+      .getMachineTabs('mechanism')
+      .find((tab) => tab.id === lifter.item.id)
+      .pages.find((page) => page.direct)
+    assert.ok(lifterDirect, 'direct page created with the first valid row')
+    assert.deepEqual(
+      tabsRepo.getMachineSectionRows(lifterDirect.id, owner).map((row) => row.role),
+      ['收板直属'],
+    )
     const samePage = tabsRepo.saveMachineTabPage(lifter.item.id, {
       name: '01 单段输送段（搭配）',
       node: leafConfig,

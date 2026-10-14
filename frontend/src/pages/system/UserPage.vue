@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
-import { KeyRound, Pencil, Trash2 } from 'lucide-vue-next';
+import { KeyRound, Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 import {
@@ -32,6 +32,7 @@ const loading = ref(false);
 const users = ref<RbacUser[]>([]);
 const roles = ref<RbacRole[]>([]);
 const orgUnits = ref<OrgUnitNode[]>([]);
+const query = ref('');
 const formDialog = ref<InstanceType<typeof UserFormDialog>>();
 const passwordDialog = ref<InstanceType<typeof UserPasswordDialog>>();
 
@@ -138,16 +139,49 @@ function orgPath(user: RbacUser) {
   return user.orgUnit?.path || '—';
 }
 
-// 分页条始终显示
+// 关键字匹配用户名、显示名、角色名和组织路径
+const filteredUsers = computed(() => {
+  const keyword = query.value.trim().toLocaleLowerCase('zh-CN');
+  if (!keyword) return users.value;
+  return users.value.filter((user) =>
+    [
+      user.username,
+      user.displayName,
+      ...user.roles.map((role) => role.name),
+      user.orgUnit?.path ?? '',
+    ].some((text) => text.toLocaleLowerCase('zh-CN').includes(keyword)),
+  );
+});
+
+// 分页条始终显示；换关键字回到第一页
 const { pagination, onChange: onPageChange } = useTablePagination(
-  () => users.value.length,
+  () => filteredUsers.value.length,
+  [() => query.value],
 );
 </script>
 
 <template>
   <section class="selection-page">
-    <div class="selection-toolbar user-toolbar">
+    <div class="selection-toolbar">
       <h1 class="visually-hidden">用户管理</h1>
+      <a-input
+        v-model:value="query"
+        class="selection-toolbar__filter"
+        placeholder="搜索用户名、显示名、角色或组织"
+        aria-label="搜索用户"
+        allow-clear
+      >
+        <template #prefix><Search :size="14" /></template>
+      </a-input>
+      <a-button
+        type="text"
+        :disabled="!query"
+        aria-label="重置筛选"
+        @click="query = ''"
+      >
+        <template #icon><RotateCcw :size="14" /></template>
+        重置
+      </a-button>
       <a-button
         v-if="writable"
         type="primary"
@@ -158,12 +192,12 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     </div>
     <a-table
       :columns="columns"
-      :data-source="users"
+      :data-source="filteredUsers"
       row-key="id"
       :loading="loading"
       :pagination="pagination"
       :scroll="{ x: scrollX(columns) }"
-      :locale="{ emptyText: '暂无用户' }"
+      :locale="{ emptyText: query.trim() ? '没有匹配的用户' : '暂无用户' }"
       :custom-row="writable ? rowClick(openEdit) : undefined"
       @change="onPageChange"
     >

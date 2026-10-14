@@ -479,8 +479,7 @@ export function createSelectionRepository({
     if (
       previous &&
       sensorCurrentGuardsAlternates(items, previous) &&
-      (!isSensorStatus(status, 'current') ||
-        sensorType !== previous.sensorType)
+      (!isSensorStatus(status, 'current') || sensorType !== previous.sensorType)
     ) {
       return {
         ok: false,
@@ -1516,7 +1515,11 @@ export function createSelectionRepository({
         for (const group of groups) {
           if (machineCatalogKind(group) !== tab.catalog) continue;
           if (group.items.includes(page.name)) {
-            page.node = { category: group.name, configuration: null, item: page.name };
+            page.node = {
+              category: group.name,
+              configuration: null,
+              item: page.name,
+            };
             page.name = tab.name;
             page.direct = true;
             break;
@@ -1758,6 +1761,26 @@ export function createSelectionRepository({
     writeMachineTabs(tabs);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
     return { ok: true, item: saved };
+  }
+
+  /**
+   * 机型在一级 Tab 下新增记录：直属表格还没有时先建，和记录在同一个事务里提交；
+   * 记录不合法时整体回滚，不留下空表格。
+   */
+  function saveMachineDirectRow(
+    tabId: number,
+    node: MachineNodeRef,
+    payload: Partial<MachineSectionRow> & Record<string, unknown>,
+  ): SaveResult<MachineSectionRow> {
+    return transaction(() => {
+      const page = ensureMachineDirectPage(tabId, node);
+      if (!page.ok) return page;
+      return saveMachineSectionRow(
+        page.item.id,
+        MACHINE_TAB_PAGE_OWNER,
+        payload,
+      );
+    });
   }
 
   /** 删除二级 Tab：连同它的内容 */
@@ -2889,7 +2912,11 @@ export function createSelectionRepository({
       (groups[index]?.items.length ?? 0) > 0 ||
       (groups[index]?.configurations?.length ?? 0) > 0 ||
       (kind === 'machine' &&
-        machineNodeHasPages({ category: name, configuration: null, item: null }))
+        machineNodeHasPages({
+          category: name,
+          configuration: null,
+          item: null,
+        }))
     ) {
       return { ok: false, reason: 'not-empty' };
     }
@@ -2931,7 +2958,8 @@ export function createSelectionRepository({
       moved.name = name;
       if (editName !== name) {
         remapPageNodes(
-          (node) => node.category === category && node.configuration === editName,
+          (node) =>
+            node.category === category && node.configuration === editName,
           (node) => ({ ...node, configuration: name }),
         );
       }
@@ -2942,9 +2970,7 @@ export function createSelectionRepository({
       group.configurations.splice(targetIndex, 0, moved);
     } else {
       // 分组已有二级 Tab，下一层就不能再有子选单
-      if (
-        machineNodeHasPages({ category, configuration: null, item: null })
-      ) {
+      if (machineNodeHasPages({ category, configuration: null, item: null })) {
         return { ok: false, reason: 'not-empty' };
       }
       const requested = Number(payload.sort);
@@ -3063,11 +3089,7 @@ export function createSelectionRepository({
       location !== null &&
       location.group.name === category &&
       (location.configuration?.name ?? null) === parentNode.configuration;
-    if (
-      kind === 'machine' &&
-      !sameParent &&
-      machineNodeHasPages(parentNode)
-    ) {
+    if (kind === 'machine' && !sameParent && machineNodeHasPages(parentNode)) {
       return { ok: false, reason: 'not-empty' };
     }
     if (editName && location) {
@@ -3234,6 +3256,7 @@ export function createSelectionRepository({
     deleteMachineSectionRow,
     deleteMachineTab,
     ensureMachineDirectPage,
+    saveMachineDirectRow,
     deleteMachineTabPage,
     deleteProcessIntroFile,
     deleteProcessStep,

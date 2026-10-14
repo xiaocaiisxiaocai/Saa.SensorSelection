@@ -16,7 +16,7 @@
 
 /* 正文行长控制在 ~70 字符，完整显示不截断 */
 .search-list__sub {
+  display: block;
   max-width: 70ch;
-  margin-bottom: 0;
   overflow-wrap: anywhere;
 }

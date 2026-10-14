@@ -61,6 +61,11 @@ const emptyLocale = {
   }),
 };
 
+/** 结果的第二行：分类 + 去掉重复分类后的细节 */
+function searchLine(item: SearchItem): string {
+  return [item.category, searchItemDetail(item)].filter(Boolean).join(' · ');
+}
+
 const typeLabel: Record<SearchItem['type'], string> = {
   customer: '客户',
   process: '制程',
@@ -144,24 +149,16 @@ const { listPagination } = useTablePagination(
                     />
                   </a-button>
                 </template>
+                <!-- 分类和细节合成一行（如「输送机构 · 放板机配置 · 机型结构」），不再分两行 -->
                 <template #description>
-                  <AHighlightText
-                    :text="(item as SearchItem).category"
-                    :query="query"
-                  />
+                  <span class="search-list__sub">
+                    <AHighlightText
+                      :text="searchLine(item as SearchItem)"
+                      :query="query"
+                    />
+                  </span>
                 </template>
               </a-list-item-meta>
-              <a-typography-paragraph
-                v-if="searchItemDetail(item as SearchItem)"
-                class="search-list__sub"
-                type="secondary"
-                :title="searchItemDetail(item as SearchItem)"
-              >
-                <AHighlightText
-                  :text="searchItemDetail(item as SearchItem)"
-                  :query="query"
-                />
-              </a-typography-paragraph>
             </a-list-item>
           </template>
         </a-list>

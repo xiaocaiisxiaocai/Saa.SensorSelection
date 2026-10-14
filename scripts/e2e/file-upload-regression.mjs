@@ -256,15 +256,12 @@ async function runMachineImage() {
   await saveSheet()
   await page.getByPlaceholder('搜索分类或机型…').fill(machine)
 
-  // 机型 Tab 是共用的：新建一个结构 Tab，再在它下面新建一个二级 Tab
+  // 机型 Tab 是共用的：新建一个结构 Tab；机型没有二级 Tab，Tab 下直接是这个机型的表格
   await page.locator('.machine-section-tabs .ant-tabs-nav-add:visible, button:has-text("新建 Tab")').first().click()
   await fillField(sheet(), 'Tab 名称', tab)
   await pickSelect(sheet(), 'Tab 类型', '结构')
   await saveSheet()
-  await page.locator('button[aria-label="新建二级 Tab"], button:has-text("新建二级 Tab")').first().click()
-  await fillField(sheet(), '名称', machine)
-  await saveSheet()
-  await page.locator('.machine-sub-tab', { hasText: machine }).first().waitFor({ state: 'visible' })
+  await page.getByText(`「${machine}」在「${tab}」下还没有选型记录`).first().waitFor({ state: 'visible' })
 
   // 示意图在表格「操作」前一列，挂在记录上：先有记录才有格子
   await check('机型结构: the schematic column appears with the first record', async () => {
@@ -279,11 +276,12 @@ async function runMachineImage() {
 
   await check('机型结构: upload, preview and delete a real image in the table', async () => {
     const cell = page.locator('.machine-row-image').first()
-    await cell.getByRole('button', { name: `给 ${role} 新增示意图`, exact: true }).waitFor({ state: 'visible' })
+    await cell.locator(`button[aria-label="给 ${role} 新增示意图"]`).waitFor({ state: 'visible' })
     await cell.locator('input[type="file"]').setInputFiles(IMAGE_PATH)
     await expectToast('示意图已更新')
-    await cell.getByText(IMAGE_NAME, { exact: true }).waitFor({ state: 'visible', timeout: 15000 })
-    const image = cell.locator('img')
+    // 文件名不单独显示，放在图片的 alt / title 上
+    const image = cell.locator(`img[alt="${IMAGE_NAME}"]`)
+    await image.waitFor({ state: 'visible', timeout: 15000 })
     assert(await image.isVisible(), 'uploaded image is not visible')
     // a-image 自带的点击放大预览（悬停时的遮罩层接收点击）
     await cell.locator('.ant-image').click()
@@ -296,14 +294,15 @@ async function runMachineImage() {
     await cell.getByRole('button', { name: `删除 ${role} 的示意图`, exact: true }).click()
     await confirmDelete()
     await expectToast('示意图已删除')
-    await cell.getByRole('button', { name: `给 ${role} 新增示意图`, exact: true }).waitFor({ state: 'visible' })
+    await cell.locator(`button[aria-label="给 ${role} 新增示意图"]`).waitFor({ state: 'visible' })
   })
 
   const contentRow = page.locator('.ant-table-tbody tr.ant-table-row', { hasText: role }).first()
   await contentRow.getByRole('button', { name: '删除', exact: true }).click()
   await confirmDelete()
-  // a-tabs editable-card 每个标签自带关闭按钮；删除 Tab 连同其下二级 Tab 一起删除
-  await page.locator('.ant-tabs-tab', { hasText: tab }).locator('.ant-tabs-tab-remove').click()
+  // 删除 Tab 在「编辑 Tab」对话框里（Tab 上没有关闭按钮），连同其下的表格一起删除
+  await page.locator('.ant-tabs-tab', { hasText: tab }).getByRole('button', { name: '编辑 Tab', exact: true }).click()
+  await sheet().getByRole('button', { name: '删除 Tab', exact: true }).click()
   await confirmDelete()
   await page.getByPlaceholder('搜索分类或机型…').fill(machine)
 

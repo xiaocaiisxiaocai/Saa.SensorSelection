@@ -516,6 +516,11 @@ export const useSelectionStore = defineStore('selection', () => {
     ) => mutate(() => repository.saveMachineTab(catalog, payload, editId)),
     ensureMachineDirectPage: (tabId: number, node: MachineNodeRef) =>
       mutate(() => repository.ensureMachineDirectPage(tabId, node)),
+    saveMachineDirectRow: (
+      tabId: number,
+      node: MachineNodeRef,
+      payload: Partial<MachineSectionRow>,
+    ) => mutate(() => repository.saveMachineDirectRow(tabId, node, payload)),
     deleteMachineTabPage: (tabId: number, pageId: number) =>
       mutate(() => repository.deleteMachineTabPage(tabId, pageId)),
     moveMachineTabPage: (tabId: number, pageId: number, offset: -1 | 1) =>

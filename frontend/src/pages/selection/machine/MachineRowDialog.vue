@@ -9,6 +9,7 @@ import {
   sensorStatusRank,
   type MachineRowImage,
   type MachineSectionRow,
+  type SaveResult,
   type SensorItem,
 } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
@@ -29,10 +30,12 @@ const props = defineProps<{
   machineName: string;
   structure: boolean;
   /**
-   * 表格还没建（机型的直属表格按需创建）时传入：第一次保存前调用，
-   * 返回新表格的 id，失败返回 null（已提示）
+   * 表格还没建（机型的直属表格按需创建）时传入：第一笔记录连同表格一起保存，
+   * 记录不合法时表格也不建
    */
-  ensureSection?: () => number | null;
+  saveFirstRow?: (
+    payload: Partial<MachineSectionRow>,
+  ) => SaveResult<MachineSectionRow>;
 }>();
 
 const store = useSelectionStore();
@@ -80,7 +83,7 @@ async function uploadImage(file: File | undefined) {
 }
 
 const rows = computed(() =>
-  props.ensureSection
+  props.saveFirstRow
     ? []
     : store.machineSectionRows(props.sectionId, props.machineName),
 );
@@ -223,27 +226,26 @@ function save() {
   const structure = props.structure;
   if (structure && imageError.value) return;
   const image = structure ? imagePayload() : undefined;
-  const sectionId = props.ensureSection
-    ? props.ensureSection()
-    : props.sectionId;
-  if (sectionId === null) return;
-  const result = store.saveMachineSectionRow(
-    sectionId,
-    props.machineName,
-    {
-      desc: form.desc.trim(),
-      machineModelId: structure ? form.machineModelId : null,
-      name: form.name.trim(),
-      note: form.note.trim(),
-      processStepId: structure ? form.processStepId : null,
-      boardCharacteristicId: structure ? form.boardCharacteristicId : null,
-      purpose: form.purpose.trim(),
-      role: form.role.trim(),
-      sensorIds: form.sensorIds.map(Number),
-      ...(image === undefined ? {} : { image }),
-    },
-    editId.value,
-  );
+  const payload = {
+    desc: form.desc.trim(),
+    machineModelId: structure ? form.machineModelId : null,
+    name: form.name.trim(),
+    note: form.note.trim(),
+    processStepId: structure ? form.processStepId : null,
+    boardCharacteristicId: structure ? form.boardCharacteristicId : null,
+    purpose: form.purpose.trim(),
+    role: form.role.trim(),
+    sensorIds: form.sensorIds.map(Number),
+    ...(image === undefined ? {} : { image }),
+  };
+  const result = props.saveFirstRow
+    ? props.saveFirstRow(payload)
+    : store.saveMachineSectionRow(
+        props.sectionId,
+        props.machineName,
+        payload,
+        editId.value,
+      );
   if (notifyResult(result, editId.value ? '记录已更新' : '记录已新增')) {
     visible.value = false;
   }

@@ -203,7 +203,10 @@ describe('UserPage', () => {
 
   it('shows field-level errors when a new user is incomplete', async () => {
     const wrapper = await mountPage();
-    await wrapper.get('button').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '新增用户')!
+      .trigger('click');
     await nextTick();
 
     const saveButton = [...document.querySelectorAll('button')].find(
@@ -217,6 +220,47 @@ describe('UserPage', () => {
         (item) => item.textContent?.trim(),
       ),
     ).toEqual(['请输入用户名', '密码至少 4 位', '请输入显示名']);
+    wrapper.unmount();
+  });
+
+  it('filters users by keyword and resets the search', async () => {
+    const lisi: RbacUser = {
+      ...user,
+      displayName: '李四',
+      id: 3,
+      orgUnit: {
+        id: 9,
+        level: '课别',
+        name: '选型课',
+        path: '制造事业部 / 选型课',
+      },
+      roles: [{ code: 'editor', id: 2, name: '业务维护员' }],
+      username: 'lisi',
+    };
+    const wrapper = await mountPage([user, lisi]);
+    const search = () =>
+      wrapper.get<HTMLInputElement>('input[aria-label="搜索用户"]');
+    const rows = () =>
+      wrapper
+        .findAll('.ant-table-tbody tr.ant-table-row')
+        .map((row) => row.text());
+
+    // 按组织路径、角色名、显示名都能找到
+    for (const keyword of ['选型课', '业务维护', '李四']) {
+      await search().setValue(keyword);
+      await nextTick();
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]).toContain('lisi');
+    }
+
+    await search().setValue('不存在');
+    await nextTick();
+    expect(wrapper.text()).toContain('没有匹配的用户');
+
+    await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
+    await nextTick();
+    expect(search().element.value).toBe('');
+    expect(rows()).toHaveLength(2);
     wrapper.unmount();
   });
 

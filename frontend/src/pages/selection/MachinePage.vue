@@ -9,7 +9,9 @@ import {
   type MachineCatalogKind,
   type MachineNodeRef,
   type MachineSectionItem,
+  type MachineSectionRow,
   type MachineTabPage,
+  type SaveResult,
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import SourcePane from '@/pages/selection/SourcePane.vue';
@@ -207,14 +209,12 @@ const placeholderSection = computed<MachineSectionItem | null>(() =>
     : null,
 );
 
-function ensureDirectSection(): number | null {
-  if (!activeTab.value || !node.value) return null;
-  const result = store.ensureMachineDirectPage(activeTab.value.id, node.value);
-  if (!result.ok) {
-    notifyResult(result, '');
-    return null;
-  }
-  return result.item.id;
+/** 机型在当前一级 Tab 下的第一笔记录：直属表格和记录一起保存 */
+function saveDirectRow(
+  payload: Partial<MachineSectionRow>,
+): SaveResult<MachineSectionRow> {
+  if (!activeTab.value || !node.value) return { ok: false, reason: 'stale' };
+  return store.saveMachineDirectRow(activeTab.value.id, node.value, payload);
 }
 
 const machineModelOptions = computed(() =>
@@ -661,7 +661,7 @@ async function removeTab(tabId: number): Promise<boolean> {
             :key="`${activeTab.id}:${nodeName}`"
             :machine-name="MACHINE_TAB_PAGE_OWNER"
             :section="pageSection ?? placeholderSection"
-            :ensure-section="pageSection ? undefined : ensureDirectSection"
+            :save-first-row="pageSection ? undefined : saveDirectRow"
             :empty-hint="directEmptyHint"
             :focus-row-id="Number(route.query.focusRow) || undefined"
           />

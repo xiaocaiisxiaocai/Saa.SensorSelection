@@ -3,7 +3,11 @@ import { Empty } from 'ant-design-vue';
 import { Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
 
-import type { MachineSectionItem, MachineSectionRow } from '@/domain';
+import type {
+  MachineSectionItem,
+  MachineSectionRow,
+  SaveResult,
+} from '@/domain';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   PAGINATION_PROPS,
@@ -33,8 +37,10 @@ const props = defineProps<{
   focusRowId?: number;
   machineName: string;
   section: MachineSectionItem;
-  /** 表格还没建时传入（机型的直属表格按需创建）：显示空表，第一次新增前调用 */
-  ensureSection?: () => number | null;
+  /** 表格还没建时传入（机型的直属表格按需创建）：显示空表，第一笔记录连同表格一起保存 */
+  saveFirstRow?: (
+    payload: Partial<MachineSectionRow>,
+  ) => SaveResult<MachineSectionRow>;
   /** 没有记录时的说明（如「XX 在 YY 下还没有选型记录」）；传了会在空态里附新增按钮 */
   emptyHint?: string;
 }>();
@@ -86,7 +92,7 @@ const sensorById = computed(
   () => new Map(store.sensors.map((sensor) => [sensor.id, sensor])),
 );
 const items = computed(() =>
-  props.ensureSection
+  props.saveFirstRow
     ? []
     : store.machineSectionRows(props.section.id, props.machineName),
 );
@@ -492,7 +498,7 @@ const customRow = computed(() =>
     :section-id="section.id"
     :machine-name="machineName"
     :structure="isStructure"
-    :ensure-section="ensureSection"
+    :save-first-row="saveFirstRow"
   />
 </template>
 

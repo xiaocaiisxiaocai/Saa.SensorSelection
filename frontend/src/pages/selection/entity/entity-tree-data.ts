@@ -58,7 +58,7 @@ function itemNode(
 }
 
 /**
- * 把分组列表转成 a-tree 的 treeData。keyword（已小写）非空时只保留命中的节点：
+ * 把分组列表转成 a-tree 的 treeData（分类下先列直属叶子，再列配置）。keyword（已小写）非空时只保留命中的节点：
  * 分组或配置名命中就带上它下面的全部叶子，否则只带命中的叶子。
  * selectableBranches 时，没有子节点的分组 / 配置也能选中（机型选单的末级节点）。
  */
@@ -120,9 +120,11 @@ export function buildEntityTree(
           group.items.length === 0 &&
           (group.configurations?.length ?? 0) === 0,
         checkable: false,
+        // 分类下同时有直属机型和配置时，直属机型在前：
+        // 它们通常带「01、02…」编号，排在配置后面会让编号看起来乱序
         children: [
-          ...configurations,
           ...items.map((item) => itemNode(group.name, null, item)),
+          ...configurations,
         ],
       },
     ];

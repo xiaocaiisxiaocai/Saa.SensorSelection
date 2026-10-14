@@ -1080,7 +1080,7 @@ describe('MachinePage machine tabs', () => {
     expect(wrapper.getComponent(MachineSectionPanel).props()).toMatchObject({
       machineName: MACHINE_TAB_PAGE_OWNER,
       section: { id: direct.id, kind: 'structure' },
-      ensureSection: undefined,
+      saveFirstRow: undefined,
     });
 
     // 右侧最上方（一级 Tab 之上）写出选中节点的完整路径；
@@ -1107,17 +1107,30 @@ describe('MachinePage machine tabs', () => {
     expect(wrapper.text()).not.toContain('还没有二级 Tab');
     const panel = wrapper.getComponent(MachineSectionPanel);
     expect(panel.props('section').id).toBe(0);
-    const ensure = panel.props('ensureSection') as () => number | null;
-    const created = ensure();
-    expect(
-      useSelectionStore().machineTabs[0]!.pages.find(
-        (page) => page.id === created,
-      ),
-    ).toMatchObject({ direct: true, node: { item: OTHER_MACHINE } });
+    const saveFirstRow = panel.props('saveFirstRow') as (
+      payload: Record<string, unknown>,
+    ) => { ok: boolean; reason?: string };
+    // 第一笔记录不合法：表格不建
+    const pagesBefore = useSelectionStore().machineTabs[0]!.pages.length;
+    expect(saveFirstRow({ role: '缺传感器' })).toMatchObject({
+      ok: false,
+      reason: 'validation',
+    });
+    expect(useSelectionStore().machineTabs[0]!.pages).toHaveLength(pagesBefore);
+    // 合法时表格和记录一起建
+    const sensorId = useSelectionStore().sensors[0]!.id;
+    expect(saveFirstRow({ role: '首条记录', sensorIds: [sensorId] }).ok).toBe(
+      true,
+    );
+    const created = useSelectionStore().machineTabs[0]!.pages.find(
+      (page) => page.direct && page.node.item === OTHER_MACHINE,
+    );
+    expect(created).toBeDefined();
     await flushPromises();
     expect(wrapper.getComponent(MachineSectionPanel).props('section').id).toBe(
-      created,
+      created!.id,
     );
+    expect(wrapper.text()).toContain('首条记录');
     wrapper.unmount();
   });
 

@@ -1,0 +1,4 @@
+/* 上级没有标准层级时，层级位置显示原因 */
+.org-form__level-missing {
+  color: var(--color-error);
+}

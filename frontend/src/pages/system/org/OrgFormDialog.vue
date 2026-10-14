@@ -6,18 +6,15 @@ import { api, type OrgUnitNode } from '@/api';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import {
-  allowedOrgLevels,
-  canHaveOrgChildren,
-  canPlaceOrgLevel,
-  collectDescendantLevels,
-  defaultChildOrgLevel,
   nextOrgSortOrder,
-  ORG_LEAF_MESSAGE,
-  ORG_LEVEL_INVERTED_MESSAGE,
+  ORG_LEVELS,
+  ORG_PARENT_LEVEL_MISSING_MESSAGE,
+  orgLevelUnder,
 } from '@/pages/system/org-tree';
 
 /**
- * 新建 / 编辑组织节点。层级只能比上级低、比下级高（允许跳级）。
+ * 新建 / 编辑组织节点。层级必须逐级（事业部 > 部门 > 课别），由所在位置决定，
+ * 只显示不让选；新建时同级排序自动排在最后，编辑时才能改。
  * 父组件调用 openCreate(上级 id) / openEdit(节点)，保存成功后发出 saved。
  */
 const props = defineProps<{ nodes: readonly OrgUnitNode[] }>();
@@ -29,66 +26,29 @@ const editingNode = ref<null | OrgUnitNode>(null);
 const validationAttempted = ref(false);
 const saving = ref(false);
 const form = reactive({
-  level: '' as string | null,
   name: '',
   sortOrder: 0,
 });
 const dirtyGuard = useDirtyGuard(form);
 
-const parentNode = computed(() =>
-  props.nodes.find((node) => node.id === parentId.value),
+const level = computed(() =>
+  orgLevelUnder(
+    props.nodes.find((node) => node.id === parentId.value)?.level,
+    parentId.value === null,
+  ),
 );
-const descendantLevels = computed(() =>
-  editingNode.value
-    ? collectDescendantLevels([...props.nodes], editingNode.value.id)
-    : [],
-);
-// 有下级的组织不能改成课别（课别是最末一级）
-const hasChildren = computed(() =>
-  editingNode.value
-    ? props.nodes.some((node) => node.parentId === editingNode.value?.id)
-    : false,
-);
-const levelAllowed = (level: string | null | undefined) =>
-  !hasChildren.value || canHaveOrgChildren(level);
-const levelInverted = computed(
-  () =>
-    !canPlaceOrgLevel(parentNode.value?.level, form.level) ||
-    descendantLevels.value.some(
-      (level) => !canPlaceOrgLevel(form.level, level),
-    ),
-);
-const levelOptions = computed(() => {
-  const parentLevel = parentNode.value?.level;
-  const names = new Set(allowedOrgLevels(parentLevel, descendantLevels.value));
-  for (const extra of props.nodes.map((node) => node.level)) {
-    if (
-      extra &&
-      canPlaceOrgLevel(parentLevel, extra) &&
-      descendantLevels.value.every((item) => canPlaceOrgLevel(extra, item))
-    ) {
-      names.add(extra);
-    }
-  }
-  for (const name of names) {
-    if (!levelAllowed(name)) names.delete(name);
-  }
-  if (form.level) names.add(form.level);
-  return [...names].map((name) => ({ label: name, value: name }));
-});
+const NAME_EXAMPLES: Record<string, string> = {
+  事业部: '如：电控事业部',
+  部门: '如：标准件组',
+  课别: '如：选型课',
+};
+const LEVEL_HINT = ORG_LEVELS.join(' > ') + '，逐级设置，由所在位置决定';
 
 function show(parent: null | number, node: null | OrgUnitNode) {
   validationAttempted.value = false;
   parentId.value = parent;
   editingNode.value = node;
   Object.assign(form, {
-    // 新建时层级取上级的下一级、排序排在最后，都还能改
-    level: node
-      ? node.level
-      : defaultChildOrgLevel(
-          props.nodes.find((item) => item.id === parent)?.level,
-          parent === null,
-        ),
     name: node?.name ?? '',
     sortOrder: node ? node.sortOrder : nextOrgSortOrder(props.nodes, parent),
   });
@@ -111,19 +71,15 @@ async function save() {
     message.warning('请输入组织名称');
     return;
   }
-  if (!levelAllowed(form.level)) {
-    message.warning(ORG_LEAF_MESSAGE);
-    return;
-  }
-  if (levelInverted.value) {
-    message.warning(ORG_LEVEL_INVERTED_MESSAGE);
+  if (!level.value) {
+    message.warning(ORG_PARENT_LEVEL_MISSING_MESSAGE);
     return;
   }
   saving.value = true;
   try {
     if (!editingNode.value) {
       await api.createOrgUnit({
-        level: form.level || null,
+        level: level.value,
         name: form.name.trim(),
         parentId: parentId.value,
         sortOrder: form.sortOrder,
@@ -131,7 +87,7 @@ async function save() {
       message.success('组织已创建');
     } else {
       await api.updateOrgUnit(editingNode.value.id, {
-        level: form.level || null,
+        level: level.value,
         name: form.name.trim(),
         parentId: editingNode.value.parentId,
         sortOrder: form.sortOrder,
@@ -177,41 +133,21 @@ defineExpose({ openCreate, openEdit });
               id="org-name"
               v-model:value="form.name"
               :maxlength="64"
-              placeholder="如：电控事业部"
+              :placeholder="NAME_EXAMPLES[level ?? ''] ?? '组织名称'"
               allow-clear
               show-count
             />
           </a-form-item>
         </a-col>
         <a-col :span="24">
-          <a-form-item
-            html-for="org-level"
-            label="层级"
-            v-bind="
-              fieldError(
-                !validationAttempted
-                  ? undefined
-                  : !levelAllowed(form.level)
-                    ? ORG_LEAF_MESSAGE
-                    : levelInverted
-                      ? ORG_LEVEL_INVERTED_MESSAGE
-                      : undefined,
-              )
-            "
-            extra="事业部 > 部门 > 课别，允许跳级；课别下面不能再有组织"
-          >
-            <a-select
-              id="org-level"
-              v-model:value="form.level"
-              :options="levelOptions"
-              placeholder="选择层级"
-              show-search
-              option-filter-prop="label"
-              allow-clear
-            />
+          <a-form-item label="层级" :extra="LEVEL_HINT">
+            <a-tag v-if="level">{{ level }}</a-tag>
+            <span v-else class="org-form__level-missing">
+              {{ ORG_PARENT_LEVEL_MISSING_MESSAGE }}
+            </span>
           </a-form-item>
         </a-col>
-        <a-col :span="24">
+        <a-col v-if="editingNode" :span="24">
           <a-form-item html-for="org-sort-order" label="同级排序">
             <a-input-number
               id="org-sort-order"
@@ -229,3 +165,5 @@ defineExpose({ openCreate, openEdit });
     </template>
   </a-modal>
 </template>
+
+<style scoped src="./OrgFormDialog.css"></style>

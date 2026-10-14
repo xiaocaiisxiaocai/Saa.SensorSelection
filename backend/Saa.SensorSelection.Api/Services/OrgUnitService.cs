@@ -49,6 +49,7 @@ public class OrgUnitService(AppDbContext db)
         {
             return RbacResult<OrgUnitListItem>.Fail("组织名称不能为空");
         }
+        string? parentLevel = null;
         if (request.ParentId is int parentId)
         {
             var parent = await db.OrgUnits.FirstOrDefaultAsync(org => org.Id == parentId, ct);
@@ -56,21 +57,19 @@ public class OrgUnitService(AppDbContext db)
             {
                 return RbacResult<OrgUnitListItem>.Fail("父级组织不存在");
             }
-            if (!OrgLevelRules.CanHaveChildren(parent.Level))
-            {
-                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
-            }
-            if (!OrgLevelRules.CanPlace(parent.Level, request.Level))
-            {
-                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.InvertedMessage);
-            }
+            parentLevel = parent.Level;
+        }
+        var (level, levelError) = ResolveLevel(request.ParentId is null, parentLevel, request.Level);
+        if (levelError is not null)
+        {
+            return RbacResult<OrgUnitListItem>.Fail(levelError);
         }
 
         var org = new OrgUnit
         {
             Name = request.Name.Trim(),
             ParentId = request.ParentId,
-            Level = string.IsNullOrWhiteSpace(request.Level) ? null : request.Level.Trim(),
+            Level = level,
             SortOrder = request.SortOrder,
         };
         db.OrgUnits.Add(org);
@@ -94,6 +93,7 @@ public class OrgUnitService(AppDbContext db)
             return RbacResult<OrgUnitListItem>.Fail("组织名称不能为空");
         }
 
+        string? parentLevel = null;
         if (request.ParentId is int parentId)
         {
             if (parentId == id)
@@ -109,28 +109,20 @@ public class OrgUnitService(AppDbContext db)
             {
                 return RbacResult<OrgUnitListItem>.Fail("父级不能是自己的子级（会造成循环）");
             }
-            if (!OrgLevelRules.CanHaveChildren(parent.Level))
-            {
-                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
-            }
-            if (!OrgLevelRules.CanPlace(parent.Level, request.Level))
-            {
-                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.InvertedMessage);
-            }
+            parentLevel = parent.Level;
         }
 
-        var level = string.IsNullOrWhiteSpace(request.Level) ? null : request.Level.Trim();
-        if (!OrgLevelRules.CanHaveChildren(level)
+        var (level, levelError) = ResolveLevel(request.ParentId is null, parentLevel, request.Level);
+        if (levelError is not null)
+        {
+            return RbacResult<OrgUnitListItem>.Fail(levelError);
+        }
+        // 层级跟着位置走：有下级的组织换了层级，下级就会跳级（历史数据没有标准层级的可以补上）
+        if (OrgLevelRules.IsStandard(org.Level)
+            && !string.Equals(org.Level, level, StringComparison.Ordinal)
             && await db.OrgUnits.AnyAsync(item => item.ParentId == id, ct))
         {
-            return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
-        }
-        foreach (var descendantLevel in await DescendantLevelsAsync(id, ct))
-        {
-            if (!OrgLevelRules.CanPlace(level, descendantLevel))
-            {
-                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.InvertedMessage);
-            }
+            return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.ChildrenLevelMessage);
         }
 
         org.Name = request.Name.Trim();
@@ -193,36 +185,25 @@ public class OrgUnitService(AppDbContext db)
         return false;
     }
 
-    private async Task<List<string>> DescendantLevelsAsync(int id, CancellationToken ct)
+    /// <summary>
+    /// 层级由位置算出；请求里带了层级就必须和算出来的一致（不能跳级、倒挂）。
+    /// </summary>
+    private static (string? Level, string? Error) ResolveLevel(
+        bool isRoot,
+        string? parentLevel,
+        string? requested)
     {
-        var all = await db.OrgUnits
-            .AsNoTracking()
-            .Select(org => new { org.Id, org.ParentId, org.Level })
-            .ToArrayAsync(ct);
-        var children = all.ToLookup(org => org.ParentId);
-        var levels = new List<string>();
-        var stack = new Stack<int>([id]);
-        var visited = new HashSet<int>();
-        var skipSelf = true;
-        while (stack.Count > 0)
+        var (level, error) = OrgLevelRules.LevelUnder(isRoot, parentLevel);
+        if (error is not null)
         {
-            var current = stack.Pop();
-            if (!visited.Add(current)) continue;
-            if (!skipSelf)
-            {
-                var node = all.First(item => item.Id == current);
-                if (!string.IsNullOrWhiteSpace(node.Level))
-                {
-                    levels.Add(node.Level);
-                }
-            }
-            skipSelf = false;
-            foreach (var child in children[current])
-            {
-                stack.Push(child.Id);
-            }
+            return (null, error);
         }
-        return levels;
+        if (!string.IsNullOrWhiteSpace(requested)
+            && !string.Equals(requested.Trim(), level, StringComparison.Ordinal))
+        {
+            return (null, OrgLevelRules.SkipMessage);
+        }
+        return (level, null);
     }
 
     private async Task<OrgUnitListItem> BuildListItemAsync(int orgId, CancellationToken ct)

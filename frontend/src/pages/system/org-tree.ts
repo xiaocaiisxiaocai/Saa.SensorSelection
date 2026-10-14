@@ -44,40 +44,35 @@ export function toTreeSelectNodes(nodes: OrgUnitNode[]): OrgTreeSelectNode[] {
   return map(buildOrgTree(nodes));
 }
 
+/** 组织层级必须逐级：顶层是事业部，事业部下是部门，部门下是课别 */
 export const ORG_LEVELS = ['事业部', '部门', '课别'] as const;
 
-const ORG_LEVEL_RANK: Record<string, number> = {
-  事业部: 3,
-  部门: 2,
-  课别: 1,
-};
-
-export const ORG_LEVEL_INVERTED_MESSAGE =
-  '层级不能倒挂（事业部 > 部门 > 课别，允许跳级）';
-
-/** 课别是最末一级：下面不能再有任何组织（不论子组织填什么层级） */
+/** 课别是最末一级：下面不能再有任何组织 */
 export const ORG_LEAF_LEVEL = '课别';
 
 export const ORG_LEAF_MESSAGE = '课别是最末一级，下面不能再新建组织';
+
+export const ORG_PARENT_LEVEL_MISSING_MESSAGE =
+  '上级组织没有设置层级，请先编辑上级组织';
 
 export function canHaveOrgChildren(level: string | null | undefined): boolean {
   return level?.trim() !== ORG_LEAF_LEVEL;
 }
 
 /**
- * 新建时默认的层级：顶层是事业部，其余取上级的下一级（事业部 → 部门 → 课别）。
- * 上级没填层级或是自定义层级时不猜，留空。
+ * 按位置算出的层级：顶层是事业部，其余是上级的下一级。
+ * 上级是课别或没有标准层级时为 null（后端会拒绝保存）。
  */
-export function defaultChildOrgLevel(
+export function orgLevelUnder(
   parentLevel: string | null | undefined,
   isRoot: boolean,
 ): string | null {
   if (isRoot) return ORG_LEVELS[0];
-  const index = ORG_LEVELS.findIndex((level) => level === parentLevel);
+  const index = ORG_LEVELS.findIndex((level) => level === parentLevel?.trim());
   return index >= 0 ? (ORG_LEVELS[index + 1] ?? null) : null;
 }
 
-/** 新建时默认的同级排序：排在同一上级下现有组织的最后 */
+/** 新建时的同级排序：排在同一上级下现有组织的最后 */
 export function nextOrgSortOrder(
   nodes: readonly OrgUnitNode[],
   parentId: number | null,
@@ -86,55 +81,6 @@ export function nextOrgSortOrder(
   return siblings.length
     ? Math.max(...siblings.map((node) => node.sortOrder)) + 1
     : 1;
-}
-
-export function canPlaceOrgLevel(
-  parentLevel: string | null | undefined,
-  childLevel: string | null | undefined,
-): boolean {
-  const parent = parentLevel ? ORG_LEVEL_RANK[parentLevel] : undefined;
-  const child = childLevel ? ORG_LEVEL_RANK[childLevel] : undefined;
-  if (parent == null || child == null) return true;
-  return parent >= child;
-}
-
-export function allowedOrgLevels(
-  parentLevel: string | null | undefined,
-  descendantLevels: readonly (string | null | undefined)[] = [],
-): string[] {
-  return ORG_LEVELS.filter(
-    (level) =>
-      canPlaceOrgLevel(parentLevel, level) &&
-      descendantLevels.every((descendant) =>
-        canPlaceOrgLevel(level, descendant),
-      ),
-  );
-}
-
-export function collectDescendantLevels(
-  nodes: OrgUnitNode[],
-  id: number,
-): string[] {
-  const tree = buildOrgTree(nodes);
-  const find = (list: OrgTreeNode[]): OrgTreeNode | undefined => {
-    for (const node of list) {
-      if (node.id === id) return node;
-      const nested = find(node.children);
-      if (nested) return nested;
-    }
-    return undefined;
-  };
-  const root = find(tree);
-  if (!root) return [];
-  const levels: string[] = [];
-  const walk = (items: OrgTreeNode[]) => {
-    for (const item of items) {
-      if (item.level) levels.push(item.level);
-      walk(item.children);
-    }
-  };
-  walk(root.children);
-  return levels;
 }
 
 export function flattenOrgTree(

@@ -632,6 +632,15 @@ async function main() {
     assertEqual(res.status, 400, 'status')
   })
 
+  await check('Skipping a level is rejected with 400', async () => {
+    assert(parentOrgId, 'no parent id')
+    const res = await request('POST', '/rbac/org-units', {
+      token: adminToken,
+      body: { name: `${E2E_PREFIX}跳级`, level: '课别', parentId: parentOrgId },
+    })
+    assertEqual(res.status, 400, 'status')
+  })
+
   await check('A unit cannot be made its own parent', async () => {
     assert(parentOrgId, 'no parent id')
     const res = await request('PUT', `/rbac/org-units/${parentOrgId}`, {

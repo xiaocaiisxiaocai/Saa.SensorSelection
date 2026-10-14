@@ -1,9 +1,9 @@
 namespace Saa.SensorSelection.Api.Models;
 
 /// <summary>
-/// 组织架构节点：自引用树，支持任意层级。
-/// Level 为自由文本（如：事业部/部门/课别，可自定义扩展），
-/// 父节点可自由指定，天然支持跳级（如课别直接挂在事业部下）。
+/// 组织架构节点：自引用树。
+/// Level 必须逐级：事业部 &gt; 部门 &gt; 课别，由所在位置算出（见 OrgLevelRules）；
+/// 列仍是文本，历史数据里可能为空。
 /// </summary>
 public class OrgUnit
 {

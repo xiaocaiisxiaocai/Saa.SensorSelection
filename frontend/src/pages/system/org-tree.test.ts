@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  allowedOrgLevels,
   buildOrgTree,
   canHaveOrgChildren,
-  canPlaceOrgLevel,
-  defaultChildOrgLevel,
   nextOrgSortOrder,
+  orgLevelUnder,
   flattenOrgTree,
   toTreeSelectNodes,
 } from './org-tree';
@@ -49,20 +47,6 @@ describe('org-tree', () => {
     expect(toTreeSelectNodes(nodes).map((node) => node.value)).toEqual([3, 1]);
   });
 
-  it('forbids inverted org ranks but allows skipping a level', () => {
-    expect(canPlaceOrgLevel('事业部', '课别')).toBe(true);
-    expect(canPlaceOrgLevel('事业部', '部门')).toBe(true);
-    expect(canPlaceOrgLevel('部门', '课别')).toBe(true);
-    expect(canPlaceOrgLevel('课别', '部门')).toBe(false);
-    expect(canPlaceOrgLevel('课别', '事业部')).toBe(false);
-    expect(canPlaceOrgLevel('部门', '事业部')).toBe(false);
-    expect(canPlaceOrgLevel('课别', '课别')).toBe(true);
-    expect(canPlaceOrgLevel(null, '事业部')).toBe(true);
-    expect(allowedOrgLevels('课别')).toEqual(['课别']);
-    expect(allowedOrgLevels('部门')).toEqual(['部门', '课别']);
-    expect(allowedOrgLevels('事业部', ['部门'])).toEqual(['事业部', '部门']);
-  });
-
   it('treats 课别 as the last level that cannot have children', () => {
     expect(canHaveOrgChildren('课别')).toBe(false);
     expect(canHaveOrgChildren('部门')).toBe(true);
@@ -70,13 +54,13 @@ describe('org-tree', () => {
     expect(canHaveOrgChildren('自定义')).toBe(true);
   });
 
-  it('defaults a new unit to the next level and the last sort position', () => {
-    expect(defaultChildOrgLevel(null, true)).toBe('事业部');
-    expect(defaultChildOrgLevel('事业部', false)).toBe('部门');
-    expect(defaultChildOrgLevel('部门', false)).toBe('课别');
-    expect(defaultChildOrgLevel('课别', false)).toBeNull();
-    expect(defaultChildOrgLevel(null, false)).toBeNull();
-    expect(defaultChildOrgLevel('自定义', false)).toBeNull();
+  it('derives the level from the position and puts a new unit last', () => {
+    expect(orgLevelUnder(null, true)).toBe('事业部');
+    expect(orgLevelUnder('事业部', false)).toBe('部门');
+    expect(orgLevelUnder('部门', false)).toBe('课别');
+    expect(orgLevelUnder('课别', false)).toBeNull();
+    expect(orgLevelUnder(null, false)).toBeNull();
+    expect(orgLevelUnder('自定义', false)).toBeNull();
 
     const node = (id: number, parentId: number | null, sortOrder: number) => ({
       childCount: 0,

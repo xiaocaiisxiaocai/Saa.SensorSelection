@@ -83,32 +83,48 @@ describe('OrgPage', () => {
     wrapper.unmount();
   });
 
-  it('offers all three levels under a division', async () => {
+  it('shows the level derived from the parent and hides the sort order when creating', async () => {
     const wrapper = await mountPage();
     await wrapper.findAll('[aria-label="新建子节点"]')[0]?.trigger('click');
     await nextTick();
 
-    const levels = formSelects(wrapper)[0]
-      ?.props('options')
-      .map((option: { value: unknown }) => String(option.value));
-    expect(levels).toEqual(['事业部', '部门', '课别']);
-    // 层级默认是上级的下一级，排序排在已有子组织之后
-    expect(formSelects(wrapper)[0]?.props('value')).toBe('部门');
+    // 不能跳级：事业部下只能是部门，不给选
+    expect(formSelects(wrapper)).toHaveLength(0);
     expect(
-      document.querySelector<HTMLInputElement>('#org-sort-order')?.value,
-    ).toBe('2');
+      document.querySelector('.ant-modal .ant-tag')?.textContent?.trim(),
+    ).toBe('部门');
+    // 排序自动排在最后，新建时不显示
+    expect(document.querySelector('#org-sort-order')).toBeNull();
+
+    const createOrgUnit = vi
+      .spyOn(api, 'createOrgUnit')
+      .mockResolvedValue({} as never);
+    const name = wrapper.findComponent({ name: 'AInput' });
+    await name.vm.$emit('update:value', '标准件组');
+    await nextTick();
+    [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '保存')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(createOrgUnit).toHaveBeenCalledWith({
+        level: '部门',
+        name: '标准件组',
+        parentId: 1,
+        sortOrder: 2,
+      }),
+    );
     wrapper.unmount();
   });
 
-  it('does not offer 课别 when editing an organization that has children', async () => {
+  it('keeps the sort order editable when editing', async () => {
     const wrapper = await mountPage();
     await wrapper.findAll('[aria-label="编辑"]')[0]?.trigger('click');
     await nextTick();
 
-    const levels = formSelects(wrapper)[0]
-      ?.props('options')
-      .map((option: { value: unknown }) => String(option.value));
-    expect(levels).not.toContain('课别');
+    expect(document.querySelector('#org-sort-order')).not.toBeNull();
+    expect(
+      document.querySelector('.ant-modal .ant-tag')?.textContent?.trim(),
+    ).toBe('事业部');
     wrapper.unmount();
   });
 

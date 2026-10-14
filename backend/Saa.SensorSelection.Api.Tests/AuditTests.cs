@@ -285,7 +285,7 @@ public class AuditTests
         // 组织创建（成功）
         var org = await admin.PostAsJsonAsync(
             "/api/rbac/org-units",
-            new { name = "审计部", level = "部门" });
+            new { name = "审计部", level = "事业部" });
         Assert.Equal(HttpStatusCode.OK, org.StatusCode);
 
         var page = await QueryAuditLogsAsync(admin, "?username=admin");
@@ -302,7 +302,7 @@ public class AuditTests
         Assert.Contains(entries, item =>
             item.GetProperty("action").GetString() == "org.create" &&
             item.GetProperty("target").GetString() == "审计部" &&
-            item.GetProperty("detail").GetString() == "层级：部门；父级：无；排序：0；子级：0；用户：0");
+            item.GetProperty("detail").GetString() == "层级：事业部；父级：无；排序：0；子级：0；用户：0");
     }
 
     [Fact]

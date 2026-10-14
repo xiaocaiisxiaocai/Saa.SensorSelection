@@ -39,3 +39,52 @@ export function sensorStatusRank(value: unknown): number {
   if (kind === 'disabled') return 2;
   return 3;
 }
+
+export const SENSOR_NEEDS_CURRENT = '请先新增该类型的现用型号';
+export const SENSOR_DISABLED_MANUAL = '停用只能通过「替换」产生';
+export const SENSOR_HAS_ALTERNATES =
+  '该现用型号下还有备选，请先用「替换」处理';
+
+type SensorStatusRef = {
+  id: number;
+  status: string;
+  sensorType: string;
+};
+
+export function sensorTypeHasCurrent(
+  items: readonly SensorStatusRef[],
+  sensorType: string,
+  exceptId?: number,
+): boolean {
+  return items.some(
+    (item) =>
+      item.id !== exceptId &&
+      item.sensorType === sensorType &&
+      isSensorStatus(item.status, 'current'),
+  );
+}
+
+export function sensorTypeHasAlternate(
+  items: readonly SensorStatusRef[],
+  sensorType: string,
+  exceptId?: number,
+): boolean {
+  return items.some(
+    (item) =>
+      item.id !== exceptId &&
+      item.sensorType === sensorType &&
+      isSensorStatus(item.status, 'alternate'),
+  );
+}
+
+/** 这条现用是该类型剩下的唯一现用，且同类型还有备选。 */
+export function sensorCurrentGuardsAlternates(
+  items: readonly SensorStatusRef[],
+  item: SensorStatusRef,
+): boolean {
+  return (
+    isSensorStatus(item.status, 'current') &&
+    sensorTypeHasAlternate(items, item.sensorType, item.id) &&
+    !sensorTypeHasCurrent(items, item.sensorType, item.id)
+  );
+}

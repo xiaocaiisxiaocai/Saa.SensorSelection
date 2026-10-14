@@ -1186,7 +1186,7 @@
   "sensor-catalog:all": [
     {
       "id": 1,
-      "status": "03 停用",
+      "status": "01 现用",
       "partNumber": "",
       "sensorType": "01 漫反射",
       "brand": "OMRON",

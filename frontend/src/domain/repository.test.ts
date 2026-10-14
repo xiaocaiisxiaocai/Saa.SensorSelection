@@ -405,6 +405,135 @@ describe('sensors', () => {
     ]);
   });
 
+  it('inherits catalog and 3d links from the current model being replaced', () => {
+    const repo = createRepo();
+    const pdf = 'data:application/pdf;base64,JVBERi0xLjAK';
+    const currentCatalog = repo.saveSensorSop({
+      title: '现用型录',
+      fileName: 'current-catalog.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: pdf,
+      size: 12,
+      uploadedAt: '2026-09-18',
+    });
+    const currentModel = repo.saveSensor3dFile({
+      title: '现用模型',
+      fileName: 'current-model.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: pdf,
+      size: 12,
+      uploadedAt: '2026-09-18',
+    });
+    const alternateCatalog = repo.saveSensorSop({
+      title: '备选型录',
+      fileName: 'alternate-catalog.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: pdf,
+      size: 12,
+      uploadedAt: '2026-09-18',
+    });
+    const alternateModel = repo.saveSensor3dFile({
+      title: '备选模型',
+      fileName: 'alternate-model.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: pdf,
+      size: 12,
+      uploadedAt: '2026-09-18',
+    });
+    if (
+      !currentCatalog.ok ||
+      !currentModel.ok ||
+      !alternateCatalog.ok ||
+      !alternateModel.ok
+    ) {
+      throw new Error('link files missing');
+    }
+
+    const diffuseCurrent = repo
+      .getSensors()
+      .find((item) => item.status === '现用' && item.sensorType === '漫反射');
+    const diffuseAlternate = repo
+      .getSensors()
+      .find((item) => item.status === '备选' && item.sensorType === '漫反射');
+    if (!diffuseCurrent || !diffuseAlternate) {
+      throw new Error('diffuse sensors missing');
+    }
+    expect(
+      repo.saveSensor(
+        {
+          ...diffuseCurrent,
+          sopId: currentCatalog.item.id,
+          model3dId: currentModel.item.id,
+        },
+        diffuseCurrent.id,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      repo.saveSensor(
+        {
+          ...diffuseAlternate,
+          sopId: alternateCatalog.item.id,
+          model3dId: alternateModel.item.id,
+        },
+        diffuseAlternate.id,
+      ),
+    ).toMatchObject({ ok: true });
+
+    const inherited = repo.replaceSensorCurrent(
+      diffuseAlternate.id,
+      diffuseCurrent.id,
+      '沿用型录和 3D',
+    );
+    if (!inherited.ok) throw new Error(inherited.reason);
+    expect(inherited.item).toMatchObject({
+      sopId: currentCatalog.item.id,
+      model3dId: currentModel.item.id,
+    });
+    expect(
+      repo.getSensors().find((item) => item.id === diffuseCurrent.id),
+    ).toMatchObject({
+      status: '停用',
+      sopId: currentCatalog.item.id,
+      model3dId: currentModel.item.id,
+    });
+
+    const beamCurrent = repo
+      .getSensors()
+      .find((item) => item.status === '现用' && item.sensorType === '对照式');
+    const beamAlternate = repo
+      .getSensors()
+      .find((item) => item.status === '备选' && item.sensorType === '对照式');
+    if (!beamCurrent || !beamAlternate) throw new Error('beam sensors missing');
+    expect(
+      repo.saveSensor(
+        {
+          ...beamAlternate,
+          sopId: alternateCatalog.item.id,
+          model3dId: alternateModel.item.id,
+        },
+        beamAlternate.id,
+      ),
+    ).toMatchObject({ ok: true });
+
+    const kept = repo.replaceSensorCurrent(
+      beamAlternate.id,
+      beamCurrent.id,
+      '保留备选自己的链接',
+    );
+    if (!kept.ok) throw new Error(kept.reason);
+    expect(kept.item).toMatchObject({
+      sopId: alternateCatalog.item.id,
+      model3dId: alternateModel.item.id,
+    });
+    expect(
+      repo.getSensors().find((item) => item.id === beamCurrent.id),
+    ).toMatchObject({
+      status: '停用',
+      sopId: null,
+      model3dId: null,
+    });
+  });
+
   it('replaces sensors when status dictionary labels include numeric prefixes', () => {
     const repo = createRepo();
     const renamedStatuses = [
@@ -510,8 +639,9 @@ describe('sensors', () => {
 
   it('removes sensorIds references from machine section rows when sensor is deleted', () => {
     const repo = createRepo();
-    const sensor = repo.getSensors().find((s) => s.status === '现用');
-    if (!sensor) throw new Error('seed sensor missing');
+    const sensor = repo.getSensors().find((item) => item.model === 'LV-H62');
+    const guarded = repo.getSensors().find((item) => item.model === 'E3Z-D61');
+    if (!sensor || !guarded) throw new Error('seed sensor missing');
 
     // 将该 Sensor 挂载到一个机型结构行
     const saved = repo.saveMachineSectionRow(1, '中间翻板机', {
@@ -527,7 +657,198 @@ describe('sensors', () => {
     const deleted = repo.deleteSensor(sensor.id);
     expect(deleted).toEqual({ ok: true });
     const rowsAfter = repo.getMachineSectionRows(1, '中间翻板机');
-    expect(rowsAfter.every((r) => !r.sensorIds.includes(sensor.id))).toBe(true);
+    expect(rowsAfter.every((row) => !row.sensorIds.includes(sensor.id))).toBe(
+      true,
+    );
+
+    const guardedRow = repo.saveMachineSectionRow(1, '中间翻板机', {
+      role: '现用仍被备选占用',
+      sensorIds: [guarded.id],
+    });
+    if (!guardedRow.ok) throw new Error(guardedRow.reason);
+    expect(repo.deleteSensor(guarded.id)).toEqual({
+      ok: false,
+      reason: 'not-empty',
+      message: '该现用型号下还有备选，请先用「替换」处理',
+    });
+    expect(
+      repo
+        .getMachineSectionRows(1, '中间翻板机')
+        .some((row) => row.sensorIds.includes(guarded.id)),
+    ).toBe(true);
+    expect(repo.getSensors().some((item) => item.id === guarded.id)).toBe(
+      true,
+    );
+  });
+
+  it('requires a current model before an alternate, and rejects a manual disabled status', () => {
+    const repo = createRepo();
+    const laser = repo.getSensors().find((item) => item.model === 'LV-H62');
+    const diffuseAlternate = repo
+      .getSensors()
+      .find((item) => item.model === 'WL12-2B530');
+    const ultrasonic = repo
+      .getSensors()
+      .find((item) => item.model === 'UM30-213113');
+    if (!laser || !diffuseAlternate || !ultrasonic) {
+      throw new Error('seed sensors missing');
+    }
+
+    const laserAlternate = repo.saveSensor({
+      brand: 'TEST',
+      model: 'LASER-ALT-OK',
+      sensorType: '激光式',
+      spec: '规格',
+      status: '备选',
+    });
+    expect(laserAlternate).toMatchObject({ ok: true });
+    if (!laserAlternate.ok) throw new Error(laserAlternate.reason);
+    expect(repo.deleteSensor(laserAlternate.item.id)).toEqual({ ok: true });
+    expect(repo.deleteSensor(laser.id)).toEqual({ ok: true });
+    expect(
+      repo.saveSensor({
+        brand: 'TEST',
+        model: 'LASER-ALT-BLOCKED',
+        sensorType: '激光式',
+        spec: '规格',
+        status: '备选',
+      }),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '请先新增该类型的现用型号',
+    });
+    expect(
+      repo.saveSensor(
+        { ...diffuseAlternate, sensorType: '激光式' },
+        diffuseAlternate.id,
+      ),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '请先新增该类型的现用型号',
+    });
+    expect(
+      repo.saveSensor({
+        brand: 'Keyence',
+        model: 'LASER-CURRENT',
+        sensorType: '激光式',
+        spec: '规格',
+        status: '现用',
+      }),
+    ).toMatchObject({ ok: true });
+    expect(
+      repo.saveSensor({
+        brand: 'TEST',
+        model: 'LASER-ALT-AGAIN',
+        sensorType: '激光式',
+        spec: '规格',
+        status: '备选',
+      }),
+    ).toMatchObject({ ok: true });
+
+    expect(
+      repo.saveSensor({
+        brand: 'TEST',
+        model: 'MANUAL-OFF',
+        replacedById: ultrasonic.id,
+        sensorType: '超声波式',
+        spec: '规格',
+        status: '停用',
+      }),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '停用只能通过「替换」产生',
+    });
+    expect(
+      repo.saveSensor({ ...ultrasonic, status: '停用' }, ultrasonic.id),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '停用只能通过「替换」产生',
+    });
+  });
+
+  it('blocks the last current while alternates remain, and allows another current of that type', () => {
+    const repo = createRepo();
+    const current = repo.getSensors().find((item) => item.model === 'E3Z-D61');
+    const alternate = repo
+      .getSensors()
+      .find((item) => item.model === 'WL12-2B530');
+    if (!current || !alternate) throw new Error('seed sensors missing');
+
+    expect(
+      repo.saveSensor({ ...current, brand: 'OMRON-EDIT' }, current.id),
+    ).toMatchObject({ ok: true, item: { brand: 'OMRON-EDIT', status: '现用' } });
+    expect(
+      repo.saveSensor({ ...current, status: '备选' }, current.id),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '该现用型号下还有备选，请先用「替换」处理',
+    });
+    expect(
+      repo.saveSensor({ ...current, sensorType: '对照式' }, current.id),
+    ).toEqual({
+      ok: false,
+      reason: 'validation',
+      message: '该现用型号下还有备选，请先用「替换」处理',
+    });
+
+    const second = repo.saveSensor({
+      brand: 'TEST',
+      model: 'SECOND-CURRENT',
+      sensorType: '漫反射',
+      spec: '规格',
+      status: '现用',
+    });
+    if (!second.ok) throw new Error(second.reason);
+    expect(
+      repo.saveSensor({ ...current, status: '备选' }, current.id),
+    ).toMatchObject({ ok: true });
+    const demoted = repo.getSensors().find((item) => item.id === current.id);
+    if (!demoted) throw new Error('demoted sensor missing');
+    expect(repo.saveSensor({ ...demoted, status: '现用' }, current.id)).toMatchObject(
+      { ok: true },
+    );
+    expect(repo.deleteSensor(current.id)).toEqual({ ok: true });
+    expect(repo.deleteSensor(second.item.id)).toEqual({
+      ok: false,
+      reason: 'not-empty',
+      message: '该现用型号下还有备选，请先用「替换」处理',
+    });
+    expect(repo.getSensors().some((item) => item.id === second.item.id)).toBe(
+      true,
+    );
+
+    const replaced = repo.replaceSensorCurrent(
+      alternate.id,
+      second.item.id,
+      '改停用后仍可编辑',
+    );
+    if (!replaced.ok) throw new Error(replaced.reason);
+    const retired = repo.getSensors().find((item) => item.id === second.item.id);
+    if (!retired) throw new Error('retired sensor missing');
+    expect(
+      repo.saveSensor(
+        {
+          ...retired,
+          brand: 'RETIRED',
+          sensorType: '激光式',
+          spec: '停用后规格',
+        },
+        retired.id,
+      ),
+    ).toMatchObject({
+      ok: true,
+      item: {
+        brand: 'RETIRED',
+        sensorType: '激光式',
+        spec: '停用后规格',
+        status: '停用',
+      },
+    });
   });
 });
 

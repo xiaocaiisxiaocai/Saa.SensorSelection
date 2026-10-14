@@ -6,8 +6,10 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UserProfile } from '@/api';
+import { isSensorStatus } from '@/domain';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import type { SensorTableRow } from './sensor/sensor-table';
 import {
   activeTabText,
   clickTab,
@@ -54,6 +56,11 @@ function searchInput(wrapper: VueWrapper) {
         input.props('placeholder') ===
         '搜索类型、品牌、型号、料号、停用或问题点',
     )!;
+}
+
+function tableRows(wrapper: VueWrapper) {
+  return wrapper.getComponent({ name: 'ATable' }).props('dataSource') as
+    SensorTableRow[];
 }
 
 /** 当前表格某列的受控排序状态 */
@@ -190,7 +197,7 @@ describe('SensorPage', () => {
     expect(width('spec')).toBe(220);
     expect(width('feature')).toBe(260);
     expect(width('scene')).toBe(200);
-    expect(width('actions')).toBe(96);
+    expect(width('actions')).toBe(120);
     // 长描述列完整显示不截断，宽度要从内容很短的列里匀过来
     for (const short of ['relation', 'sop', 'model3d']) {
       expect(width(short)).toBeLessThan(width('scene'));
@@ -604,11 +611,10 @@ describe('SensorPage', () => {
 
     const disabledWrapper = await mountPage({ tab: '停用' });
     const store = useSelectionStore();
-    store.saveSensor({
-      model: '停用颜色测试型号',
-      sensorType: store.sensors[0]?.sensorType,
-      status: '停用',
-    });
+    const current = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    if (!current || !alternate) throw new Error('seed sensors missing');
+    store.replaceSensorCurrent(alternate.id, current.id, '颜色测试');
     await nextTick();
     expect(
       tagColor(disabledWrapper.get('.ant-table-tbody .ant-tag').element),
@@ -619,14 +625,24 @@ describe('SensorPage', () => {
   it('shows the disabled date and reason on the disabled status page', async () => {
     const wrapper = await mountPage({ tab: '停用' });
     const store = useSelectionStore();
+    const current = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    if (!current || !alternate) throw new Error('seed sensors missing');
     expect(
-      store.saveSensor({
-        model: '停用信息测试型号',
-        sensorType: store.sensors[0]?.sensorType,
-        status: '停用',
-        problemNote: '现场检测距离不稳定',
-        replacedAt: '2026-08-31',
-      }),
+      store.replaceSensorCurrent(alternate.id, current.id, '临时原因'),
+    ).toMatchObject({ ok: true });
+    const retired = store.sensors.find((item) => item.id === current.id);
+    if (!retired) throw new Error('retired sensor missing');
+    expect(
+      store.saveSensor(
+        {
+          ...retired,
+          model: '停用信息测试型号',
+          problemNote: '现场检测距离不稳定',
+          replacedAt: '2026-08-31',
+        },
+        retired.id,
+      ),
     ).toMatchObject({ ok: true });
     await nextTick();
 
@@ -674,7 +690,7 @@ describe('SensorPage', () => {
 
     expect(tagColor(currentRow!.get('.ant-tag').element)).toBe('green');
     expect(tagColor(alternateRow!.get('.ant-tag').element)).toBe('gold');
-    expect(alternateRow?.find('[aria-label="替换现用"]').exists()).toBe(true);
+    expect(alternateRow?.find('[aria-label^="替换现用"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -692,8 +708,271 @@ describe('SensorPage', () => {
           component.props('placeholder') === '同类型优先，也可选其他现用',
       );
     expect(sameTypeSelect).toBeUndefined();
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ASelect' })
+        .some(
+          (component) => component.props('placeholder') === '请选择现用型号',
+        ),
+    ).toBe(true);
 
     wrapper.unmount();
+  });
+
+  it('replaces the grouped current directly and still asks in the alternate filter', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const parent = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    const replace = vi.spyOn(store, 'replaceSensorCurrent');
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+
+    expect(
+      alternateRow!
+        .findAllComponents({ name: 'ATooltip' })
+        .some(
+          (tooltip: { props: (name: string) => unknown }) =>
+            tooltip.props('title') === '替换现用 E3Z-D61',
+        ),
+    ).toBe(true);
+
+    await alternateRow!.get('[aria-label="替换现用 E3Z-D61"]').trigger('click');
+    await nextTick();
+    const dialogText = () =>
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join('');
+    expect(dialogText()).toContain('漫反射 · OMRON');
+    expect(dialogText()).toContain('E3Z-D61');
+    expect(dialogText()).toContain('WL12-2B530');
+    expect(dialogText()).toContain('替换后停用');
+    expect(dialogText()).toContain('替换后转为现用');
+    expect(dialogText()).toContain(
+      '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用。',
+    );
+    expect(document.querySelector('#sensor-target-id')).toBeNull();
+
+    const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
+      (button) => button.textContent?.includes('取消'),
+    );
+    cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+    expect(document.body.textContent).not.toContain('放弃未保存的修改');
+
+    await alternateRow!.get('[aria-label="替换现用 E3Z-D61"]').trigger('click');
+    await nextTick();
+    const note = document.querySelector<HTMLTextAreaElement>('#sensor-note');
+    note!.value = '检测距离不稳定';
+    note!.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick();
+    const save = [...document.querySelectorAll('[role="dialog"] button')].find(
+      (button) => button.textContent?.trim() === '替换',
+    );
+    save?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+
+    expect(replace).toHaveBeenCalledWith(
+      alternate!.id,
+      parent!.id,
+      '检测距离不稳定',
+    );
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('mentions inherited catalog and 3d in the replace hint only when the current has them', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const parent = store.sensors.find((item) => item.model === 'E3Z-D61');
+    if (!parent) throw new Error('missing current sensor');
+    const pdf = 'data:application/pdf;base64,JVBERi0xLjAK';
+    const catalog = store.saveSensorSop({
+      dataUrl: pdf,
+      fileName: '现用型录.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '现用型录',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    const model = store.saveSensor3dFile({
+      dataUrl: pdf,
+      fileName: '现用三维.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '现用三维',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    if (!catalog.ok || !model.ok) throw new Error('link files missing');
+
+    const base =
+      '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用';
+    const hint = () => document.querySelector('.replace-hint')?.textContent ?? '';
+    const openReplace = async () => {
+      await nextTick();
+      const row = wrapper
+        .findAll('tbody tr.ant-table-row')
+        .find((item) => item.text().includes('WL12-2B530'));
+      await row!.get('[aria-label="替换现用 E3Z-D61"]').trigger('click');
+      await nextTick();
+    };
+    const closeReplace = async () => {
+      const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
+        (button) => button.textContent?.includes('取消'),
+      );
+      cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await nextTick();
+    };
+    const link = (sopId: number | null, model3dId: number | null) => {
+      expect(
+        store.saveSensor(
+          {
+            brand: parent.brand,
+            model: parent.model,
+            model3dId,
+            sensorType: parent.sensorType,
+            sopId,
+            status: parent.status,
+          },
+          parent.id,
+        ),
+      ).toMatchObject({ ok: true });
+    };
+
+    await openReplace();
+    expect(hint()).toContain(`${base}。`);
+    expect(hint()).not.toContain('沿用');
+    await closeReplace();
+
+    link(catalog.item.id, null);
+    await openReplace();
+    expect(hint()).toContain(`${base}，并沿用原型号的型录。`);
+    await closeReplace();
+
+    link(catalog.item.id, model.item.id);
+    await openReplace();
+    expect(hint()).toContain(`${base}，并沿用原型号的型录和 3D。`);
+    await closeReplace();
+
+    link(null, model.item.id);
+    await openReplace();
+    expect(hint()).toContain(`${base}，并沿用原型号的 3D。`);
+    expect(hint()).not.toContain('型录');
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('fills the current card after a selection on the alternate filter', async () => {
+    const wrapper = await mountPage({ tab: '备选' }, writer);
+    const store = useSelectionStore();
+    const parent = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    const replace = vi.spyOn(store, 'replaceSensorCurrent');
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+
+    await alternateRow!.get('[aria-label="替换现用"]').trigger('click');
+    await nextTick();
+    const dialogText = () =>
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join('');
+    expect(dialogText()).toContain('请选择要替换的现用型号');
+    expect(dialogText()).not.toContain(
+      '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用。',
+    );
+
+    expect(document.querySelector('#sensor-target-id')).toBeTruthy();
+    const targetSelect = wrapper
+      .findAllComponents({ name: 'ASelect' })
+      .find(
+        (component) => component.props('placeholder') === '请选择现用型号',
+      );
+    targetSelect!.vm.$emit('update:value', parent!.id);
+    await nextTick();
+    expect(dialogText()).toContain('漫反射 · OMRON');
+    expect(dialogText()).toContain('E3Z-D61');
+    expect(dialogText()).toContain(
+      '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用。',
+    );
+
+    const note = document.querySelector<HTMLTextAreaElement>('#sensor-note');
+    note!.value = '检测距离不稳定';
+    note!.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick();
+    const save = [...document.querySelectorAll('[role="dialog"] button')].find(
+      (button) => button.textContent?.trim() === '替换',
+    );
+    save?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushPromises();
+    expect(replace).toHaveBeenCalledWith(
+      alternate!.id,
+      parent!.id,
+      '检测距离不稳定',
+    );
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('lines up edit, replace and delete in the same three slots', async () => {
+    const wrapper = await mountPage({}, writer);
+    const currentRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('E3Z-D61'));
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+    const currentSlots = currentRow!.get('.sensor-actions').element.children;
+    const alternateSlots = alternateRow!.get('.sensor-actions').element.children;
+
+    const labeled = (slot: Element | undefined, label: string) =>
+      slot?.matches(`[aria-label="${label}"]`) ||
+      slot?.querySelector(`[aria-label="${label}"]`);
+    const hasButton = (slot: Element | undefined) =>
+      slot?.matches('button') || slot?.querySelector('button');
+
+    expect(currentSlots).toHaveLength(3);
+    expect(alternateSlots).toHaveLength(3);
+    expect(labeled(currentSlots[0], '编辑')).toBeTruthy();
+    expect(hasButton(currentSlots[1])).toBeFalsy();
+    expect(labeled(currentSlots[2], '删除')).toBeTruthy();
+    expect(labeled(alternateSlots[1], '替换现用 E3Z-D61')).toBeTruthy();
+    expect(labeled(alternateSlots[2], '删除')).toBeTruthy();
+
+    wrapper.unmount();
+
+    const alternates = await mountPage({ tab: '备选' }, writer);
+    const plainAlternate = alternates
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+    const plainAlternateSlot =
+      plainAlternate!.get('.sensor-actions').element.children[1];
+    expect(plainAlternate?.classes()).not.toContain('sensor-row--group');
+    expect(
+      plainAlternateSlot?.matches('[aria-label="替换现用"]') ||
+        plainAlternateSlot?.querySelector('[aria-label="替换现用"]'),
+    ).toBeTruthy();
+    alternates.unmount();
+
+    const currents = await mountPage({ tab: '现用' }, writer);
+    const plainCurrent = currents
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('E3Z-D61'));
+    const plainCurrentSlot =
+      plainCurrent!.get('.sensor-actions').element.children[1];
+    expect(
+      plainCurrentSlot?.matches('button') ||
+        plainCurrentSlot?.querySelector('button'),
+    ).toBeFalsy();
+    expect(currents.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+    currents.unmount();
   });
 
   it('keeps the status tab when typing in the search box but honours external model deep links', async () => {
@@ -764,6 +1043,495 @@ describe('SensorPage', () => {
     expect(zzz).toBeGreaterThan(-1);
     expect(zzz).toBeLessThan(mmm);
     expect(mmm).toBeLessThan(aaa);
+
+    wrapper.unmount();
+  });
+
+  it('places same-type alternates under current rows and paginates currents only', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const rows = tableRows(wrapper);
+    const models = rows.map((row) => row.item.model);
+    const start = models.indexOf('E3Z-D61');
+
+    expect(models.slice(start, start + 3)).toEqual([
+      'E3Z-D61',
+      'WL12-2B530',
+      'PZ-G61CP',
+    ]);
+    expect(wrapper.get('.selection-panel').classes()).toContain(
+      'sensor-models--grouped',
+    );
+    expect(rows[start]?.muted).toBe(false);
+    expect(rows[start + 1]?.muted).toBe(true);
+    expect(rows[start + 1]?.rowKey).toBe(
+      `${rows[start]!.item.id}:${rows[start + 1]!.item.id}`,
+    );
+    const currentCount = store.sensors.filter((item) =>
+      isSensorStatus(item.status, 'current'),
+    ).length;
+    expect(wrapper.getComponent({ name: 'APagination' }).props('total')).toBe(
+      currentCount,
+    );
+    expect(rows.length).toBeGreaterThan(currentCount);
+
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+    const currentRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find(
+        (row) =>
+          row.text().includes('E3Z-D61') &&
+          !row.classes().includes('sensor-row--alternate'),
+      );
+    const loneRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('LV-H62'));
+    expect(currentRow?.classes()).toContain('sensor-row--group');
+    expect(currentRow?.classes()).not.toContain('sensor-row--alternate');
+    expect(alternateRow?.classes()).toContain('sensor-row--alternate');
+    expect(alternateRow?.classes()).toContain('sensor-row--group');
+    expect(loneRow?.classes()).not.toContain('sensor-row--group');
+    expect(loneRow?.classes()).not.toContain('sensor-row--alternate');
+    expect(alternateRow?.text()).toContain('SICK');
+
+    await alternateRow!.trigger('mouseenter');
+    await nextTick();
+    const hovered = () => wrapper.findAll('tbody tr.sensor-row--group-hover');
+    expect(hovered()).toHaveLength(3);
+    expect(hovered().some((row) => row.text().includes('E3Z-D61'))).toBe(true);
+    expect(hovered().some((row) => row.text().includes('WL12-2B530'))).toBe(
+      true,
+    );
+    expect(hovered().some((row) => row.text().includes('PZ-G61CP'))).toBe(
+      true,
+    );
+    expect(hovered().some((row) => row.text().includes('LV-H62'))).toBe(false);
+
+    alternateRow!.element.dispatchEvent(
+      new MouseEvent('mouseleave', { relatedTarget: currentRow!.element }),
+    );
+    await nextTick();
+    expect(hovered()).toHaveLength(3);
+
+    alternateRow!.element.dispatchEvent(
+      new MouseEvent('mouseleave', { relatedTarget: document.body }),
+    );
+    await nextTick();
+    expect(hovered()).toHaveLength(0);
+    expect(
+      alternateRow?.find('[aria-label="替换现用 E3Z-D61"]').exists(),
+    ).toBe(true);
+    expect(alternateRow?.find('[aria-label="编辑"]').exists()).toBe(true);
+    expect(alternateRow?.find('[aria-label="删除"]').exists()).toBe(true);
+    expect(
+      currentRow?.get('[aria-label="删除"]').element.hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      currentRow!
+        .findAllComponents({ name: 'ATooltip' })
+        .some(
+          (tooltip: { props: (name: string) => unknown }) =>
+            tooltip.props('title') ===
+            '该现用型号下还有备选，请先用「替换」处理',
+        ),
+    ).toBe(true);
+    expect(
+      loneRow?.get('[aria-label="删除"]').element.hasAttribute('disabled'),
+    ).toBe(false);
+    expect(
+      alternateRow?.get('[aria-label="删除"]').element.hasAttribute('disabled'),
+    ).toBe(false);
+
+    await alternateRow!.get('[aria-label="替换现用 E3Z-D61"]').trigger('click');
+    await nextTick();
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')]
+        .map((node) => node.textContent)
+        .join(''),
+    ).toContain('WL12-2B530');
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('does not open the editor from a grouped row click, and still opens it from a standalone row', async () => {
+    const wrapper = await mountPage({}, writer);
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+    const currentRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find(
+        (row) =>
+          row.text().includes('E3Z-D61') &&
+          !row.classes().includes('sensor-row--alternate'),
+      );
+    const loneRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('LV-H62'));
+
+    await alternateRow!.trigger('click');
+    await currentRow!.trigger('click');
+    await nextTick();
+    expect(document.body.textContent).not.toContain('编辑 Sensor 型号');
+    expect(document.querySelector('#sensor-model')).toBeNull();
+
+    await alternateRow!.get('[aria-label="编辑"]').trigger('click');
+    await nextTick();
+    expect(
+      document.querySelector<HTMLInputElement>('#sensor-model')?.value,
+    ).toBe('WL12-2B530');
+
+    const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
+      (button) => button.textContent?.includes('取消'),
+    );
+    cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+
+    await loneRow!.trigger('click');
+    await nextTick();
+    expect(document.body.textContent).toContain('编辑 Sensor 型号');
+    expect(
+      document.querySelector<HTMLInputElement>('#sensor-model')?.value,
+    ).toBe('LV-H62');
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('merges a group into one catalog cell and one 3d cell showing the current model', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const pdf = 'data:application/pdf;base64,JVBERi0xLjAK';
+    const parentSop = store.saveSensorSop({
+      dataUrl: pdf,
+      fileName: '现用型录.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '现用型录E3Z',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    const parent3d = store.saveSensor3dFile({
+      dataUrl: pdf,
+      fileName: '现用三维.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '现用三维E3Z',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    const alternateSop = store.saveSensorSop({
+      dataUrl: pdf,
+      fileName: '备选型录.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '备选型录WL12',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    const alternate3d = store.saveSensor3dFile({
+      dataUrl: pdf,
+      fileName: '备选三维.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      title: '备选三维WL12',
+      uploadedAt: '2026-08-28T00:00:00.000Z',
+    });
+    expect(parentSop.ok && parent3d.ok && alternateSop.ok && alternate3d.ok).toBe(
+      true,
+    );
+    if (!parentSop.ok || !parent3d.ok || !alternateSop.ok || !alternate3d.ok) {
+      throw new Error('测试文件保存失败');
+    }
+    const parent = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    if (!parent || !alternate) throw new Error('缺少漫反射型号');
+    expect(
+      store.saveSensor(
+        {
+          brand: parent.brand,
+          model: parent.model,
+          model3dId: parent3d.item.id,
+          sensorType: parent.sensorType,
+          sopId: parentSop.item.id,
+          status: parent.status,
+        },
+        parent.id,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      store.saveSensor(
+        {
+          brand: alternate.brand,
+          model: alternate.model,
+          model3dId: alternate3d.item.id,
+          sensorType: alternate.sensorType,
+          sopId: alternateSop.item.id,
+          status: alternate.status,
+        },
+        alternate.id,
+      ),
+    ).toMatchObject({ ok: true });
+    await nextTick();
+
+    const cellsWith = (text: string) =>
+      wrapper.findAll('tbody td').filter((cell) => cell.text().includes(text));
+    const catalogCells = cellsWith('现用型录E3Z');
+    const model3dCells = cellsWith('现用三维E3Z');
+    expect(catalogCells).toHaveLength(1);
+    expect(model3dCells).toHaveLength(1);
+    expect(catalogCells[0]!.attributes('rowspan')).toBe('3');
+    expect(model3dCells[0]!.attributes('rowspan')).toBe('3');
+    expect(catalogCells[0]!.classes()).toContain('sensor-shared-cell');
+    expect(model3dCells[0]!.classes()).toContain('sensor-shared-cell');
+    expect(wrapper.text()).not.toContain('备选型录WL12');
+    expect(wrapper.text()).not.toContain('备选三维WL12');
+
+    await statusSelect(wrapper).vm.$emit('update:value', '现用');
+    await nextTick();
+    const currentRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('E3Z-D61'));
+    expect(currentRow?.text()).toContain('现用型录E3Z');
+    expect(currentRow?.text()).toContain('现用三维E3Z');
+    expect(currentRow?.find('[rowspan]').exists()).toBe(false);
+    expect(cellsWith('现用型录E3Z')).toHaveLength(1);
+    expect(cellsWith('现用型录E3Z')[0]!.attributes('rowspan')).toBeUndefined();
+
+    await statusSelect(wrapper).vm.$emit('update:value', '备选');
+    await nextTick();
+    const alternateRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('WL12-2B530'));
+    expect(alternateRow?.text()).toContain('备选型录WL12');
+    expect(alternateRow?.text()).toContain('备选三维WL12');
+    expect(alternateRow?.find('[rowspan]').exists()).toBe(false);
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('keeps a status filter flat', async () => {
+    const wrapper = await mountPage({ tab: '现用' });
+    const store = useSelectionStore();
+    const rows = tableRows(wrapper);
+    const currents = store.sensors.filter((item) =>
+      isSensorStatus(item.status, 'current'),
+    );
+
+    expect(rows).toHaveLength(currents.length);
+    expect(rows.every((row) => !row.muted)).toBe(true);
+    expect(rows.every((row) => !row.struck)).toBe(true);
+    expect(rows.every((row) => !row.groupStart)).toBe(true);
+    expect(rows.every((row) => row.parent === row.item)).toBe(true);
+    expect(rows.every((row) => row.groupSize === 1)).toBe(true);
+    expect(rows.every((row) => row.rowKey === String(row.item.id))).toBe(true);
+    expect(wrapper.find('tr.sensor-row--group').exists()).toBe(false);
+    expect(wrapper.find('tr.sensor-row--alternate').exists()).toBe(false);
+    expect(wrapper.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+
+    wrapper.unmount();
+  });
+
+  it('sorts current rows by the column key and keeps alternates under their parent', async () => {
+    const wrapper = await mountPage({}, writer);
+    const brandHeader = wrapper
+      .findAll('th')
+      .find((header) => header.text().includes('品牌'));
+    await brandHeader!.trigger('click');
+    await nextTick();
+
+    expect(sortOrder(wrapper, 'brand')).toBe('ascend');
+    const rows = tableRows(wrapper);
+    const parents = rows.filter((row) => !row.muted);
+    expect(parents[0]?.item.model).toBe('LV-H62');
+    expect(parents.at(-1)?.item.model).toBe('UM30-213113');
+    let parentType = '';
+    for (const row of rows) {
+      if (!row.muted) parentType = row.item.sensorType;
+      else expect(row.item.sensorType).toBe(parentType);
+    }
+    const omron = rows.findIndex((row) => row.item.model === 'E3Z-D61');
+    expect(rows.slice(omron, omron + 3).map((row) => row.item.model)).toEqual([
+      'E3Z-D61',
+      'WL12-2B530',
+      'PZ-G61CP',
+    ]);
+
+    wrapper.unmount();
+  });
+
+  it('exports grouped members from 全部 and only flat hits from a status filter', async () => {
+    let exportedBlob: Blob | undefined;
+    const NativeUrl = URL;
+    class ExportTestUrl extends NativeUrl {
+      static createObjectURL(blob: Blob) {
+        exportedBlob = blob;
+        return 'blob:sensor-export-current-test';
+      }
+
+      static revokeObjectURL() {}
+    }
+    vi.stubGlobal('URL', ExportTestUrl);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const exportText = async (query: Record<string, string> = {}) => {
+      const wrapper = await mountPage(query, writer);
+      exportedBlob = undefined;
+      await wrapper.get('button[aria-label="导出 Excel"]').trigger('click');
+      await nextTick();
+      const text = new TextDecoder().decode(await exportedBlob!.arrayBuffer());
+      wrapper.unmount();
+      return text;
+    };
+
+    const grouped = await exportText();
+    expect(grouped.indexOf('E3Z-D61')).toBeGreaterThan(-1);
+    expect(grouped.indexOf('E3Z-D61')).toBeLessThan(grouped.indexOf('WL12-2B530'));
+    expect(grouped.indexOf('WL12-2B530')).toBeLessThan(
+      grouped.indexOf('PZ-G61CP'),
+    );
+
+    const current = await exportText({ tab: '现用' });
+    expect(current).toContain('E3Z-D61');
+    expect(current).not.toContain('WL12-2B530');
+    expect(current).not.toContain('PZ-G61CP');
+  });
+
+  it('omits the tab query on 全部 and writes it for a status filter', async () => {
+    const wrapper = await mountPage();
+    const router = wrapper.vm.$router;
+    await flushPromises();
+    expect(statusSelect(wrapper).props('value')).toBe('全部');
+    expect(router.currentRoute.value.query.tab).toBeUndefined();
+
+    await statusSelect(wrapper).vm.$emit('update:value', '现用');
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe('现用');
+
+    await statusSelect(wrapper).vm.$emit('update:value', '全部');
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('explains a guarded current and keeps 停用 selectable only when already disabled', async () => {
+    const wrapper = await mountPage({}, writer);
+    const currentRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find(
+        (row) =>
+          row.text().includes('E3Z-D61') &&
+          !row.classes().includes('sensor-row--alternate'),
+      );
+    await currentRow!.get('[aria-label="编辑"]').trigger('click');
+    await nextTick();
+    expect(document.body.textContent).toContain(
+      '该现用型号下还有备选，请先用「替换」处理',
+    );
+
+    const statusSelect = () =>
+      wrapper
+        .findAllComponents({ name: 'ASelect' })
+        .find((item) => item.props('id') === 'sensor-status');
+    const disabledOption = () =>
+      (
+        statusSelect()?.props('options') as Array<{
+          disabled?: boolean;
+          title?: string;
+          value: string;
+        }>
+      ).find((option) => isSensorStatus(option.value, 'disabled'));
+    expect(disabledOption()?.disabled).toBe(true);
+    expect(disabledOption()?.title).toBe('停用只能通过「替换」产生');
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ASelect' })
+        .find((item) => item.props('id') === 'sensor-sensor-type')
+        ?.props('disabled'),
+    ).toBeFalsy();
+
+    document.querySelector<HTMLButtonElement>('.ant-modal-close')?.click();
+    await nextTick();
+    await findButton(wrapper, '新增型号')!.trigger('click');
+    await nextTick();
+    expect(disabledOption()?.disabled).toBe(true);
+    expect(document.body.textContent).not.toContain(
+      '该现用型号下还有备选，请先用「替换」处理',
+    );
+    document.querySelector<HTMLButtonElement>('.ant-modal-close')?.click();
+    await nextTick();
+
+    const store = useSelectionStore();
+    const current = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    if (!current || !alternate) throw new Error('seed sensors missing');
+    store.replaceSensorCurrent(alternate.id, current.id, '保留停用');
+    await nextTick();
+    const retiredRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.get('.ant-tag').text() === '停用');
+    await retiredRow!.get('[aria-label="编辑"]').trigger('click');
+    await nextTick();
+    expect(disabledOption()?.disabled).toBe(false);
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
+  it('strikes only the wrapped text of an in-group disabled row', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const parent = store.sensors.find((item) => item.model === 'E3Z-D61');
+    const alternate = store.sensors.find((item) => item.model === 'WL12-2B530');
+    if (!parent || !alternate) throw new Error('missing current sensor');
+    expect(
+      store.replaceSensorCurrent(alternate.id, parent.id, '链式停用'),
+    ).toMatchObject({ ok: true });
+    const retired = store.sensors.find((item) => item.id === parent.id);
+    if (!retired) throw new Error('retired sensor missing');
+    expect(
+      store.saveSensor(
+        {
+          ...retired,
+          model: '链式停用测试',
+          sensorType: '激光式',
+          spec: '停用规格整段',
+        },
+        retired.id,
+      ),
+    ).toMatchObject({ ok: true });
+    await nextTick();
+
+    const row = wrapper.findAll('tbody tr.ant-table-row').find((item) => {
+      return (
+        item.text().includes('链式停用测试') &&
+        item.get('.ant-tag').text() === '停用'
+      );
+    });
+    expect(row?.classes()).toEqual(
+      expect.arrayContaining([
+        'sensor-row--alternate',
+        'sensor-row--struck',
+        'sensor-row--group',
+      ]),
+    );
+    const struck = row!.findAll('.sensor-struck').map((node) => node.text());
+    expect(struck).toContain('链式停用测试');
+    expect(struck).toContain('停用规格整段');
+    expect(struck.join('')).not.toContain('激光式');
+    expect(
+      row?.get('.ant-tag').element.closest('.sensor-struck'),
+    ).toBeNull();
+    expect(
+      row?.get('[aria-label="编辑"]').element.closest('.sensor-struck'),
+    ).toBeNull();
+    expect(row?.get('.ant-tag').text()).toBe('停用');
+    const relation = row!.get('.sensor-relation-link');
+    expect(relation.classes()).toContain('ant-btn-link');
+    expect(relation.text()).toContain('被 SICK WL12-2B530 替换');
 
     wrapper.unmount();
   });

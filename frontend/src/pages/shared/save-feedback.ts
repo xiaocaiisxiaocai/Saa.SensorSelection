@@ -20,12 +20,14 @@ export function failureMessage(
 }
 
 export function notifyResult(
-  result: { ok: true } | { ok: false; reason: SaveFailure },
+  result:
+    | { ok: true }
+    | { ok: false; reason: SaveFailure; message?: string },
   success: string,
   overrides: Partial<Record<SaveFailure, string>> = {},
 ): boolean {
   if (!result.ok) {
-    message.error(failureMessage(result.reason, overrides));
+    message.error(result.message || failureMessage(result.reason, overrides));
     return false;
   }
   if (success) message.success(success);

@@ -742,6 +742,8 @@ async function runSensorCrud() {
     await fillField(sheet(), '品牌', `${TAG}Brand`)
     await fillField(sheet(), '型号', NAMES.sensorModel)
     await fillField(sheet(), '规格参数', `${TAG} 规格`)
+    // 默认类型是漫反射，底下已有备选；新建现用会让删除被禁用。改选没有备选的类型。
+    await pickSelect(sheet(), '感应器类型', '04 光纤式')
     await saveSheet()
     await expectToast('型号已新增')
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
@@ -778,8 +780,15 @@ async function runSensorCrud() {
     await search.fill(NAMES.sensorModel)
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
-    const rows = await page.locator('.ant-table-tbody tr.ant-table-row').count()
-    assertEqual(rows, 1, 'search should narrow the table to one row')
+    // 默认是「全部」。命中任一成员会展开整组：备选和组内停用都带 sensor-row--alternate。
+    // 不带这个 class 的是组头、单独的现用，以及落单的备选或停用。
+    const rows = page.locator('.ant-table-tbody tr.ant-table-row')
+    const parentRows = page.locator('.ant-table-tbody tr.ant-table-row:not(.sensor-row--alternate)')
+    const alternateRows = page.locator('.ant-table-tbody tr.ant-table-row.sensor-row--alternate')
+    const parentCount = await parentRows.count()
+    const extra = (await rows.count()) - parentCount
+    assertEqual(parentCount, 1, 'search should narrow the table to one parent row')
+    assertEqual(await alternateRows.count(), extra, 'extra rows must carry sensor-row--alternate')
     await search.fill('')
     await settle()
   })

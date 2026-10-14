@@ -254,6 +254,54 @@ async function run() {
   )
   assert.deepEqual(replaceBadTarget, { ok: false, reason: 'validation' })
 
+  const pdf = 'data:application/pdf;base64,JVBERi0xLjAK'
+  const currentCatalog = repository.saveSensorSop({
+    title: '现用型录',
+    fileName: 'current-catalog.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: pdf,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  const alternateCatalog = repository.saveSensorSop({
+    title: '备选型录',
+    fileName: 'alternate-catalog.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: pdf,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  const alternateModel = repository.saveSensor3dFile({
+    title: '备选模型',
+    fileName: 'alternate-model.pdf',
+    mimeType: 'application/pdf',
+    dataUrl: pdf,
+    size: 12,
+    uploadedAt: '2026-09-18',
+  })
+  assert.equal(currentCatalog.ok, true)
+  assert.equal(alternateCatalog.ok, true)
+  assert.equal(alternateModel.ok, true)
+  // 现用有型录、没有 3D；备选自己两者都有。替换后型录沿用现用，3D 留备选自己的。
+  assert.equal(
+    repository.saveSensor(
+      { ...currentSeed, sopId: currentCatalog.item.id, model3dId: null },
+      currentSeed.id,
+    ).ok,
+    true,
+  )
+  assert.equal(
+    repository.saveSensor(
+      {
+        ...alternateSeed,
+        sopId: alternateCatalog.item.id,
+        model3dId: alternateModel.item.id,
+      },
+      alternateSeed.id,
+    ).ok,
+    true,
+  )
+
   const replaced = repository.replaceSensorCurrent(
     alternateSeed.id,
     currentSeed.id,
@@ -266,9 +314,13 @@ async function run() {
   assert.equal(newCurrent?.status, '现用')
   assert.equal(newCurrent?.replacesId, currentSeed.id)
   assert.equal(newCurrent?.problemNote, '检测不稳定')
+  assert.equal(newCurrent?.sopId, currentCatalog.item.id)
+  assert.equal(newCurrent?.model3dId, alternateModel.item.id)
   assert.equal(retired?.status, '停用')
   assert.equal(retired?.replacedById, alternateSeed.id)
   assert.equal(retired?.problemNote, '检测不稳定')
+  assert.equal(retired?.sopId, currentCatalog.item.id)
+  assert.equal(retired?.model3dId, null)
   assert.ok(retired?.replacedAt)
 
   const withPart = repository.saveSensor(
@@ -306,6 +358,342 @@ async function run() {
     ),
     true,
   )
+
+  // 备选必须有现用；停用只能由替换产生；唯一现用底下还有备选时不能直接改走。
+  const NEEDS_CURRENT = '请先新增该类型的现用型号'
+  const DISABLED_MANUAL = '停用只能通过「替换」产生'
+  const HAS_ALTERNATES = '该现用型号下还有备选，请先用「替换」处理'
+
+  function freshStatusRepository() {
+    return domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: {
+        getItem: () => null,
+        setItem: () => undefined,
+      },
+    })
+  }
+
+  function requireSensor(repo, model) {
+    const item = repo.getSensors().find((entry) => entry.model === model)
+    assert.ok(item, `missing sensor ${model}`)
+    return item
+  }
+
+  const statusRepo = freshStatusRepository()
+  const diffuseCurrent = requireSensor(statusRepo, 'E3Z-D61')
+  const diffuseAlternate = requireSensor(statusRepo, 'WL12-2B530')
+  assert.deepEqual(
+    statusRepo.saveSensor(
+      { ...diffuseCurrent, status: '备选' },
+      diffuseCurrent.id,
+    ),
+    { ok: false, reason: 'validation', message: HAS_ALTERNATES },
+  )
+  assert.deepEqual(
+    statusRepo.saveSensor(
+      { ...diffuseCurrent, sensorType: '对照式' },
+      diffuseCurrent.id,
+    ),
+    { ok: false, reason: 'validation', message: HAS_ALTERNATES },
+  )
+  assert.deepEqual(
+    statusRepo.saveSensor(
+      { ...diffuseCurrent, status: '停用' },
+      diffuseCurrent.id,
+    ),
+    { ok: false, reason: 'validation', message: HAS_ALTERNATES },
+  )
+  assert.deepEqual(statusRepo.deleteSensor(diffuseCurrent.id), {
+    ok: false,
+    reason: 'not-empty',
+    message: HAS_ALTERNATES,
+  })
+  assert.equal(
+    statusRepo.getSensors().some((item) => item.id === diffuseCurrent.id),
+    true,
+  )
+  const renamedCurrent = statusRepo.saveSensor(
+    { ...diffuseCurrent, brand: 'OMRON-EDIT' },
+    diffuseCurrent.id,
+  )
+  assert.equal(renamedCurrent.ok, true)
+  assert.equal(renamedCurrent.item.brand, 'OMRON-EDIT')
+  assert.equal(renamedCurrent.item.status, '现用')
+  assert.equal(renamedCurrent.item.sensorType, '漫反射')
+  assert.deepEqual(statusRepo.deleteSensor(requireSensor(statusRepo, 'PZ-G61CP').id), {
+    ok: true,
+  })
+  assert.deepEqual(statusRepo.deleteSensor(diffuseCurrent.id), {
+    ok: false,
+    reason: 'not-empty',
+    message: HAS_ALTERNATES,
+  })
+
+  const laserCurrent = requireSensor(statusRepo, 'LV-H62')
+  const laserAlternate = statusRepo.saveSensor({
+    status: '备选',
+    sensorType: '激光式',
+    brand: 'TEST',
+    model: 'LASER-ALT-OK',
+    spec: '规格',
+  })
+  assert.equal(laserAlternate.ok, true)
+  assert.deepEqual(statusRepo.deleteSensor(laserAlternate.item.id), { ok: true })
+  assert.deepEqual(statusRepo.deleteSensor(laserCurrent.id), { ok: true })
+  assert.deepEqual(
+    statusRepo.saveSensor({
+      status: '备选',
+      sensorType: '激光式',
+      brand: 'TEST',
+      model: 'LASER-ALT-BLOCKED',
+      spec: '规格',
+    }),
+    { ok: false, reason: 'validation', message: NEEDS_CURRENT },
+  )
+  assert.deepEqual(
+    statusRepo.saveSensor(
+      { ...diffuseAlternate, sensorType: '激光式' },
+      diffuseAlternate.id,
+    ),
+    { ok: false, reason: 'validation', message: NEEDS_CURRENT },
+  )
+  assert.equal(
+    statusRepo.saveSensor({
+      status: '现用',
+      sensorType: '激光式',
+      brand: 'Keyence',
+      model: 'LASER-CURRENT',
+      spec: '规格',
+    }).ok,
+    true,
+  )
+  assert.equal(
+    statusRepo.saveSensor({
+      status: '备选',
+      sensorType: '激光式',
+      brand: 'TEST',
+      model: 'LASER-ALT-AGAIN',
+      spec: '规格',
+    }).ok,
+    true,
+  )
+
+  const ultrasonic = requireSensor(statusRepo, 'UM30-213113')
+  assert.deepEqual(
+    statusRepo.saveSensor({
+      status: '停用',
+      sensorType: '超声波式',
+      brand: 'TEST',
+      model: 'MANUAL-OFF',
+      spec: '规格',
+      replacedById: ultrasonic.id,
+    }),
+    { ok: false, reason: 'validation', message: DISABLED_MANUAL },
+  )
+  assert.deepEqual(
+    statusRepo.saveSensor({ ...ultrasonic, status: '停用' }, ultrasonic.id),
+    { ok: false, reason: 'validation', message: DISABLED_MANUAL },
+  )
+
+  const replacedCurrent = statusRepo.replaceSensorCurrent(
+    diffuseAlternate.id,
+    diffuseCurrent.id,
+    '检测不稳定',
+  )
+  assert.equal(replacedCurrent.ok, true)
+  const retiredCurrent = statusRepo
+    .getSensors()
+    .find((item) => item.id === diffuseCurrent.id)
+  assert.equal(retiredCurrent.status, '停用')
+  const editedRetired = statusRepo.saveSensor(
+    {
+      ...retiredCurrent,
+      brand: 'RETIRED',
+      spec: '停用后规格',
+      sensorType: '激光式',
+    },
+    retiredCurrent.id,
+  )
+  assert.equal(editedRetired.ok, true)
+  assert.equal(editedRetired.item.status, '停用')
+  assert.equal(editedRetired.item.brand, 'RETIRED')
+  assert.equal(editedRetired.item.spec, '停用后规格')
+  assert.equal(editedRetired.item.sensorType, '激光式')
+
+  const twoCurrentRepo = freshStatusRepository()
+  const firstCurrent = requireSensor(twoCurrentRepo, 'E3Z-D61')
+  const secondCurrent = twoCurrentRepo.saveSensor({
+    status: '现用',
+    sensorType: '漫反射',
+    brand: 'TEST',
+    model: 'SECOND-CURRENT',
+    spec: '规格',
+  })
+  assert.equal(secondCurrent.ok, true)
+  assert.equal(
+    twoCurrentRepo.saveSensor(
+      { ...firstCurrent, status: '备选' },
+      firstCurrent.id,
+    ).ok,
+    true,
+  )
+  assert.equal(
+    twoCurrentRepo.saveSensor(
+      { ...requireSensor(twoCurrentRepo, 'E3Z-D61'), status: '现用' },
+      firstCurrent.id,
+    ).ok,
+    true,
+  )
+  assert.deepEqual(twoCurrentRepo.deleteSensor(firstCurrent.id), { ok: true })
+  assert.deepEqual(twoCurrentRepo.deleteSensor(secondCurrent.item.id), {
+    ok: false,
+    reason: 'not-empty',
+    message: HAS_ALTERNATES,
+  })
+  assert.equal(
+    twoCurrentRepo
+      .getSensors()
+      .some((item) => item.id === secondCurrent.item.id),
+    true,
+  )
+
+  const orphanRepo = freshStatusRepository()
+  assert.deepEqual(
+    orphanRepo.deleteSensor(requireSensor(orphanRepo, 'LV-H62').id),
+    { ok: true },
+  )
+  const orphanSnapshot = orphanRepo.snapshotStore()
+  const catalogKey = domain.keyFor('sensor-catalog', 'all')
+  orphanSnapshot[catalogKey].push(
+    {
+      id: 9001,
+      status: '备选',
+      sensorType: '激光式',
+      brand: 'ORPHAN',
+      model: 'ORPHAN-ALT',
+      spec: '原规格',
+      partNumber: '',
+      feature: '',
+      scene: '',
+      sopId: null,
+      model3dId: null,
+      replacesId: null,
+      replacedById: null,
+      problemNote: '',
+      replacedAt: '',
+    },
+    {
+      id: 9002,
+      status: '停用',
+      sensorType: '激光式',
+      brand: 'ORPHAN',
+      model: 'ORPHAN-OFF',
+      spec: '停用规格',
+      partNumber: '',
+      feature: '',
+      scene: '',
+      sopId: null,
+      model3dId: null,
+      replacesId: null,
+      replacedById: null,
+      problemNote: '',
+      replacedAt: '',
+    },
+  )
+  orphanRepo.replaceFromStorage(JSON.stringify(orphanSnapshot))
+  const loadedOrphan = orphanRepo
+    .getSensors()
+    .find((item) => item.model === 'ORPHAN-ALT')
+  const loadedDisabled = orphanRepo
+    .getSensors()
+    .find((item) => item.model === 'ORPHAN-OFF')
+  assert.equal(loadedOrphan?.status, '备选')
+  assert.equal(loadedOrphan?.sensorType, '激光式')
+  assert.equal(loadedOrphan?.spec, '原规格')
+  assert.equal(loadedDisabled?.status, '停用')
+  assert.equal(loadedDisabled?.replacedById, null)
+  assert.deepEqual(
+    orphanRepo.saveSensor({ ...loadedOrphan, spec: '改规格' }, loadedOrphan.id),
+    { ok: false, reason: 'validation', message: NEEDS_CURRENT },
+  )
+  assert.equal(
+    orphanRepo.getSensors().find((item) => item.id === loadedOrphan.id)?.spec,
+    '原规格',
+  )
+
+  const prefixedRepo = freshStatusRepository()
+  for (const [previousName, nextName] of [
+    ['现用', '01 现用'],
+    ['备选', '02 备选'],
+    ['停用', '03 停用'],
+  ]) {
+    const entry = prefixedRepo
+      .getDictionaryItems('sensor-status')
+      .find((item) => item.name === previousName)
+    assert.ok(entry, `missing status ${previousName}`)
+    assert.equal(
+      prefixedRepo.saveDictionaryItem(
+        'sensor-status',
+        { name: nextName, sort: entry.sort },
+        entry.id,
+      ).ok,
+      true,
+    )
+  }
+  const prefixedLaser = requireSensor(prefixedRepo, 'LV-H62')
+  assert.equal(prefixedLaser.status, '01 现用')
+  assert.deepEqual(prefixedRepo.deleteSensor(prefixedLaser.id), { ok: true })
+  assert.deepEqual(
+    prefixedRepo.saveSensor({
+      status: '02 备选',
+      sensorType: '激光式',
+      brand: 'TEST',
+      model: 'PREFIX-ALT',
+      spec: '规格',
+    }),
+    { ok: false, reason: 'validation', message: NEEDS_CURRENT },
+  )
+  assert.deepEqual(
+    prefixedRepo.saveSensor({
+      status: '03 停用',
+      sensorType: '激光式',
+      brand: 'TEST',
+      model: 'PREFIX-OFF',
+      spec: '规格',
+    }),
+    { ok: false, reason: 'validation', message: DISABLED_MANUAL },
+  )
+  const prefixedCurrent = prefixedRepo
+    .getSensors()
+    .find((item) => item.status === '01 现用' && item.sensorType === '漫反射')
+  const prefixedAlternate = prefixedRepo
+    .getSensors()
+    .find((item) => item.status === '02 备选' && item.sensorType === '漫反射')
+  assert.ok(prefixedCurrent && prefixedAlternate)
+  const prefixedReplace = prefixedRepo.replaceSensorCurrent(
+    prefixedAlternate.id,
+    prefixedCurrent.id,
+    '前缀停用',
+  )
+  assert.equal(prefixedReplace.ok, true)
+  const prefixedRetired = prefixedRepo
+    .getSensors()
+    .find((item) => item.id === prefixedCurrent.id)
+  assert.equal(prefixedRetired.status, '03 停用')
+  const prefixedEdited = prefixedRepo.saveSensor(
+    { ...prefixedRetired, spec: '改过的规格' },
+    prefixedRetired.id,
+  )
+  assert.equal(prefixedEdited.ok, true)
+  assert.equal(prefixedEdited.item.status, '03 停用')
+  assert.equal(prefixedEdited.item.spec, '改过的规格')
+  assert.deepEqual(prefixedRepo.deleteSensor(prefixedAlternate.id), {
+    ok: false,
+    reason: 'not-empty',
+    message: HAS_ALTERNATES,
+  })
 
   const stale = repository.saveCrud(
     'process-feat',

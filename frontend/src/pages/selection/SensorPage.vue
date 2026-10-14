@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { findSensorStatusName, isSensorStatus } from '@/domain';
 import { useSyncedQuery } from '@/pages/shared/use-synced-query';
 import Sensor3dPanel from '@/pages/selection/sensor/Sensor3dPanel.vue';
 import SensorModelsPanel from '@/pages/selection/sensor/SensorModelsPanel.vue';
@@ -31,9 +30,7 @@ const focusModel3dId = ref<null | number>(positiveId(route.query.model3dId));
 
 // 切到资源页签再切回「型号」时，回到之前的状态筛选
 const lastStatusTab = ref(
-  RESOURCE_TABS.includes(mainTab.value)
-    ? currentStatusName() || '全部'
-    : mainTab.value,
+  RESOURCE_TABS.includes(mainTab.value) ? '全部' : mainTab.value,
 );
 const sectionTab = computed({
   get: () => (RESOURCE_TABS.includes(mainTab.value) ? mainTab.value : 'models'),
@@ -61,7 +58,7 @@ useSyncedQuery(() => {
     };
   }
   return {
-    tab: isSensorStatus(mainTab.value, 'current') ? undefined : mainTab.value,
+    tab: mainTab.value === '全部' ? undefined : mainTab.value,
     model: query.value.trim() || undefined,
     sensorTypes: sensorTypeFilters.value.length
       ? sensorTypeFilters.value.map(String).join(',')
@@ -112,14 +109,7 @@ function initialTab() {
   const tab = String(route.query.tab || '');
   if (RESOURCE_TABS.includes(tab)) return tab;
   if (route.query.model) return '全部';
-  return tab || currentStatusName() || '全部';
-}
-
-function currentStatusName() {
-  return findSensorStatusName(
-    store.dictionaryNames('sensor-status'),
-    'current',
-  );
+  return tab || '全部';
 }
 
 function parseSensorTypeFilters(value: string) {

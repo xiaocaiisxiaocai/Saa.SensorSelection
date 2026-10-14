@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 
-import { sensorStatusRank, type SensorItem } from '@/domain';
+import {
+  SENSOR_DISABLED_MANUAL,
+  SENSOR_HAS_ALTERNATES,
+  isSensorStatus,
+  sensorCurrentGuardsAlternates,
+  sensorStatusRank,
+  type SensorItem,
+} from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import { notifyResult } from '@/pages/shared/save-feedback';
@@ -12,6 +19,7 @@ const store = useSelectionStore();
 
 const visible = ref(false);
 const editId = ref<number>();
+const editing = ref<SensorItem>();
 const validationAttempted = ref(false);
 const form = reactive({
   brand: '',
@@ -27,10 +35,30 @@ const form = reactive({
 });
 const dirtyGuard = useDirtyGuard(form);
 
+const keepsDisabled = computed(
+  () =>
+    editing.value !== undefined &&
+    isSensorStatus(editing.value.status, 'disabled'),
+);
+const alternateGuard = computed(() =>
+  editing.value !== undefined &&
+  sensorCurrentGuardsAlternates(store.sensors, editing.value)
+    ? SENSOR_HAS_ALTERNATES
+    : undefined,
+);
 const statusOptions = computed(() =>
   [...store.dictionaryNames('sensor-status')]
     .sort((left, right) => sensorStatusRank(left) - sensorStatusRank(right))
-    .map((name) => ({ label: name, value: name })),
+    .map((name) => {
+      const blockDisabled =
+        isSensorStatus(name, 'disabled') && !keepsDisabled.value;
+      return {
+        label: name,
+        value: name,
+        disabled: blockDisabled,
+        title: blockDisabled ? SENSOR_DISABLED_MANUAL : undefined,
+      };
+    }),
 );
 const typeOptions = computed(() =>
   store
@@ -47,6 +75,7 @@ const model3dOptions = computed(() =>
 /** 不传 item 为新增 */
 function open(item?: SensorItem) {
   validationAttempted.value = false;
+  editing.value = item;
   editId.value = item?.id;
   Object.assign(
     form,
@@ -135,6 +164,7 @@ defineExpose({ open });
             html-for="sensor-status"
             label="状态"
             required
+            :extra="alternateGuard"
             v-bind="
               fieldError(
                 validationAttempted && !form.status ? '请选择状态' : undefined,
@@ -153,6 +183,7 @@ defineExpose({ open });
             html-for="sensor-sensor-type"
             label="感应器类型"
             required
+            :extra="alternateGuard"
             v-bind="
               fieldError(
                 validationAttempted && !form.sensorType

@@ -50,10 +50,16 @@ export {
   PROJECT_MACHINE_CATEGORY,
 } from './entity-tree';
 export {
+  SENSOR_DISABLED_MANUAL,
+  SENSOR_HAS_ALTERNATES,
+  SENSOR_NEEDS_CURRENT,
   findSensorStatusName,
   isSensorStatus,
+  sensorCurrentGuardsAlternates,
   sensorStatusKind,
   sensorStatusRank,
+  sensorTypeHasAlternate,
+  sensorTypeHasCurrent,
 } from './sensor-status';
 export type { SensorStatusKind } from './sensor-status';
 export { migrateSelectionSeedStore } from './seed-migration';

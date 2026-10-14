@@ -9,12 +9,83 @@
   overflow-wrap: anywhere;
 }
 
-/* 文件名完整显示：链接按钮默认不折行，这里放开 */
-.sensor-file-link.ant-btn {
+/* 只在「全部」分组里加粗组界。组与组之间是下一条非成员行的实线顶边，
+   最后一行底边同样是实线。组内不画线。
+   状态筛选不加 sensor-models--grouped，边线维持 antd 默认。
+   组内停用的删除线只画在文字上，不画在格子、标签或按钮上。 */
+.sensor-models--grouped :deep(tr.ant-table-row:not(.sensor-row--alternate) > td.ant-table-cell) {
+  border-top: 1px solid var(--color-border);
+}
+
+.sensor-models--grouped :deep(tr.ant-table-row:last-child > td.ant-table-cell) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* 有成员的现用收紧底边距。成员去掉顶边线并收紧顶边距，字号用小号。
+   组里还有下一条成员时，底边距也收紧；最后一条成员保留原来的底边距。
+   状态标签自带字号，不跟着变小。删除线只包在正文上：
+   格子上的 line-through 会穿透标签和按钮，子元素取消不掉。 */
+.sensor-models--grouped :deep(tr.sensor-row--group:not(.sensor-row--alternate) > td.ant-table-cell:not(.sensor-shared-cell)) {
+  padding-bottom: 0;
+}
+
+/* 分组行不整行编辑，光标保持默认箭头。行内按钮仍用自己的指针。 */
+.sensor-models--grouped :deep(tr.sensor-row--group) {
+  cursor: default;
+}
+
+/* 整组合并的型录 / 3D 在组的高度里垂直居中，字号和颜色跟现用行。 */
+.sensor-models--grouped :deep(td.sensor-shared-cell) {
+  vertical-align: middle;
+  color: var(--color-text);
+  font: var(--font-body);
+}
+
+/* 合并格画在组的第一行上，表格最后一组的底边要补在格子自己的底边。 */
+.sensor-models--grouped :deep(tr.sensor-row--group:not(.sensor-row--alternate, :has(~ tr.ant-table-row:not(.sensor-row--alternate))) > td.sensor-shared-cell) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--alternate > td.ant-table-cell) {
+  border-top: 0;
+  padding-top: 0;
+  color: var(--color-text-secondary);
+  font: var(--font-sm);
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--alternate:has(+ tr.sensor-row--alternate) > td.ant-table-cell) {
+  padding-bottom: 0;
+}
+
+.sensor-struck {
+  text-decoration: line-through;
+}
+
+/* 整组一起悬停，含左右固定列；底色与 antd 行悬停相同 */
+.selection-panel :deep(tr.sensor-row--group-hover > td.ant-table-cell) {
+  background: var(--color-fill-alter);
+}
+
+/* 编辑、替换、删除各占一格，没有替换的行中间留空，图标才能上下对齐 */
+.sensor-actions {
+  display: grid;
+  grid-template-columns: repeat(3, var(--control-height-sm));
+  place-items: center;
+}
+
+/* 文件名和替换关系完整折行。antd 的 link 按钮默认 nowrap、固定高度，窄列会溢到下一列。 */
+.sensor-file-link.ant-btn,
+.sensor-relation-link.ant-btn {
   height: auto;
   max-width: 100%;
   padding-inline: 0;
   overflow-wrap: anywhere;
   white-space: normal;
   text-align: start;
+}
+
+/* 分组成员行的格子已是小号字。关系链接跟着格子的字号，颜色仍用链接色。 */
+.sensor-models--grouped :deep(tr.sensor-row--alternate .sensor-relation-link.ant-btn) {
+  font-size: inherit;
+  line-height: inherit;
 }

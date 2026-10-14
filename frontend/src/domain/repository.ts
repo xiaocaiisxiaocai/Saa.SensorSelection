@@ -36,7 +36,15 @@ import {
 } from './normalize';
 import { entityDataName, machineCatalogKind } from './entity-tree';
 import { migrateSelectionSeedStore } from './seed-migration';
-import { findSensorStatusName, isSensorStatus } from './sensor-status';
+import {
+  SENSOR_DISABLED_MANUAL,
+  SENSOR_HAS_ALTERNATES,
+  SENSOR_NEEDS_CURRENT,
+  findSensorStatusName,
+  isSensorStatus,
+  sensorCurrentGuardsAlternates,
+  sensorTypeHasCurrent,
+} from './sensor-status';
 import {
   DICTIONARY_DEFINITIONS,
   ENTITY_KIND_DEFINITIONS,
@@ -463,6 +471,40 @@ export function createSelectionRepository({
     );
     if (duplicate) return { ok: false, reason: 'duplicate' };
 
+    const previous = editId
+      ? items.find((item) => item.id === editId)
+      : undefined;
+    if (editId && !previous) return { ok: false, reason: 'stale' };
+    // 先守住「备选必须还有现用」，再拒绝手选停用，最后才要求备选类型已有现用。
+    if (
+      previous &&
+      sensorCurrentGuardsAlternates(items, previous) &&
+      (!isSensorStatus(status, 'current') ||
+        sensorType !== previous.sensorType)
+    ) {
+      return {
+        ok: false,
+        reason: 'validation',
+        message: SENSOR_HAS_ALTERNATES,
+      };
+    }
+    if (
+      isSensorStatus(status, 'disabled') &&
+      !(previous && isSensorStatus(previous.status, 'disabled'))
+    ) {
+      return {
+        ok: false,
+        reason: 'validation',
+        message: SENSOR_DISABLED_MANUAL,
+      };
+    }
+    if (
+      isSensorStatus(status, 'alternate') &&
+      !sensorTypeHasCurrent(items, sensorType, previous?.id)
+    ) {
+      return { ok: false, reason: 'validation', message: SENSOR_NEEDS_CURRENT };
+    }
+
     const snapshot = cloneStore(store);
     let sopId: null | number = null;
     if (
@@ -600,6 +642,7 @@ export function createSelectionRepository({
 
     const snapshot = cloneStore(store);
     const replacedAt = formatLocalDate(new Date());
+    // 备选沿用现用已挂上的型录 / 3D；现用没挂的保留备选自己的。停用的现用保持原链接。
     const nextAlt = normalizeSensorItems(
       [
         {
@@ -608,6 +651,9 @@ export function createSelectionRepository({
           replacesId: curId,
           problemNote: note,
           replacedAt,
+          sopId: current.sopId != null ? current.sopId : alternate.sopId,
+          model3dId:
+            current.model3dId != null ? current.model3dId : alternate.model3dId,
         },
       ],
       typeNames,
@@ -653,6 +699,10 @@ export function createSelectionRepository({
     const items = getSensors();
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
+    const current = items[index];
+    if (current && sensorCurrentGuardsAlternates(items, current)) {
+      return { ok: false, reason: 'not-empty', message: SENSOR_HAS_ALTERNATES };
+    }
     const snapshot = cloneStore(store);
     items.splice(index, 1);
     // 级联清理：从所有机型结构行的 sensorIds 中移除被删除的 Sensor 引用

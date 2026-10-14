@@ -9,10 +9,16 @@ export type SaveFailure =
   | 'validation';
 
 export type SaveResult<T> =
-  { item: T; ok: true } | { ok: false; reason: SaveFailure };
+  | { item: T; ok: true }
+  | { ok: false; reason: SaveFailure; message?: string };
 
 export type DeleteResult =
-  { ok: false; reason: Exclude<SaveFailure, 'duplicate'> } | { ok: true };
+  | {
+      ok: false;
+      reason: Exclude<SaveFailure, 'duplicate'>;
+      message?: string;
+    }
+  | { ok: true };
 
 export type ReorderResult =
   { ok: false; reason: 'stale' | 'storage' | 'validation' } | { ok: true };

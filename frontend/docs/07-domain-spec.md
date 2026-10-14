@@ -63,8 +63,8 @@ type SaveFailure =
   | 'duplicate' | 'in-use' | 'not-empty'
   | 'size' | 'stale' | 'storage' | 'type' | 'validation'
 
-type SaveResult<T> = { item: T; ok: true } | { ok: false; reason: SaveFailure }
-type DeleteResult = { ok: true } | { ok: false; reason: Exclude<SaveFailure, 'duplicate'> }
+type SaveResult<T> = { item: T; ok: true } | { ok: false; reason: SaveFailure; message?: string }
+type DeleteResult = { ok: true } | { ok: false; reason: Exclude<SaveFailure, 'duplicate'>; message?: string }
 type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | 'validation' }
 ```
 
@@ -74,6 +74,7 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 - `cloneStore` = `parsePersistedStore(JSON.stringify(store))`（深拷贝且走同一套安全解析）。
 - `persist` 把**当前**内存 store 整包 `JSON.stringify` 写到 `STORAGE_KEY`。失败则 `store = snapshot`。
 - 写成功形状一律 `{ ok: true, item }`；删/排序成功 `{ ok: true }`。
+- 失败对象可以带 `message`。页面提示优先用这句话，没有才按 `reason` 取通用文案。
 - 未单独列出的 `reason` 表示该方法**不会**返回该值。
 
 ---
@@ -453,6 +454,13 @@ key `sensor-catalog:all`。缺失则 `createSensorCatalogDefaults(sensorData)`�
 | `model` trim 空，或 `sensorType` 不在类型字典，或 `status` 不在状态字典 | `validation` |
 | 其他记录（`id !== editId`）型号 zh-CN 小写相同 | `duplicate` |
 | `editId` 找不到 | `stale` |
+| 原记录是该 `sensorType` 唯一的现用，同类型还有备选，而新状态不再是现用，或 `sensorType` 变了 | `validation`，`message`「该现用型号下还有备选，请先用「替换」处理」 |
+| 新状态是停用，且原记录不是停用（含新增；带 `replacedById` 也一样） | `validation`，`message`「停用只能通过「替换」产生」 |
+| 新状态是备选，且该 `sensorType` 没有其他现用 | `validation`，`message`「请先新增该类型的现用型号」 |
+
+状态用 `isSensorStatus` 归类（`现用` / `01 现用` 都算现用）。同类型另有现用时，改状态、改类型、删除都允许。已是停用并保持停用时，可以改型号、类型、规格、链接等其他字段。新增现用始终允许。这三项在改快照之前检查；前一条先于后一条，所以唯一现用被改成停用或备选时，文案是「请先用替换处理」。
+
+已经落在库里的落单备选、以及没有替换链的停用，`getSensors()` 原样返回，不做迁移。再保存一条没有现用的备选仍会被拒绝。
 
 `sopId` / `model3dId`：仅当 payload **自有**对应键且非 null/undefined 时解析；必须分别指向已存在资料 / 3D 文件的正安全整数，否则写成 `null`。编辑时若未传 `sopId` / `model3dId` / `partNumber` / `replacesId` / `replacedById` / `problemNote` / `replacedAt`，保留旧值。
 
@@ -470,16 +478,19 @@ key `sensor-catalog:all`。缺失则 `createSensorCatalogDefaults(sensorData)`�
 | 找不到 alt 或 current | `stale` |
 | alt 状态不是「备选」或 current 不是「现用」 | `validation` |
 
+这是唯一会把一条型号写成停用的路径。`saveSensor` 不能手选停用。
+
 **成功**
 
 - alt → 现用，`replacesId=currentId`，双方写入同一 `problemNote` 与 `replacedAt=formatLocalDate(now)`。
+- alt 的 `sopId`：current.`sopId` 有值（非 null）则改为该值，否则保留 alt 原来的；`model3dId` 同样处理。current → 停用后仍保留自己的 `sopId` / `model3dId`。
 - current → 停用，`replacedById=altId`。
 - 所有机型结构行：`sensorIds` 里的 `currentId` 换成 `altId` 并去重；主传感器（新数组第一项）刷新 type/spec 快照。
 - 返回 `{ ok: true, item: 更新后的备选（现已现用）}`。
 
 #### `deleteSensor(id)`
 
-找不到 → `stale`。**不**检查机型引用（`in-use` 不用于此）。splice + persist。
+找不到 → `stale`。该型号是此 `sensorType` 唯一的现用，且同类型还有备选 → `{ ok: false, reason: 'not-empty', message: '该现用型号下还有备选，请先用「替换」处理' }`，不改目录，也不清机型引用。同类型另有现用时允许删除。备选和停用允许删除。否则 splice，并从机型结构行 `sensorIds` 移除该 id。**不**检查机型引用（`in-use` 不用于此）。
 
 #### `syncMachineSensorSnapshots()`（内部）
 

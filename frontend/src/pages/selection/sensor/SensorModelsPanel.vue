@@ -12,8 +12,10 @@ import {
 import { computed, ref, watch } from 'vue';
 
 import {
+  SENSOR_HAS_ALTERNATES,
   findSensorStatusName,
   isSensorStatus,
+  sensorCurrentGuardsAlternates,
   sensorStatusRank,
   type SensorFileItem,
   type SensorItem,
@@ -37,14 +39,19 @@ import SensorLinkedPreview from './SensorLinkedPreview.vue';
 import SensorReplaceDialog from './SensorReplaceDialog.vue';
 import { downloadSensorExcel } from './sensor-excel';
 import {
+  expandSensorGroups,
   exportCell,
+  filterSensorGroups,
   filterSensors,
+  groupSensorCatalog,
   HIDEABLE_COLUMNS,
   relationText,
   sensorColumns,
+  sortSensorGroups,
   statusColor,
   typeAccent,
   type SensorLookup,
+  type SensorTableRow,
 } from './sensor-table';
 import { useHiddenColumns } from './use-hidden-columns';
 
@@ -122,22 +129,101 @@ const lookup: SensorLookup = {
 };
 const relation = (item: SensorItem) => relationText(item, lookup.related(item));
 
+const groupedView = computed(() => status.value === '全部');
 const items = computed(() =>
-  filterSensors(
-    store.sensors,
-    {
-      status: status.value,
-      sensorTypes: sensorTypes.value,
-      query: query.value,
-    },
-    lookup,
-  ),
+  groupedView.value
+    ? []
+    : filterSensors(
+        store.sensors,
+        {
+          status: status.value,
+          sensorTypes: sensorTypes.value,
+          query: query.value,
+        },
+        lookup,
+      ),
 );
 // 排序必须发生在分页切片之前，否则只会把当前这一页重排。
 const sortedItems = computed(() => sortRows(items.value, sort.value));
+// 「全部」先按整份目录分组，再筛、再按组头排序。分页切的是组，不是展开后的行。
+const groupedUnits = computed(() => {
+  if (!groupedView.value) return [];
+  return sortSensorGroups(
+    filterSensorGroups(
+      groupSensorCatalog(store.sensors),
+      {
+        sensorTypes: sensorTypes.value,
+        query: query.value,
+      },
+      lookup,
+    ),
+    sort.value,
+  );
+});
+const entryCount = computed(() =>
+  groupedView.value ? groupedUnits.value.length : sortedItems.value.length,
+);
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
-  return sortedItems.value.slice(start, start + pageSize.value);
+  const end = start + pageSize.value;
+  if (groupedView.value) {
+    return expandSensorGroups(groupedUnits.value.slice(start, end));
+  }
+  return sortedItems.value.slice(start, end).map((item) => ({
+    rowKey: String(item.id),
+    item,
+    parent: item,
+    muted: false,
+    struck: false,
+    groupStart: false,
+    groupSize: 1,
+  }));
+});
+const hoveredGroup = ref<number | null>(null);
+
+function isGroupRow(row: SensorTableRow) {
+  return row.groupStart || row.muted;
+}
+
+const customRow = computed(() => {
+  // 有成员的组不再整行点开；各自用编辑按钮。单独的行仍整行编辑。
+  const activate = writable.value
+    ? rowClick<SensorTableRow>((row) => editItem(row.item))
+    : null;
+  return (row: SensorTableRow) => {
+    const grouped = isGroupRow(row);
+    const groupId = String(row.parent.id);
+    return {
+      ...(activate && !grouped ? activate(row) : {}),
+      ...(grouped ? { 'data-group-id': groupId } : {}),
+      onMouseenter() {
+        if (grouped) hoveredGroup.value = row.parent.id;
+      },
+      onMouseleave(event: MouseEvent) {
+        if (!grouped) return;
+        const next =
+          event.relatedTarget instanceof Element ? event.relatedTarget : null;
+        if (next?.closest('tr')?.getAttribute('data-group-id') === groupId) {
+          return;
+        }
+        if (hoveredGroup.value === row.parent.id) hoveredGroup.value = null;
+      },
+    };
+  };
+});
+
+const rowClassName = computed(() => {
+  const hovered = hoveredGroup.value;
+  return (row: SensorTableRow) => {
+    const classes: string[] = [];
+    if (row.muted) classes.push('sensor-row--alternate');
+    if (row.struck) classes.push('sensor-row--struck');
+    if (isGroupRow(row)) {
+      classes.push('sensor-row--group');
+      if (hovered === row.parent.id) classes.push('sensor-row--group-hover');
+    }
+    return classes.join(' ');
+  };
 });
 const columns = computed(() =>
   sensorColumns({
@@ -145,6 +231,7 @@ const columns = computed(() =>
     showDisabledDetails: isSensorStatus(status.value, 'disabled'),
     hidden: hiddenColumns.value,
     writable: writable.value,
+    grouped: groupedView.value,
   }),
 );
 
@@ -152,9 +239,9 @@ watch([query, sensorTypes, status, pageSize, sort], () => {
   page.value = 1;
 });
 watch(
-  () => [items.value.length, pageSize.value] as const,
+  () => [entryCount.value, pageSize.value] as const,
   () => {
-    const maxPage = Math.max(1, Math.ceil(items.value.length / pageSize.value));
+    const maxPage = Math.max(1, Math.ceil(entryCount.value / pageSize.value));
     if (page.value > maxPage) page.value = maxPage;
   },
 );
@@ -167,8 +254,11 @@ function resetFilters() {
 }
 
 function exportExcel() {
-  // 导出当前筛选条件下的全部型号（不只当前页），顺序与表格排序一致。
-  const rows = sortedItems.value;
+  // 导出当前筛选的全部型号（不只当前页），顺序与表格一致。
+  // 「全部」展开每一组的成员，单元格用成员自己的值；状态筛选只导出命中的行。
+  const rows = groupedView.value
+    ? expandSensorGroups(groupedUnits.value).map((row) => row.item)
+    : sortedItems.value;
   if (rows.length === 0) {
     message.error('当前条件下没有可导出的型号');
     return;
@@ -192,7 +282,18 @@ function editItem(item: SensorItem) {
   formDialog.value?.open(item);
 }
 
+function deleteBlockedReason(item: SensorItem): string | undefined {
+  return sensorCurrentGuardsAlternates(store.sensors, item)
+    ? SENSOR_HAS_ALTERNATES
+    : undefined;
+}
+
 async function deleteItem(item: SensorItem) {
+  const blocked = deleteBlockedReason(item);
+  if (blocked) {
+    message.warning(blocked);
+    return;
+  }
   const ok = await confirmDelete('删除型号', `确认删除“${item.model}”吗？`);
   if (!ok) return;
   notifyResult(store.deleteSensor(item.id), '型号已删除');
@@ -223,10 +324,27 @@ function openRelatedSensor(item: SensorItem) {
 function showCurrent() {
   status.value = findSensorStatusName(statusNames.value, 'current') || '全部';
 }
+
+function replaceTitle(row: SensorTableRow) {
+  return row.parent !== row.item
+    ? `替换现用 ${row.parent.model}`
+    : '替换现用';
+}
+
+function openReplace(row: SensorTableRow) {
+  if (row.parent !== row.item) {
+    replaceDialog.value?.open(row.item, row.parent);
+    return;
+  }
+  replaceDialog.value?.open(row.item);
+}
 </script>
 
 <template>
-  <div class="selection-panel">
+  <div
+    class="selection-panel"
+    :class="{ 'sensor-models--grouped': status === '全部' }"
+  >
     <div class="selection-toolbar">
       <a-select
         v-model:value="status"
@@ -279,11 +397,12 @@ function showCurrent() {
     <a-table
       :columns="columns"
       :data-source="tableData"
-      row-key="id"
+      row-key="rowKey"
       :pagination="false"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '没有符合当前条件的型号' }"
-      :custom-row="writable ? rowClick(editItem) : undefined"
+      :custom-row="customRow"
+      :row-class-name="rowClassName"
       @change="
         (_p: unknown, _f: unknown, sorter: unknown) =>
           (sort = sortFromChange(sorter))
@@ -291,16 +410,19 @@ function showCurrent() {
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'status'">
-          <a-tag :color="statusColor(row.status)">{{ row.status }}</a-tag>
+          <a-tag :color="statusColor(row.item.status)">
+            {{ row.item.status }}
+          </a-tag>
         </template>
         <template v-else-if="column.key === 'sensorType'">
           <a-badge
-            v-if="row.sensorType"
+            v-if="row.item.sensorType"
             class="sensor-type"
-            :title="row.sensorType"
-            :color="typeAccent(row.sensorType)"
-            :text="row.sensorType"
+            :title="row.item.sensorType"
+            :color="typeAccent(row.item.sensorType)"
+            :text="row.item.sensorType"
           />
+          <span v-else-if="row.struck" class="sensor-struck">—</span>
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'partNumber'">
@@ -311,101 +433,113 @@ function showCurrent() {
               tooltips: ['复制料号', '已复制'],
             }"
           >
-            {{ value }}
+            <span v-if="row.struck" class="sensor-struck">{{ value }}</span>
+            <template v-else>{{ value }}</template>
           </a-typography-text>
+          <span v-else-if="row.struck" class="sensor-struck">—</span>
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'sop'">
           <a-button
-            v-if="row.sopId"
+            v-if="row.parent.sopId"
             class="sensor-file-link"
             type="link"
             size="small"
-            :title="`预览型录：${lookup.sopTitle(row.sopId)}`"
-            @click="openLinked('型录', row.sopId)"
+            :title="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
+            @click="openLinked('型录', row.parent.sopId)"
           >
             <template #icon><Eye :size="14" /></template>
-            {{ lookup.sopTitle(row.sopId) }}
+            {{ lookup.sopTitle(row.parent.sopId) }}
           </a-button>
           <span v-else>未关联</span>
         </template>
         <template v-else-if="column.key === 'model3d'">
           <a-button
-            v-if="row.model3dId"
+            v-if="row.parent.model3dId"
             class="sensor-file-link"
             type="link"
             size="small"
-            :title="`预览 3D：${lookup.model3dTitle(row.model3dId)}`"
-            @click="openLinked('3D', row.model3dId)"
+            :title="`预览 3D：${lookup.model3dTitle(row.parent.model3dId)}`"
+            @click="openLinked('3D', row.parent.model3dId)"
           >
             <template #icon><Eye :size="14" /></template>
-            {{ lookup.model3dTitle(row.model3dId) }}
+            {{ lookup.model3dTitle(row.parent.model3dId) }}
           </a-button>
           <span v-else>未关联</span>
         </template>
         <template v-else-if="column.key === 'replacedAt'">
-          {{ value || '—' }}
+          <span v-if="row.struck" class="sensor-struck">{{ value || '—' }}</span>
+          <template v-else>{{ value || '—' }}</template>
         </template>
         <template v-else-if="column.key === 'problemNote'">
-          {{ value || '—' }}
+          <span v-if="row.struck" class="sensor-struck">{{ value || '—' }}</span>
+          <template v-else>{{ value || '—' }}</template>
         </template>
         <template v-else-if="column.key === 'relation'">
           <a-button
-            v-if="relation(row)"
+            v-if="relation(row.item)"
+            class="sensor-relation-link"
             type="link"
             size="small"
-            @click="openRelatedSensor(row)"
+            @click="openRelatedSensor(row.item)"
           >
-            {{ relation(row) }}
+            {{ relation(row.item) }}
           </a-button>
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'actions'">
-          <a-space :size="4">
+          <div class="sensor-actions">
             <a-tooltip title="编辑">
               <a-button
                 type="text"
                 size="small"
                 aria-label="编辑"
-                @click="editItem(row)"
+                @click="editItem(row.item)"
               >
                 <template #icon><Pencil :size="14" /></template>
               </a-button>
             </a-tooltip>
             <a-tooltip
-              v-if="isSensorStatus(row.status, 'alternate')"
-              title="替换现用"
+              v-if="isSensorStatus(row.item.status, 'alternate')"
+              :title="replaceTitle(row)"
             >
               <a-button
                 type="text"
                 size="small"
-                aria-label="替换现用"
-                @click="replaceDialog?.open(row)"
+                :aria-label="replaceTitle(row)"
+                @click="openReplace(row)"
               >
                 <template #icon><Replace :size="14" /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip title="删除">
+            <span v-else class="sensor-actions__slot" aria-hidden="true" />
+            <a-tooltip :title="deleteBlockedReason(row.item) ?? '删除'">
               <a-button
                 type="text"
                 size="small"
                 danger
                 aria-label="删除"
-                @click="deleteItem(row)"
+                :disabled="Boolean(deleteBlockedReason(row.item))"
+                @click="deleteItem(row.item)"
               >
                 <template #icon><Trash2 :size="14" /></template>
               </a-button>
             </a-tooltip>
-          </a-space>
+          </div>
         </template>
-        <template v-else>{{ cellText(value) }}</template>
+        <template v-else>
+          <span v-if="row.struck" class="sensor-struck">{{
+            cellText(value)
+          }}</span>
+          <template v-else>{{ cellText(value) }}</template>
+        </template>
       </template>
     </a-table>
     <a-pagination
       v-model:current="page"
       v-model:page-size="pageSize"
       class="table-pagination"
-      :total="items.length"
+      :total="entryCount"
       v-bind="PAGINATION_PROPS"
     />
     <SensorLinkedPreview v-model="linkedPreview" />

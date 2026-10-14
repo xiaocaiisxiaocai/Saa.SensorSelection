@@ -7,8 +7,10 @@ import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import {
   allowedOrgLevels,
+  canHaveOrgChildren,
   canPlaceOrgLevel,
   collectDescendantLevels,
+  ORG_LEAF_MESSAGE,
   ORG_LEVEL_INVERTED_MESSAGE,
 } from '@/pages/system/org-tree';
 
@@ -39,6 +41,14 @@ const descendantLevels = computed(() =>
     ? collectDescendantLevels([...props.nodes], editingNode.value.id)
     : [],
 );
+// 有下级的组织不能改成课别（课别是最末一级）
+const hasChildren = computed(() =>
+  editingNode.value
+    ? props.nodes.some((node) => node.parentId === editingNode.value?.id)
+    : false,
+);
+const levelAllowed = (level: string | null | undefined) =>
+  !hasChildren.value || canHaveOrgChildren(level);
 const levelInverted = computed(
   () =>
     !canPlaceOrgLevel(parentNode.value?.level, form.level) ||
@@ -57,6 +67,9 @@ const levelOptions = computed(() => {
     ) {
       names.add(extra);
     }
+  }
+  for (const name of names) {
+    if (!levelAllowed(name)) names.delete(name);
   }
   if (form.level) names.add(form.level);
   return [...names].map((name) => ({ label: name, value: name }));
@@ -88,6 +101,10 @@ async function save() {
   validationAttempted.value = true;
   if (!form.name.trim()) {
     message.warning('请输入组织名称');
+    return;
+  }
+  if (!levelAllowed(form.level)) {
+    message.warning(ORG_LEAF_MESSAGE);
     return;
   }
   if (levelInverted.value) {
@@ -164,12 +181,16 @@ defineExpose({ openCreate, openEdit });
             label="层级"
             v-bind="
               fieldError(
-                validationAttempted && levelInverted
-                  ? ORG_LEVEL_INVERTED_MESSAGE
-                  : undefined,
+                !validationAttempted
+                  ? undefined
+                  : !levelAllowed(form.level)
+                    ? ORG_LEAF_MESSAGE
+                    : levelInverted
+                      ? ORG_LEVEL_INVERTED_MESSAGE
+                      : undefined,
               )
             "
-            extra="事业部 > 部门 > 课别，允许跳级"
+            extra="事业部 > 部门 > 课别，允许跳级；课别下面不能再有组织"
           >
             <a-select
               id="org-level"

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allowedOrgLevels,
   buildOrgTree,
+  canHaveOrgChildren,
   canPlaceOrgLevel,
   flattenOrgTree,
   toTreeSelectNodes,
@@ -58,5 +59,12 @@ describe('org-tree', () => {
     expect(allowedOrgLevels('课别')).toEqual(['课别']);
     expect(allowedOrgLevels('部门')).toEqual(['部门', '课别']);
     expect(allowedOrgLevels('事业部', ['部门'])).toEqual(['事业部', '部门']);
+  });
+
+  it('treats 课别 as the last level that cannot have children', () => {
+    expect(canHaveOrgChildren('课别')).toBe(false);
+    expect(canHaveOrgChildren('部门')).toBe(true);
+    expect(canHaveOrgChildren(null)).toBe(true);
+    expect(canHaveOrgChildren('自定义')).toBe(true);
   });
 });

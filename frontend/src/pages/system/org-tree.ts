@@ -55,6 +55,15 @@ const ORG_LEVEL_RANK: Record<string, number> = {
 export const ORG_LEVEL_INVERTED_MESSAGE =
   '层级不能倒挂（事业部 > 部门 > 课别，允许跳级）';
 
+/** 课别是最末一级：下面不能再有任何组织（不论子组织填什么层级） */
+export const ORG_LEAF_LEVEL = '课别';
+
+export const ORG_LEAF_MESSAGE = '课别是最末一级，下面不能再新建组织';
+
+export function canHaveOrgChildren(level: string | null | undefined): boolean {
+  return level?.trim() !== ORG_LEAF_LEVEL;
+}
+
 export function canPlaceOrgLevel(
   parentLevel: string | null | undefined,
   childLevel: string | null | undefined,

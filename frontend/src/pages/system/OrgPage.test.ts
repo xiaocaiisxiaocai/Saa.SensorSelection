@@ -72,16 +72,38 @@ describe('OrgPage', () => {
     wrapper.unmount();
   });
 
-  it('only offers 课别 when adding a child under a section', async () => {
+  it('disables adding a child under a section, since 课别 is the last level', async () => {
     const wrapper = await mountPage();
     const addChild = wrapper.findAll('[aria-label="新建子节点"]');
+    expect(addChild[0]?.attributes('disabled')).toBeUndefined();
+    expect(addChild[1]?.attributes('disabled')).toBeDefined();
     await addChild[1]?.trigger('click');
+    await nextTick();
+    expect(document.querySelector('.ant-modal')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('offers all three levels under a division', async () => {
+    const wrapper = await mountPage();
+    await wrapper.findAll('[aria-label="新建子节点"]')[0]?.trigger('click');
     await nextTick();
 
     const levels = formSelects(wrapper)[0]
       ?.props('options')
       .map((option: { value: unknown }) => String(option.value));
-    expect(levels).toEqual(['课别']);
+    expect(levels).toEqual(['事业部', '部门', '课别']);
+    wrapper.unmount();
+  });
+
+  it('does not offer 课别 when editing an organization that has children', async () => {
+    const wrapper = await mountPage();
+    await wrapper.findAll('[aria-label="编辑"]')[0]?.trigger('click');
+    await nextTick();
+
+    const levels = formSelects(wrapper)[0]
+      ?.props('options')
+      .map((option: { value: unknown }) => String(option.value));
+    expect(levels).not.toContain('课别');
     wrapper.unmount();
   });
 

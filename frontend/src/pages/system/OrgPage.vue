@@ -13,7 +13,12 @@ import {
   useTablePagination,
 } from '@/pages/shared/table';
 import OrgFormDialog from '@/pages/system/org/OrgFormDialog.vue';
-import { buildOrgTree, flattenOrgTree } from '@/pages/system/org-tree';
+import {
+  buildOrgTree,
+  canHaveOrgChildren,
+  flattenOrgTree,
+  ORG_LEAF_MESSAGE,
+} from '@/pages/system/org-tree';
 import { useAccess } from '@/stores/auth';
 
 import '../shared/selection-page.css';
@@ -152,11 +157,16 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         </template>
         <template v-else-if="column.key === 'actions'">
           <a-space :size="4">
-            <a-tooltip title="新建子节点">
+            <a-tooltip
+              :title="
+                canHaveOrgChildren(row.level) ? '新建子节点' : ORG_LEAF_MESSAGE
+              "
+            >
               <a-button
                 type="text"
                 size="small"
                 aria-label="新建子节点"
+                :disabled="!canHaveOrgChildren(row.level)"
                 @click.stop="formDialog?.openCreate(row.id)"
               >
                 <template #icon><Plus :size="14" /></template>

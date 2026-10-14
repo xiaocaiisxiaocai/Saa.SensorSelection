@@ -56,6 +56,10 @@ public class OrgUnitService(AppDbContext db)
             {
                 return RbacResult<OrgUnitListItem>.Fail("父级组织不存在");
             }
+            if (!OrgLevelRules.CanHaveChildren(parent.Level))
+            {
+                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
+            }
             if (!OrgLevelRules.CanPlace(parent.Level, request.Level))
             {
                 return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.InvertedMessage);
@@ -105,6 +109,10 @@ public class OrgUnitService(AppDbContext db)
             {
                 return RbacResult<OrgUnitListItem>.Fail("父级不能是自己的子级（会造成循环）");
             }
+            if (!OrgLevelRules.CanHaveChildren(parent.Level))
+            {
+                return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
+            }
             if (!OrgLevelRules.CanPlace(parent.Level, request.Level))
             {
                 return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.InvertedMessage);
@@ -112,6 +120,11 @@ public class OrgUnitService(AppDbContext db)
         }
 
         var level = string.IsNullOrWhiteSpace(request.Level) ? null : request.Level.Trim();
+        if (!OrgLevelRules.CanHaveChildren(level)
+            && await db.OrgUnits.AnyAsync(item => item.ParentId == id, ct))
+        {
+            return RbacResult<OrgUnitListItem>.Fail(OrgLevelRules.LeafMessage);
+        }
         foreach (var descendantLevel in await DescendantLevelsAsync(id, ct))
         {
             if (!OrgLevelRules.CanPlace(level, descendantLevel))

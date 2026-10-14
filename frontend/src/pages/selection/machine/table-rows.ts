@@ -6,7 +6,6 @@ import type {
   ProcessStepItem,
   SensorItem,
 } from '@/domain';
-import { sortOrderOf, type TableSortState } from '@/pages/shared/table';
 
 export interface MachineTableRow extends MachineSectionRow {
   displayId: string;
@@ -154,15 +153,13 @@ type Column = TableColumnType<MachineTableRow>;
 
 /**
  * 分区表格的列。结构分区一条记录按传感器展开成多行，除传感器两列外都合并单元格，
- * 示意图列再把相邻同图的记录合并（合并后 antd 不能排序，所以结构分区不提供排序）；
- * 注意事项分区按分类 / 名称排序。
+ * 示意图列再把相邻同图的记录合并。行序保持仓库顺序，表头不提供排序。
  */
 export function sectionColumns(options: {
   structure: boolean;
-  sort: TableSortState | null;
   writable: boolean;
 }): Column[] {
-  const { structure, sort } = options;
+  const { structure } = options;
   const merged: Pick<Column, 'customCell'> = structure
     ? { customCell: (row) => ({ rowSpan: row.groupStart ? row.groupSize : 0 }) }
     : {};
@@ -187,21 +184,21 @@ export function sectionColumns(options: {
           key: 'processStepName',
           dataIndex: 'processStepName',
           title: '工艺制程',
-          width: 110,
+          width: 136,
           ...merged,
         },
         {
           key: 'boardCharacteristicName',
           dataIndex: 'boardCharacteristicName',
           title: '板件特性',
-          width: 120,
+          width: 144,
           ...merged,
         },
         {
           key: 'sensorType',
           dataIndex: 'sensorType',
           title: '传感器类型',
-          width: 116,
+          width: 152,
         },
         { key: 'spec', dataIndex: 'spec', title: '规格', width: 220 },
         {
@@ -233,16 +230,12 @@ export function sectionColumns(options: {
           title: '注意分类',
           width: 120,
           fixed: 'left',
-          sorter: true,
-          sortOrder: sortOrderOf(sort, 'role'),
         },
         {
           key: 'name',
           dataIndex: 'name',
           title: '事项名称',
           width: 140,
-          sorter: true,
-          sortOrder: sortOrderOf(sort, 'name'),
         },
         { key: 'desc', dataIndex: 'desc', title: '说明', width: 180 },
         { key: 'note', dataIndex: 'note', title: '备注', width: 120 },
@@ -262,14 +255,16 @@ export function sectionColumns(options: {
 export interface SectionRowFilters {
   query: string;
   sensorTypes: readonly (string | number)[];
-  machineModelId: string | number | null;
-  processStepId: string | number | null;
-  boardCharacteristicId: string | number | null;
+  /** 空数组表示不限。多选命中任一即可。 */
+  machineModelIds: readonly (string | number)[];
+  processStepIds: readonly (string | number)[];
+  boardCharacteristicIds: readonly (string | number)[];
 }
 
 /**
- * 按筛选条件过滤分区记录。下拉筛选只对结构分区生效；关键字在结构分区里
+ * 按筛选条件过滤分区记录。表头筛选只对结构分区生效；关键字在结构分区里
  * 也匹配机型 / 工艺制程 / 板件特性名称和关联传感器的类型、品牌型号、规格。
+ * 机型、工艺制程、板件特性是多选，命中任一即可；空数组表示不限。
  */
 export function filterSectionRows(
   rows: readonly MachineSectionRow[],
@@ -296,8 +291,12 @@ export function filterSectionRows(
     const step = lookup.processSteps.find((candidate) => candidate.id === id);
     return step ? `${step.layer} · ${step.name}` : '';
   };
-  const matchesId = (filter: string | number | null, id: number | null) =>
-    filter === null || id === Number(filter);
+  const matchesAny = (
+    selected: readonly (string | number)[],
+    id: number | null,
+  ) =>
+    selected.length === 0 ||
+    (id !== null && selected.some((item) => Number(item) === id));
 
   return rows.filter((row) => {
     if (structure) {
@@ -310,9 +309,9 @@ export function filterSectionRows(
         return false;
       }
       if (
-        !matchesId(filters.machineModelId, row.machineModelId) ||
-        !matchesId(filters.processStepId, row.processStepId) ||
-        !matchesId(filters.boardCharacteristicId, row.boardCharacteristicId)
+        !matchesAny(filters.machineModelIds, row.machineModelId) ||
+        !matchesAny(filters.processStepIds, row.processStepId) ||
+        !matchesAny(filters.boardCharacteristicIds, row.boardCharacteristicId)
       ) {
         return false;
       }

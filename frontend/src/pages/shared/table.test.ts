@@ -3,69 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   rowClick,
   scrollX,
-  sortFromChange,
-  sortOrderOf,
+  setColumnFilter,
   PAGINATION_PROPS,
-  sortRows,
   useTablePagination,
 } from './table';
 
 describe('table helpers', () => {
-  it('sorts the whole dataset so paginated tables can slice after sorting', () => {
-    const rows = [{ n: 'C' }, { n: 'A' }, { n: 'B' }, { n: 'D' }];
-
-    // 页面必须先排完整数据再切片：先切后排会把 D 留在第一页。
-    const firstPage = sortRows(rows, { key: 'n', order: 'ascend' }).slice(0, 2);
-
-    expect(firstPage.map((row) => row.n)).toEqual(['A', 'B']);
-  });
-
-  it('orders numbers numerically rather than as text', () => {
-    const rows = [{ sort: 10 }, { sort: 2 }, { sort: 1 }];
-
-    expect(
-      sortRows(rows, { key: 'sort', order: 'ascend' }).map((row) => row.sort),
-    ).toEqual([1, 2, 10]);
-  });
-
-  it('orders numeric prefixes inside Chinese labels naturally', () => {
-    const rows = [{ name: '10 入料' }, { name: '2 曝光' }, { name: '1 上板' }];
-
-    expect(
-      sortRows(rows, { key: 'name', order: 'ascend' }).map((row) => row.name),
-    ).toEqual(['1 上板', '2 曝光', '10 入料']);
-    expect(
-      sortRows(rows, { key: 'name', order: 'descend' }).map((row) => row.name),
-    ).toEqual(['10 入料', '2 曝光', '1 上板']);
-  });
-
-  it('leaves the original array untouched', () => {
-    const rows = [{ n: 'B' }, { n: 'A' }];
-
-    sortRows(rows, { key: 'n', order: 'ascend' });
-
-    expect(rows.map((row) => row.n)).toEqual(['B', 'A']);
-  });
-
-  it('maps a-table sorter changes to controlled sort state', () => {
-    expect(sortFromChange({ columnKey: 'name', order: 'ascend' })).toEqual({
-      key: 'name',
-      order: 'ascend',
-    });
-    expect(sortFromChange([{ field: 'code', order: 'descend' }])).toEqual({
-      key: 'code',
-      order: 'descend',
-    });
-    // 第三次点击表头取消排序时 order 为 undefined
-    expect(sortFromChange({ columnKey: 'name', order: undefined })).toBeNull();
-    expect(sortOrderOf({ key: 'name', order: 'descend' }, 'name')).toBe(
-      'descend',
-    );
-    expect(sortOrderOf({ key: 'name', order: 'descend' }, 'code')).toBeNull();
-  });
-
   it('shows a dash for empty cells', () => {
     expect(cellText('')).toBe('—');
     expect(cellText('  ')).toBe('—');
@@ -155,6 +103,44 @@ describe('useTablePagination', () => {
     expect(render('prev')).toBe('上一页');
     expect(render('next')).toBe('下一页');
     expect(render('page')).toBeUndefined();
+  });
+
+  it('builds a controlled header filter and ignores a repeated selection', () => {
+    const idle = columnFilter({
+      options: [
+        { label: '现用', value: '现用' },
+        { label: '备选', value: '备选' },
+      ],
+      value: [],
+    });
+    expect(idle.filteredValue).toBeNull();
+    expect(idle.filterMultiple).toBe(true);
+    expect('filterSearch' in idle).toBe(false);
+
+    const active = columnFilter({
+      options: [{ label: '登录', value: 'auth.login' }],
+      value: ['auth.login'],
+      multiple: false,
+      search: true,
+    });
+    expect(active.filteredValue).toEqual(['auth.login']);
+    expect(active.filterMultiple).toBe(false);
+    expect(active.filterSearch).toBe(true);
+    expect(
+      columnFilterValues({ action: active.filteredValue }, 'action'),
+    ).toEqual(['auth.login']);
+    expect(columnFilterValues({ action: null }, 'missing')).toEqual([]);
+    expect(columnFilterValues(undefined, 'action')).toEqual([]);
+    expect(isColumnFilterChange({ action: 'filter' })).toBe(true);
+    expect(isColumnFilterChange({ action: 'paginate' })).toBe(false);
+    expect(isColumnFilterChange(undefined)).toBe(false);
+
+    const current = ref(['现用']);
+    const same = current.value;
+    setColumnFilter(current, ['现用']);
+    expect(current.value).toBe(same);
+    setColumnFilter(current, ['备选', '停用']);
+    expect(current.value).toEqual(['备选', '停用']);
   });
 
   it('drives a-list paging through the config callback', () => {

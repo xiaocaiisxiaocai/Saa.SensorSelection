@@ -8,12 +8,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { dialogs } from '@/pages/shared/confirm';
 import {
-  chooseSelect,
+  chooseColumnFilter,
   clickTab,
   clickTreeNode,
   columnWidths,
   findButton,
-  findSelect,
+  findColumn,
   tabCount,
   tagColor,
 } from '@/test-helpers';
@@ -225,7 +225,7 @@ describe('CustomerPage', () => {
     });
     await flushPromises();
 
-    await chooseSelect(wrapper, '要求来源', sources.slice(0, 2));
+    await chooseColumnFilter(wrapper, '来源', sources.slice(0, 2));
 
     expect(wrapper.text()).toContain('多来源筛选记录-1');
     expect(wrapper.text()).toContain('多来源筛选记录-2');
@@ -311,35 +311,47 @@ describe('CustomerPage', () => {
     });
     await flushPromises();
 
-    await chooseSelect(wrapper, '要求分类', requirementTypes.slice(0, 2));
+    await chooseColumnFilter(wrapper, '要求分类', requirementTypes.slice(0, 2));
     expect(wrapper.text()).toContain('要求分类多选-1');
     expect(wrapper.text()).toContain('要求分类多选-2');
     expect(wrapper.text()).not.toContain('要求分类多选-3');
+    findColumn(wrapper, '要求分类').table.vm.$emit(
+      'change',
+      { current: 1 },
+      { type: null, source: null },
+      {},
+      { action: 'paginate' },
+    );
+    await flushPromises();
+    expect(findColumn(wrapper, '要求分类').column.filteredValue).toEqual(
+      requirementTypes.slice(0, 2),
+    );
+    expect(wrapper.text()).not.toContain('要求分类多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findSelect(wrapper, '要求分类').props('value')).toEqual([]);
+    expect(findColumn(wrapper, '要求分类').column.filteredValue).toBeNull();
     expect(wrapper.text()).toContain('要求分类多选-3');
 
     await clickTab(wrapper, '制程注意事项');
-    await chooseSelect(wrapper, '制程分类', processTypes.slice(0, 2));
+    await chooseColumnFilter(wrapper, '制程分类', processTypes.slice(0, 2));
     expect(wrapper.text()).toContain('制程分类多选-1');
     expect(wrapper.text()).toContain('制程分类多选-2');
     expect(wrapper.text()).not.toContain('制程分类多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findSelect(wrapper, '制程分类').props('value')).toEqual([]);
+    expect(findColumn(wrapper, '制程分类').column.filteredValue).toBeNull();
     expect(wrapper.text()).toContain('制程分类多选-3');
 
     await clickTab(wrapper, '厂外反馈问题项');
-    chooseSelect(wrapper, '问题分类', feedbackTypes.slice(0, 2));
-    await chooseSelect(wrapper, '处理状态', feedbackStatuses.slice(0, 2));
+    await chooseColumnFilter(wrapper, '问题分类', feedbackTypes.slice(0, 2));
+    await chooseColumnFilter(wrapper, '处理状态', feedbackStatuses.slice(0, 2));
     expect(wrapper.text()).toContain('反馈筛选多选-1');
     expect(wrapper.text()).toContain('反馈筛选多选-2');
     expect(wrapper.text()).not.toContain('反馈筛选多选-3');
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findSelect(wrapper, '问题分类').props('value')).toEqual([]);
-    expect(findSelect(wrapper, '处理状态').props('value')).toEqual([]);
+    expect(findColumn(wrapper, '问题分类').column.filteredValue).toBeNull();
+    expect(findColumn(wrapper, '处理状态').column.filteredValue).toBeNull();
     expect(wrapper.text()).toContain('反馈筛选多选-3');
 
     wrapper.unmount();
@@ -354,14 +366,14 @@ describe('CustomerPage', () => {
     expect(processWidths['备注']).toBe(130);
     expect(processWidths['操作']).toBe(96);
     expect(processWidths['制程作用']).toBe(150);
-    expect(processWidths['制程分类']).toBe(104);
+    expect(processWidths['制程分类']).toBe(128);
     expect(processWidths['制程特性']).toBe(150);
     expect(processWidths['sensor使用注意事项']).toBe(190);
 
     await clickTab(wrapper, '厂外反馈问题项');
     const feedbackWidths = readWidths();
     expect(feedbackWidths['反馈时间']).toBe(120);
-    expect(feedbackWidths['处理状态']).toBe(112);
+    expect(feedbackWidths['处理状态']).toBe(136);
     expect(feedbackWidths['操作']).toBe(96);
     expect(feedbackWidths['改善对策']).toBe(205);
     expect(feedbackWidths['适用机型']).toBe(90);

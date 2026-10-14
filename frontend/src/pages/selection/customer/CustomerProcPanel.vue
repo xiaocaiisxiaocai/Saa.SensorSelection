@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumnType } from 'ant-design-vue';
+import type { TableColumnType, TablePaginationConfig } from 'ant-design-vue';
 import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -7,10 +7,14 @@ import type { CustomerProcItem } from '@/domain';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   rowClick,
   scrollX,
-  sortBy,
+  setColumnFilter,
   useTablePagination,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -53,15 +57,17 @@ const hasActiveFilters = computed(
 );
 const columns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
-    // 104：最长字典值只要 80px，但表头「制程分类」加排序图标要 86px，
-    // 同时和另外两个 Tab 的首列保持相近宽度。
+    // 128：标题、漏斗和最长字典值（约 80px）放在一行里。
     {
       key: 'type',
       dataIndex: 'type',
       title: '制程分类',
-      width: 104,
+      width: 128,
       fixed: 'left',
-      sorter: sortBy('type'),
+      ...columnFilter({
+        options: typeOptions.value,
+        value: typeFilters.value,
+      }),
     },
     { key: 'role', dataIndex: 'role', title: '制程作用', width: 150 },
     { key: 'feature', dataIndex: 'feature', title: '制程特性', width: 150 },
@@ -110,22 +116,23 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   () => filtered.value.length,
   [query, typeFilters, () => props.entityName],
 );
+
+function onTableChange(
+  next: TablePaginationConfig,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (isColumnFilterChange(extra)) {
+    setColumnFilter(typeFilters, columnFilterValues(filters, 'type'));
+  }
+  onPageChange(next);
+}
 </script>
 
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <a-select
-        v-model:value="typeFilters"
-        mode="multiple"
-        class="selection-toolbar__filter"
-        :options="typeOptions"
-        placeholder="制程分类"
-        aria-label="制程分类筛选"
-        :max-tag-count="1"
-        allow-clear
-        option-filter-prop="label"
-      />
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -161,7 +168,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
             : '暂无注意事项',
       }"
       :custom-row="writable ? rowClick(editItem) : undefined"
-      @change="onPageChange"
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'actions'">

@@ -7,13 +7,14 @@ import type { ProcessStepItem } from '@/domain';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   PAGINATION_PROPS,
   rowClick,
   scrollX,
-  sortFromChange,
-  sortOrderOf,
-  sortRows,
-  type TableSortState,
+  setColumnFilter,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -28,10 +29,9 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
 const stepDialog = ref<InstanceType<typeof ProcessStepDialog>>();
-const layerFilter = ref<string | null>(null);
+const layerFilters = ref<string[]>([]);
 const page = ref(1);
 const pageSize = ref(20);
-const sort = ref<TableSortState | null>(null);
 
 const layerOptions = computed(() =>
   store
@@ -39,14 +39,15 @@ const layerOptions = computed(() =>
     .map((name) => ({ label: name, value: name })),
 );
 const hasActiveFilters = computed(
-  () => Boolean(query.value.trim()) || Boolean(layerFilter.value),
+  () => Boolean(query.value.trim()) || layerFilters.value.length > 0,
 );
 
 const filteredItems = computed(() => {
   const value = query.value.trim().toLocaleLowerCase('zh-CN');
   return store.processSteps.filter(
     (item) =>
-      (!layerFilter.value || item.layer === layerFilter.value) &&
+      (layerFilters.value.length === 0 ||
+        layerFilters.value.includes(item.layer)) &&
       (!value ||
         [item.layer, item.name, item.role, item.feature, item.note]
           .join(' ')
@@ -55,12 +56,9 @@ const filteredItems = computed(() => {
   );
 });
 
-// 排序必须发生在分页切片之前，否则只会把当前这一页重排。
-const sortedItems = computed(() => sortRows(filteredItems.value, sort.value));
-
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
-  return sortedItems.value.slice(start, start + pageSize.value);
+  return filteredItems.value.slice(start, start + pageSize.value);
 });
 
 const columns = computed<TableColumnType[]>(() => {
@@ -69,10 +67,12 @@ const columns = computed<TableColumnType[]>(() => {
       key: 'layer',
       dataIndex: 'layer',
       title: '制程',
-      width: 88,
+      width: 120,
       fixed: 'left',
-      sorter: true,
-      sortOrder: sortOrderOf(sort.value, 'layer'),
+      ...columnFilter({
+        options: layerOptions.value,
+        value: layerFilters.value,
+      }),
     },
     // 固定宽度：工艺制程名很短（实测最长 107px），设成弹性列会按比例吃掉
     // 大量多余空间（实测占到 375px），把宽度从真正需要的「作用」列抢走。
@@ -81,8 +81,6 @@ const columns = computed<TableColumnType[]>(() => {
       dataIndex: 'name',
       title: '工艺制程',
       width: 160,
-      sorter: true,
-      sortOrder: sortOrderOf(sort.value, 'name'),
     },
     { key: 'role', dataIndex: 'role', title: '作用', width: 160 },
     { key: 'feature', dataIndex: 'feature', title: '制程特性', width: 160 },
@@ -94,7 +92,7 @@ const columns = computed<TableColumnType[]>(() => {
   return cols;
 });
 
-watch([query, layerFilter, pageSize, sort], () => {
+watch([query, layerFilters, pageSize], () => {
   page.value = 1;
 });
 
@@ -111,8 +109,21 @@ watch(
 
 function resetFilters() {
   query.value = '';
-  layerFilter.value = null;
+  layerFilters.value = [];
   page.value = 1;
+}
+
+function onTableChange(
+  _pagination: unknown,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (!isColumnFilterChange(extra)) return;
+  setColumnFilter(
+    layerFilters,
+    columnFilterValues(filters, 'layer').map(String),
+  );
 }
 
 function editItem(item: ProcessStepItem) {
@@ -129,14 +140,6 @@ async function deleteItem(item: ProcessStepItem) {
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <a-select
-        v-model:value="layerFilter"
-        class="selection-toolbar__filter"
-        :options="layerOptions"
-        placeholder="制程分层"
-        aria-label="制程分层筛选"
-        allow-clear
-      />
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -167,13 +170,12 @@ async function deleteItem(item: ProcessStepItem) {
       :scroll="{ x: scrollX(columns) }"
       :locale="{
         emptyText:
-          query.trim() || layerFilter ? '没有匹配的工艺制程' : '暂无工艺制程',
+          query.trim() || layerFilters.length
+            ? '没有匹配的工艺制程'
+            : '暂无工艺制程',
       }"
       :custom-row="writable ? rowClick(editItem) : undefined"
-      @change="
-        (_p: unknown, _f: unknown, sorter: unknown) =>
-          (sort = sortFromChange(sorter))
-      "
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'actions'">

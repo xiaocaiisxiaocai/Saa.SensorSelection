@@ -13,16 +13,19 @@ import { dialogs } from '@/pages/shared/confirm';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import {
+  chooseColumnFilter,
   chooseSegment,
   clickTreeNode,
   columnWidths,
   findButton,
+  findColumn,
   runTreeAction,
   tabCount,
   treeNodes,
 } from '@/test-helpers';
 import EntityTree from './EntityTree.vue';
-import MachineGlobalSearch from './machine/MachineGlobalSearch.vue';
+import MachineGlobalSearchFilters from './machine/MachineGlobalSearchFilters.vue';
+import MachineGlobalSearchResults from './machine/MachineGlobalSearchResults.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
 import { resolveMachineSelection } from './machine/machine-selection';
 import MachinePage from './MachinePage.vue';
@@ -184,9 +187,20 @@ describe('MachinePage', () => {
       wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
       '条件查找',
     );
-    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
-    expect(globalSearch.text()).not.toContain('上层制程');
-    expect(globalSearch.text()).not.toContain('全部制程');
+    const split = wrapper.get('.selection-split');
+    expect(split.classes()).not.toContain('selection-split--global-search');
+    expect(
+      split.get('.machine-source-stack').find('.machine-global-search-filters')
+        .exists(),
+    ).toBe(true);
+    expect(
+      split.find('.machine-source-stack .machine-global-search-results').exists(),
+    ).toBe(false);
+    expect(split.find('.machine-global-search-results').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('上层制程');
+    expect(wrapper.text()).not.toContain('全部制程');
+    expect(wrapper.text()).not.toContain('按条件查找全部结构');
+    expect(wrapper.text()).toMatch(/找到 \d+ 个结构/);
     wrapper.unmount();
   });
 
@@ -213,23 +227,33 @@ describe('MachinePage', () => {
       '条件查找',
     );
 
-    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
+    const filters = wrapper.getComponent(MachineGlobalSearchFilters);
+    const results = wrapper.getComponent(MachineGlobalSearchResults);
+    expect(findButton(wrapper, '查找')).toBeUndefined();
+    expect(wrapper.text()).not.toContain('按条件查找全部结构');
+    expect(results.text()).toMatch(/找到 \d+ 个结构/);
     // 已选条件全部显示，不折叠成「+N」
     expect(
-      globalSearch
+      filters
         .findAllComponents({ name: 'ASelect' })
         .every((field) => field.props('maxTagCount') === undefined),
     ).toBe(true);
-    const machineField = globalSearch
+    const machineField = filters
       .findAllComponents({ name: 'ASelect' })
       .find((component) => component.props('placeholder') === '选择适用机型');
     machineField?.vm.$emit('update:value', [machineModel.id]);
     await flushPromises();
-    await findButton(globalSearch, '查找')?.trigger('click');
-    await flushPromises();
 
-    expect(globalSearch.text()).toContain('找到 1 个结构');
-    const result = globalSearch
+    expect(results.text()).toContain('找到 1 个结构');
+    const query = inputBy(filters, '搜索结构名称、功能作用或传感器');
+    query?.vm.$emit('update:value', '不会命中的关键词');
+    await flushPromises();
+    expect(results.text()).toContain('找到 0 个结构');
+    query?.vm.$emit('update:value', '');
+    await flushPromises();
+    expect(results.text()).toContain('找到 1 个结构');
+
+    const result = results
       .findAll('button')
       .find((button) => button.text().includes('查看结构'));
     expect(result).toBeDefined();
@@ -245,17 +269,18 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('enables global search when only a board characteristic is selected', async () => {
+  it('filters immediately when only a board characteristic is selected', async () => {
     const wrapper = await mountPage(true, true);
     await chooseSegment(
       wrapper.findAllComponents({ name: 'ASegmented' })[1]!,
       '条件查找',
     );
 
-    const globalSearch = wrapper.getComponent(MachineGlobalSearch);
-    const searchButton = () => findButton(globalSearch, '查找');
-    expect(searchButton()?.attributes('disabled')).toBeDefined();
-    const boardField = globalSearch
+    const resetButton = () => findButton(wrapper, '重置');
+    expect(findButton(wrapper, '查找')).toBeUndefined();
+    expect(resetButton()?.attributes('disabled')).toBeDefined();
+    const filters = wrapper.getComponent(MachineGlobalSearchFilters);
+    const boardField = filters
       .findAllComponents({ name: 'ASelect' })
       .find((component) => component.props('placeholder') === '选择板件特性');
     const board = useSelectionStore().dictionaryItems(
@@ -264,7 +289,15 @@ describe('MachinePage', () => {
     boardField?.vm.$emit('update:value', [board?.id]);
     await flushPromises();
 
-    expect(searchButton()?.attributes('disabled')).toBeUndefined();
+    expect(resetButton()?.attributes('disabled')).toBeUndefined();
+    expect(wrapper.get('.machine-global-search-results').text()).toMatch(
+      /找到 \d+ 个结构/,
+    );
+
+    await resetButton()?.trigger('click');
+    await flushPromises();
+    expect(boardField?.props('value')).toEqual([]);
+    expect(resetButton()?.attributes('disabled')).toBeDefined();
     wrapper.unmount();
   });
 
@@ -601,28 +634,24 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const processFilter = panel
-      .findAllComponents({ name: 'ASelect' })
-      .find((component) => component.props('placeholder') === '工艺制程');
-    expect(processFilter).toBeDefined();
-    expect(processFilter?.props('showSearch')).toBe(true);
-    expect(processFilter?.props('allowClear')).toBe(true);
-    expect(processFilter?.props('options')).toEqual(
+    const processFilter = findColumn(panel, '工艺制程').column;
+    expect(processFilter.filterSearch).toBe(true);
+    expect(processFilter.filterMultiple).toBe(true);
+    expect(processFilter.filters).toEqual(
       selectionStore.processSteps.map((item) => ({
-        label: `${item.layer} · ${item.name}`,
+        text: `${item.layer} · ${item.name}`,
         value: item.id,
       })),
     );
 
-    processFilter?.vm.$emit('update:value', secondProcessStep.id);
-    await flushPromises();
+    await chooseColumnFilter(panel, '工艺制程', [secondProcessStep.id]);
 
     expect(panel.text()).toContain('制程下拉-匹配');
     expect(panel.text()).not.toContain('制程下拉-不匹配');
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(processFilter?.props('value')).toBeNull();
+    expect(findColumn(panel, '工艺制程').column.filteredValue).toBeNull();
     expect(panel.text()).toContain('制程下拉-不匹配');
     wrapper.unmount();
   });
@@ -678,51 +707,40 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const selects = panel.findAllComponents({ name: 'ASelect' });
-    const machineModelFilter = selects.find(
-      (component) => component.props('placeholder') === '机型',
-    );
-    const boardCharacteristicFilter = selects.find(
-      (component) => component.props('placeholder') === '板件特性',
-    );
+    const machineModelFilter = findColumn(panel, '机型').column;
+    const boardCharacteristicFilter = findColumn(panel, '板件特性').column;
 
-    expect(machineModelFilter).toBeDefined();
-    expect(machineModelFilter?.props('showSearch')).toBe(true);
-    expect(machineModelFilter?.props('allowClear')).toBe(true);
-    expect(machineModelFilter?.props('options')).toEqual(
+    expect(machineModelFilter.filterSearch).toBe(true);
+    expect(machineModelFilter.filterMultiple).toBe(true);
+    expect(machineModelFilter.filters).toEqual(
       selectionStore.dictionaryItems('machine-model').map((item) => ({
-        label: item.name,
+        text: item.name,
         value: item.id,
       })),
     );
-    expect(boardCharacteristicFilter).toBeDefined();
-    expect(boardCharacteristicFilter?.props('showSearch')).toBe(true);
-    expect(boardCharacteristicFilter?.props('allowClear')).toBe(true);
-    expect(boardCharacteristicFilter?.props('options')).toEqual(
+    expect(boardCharacteristicFilter.filterSearch).toBe(true);
+    expect(boardCharacteristicFilter.filters).toEqual(
       selectionStore.dictionaryItems('board-characteristic').map((item) => ({
-        label: item.name,
+        text: item.name,
         value: item.id,
       })),
     );
+    expect(findColumn(panel, '传感器类型').column.filterSearch).toBe(true);
+    expect(findColumn(panel, '工艺制程').column.filterSearch).toBe(true);
 
-    machineModelFilter?.vm.$emit('update:value', secondMachineModel.id);
-    await flushPromises();
+    await chooseColumnFilter(panel, '机型', [secondMachineModel.id]);
     expect(panel.text()).toContain('字典筛选-第二项');
     expect(panel.text()).not.toContain('字典筛选-第一项');
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
-    boardCharacteristicFilter?.vm.$emit(
-      'update:value',
-      firstBoardCharacteristic.id,
-    );
-    await flushPromises();
+    await chooseColumnFilter(panel, '板件特性', [firstBoardCharacteristic.id]);
     expect(panel.text()).toContain('字典筛选-第一项');
     expect(panel.text()).not.toContain('字典筛选-第二项');
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(machineModelFilter?.props('value')).toBeNull();
-    expect(boardCharacteristicFilter?.props('value')).toBeNull();
+    expect(findColumn(panel, '机型').column.filteredValue).toBeNull();
+    expect(findColumn(panel, '板件特性').column.filteredValue).toBeNull();
     expect(panel.text()).toContain('字典筛选-第一项');
     expect(panel.text()).toContain('字典筛选-第二项');
     wrapper.unmount();
@@ -732,7 +750,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true, true);
     const widths = Object.values(columnWidths(wrapper));
 
-    expect(widths).toEqual([104, 100, 110, 120, 116, 220, 120, 96, 152, 72]);
+    expect(widths).toEqual([104, 100, 136, 144, 152, 220, 120, 96, 152, 72]);
 
     wrapper.unmount();
   });
@@ -863,13 +881,12 @@ describe('MachinePage', () => {
     });
     await flushPromises();
 
-    const typeFilter = selectBy(panel, '传感器类型')!;
-    expect(typeFilter).toBeDefined();
-    typeFilter.vm.$emit(
-      'update:value',
+    expect(findColumn(panel, '传感器类型').column.filterSearch).toBe(true);
+    await chooseColumnFilter(
+      panel,
+      '传感器类型',
       sensors.slice(0, 2).map((sensor) => sensor.sensorType),
     );
-    await flushPromises();
 
     expect(wrapper.text()).toContain('机型类型多选-1');
     expect(wrapper.text()).toContain('机型类型多选-2');
@@ -877,7 +894,7 @@ describe('MachinePage', () => {
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(typeFilter.props('value')).toEqual([]);
+    expect(findColumn(panel, '传感器类型').column.filteredValue).toBeNull();
     expect(wrapper.text()).toContain('机型类型多选-3');
     wrapper.unmount();
   });

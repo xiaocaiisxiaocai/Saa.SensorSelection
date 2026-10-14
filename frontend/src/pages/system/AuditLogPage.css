@@ -1,11 +1,8 @@
 .audit-toolbar {
   display: grid;
 
-  /* h1 现在是 visually-hidden（绝对定位，不参与网格布局），
-     所以这里少了一列——直接从筛选字段开始。 */
-  grid-template-columns:
-    minmax(8rem, 1fr) minmax(8rem, 1fr) minmax(6rem, 0.75fr)
-    minmax(17rem, 1.5fr) auto;
+  /* h1 是 visually-hidden，不参与网格。操作类型和结果在表头漏斗里。 */
+  grid-template-columns: minmax(12rem, 1fr) minmax(17rem, 1.5fr) auto;
   gap: var(--space-2);
 }
 

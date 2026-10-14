@@ -7,10 +7,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { useSelectionStore } from '@/stores/selection';
 import { useAuthStore } from '@/stores/auth';
 import {
-  chooseSelect,
+  chooseColumnFilter,
   clickTab,
   columnWidths,
-  findSelect,
+  findColumn,
 } from '@/test-helpers';
 
 import ProcessPage from './ProcessPage.vue';
@@ -122,7 +122,7 @@ describe('ProcessPage', () => {
     const wrapper = await mountPage();
     await clickTab(wrapper, '工艺制程');
 
-    expect(columnWidths(wrapper)['制程']).toBe(88);
+    expect(columnWidths(wrapper)['制程']).toBe(120);
 
     wrapper.unmount();
   });
@@ -131,12 +131,12 @@ describe('ProcessPage', () => {
     const wrapper = await mountPage();
     await clickTab(wrapper, '工艺制程');
 
-    const layerOptions = findSelect(wrapper, '制程分层').props(
-      'options',
-    ) as Array<{
+    const layerOptions = findColumn(wrapper, '制程').column.filters as Array<{
       value: string;
     }>;
-    await chooseSelect(wrapper, '制程分层', layerOptions[0]?.value);
+    expect(findColumn(wrapper, '制程').column.filterMultiple).toBe(true);
+    expect(findColumn(wrapper, '制程').column.filterSearch).toBeUndefined();
+    await chooseColumnFilter(wrapper, '制程', [layerOptions[0]!.value]);
     const search = () =>
       wrapper.get<HTMLInputElement>('input[aria-label="搜索制程"]');
     await search().setValue('不存在的工艺');
@@ -145,7 +145,7 @@ describe('ProcessPage', () => {
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await nextTick();
 
-    expect(findSelect(wrapper, '制程分层').props('value')).toBeNull();
+    expect(findColumn(wrapper, '制程').column.filteredValue).toBeNull();
     expect(search().element.value).toBe('');
     wrapper.unmount();
   });

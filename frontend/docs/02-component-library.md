@@ -15,12 +15,12 @@
 | 主按钮 / 普通 / 文字 / 危险 | `a-button type="primary"` / 默认 / `type="text"` / `danger` |
 | 图标按钮 | `a-tooltip` 包 `a-button type="text" size="small" aria-label="…"`，图标放 `#icon` 插槽（Lucide） |
 | 输入 / 密码 / 多行 / 数字 | `a-input allow-clear`、`a-input-password`、`a-textarea show-count`、`a-input-number` |
-| 单选 / 多选下拉 | `a-select`、`a-select mode="multiple" :max-tag-count="1"` |
+| 单选 / 多选下拉 | `a-select`、`a-select mode="multiple"`（表单多选不设 `max-tag-count`） |
 | 搜索框 | `a-input allow-clear`，`#prefix` 放 Lucide `Search` |
 | 日期 / 日期范围 | `a-date-picker` / `a-range-picker`，都用 `value-format="YYYY-MM-DD"` |
 | 树形下拉 | `a-tree-select`（数据用 `{ title, value, key, children }`） |
-| 表格 | `a-table` + `#bodyCell`；列定义用 antd 的 `TableColumnType` |
-| 分页 | 所有表格与列表都分页且分页条始终显示：antd 排序的表格 / `a-list` 用 `useTablePagination()` 的 `pagination` / `listPagination`；自己切片的页面用 `a-pagination v-bind="PAGINATION_PROPS"` |
+| 表格 | `a-table` + `#bodyCell`；列定义用 antd 的 `TableColumnType`。单列筛选用表头漏斗（`columnFilter`），在送进表格前滤完整数据，不设 `onFilter`；`@change` 只在 `extra.action === 'filter'` 时写筛选 |
+| 分页 | 所有表格与列表都分页且分页条始终显示，并且不提供列排序：表格和 `a-list` 用 `useTablePagination()` 的 `pagination` / `listPagination`；自己切片的页面用 `a-pagination v-bind="PAGINATION_PROPS"` |
 | 弹窗 | `a-modal destroy-on-close`，自定义 `#footer` |
 | 确认框 | `pages/shared/confirm.ts` 的 `dialogs.confirm()`（`Modal.confirm` 的 Promise 版） |
 | 轻提示 | `import { message } from 'ant-design-vue'` |
@@ -36,7 +36,7 @@
 
 | 模块 | 内容 |
 | --- | --- |
-| `table.ts` | `sortBy` / `sortRows` / `sortOrderOf` / `sortFromChange`（受控排序）、`rowClick`（整行点击，忽略行内按钮）、`scrollX`（各列宽度之和）、`cellText`（空值显示「—」）、`PAGE_SIZE_OPTIONS`（20/50/100）、`PAGINATION_PROPS`（分页条共用属性，含翻页按钮读屏名称）、`useTablePagination`（内置分页：筛选变化回第一页、越界收回、`showIndex` 定位到某条所在页） |
+| `table.ts` | `rowClick`（整行点击，忽略行内按钮）、`scrollX`（各列宽度之和）、`cellText`（空值显示「—」）、`PAGE_SIZE_OPTIONS`（20/50/100）、`PAGINATION_PROPS`（分页条共用属性，含翻页按钮读屏名称）、`useTablePagination`（内置分页：筛选变化回第一页、越界收回、`showIndex` 定位到某条所在页）、`columnFilter` / `columnFilterValues` / `isColumnFilterChange` / `setColumnFilter`（表头漏斗：受控 `filteredValue`，空选为 `null`）。表格按数据源顺序显示，不提供列排序 |
 | `form.ts` | `fieldError(message)`：`<a-form-item v-bind="fieldError(err)">` |
 | `confirm.ts` | `dialogs.confirm()` |
 | `dirty-guard.ts` | 弹窗未保存确认：`@cancel="cancelDialog"`，`cancelDialog` 里先 `await dirtyGuard.confirmClose()` |

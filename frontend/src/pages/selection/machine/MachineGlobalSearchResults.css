@@ -1,0 +1,17 @@
+.machine-global-search-results__heading {
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.machine-global-search-results__heading :deep(.ant-page-header-heading-title) {
+  white-space: nowrap;
+}
+
+.machine-global-search-results__tags {
+  margin-top: var(--space-2);
+}
+
+.machine-global-search-results :deep(.ant-list-item-meta-title),
+.machine-global-search-results :deep(.ant-list-item-meta-description) {
+  overflow-wrap: anywhere;
+}

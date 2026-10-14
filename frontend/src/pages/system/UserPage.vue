@@ -17,7 +17,6 @@ import {
   cellText,
   rowClick,
   scrollX,
-  sortBy,
   useTablePagination,
 } from '@/pages/shared/table';
 import UserFormDialog from '@/pages/system/user/UserFormDialog.vue';
@@ -44,14 +43,12 @@ const columns = computed<TableColumnType[]>(() => {
       title: '用户名',
       width: 160,
       fixed: 'left',
-      sorter: sortBy('username'),
     },
     {
       key: 'displayName',
       dataIndex: 'displayName',
       title: '显示名',
       width: 140,
-      sorter: sortBy('displayName'),
     },
     { key: 'roles', dataIndex: 'roles', title: '角色', width: 160 },
     { key: 'org', dataIndex: 'org', title: '所属组织', width: 180 },
@@ -61,7 +58,6 @@ const columns = computed<TableColumnType[]>(() => {
       dataIndex: 'createdAt',
       title: '创建时间',
       width: 192,
-      sorter: sortBy('createdAt'),
     },
   ];
   if (writable.value) {

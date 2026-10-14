@@ -6,15 +6,9 @@
   min-height: 0;
 }
 
-.machine-source-stack > .entity-source {
+.machine-source-stack > .entity-source,
+.machine-source-stack > .machine-global-search-filters {
   flex: 1;
-}
-
-.selection-split--global-search {
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-
-.machine-global-search {
   min-height: 0;
 }
 
@@ -42,9 +36,7 @@
 }
 
 @media (width <= 60rem) {
-  .machine-source-stack,
-  .selection-split--global-search {
+  .machine-source-stack {
     width: 100%;
-    grid-template-columns: 1fr;
   }
 }

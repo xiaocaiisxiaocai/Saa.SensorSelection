@@ -23,12 +23,14 @@ import {
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   PAGINATION_PROPS,
   rowClick,
   scrollX,
-  sortFromChange,
-  sortRows,
-  type TableSortState,
+  setColumnFilter,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -47,7 +49,6 @@ import {
   HIDEABLE_COLUMNS,
   relationText,
   sensorColumns,
-  sortSensorGroups,
   statusColor,
   typeAccent,
   type SensorLookup,
@@ -59,7 +60,7 @@ import { useHiddenColumns } from './use-hidden-columns';
  * 「型号」页签：筛选工具栏 + 型号表格 + 分页，以及新增/编辑、替换、预览对话框。
  * 筛选条件由父页面持有（要同步到地址栏），这里通过 v-model 读写。
  */
-const status = defineModel<string>('status', { required: true });
+const statuses = defineModel<string[]>('statuses', { required: true });
 const query = defineModel<string>('query', { required: true });
 const sensorTypes = defineModel<Array<string | number>>('sensorTypes', {
   required: true,
@@ -77,7 +78,6 @@ const linkedPreview = ref<{
 } | null>(null);
 const page = ref(1);
 const pageSize = ref(20);
-const sort = ref<TableSortState | null>(null);
 
 // 型号表格列数多、内容长，1440px 下仍要横向滚动才能看到「关联型录/3D」，
 // 描述性列允许按需隐藏，选择记忆在本地。
@@ -92,10 +92,6 @@ const statusNames = computed(() =>
     (left, right) => sensorStatusRank(left) - sensorStatusRank(right),
   ),
 );
-const statusFilterOptions = computed(() => [
-  { label: '全部', value: '全部' },
-  ...statusNames.value.map((name) => ({ label: name, value: name })),
-]);
 const typeOptions = computed(() =>
   store
     .dictionaryNames('sensor-type')
@@ -103,7 +99,7 @@ const typeOptions = computed(() =>
 );
 const hasActiveFilters = computed(
   () =>
-    status.value !== '全部' ||
+    statuses.value.length > 0 ||
     sensorTypes.value.length > 0 ||
     Boolean(query.value.trim()),
 );
@@ -129,39 +125,37 @@ const lookup: SensorLookup = {
 };
 const relation = (item: SensorItem) => relationText(item, lookup.related(item));
 
-const groupedView = computed(() => status.value === '全部');
+const groupedView = computed(() => statuses.value.length === 0);
+const showDisabledDetails = computed(() =>
+  statuses.value.some((name) => isSensorStatus(name, 'disabled')),
+);
 const items = computed(() =>
   groupedView.value
     ? []
     : filterSensors(
         store.sensors,
         {
-          status: status.value,
+          statuses: statuses.value,
           sensorTypes: sensorTypes.value,
           query: query.value,
         },
         lookup,
       ),
 );
-// 排序必须发生在分页切片之前，否则只会把当前这一页重排。
-const sortedItems = computed(() => sortRows(items.value, sort.value));
-// 「全部」先按整份目录分组，再筛、再按组头排序。分页切的是组，不是展开后的行。
+// 「全部」先按整份目录分组，再筛。分页切的是组，不是展开后的行。
 const groupedUnits = computed(() => {
   if (!groupedView.value) return [];
-  return sortSensorGroups(
-    filterSensorGroups(
-      groupSensorCatalog(store.sensors),
-      {
-        sensorTypes: sensorTypes.value,
-        query: query.value,
-      },
-      lookup,
-    ),
-    sort.value,
+  return filterSensorGroups(
+    groupSensorCatalog(store.sensors),
+    {
+      sensorTypes: sensorTypes.value,
+      query: query.value,
+    },
+    lookup,
   );
 });
 const entryCount = computed(() =>
-  groupedView.value ? groupedUnits.value.length : sortedItems.value.length,
+  groupedView.value ? groupedUnits.value.length : items.value.length,
 );
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
@@ -169,7 +163,7 @@ const tableData = computed(() => {
   if (groupedView.value) {
     return expandSensorGroups(groupedUnits.value.slice(start, end));
   }
-  return sortedItems.value.slice(start, end).map((item) => ({
+  return items.value.slice(start, end).map((item) => ({
     rowKey: String(item.id),
     item,
     parent: item,
@@ -227,15 +221,38 @@ const rowClassName = computed(() => {
 });
 const columns = computed(() =>
   sensorColumns({
-    sort: sort.value,
-    showDisabledDetails: isSensorStatus(status.value, 'disabled'),
+    showDisabledDetails: showDisabledDetails.value,
     hidden: hiddenColumns.value,
     writable: writable.value,
     grouped: groupedView.value,
+  }).map((column) => {
+    if (column.key === 'status') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: statusNames.value.map((name) => ({
+            label: name,
+            value: name,
+          })),
+          value: statuses.value,
+        }),
+      };
+    }
+    if (column.key === 'sensorType') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: typeOptions.value,
+          value: sensorTypes.value,
+          search: true,
+        }),
+      };
+    }
+    return column;
   }),
 );
 
-watch([query, sensorTypes, status, pageSize, sort], () => {
+watch([query, sensorTypes, statuses, pageSize], () => {
   page.value = 1;
 });
 watch(
@@ -247,10 +264,24 @@ watch(
 );
 
 function resetFilters() {
-  status.value = '全部';
+  statuses.value = [];
   sensorTypes.value = [];
   query.value = '';
   page.value = 1;
+}
+
+function onTableChange(
+  _pagination: unknown,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (!isColumnFilterChange(extra)) return;
+  setColumnFilter(
+    statuses,
+    columnFilterValues(filters, 'status').map(String),
+  );
+  setColumnFilter(sensorTypes, columnFilterValues(filters, 'sensorType'));
 }
 
 function exportExcel() {
@@ -258,7 +289,7 @@ function exportExcel() {
   // 「全部」展开每一组的成员，单元格用成员自己的值；状态筛选只导出命中的行。
   const rows = groupedView.value
     ? expandSensorGroups(groupedUnits.value).map((row) => row.item)
-    : sortedItems.value;
+    : items.value;
   if (rows.length === 0) {
     message.error('当前条件下没有可导出的型号');
     return;
@@ -267,7 +298,8 @@ function exportExcel() {
     (column) => column.key !== 'actions',
   );
   downloadSensorExcel({
-    pageName: status.value,
+    pageName:
+      statuses.value.length === 0 ? '全部' : statuses.value.join('、'),
     headers: exportColumns.map((column) => String(column.title)),
     rows: rows.map((item) =>
       exportColumns.map((column) =>
@@ -317,12 +349,13 @@ function openLinked(kind: '3D' | '型录', id: null | number) {
 function openRelatedSensor(item: SensorItem) {
   const related = lookup.related(item);
   if (!related) return;
-  status.value = '全部';
+  statuses.value = [];
   query.value = related.model;
 }
 
 function showCurrent() {
-  status.value = findSensorStatusName(statusNames.value, 'current') || '全部';
+  const name = findSensorStatusName(statusNames.value, 'current');
+  statuses.value = name ? [name] : [];
 }
 
 function replaceTitle(row: SensorTableRow) {
@@ -343,26 +376,9 @@ function openReplace(row: SensorTableRow) {
 <template>
   <div
     class="selection-panel"
-    :class="{ 'sensor-models--grouped': status === '全部' }"
+    :class="{ 'sensor-models--grouped': groupedView }"
   >
     <div class="selection-toolbar">
-      <a-select
-        v-model:value="status"
-        class="selection-toolbar__filter"
-        :options="statusFilterOptions"
-        aria-label="状态筛选"
-      />
-      <a-select
-        v-model:value="sensorTypes"
-        mode="multiple"
-        class="selection-toolbar__filter"
-        :options="typeOptions"
-        placeholder="感应器类型"
-        aria-label="感应器类型筛选"
-        :max-tag-count="1"
-        allow-clear
-        option-filter-prop="label"
-      />
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -403,10 +419,7 @@ function openReplace(row: SensorTableRow) {
       :locale="{ emptyText: '没有符合当前条件的型号' }"
       :custom-row="customRow"
       :row-class-name="rowClassName"
-      @change="
-        (_p: unknown, _f: unknown, sorter: unknown) =>
-          (sort = sortFromChange(sorter))
-      "
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'status'">

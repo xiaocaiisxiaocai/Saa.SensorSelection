@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumnType } from 'ant-design-vue';
+import type { TableColumnType, TablePaginationConfig } from 'ant-design-vue';
 import { History, Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -7,10 +7,14 @@ import type { TimelineItem } from '@/domain';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   rowClick,
   scrollX,
-  sortBy,
+  setColumnFilter,
   useTablePagination,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -81,7 +85,10 @@ const columns = computed<TableColumnType[]>(() => {
       title: '问题分类',
       width: 168,
       fixed: 'left',
-      sorter: sortBy('type'),
+      ...columnFilter({
+        options: typeOptions.value,
+        value: typeFilters.value,
+      }),
     },
     { key: 'machine', dataIndex: 'machine', title: '适用机型', width: 90 },
     { key: 'problem', dataIndex: 'problem', title: '问题点', width: 205 },
@@ -92,14 +99,16 @@ const columns = computed<TableColumnType[]>(() => {
       dataIndex: 'date',
       title: '反馈时间',
       width: 120,
-      sorter: sortBy('date'),
     },
     {
       key: 'status',
       dataIndex: 'status',
       title: '处理状态',
-      width: 112,
-      sorter: sortBy('status'),
+      width: 136,
+      ...columnFilter({
+        options: statusOptions.value,
+        value: statusFilters.value,
+      }),
     },
     { key: 'history', dataIndex: 'history', title: '历史', width: 60 },
   ];
@@ -161,33 +170,24 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   () => filtered.value.length,
   [query, typeFilters, statusFilters, () => props.entityName],
 );
+
+function onTableChange(
+  next: TablePaginationConfig,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (isColumnFilterChange(extra)) {
+    setColumnFilter(typeFilters, columnFilterValues(filters, 'type'));
+    setColumnFilter(statusFilters, columnFilterValues(filters, 'status'));
+  }
+  onPageChange(next);
+}
 </script>
 
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <a-select
-        v-model:value="typeFilters"
-        mode="multiple"
-        class="selection-toolbar__filter"
-        :options="typeOptions"
-        placeholder="问题分类"
-        aria-label="问题分类筛选"
-        :max-tag-count="1"
-        allow-clear
-        option-filter-prop="label"
-      />
-      <a-select
-        v-model:value="statusFilters"
-        mode="multiple"
-        class="selection-toolbar__filter"
-        :options="statusOptions"
-        placeholder="处理状态"
-        aria-label="处理状态筛选"
-        :max-tag-count="1"
-        allow-clear
-        option-filter-prop="label"
-      />
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -223,7 +223,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
             : '暂无反馈记录',
       }"
       :custom-row="rowClick(activateRow)"
-      @change="onPageChange"
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'status'">

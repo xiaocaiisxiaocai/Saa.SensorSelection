@@ -10,7 +10,6 @@ import {
   cellText,
   rowClick,
   scrollX,
-  sortBy,
   useTablePagination,
 } from '@/pages/shared/table';
 import RoleFormDialog from '@/pages/system/role/RoleFormDialog.vue';
@@ -33,14 +32,12 @@ const columns = computed<TableColumnType[]>(() => {
       title: '标识',
       width: 140,
       fixed: 'left',
-      sorter: sortBy('code'),
     },
     {
       key: 'name',
       dataIndex: 'name',
       title: '名称',
       width: 160,
-      sorter: sortBy('name'),
     },
     { key: 'description', dataIndex: 'description', title: '描述', width: 180 },
     { key: 'permissions', dataIndex: 'permissions', title: '权限', width: 240 },

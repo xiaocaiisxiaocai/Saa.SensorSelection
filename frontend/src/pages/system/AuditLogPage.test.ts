@@ -6,6 +6,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type AuditLogItem } from '@/api';
+import { chooseColumnFilter, findColumn } from '@/test-helpers';
 import AuditLogPage from './AuditLogPage.vue';
 import { ACTION_LABELS } from './audit/audit-actions';
 
@@ -42,7 +43,7 @@ describe('AuditLogPage', () => {
       expect(wrapper.find('.ant-table-wrapper').text()).toContain('查看');
     });
 
-    // 表头现在也有排序按钮，必须精确点到行内的「查看」，不能取第一个 button。
+    // 点行内的「查看」，不要取到工具栏上的按钮。
     const detailButton = wrapper
       .findAll('.ant-table-tbody button')
       .find((button) => button.text() === '查看');
@@ -76,9 +77,8 @@ describe('AuditLogPage', () => {
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalled());
 
     await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
-    const selects = wrapper.findAllComponents({ name: 'ASelect' });
-    selects[0]?.vm.$emit('update:value', 'auth.login');
-    selects[1]?.vm.$emit('update:value', 'true');
+    await chooseColumnFilter(wrapper, '操作', ['auth.login']);
+    await chooseColumnFilter(wrapper, '结果', ['true']);
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
 
     await vi.waitFor(() => {
@@ -96,8 +96,8 @@ describe('AuditLogPage', () => {
       wrapper.get<HTMLInputElement>('input[placeholder="操作用户"]').element
         .value,
     ).toBe('');
-    expect(selects[0]?.props('value')).toBe('');
-    expect(selects[1]?.props('value')).toBe('');
+    expect(findColumn(wrapper, '操作').column.filteredValue).toBeNull();
+    expect(findColumn(wrapper, '结果').column.filteredValue).toBeNull();
     wrapper.unmount();
   });
 
@@ -204,9 +204,7 @@ describe('AuditLogPage', () => {
     ).toBe(false);
 
     await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
-    wrapper
-      .findAllComponents({ name: 'ASelect' })[0]
-      ?.vm.$emit('update:value', 'auth.login');
+    await chooseColumnFilter(wrapper, '操作', ['auth.login']);
 
     await vi.waitFor(() => {
       expect(listAuditLogs).toHaveBeenLastCalledWith(
@@ -222,12 +220,23 @@ describe('AuditLogPage', () => {
     wrapper.unmount();
   });
 
-  it('does not offer a clear button on filters whose default is already "all"', () => {
+  it('puts action and result filters in the column header', () => {
     vi.spyOn(api, 'listAuditLogs').mockResolvedValue({ items: [], total: 0 });
     const wrapper = mount(AuditLogPage);
-    for (const select of wrapper.findAllComponents({ name: 'ASelect' })) {
-      expect(select.props('allowClear')).toBeFalsy();
-    }
+    const action = findColumn(wrapper, '操作').column;
+    const result = findColumn(wrapper, '结果').column;
+
+    expect(action.filterMultiple).toBe(false);
+    expect(action.filterSearch).toBe(true);
+    expect(action.filteredValue).toBeNull();
+    expect(
+      (action.filters as Array<{ text: string }>).map((item) => item.text),
+    ).not.toContain('全部操作');
+    expect(result.filterMultiple).toBe(false);
+    expect(result.filterSearch).toBeUndefined();
+    expect(result.filteredValue).toBeNull();
+    expect(wrapper.find('[aria-label="操作类型筛选"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="操作结果筛选"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -290,9 +299,7 @@ describe('AuditLogPage', () => {
     const wrapper = mount(AuditLogPage);
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(1));
 
-    wrapper
-      .findAllComponents({ name: 'ASelect' })[0]
-      ?.vm.$emit('update:value', 'auth.login');
+    await chooseColumnFilter(wrapper, '操作', ['auth.login']);
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalledTimes(2));
     const table = () => wrapper.getComponent({ name: 'ATable' });
 

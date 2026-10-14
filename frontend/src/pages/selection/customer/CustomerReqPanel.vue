@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import type { TableColumnType } from 'ant-design-vue';
+import type { TableColumnType, TablePaginationConfig } from 'ant-design-vue';
 import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { CustomerReqItem } from '@/domain';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   rowClick,
   scrollX,
-  sortBy,
+  setColumnFilter,
   useTablePagination,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -71,14 +75,17 @@ const hasActiveFilters = computed(
 const columns = computed(() => {
   const cols: TableColumnType<CustomerReqItem>[] = [
     // 136/108：最长字典值「02 两片检测标准」实测 113px、「04 产品迭代」84px，
-    // 加上单元格左右内边距才不会折成两行把行高撑乱。
+    // 加上单元格左右内边距和表头漏斗才不会折成两行把行高撑乱。
     {
       key: 'type',
       dataIndex: 'type',
       title: '要求分类',
       width: 136,
       fixed: 'left',
-      sorter: sortBy<CustomerReqItem>('type'),
+      ...columnFilter({
+        options: typeOptions.value,
+        value: typeFilters.value,
+      }),
     },
     { key: 'machine', dataIndex: 'machine', title: '适用机型', width: 90 },
     { key: 'process', dataIndex: 'process', title: '适用制程', width: 130 },
@@ -88,7 +95,10 @@ const columns = computed(() => {
       dataIndex: 'source',
       title: '来源',
       width: 108,
-      sorter: sortBy<CustomerReqItem>('source'),
+      ...columnFilter({
+        options: sourceOptions.value,
+        value: sourceFilters.value,
+      }),
     },
     { key: 'note', dataIndex: 'note', title: '备注', width: 140 },
   ];
@@ -137,31 +147,30 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   () => filtered.value.length,
   [query, typeFilters, sourceFilters, () => props.entityName],
 );
+
+function onTableChange(
+  next: TablePaginationConfig,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (isColumnFilterChange(extra)) {
+    setColumnFilter(
+      typeFilters,
+      columnFilterValues(filters, 'type').map(String),
+    );
+    setColumnFilter(
+      sourceFilters,
+      columnFilterValues(filters, 'source').map(String),
+    );
+  }
+  onPageChange(next);
+}
 </script>
 
 <template>
   <div class="selection-panel">
     <div class="selection-toolbar">
-      <a-select
-        v-model:value="typeFilters"
-        class="selection-toolbar__filter"
-        mode="multiple"
-        :options="typeOptions"
-        placeholder="要求分类"
-        aria-label="要求分类筛选"
-        :max-tag-count="1"
-        allow-clear
-      />
-      <a-select
-        v-model:value="sourceFilters"
-        class="selection-toolbar__filter"
-        mode="multiple"
-        :options="sourceOptions"
-        placeholder="要求来源"
-        aria-label="要求来源筛选"
-        :max-tag-count="1"
-        allow-clear
-      />
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -194,7 +203,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       :locale="{
         emptyText: hasActiveFilters ? '没有匹配的要求记录' : '暂无要求记录',
       }"
-      @change="onPageChange"
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record, text }">
         <a-space v-if="column.key === 'actions'" :size="4">

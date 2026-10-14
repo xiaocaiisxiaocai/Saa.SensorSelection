@@ -6,7 +6,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
-import { rowClick, sortBy, useTablePagination } from '@/pages/shared/table';
+import { rowClick, useTablePagination } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -44,13 +44,11 @@ const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
       width: 88,
       fixed: 'left',
       align: 'right',
-      sorter: sortBy<DictionaryItem>('sort'),
     },
     {
       key: 'name',
       dataIndex: 'name',
       title: '字典项名称',
-      sorter: sortBy<DictionaryItem>('name'),
     },
   ];
   if (writable.value) {

@@ -8,30 +8,6 @@ import {
   type WatchSource,
 } from 'vue';
 
-const collator = new Intl.Collator('zh', {
-  numeric: true,
-  sensitivity: 'base',
-});
-
-/** 数字按大小，其余按中文自然顺序（"型号2" < "型号10"）比较。 */
-export function compareValues(left: unknown, right: unknown): number {
-  if (typeof left === 'number' && typeof right === 'number') {
-    return left - right;
-  }
-  return collator.compare(String(left ?? ''), String(right ?? ''));
-}
-
-/** 给 a-table 列的 `sorter` 用：`sorter: sortBy('name')`。 */
-export function sortBy<T = Record<string, unknown>>(
-  key: string | ((row: T) => unknown),
-) {
-  const read =
-    typeof key === 'function'
-      ? key
-      : (row: T) => (row as Record<string, unknown>)[key];
-  return (a: T, b: T) => compareValues(read(a), read(b));
-}
-
 /** 空值单元格统一显示破折号。 */
 export function cellText(value: unknown): string {
   if (value == null || String(value).trim() === '') return '—';
@@ -74,8 +50,9 @@ export const PAGINATION_PROPS = {
 } as const;
 
 /**
- * a-table / a-list 内置分页（排序交给 antd 的表格用这个，排序和分页都作用于整个数据集）。
+ * a-table / a-list 内置分页。
  * 分页条始终显示；`resetOn` 里的筛选条件变化时回到第一页，数据变少时收回越界页。
+ * 表格不在这里重排，行序就是传入的数据顺序。
  */
 export function useTablePagination(
   total: () => number,
@@ -157,40 +134,68 @@ export function scrollX(columns: ReadonlyArray<{ width?: number | string }>) {
   return total > 0 ? total : 'max-content';
 }
 
-/** 受控排序状态，order 直接用 antd 的 'ascend' / 'descend'。 */
-export interface TableSortState {
-  key: string;
-  order: 'ascend' | 'descend';
+export interface ColumnFilterOption {
+  label: string;
+  value: string | number;
 }
+
+/** `@change` 里 antd 交回来的各列筛选值。空选是 null。 */
+export type ColumnFilterMap = Record<
+  string,
+  readonly (boolean | string | number)[] | null
+>;
 
 /**
- * 分页表格必须先排完整数据集再切片：只排当前页会让翻页后顺序对不上。
+ * 表头漏斗。筛选在传入表格之前做完，这里不设 `onFilter`
+ * （那只会滤当前页，并打乱合并单元格和分组）。
+ * 空选传 `filteredValue: null`，漏斗不高亮。
  */
-export function sortRows<T>(
-  rows: readonly T[],
-  sort: TableSortState | null,
-): T[] {
-  if (!sort) return [...rows];
-  const direction = sort.order === 'ascend' ? 1 : -1;
-  const compare = sortBy<T>(sort.key);
-  return [...rows].sort((a, b) => compare(a, b) * direction);
+export function columnFilter(input: {
+  options: readonly ColumnFilterOption[];
+  value: readonly (string | number)[];
+  multiple?: boolean;
+  search?: boolean;
+}) {
+  return {
+    filters: input.options.map((item) => ({
+      text: item.label,
+      value: item.value,
+    })),
+    filteredValue: input.value.length > 0 ? [...input.value] : null,
+    filterMultiple: input.multiple !== false,
+    ...(input.search ? { filterSearch: true as const } : {}),
+  };
 }
 
-/** 列定义里的 `sortOrder: sortOrderOf(sort.value, 'name')`。 */
-export function sortOrderOf(sort: TableSortState | null, key: string) {
-  return sort?.key === key ? sort.order : null;
+/** 取出某一列确认后的筛选值；没有这一列或已清空时是空数组。 */
+export function columnFilterValues(
+  filters: ColumnFilterMap | undefined,
+  key: string,
+): Array<string | number> {
+  const value = filters?.[key];
+  if (!value) return [];
+  return value.filter(
+    (item): item is string | number =>
+      typeof item === 'string' || typeof item === 'number',
+  );
 }
 
-/** a-table `@change` 的第三个参数 → 受控排序状态。 */
-export function sortFromChange(sorter: unknown): TableSortState | null {
-  const current = (Array.isArray(sorter) ? sorter[0] : sorter) as
-    | {
-        columnKey?: unknown;
-        field?: unknown;
-        order?: 'ascend' | 'descend' | null;
-      }
-    | undefined;
-  if (!current?.order) return null;
-  const key = String(current.columnKey ?? current.field ?? '');
-  return key ? { key, order: current.order } : null;
+/** 翻页也会触发 `@change`。只有筛选动作能改筛选条件，否则会把页码打回第一页。 */
+export function isColumnFilterChange(extra: { action?: string } | undefined) {
+  return extra?.action === 'filter';
+}
+
+/** 内容相同就不替换，避免无意义地触发「筛选变化回到第一页」。 */
+export function setColumnFilter<T extends string | number>(
+  current: { value: T[] },
+  next: readonly T[],
+) {
+  const values = [...next];
+  if (
+    current.value.length === values.length &&
+    current.value.every((item, index) => item === values[index])
+  ) {
+    return;
+  }
+  current.value = values;
 }

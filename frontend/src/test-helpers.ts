@@ -60,6 +60,51 @@ export function tabCount(wrapper: AnyWrapper, label: string) {
   return tab?.find('.ant-badge-count').attributes('title');
 }
 
+/** 按列标题找到所在的 a-table 和列定义。 */
+export function findColumn(wrapper: AnyWrapper, title: string) {
+  for (const table of wrapper.findAllComponents({ name: 'ATable' })) {
+    const columns = (table.props('columns') ?? []) as Array<{
+      title?: unknown;
+      key?: unknown;
+      dataIndex?: unknown;
+      filteredValue?: unknown;
+      filters?: unknown;
+      filterSearch?: unknown;
+      filterMultiple?: unknown;
+      width?: unknown;
+    }>;
+    const column = columns.find((item) => String(item.title) === title);
+    if (column) return { table, column, columns };
+  }
+  throw new Error(`column "${title}" not found`);
+}
+
+/**
+ * 等价于在表头漏斗里勾选后点确定。
+ * 其它已有筛选列保持原值，避免一次操作把旁边的条件清掉。
+ */
+export async function chooseColumnFilter(
+  wrapper: AnyWrapper,
+  title: string,
+  value: readonly (string | number)[],
+) {
+  const { table, columns } = findColumn(wrapper, title);
+  const filters: Record<string, Array<string | number> | null> = {};
+  for (const column of columns) {
+    if (!column.filters || column.key == null) continue;
+    const key = String(column.key);
+    const selected = column.filteredValue as Array<string | number> | null;
+    filters[key] =
+      String(column.title) === title
+        ? value.length > 0
+          ? [...value]
+          : null
+        : (selected ?? null);
+  }
+  table.vm.$emit('change', {}, filters, {}, { action: 'filter' });
+  await flushPromises();
+}
+
 /** 第 index 个 a-table 的列宽：{ 列标题: width }。 */
 export function columnWidths(wrapper: AnyWrapper, index = 0) {
   const table = wrapper.findAllComponents({ name: 'ATable' })[index];

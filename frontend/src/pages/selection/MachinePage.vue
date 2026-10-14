@@ -13,7 +13,8 @@ import {
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import MachineCatalogSwitch from '@/pages/selection/machine/MachineCatalogSwitch.vue';
-import MachineGlobalSearch from '@/pages/selection/machine/MachineGlobalSearch.vue';
+import MachineGlobalSearchFilters from '@/pages/selection/machine/MachineGlobalSearchFilters.vue';
+import MachineGlobalSearchResults from '@/pages/selection/machine/MachineGlobalSearchResults.vue';
 import MachineReportBar from '@/pages/selection/machine/MachineReportBar.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
 import MachineTabDialog from '@/pages/selection/machine/MachineTabDialog.vue';
@@ -33,7 +34,10 @@ import {
   resolveTabSelection,
 } from '@/pages/selection/machine/machine-selection';
 import { buildMachineSearchDocuments } from '@/pages/selection/machine/machine-search-documents';
-import type { MachineStructureSearchResult } from '@/pages/selection/machine/machine-structure-search';
+import {
+  searchMachineStructures,
+  type MachineStructureSearchResult,
+} from '@/pages/selection/machine/machine-structure-search';
 import { TAB_COUNT_STYLE } from '@/pages/shared/tabs';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess, useAuthStore } from '@/stores/auth';
@@ -44,6 +48,7 @@ import '../shared/selection-page.css';
 /*
  * 机型结构页。左侧选单（分类 → 配置 → 机型）选中一个末级节点，右侧显示
  * 当前目录（结构 / 专案机型）共用的一级 Tab，以及这个节点在该 Tab 下的二级 Tab。
+ * 条件查找时，左侧换成筛选表单，右侧列出结构（不设条件就是全部，改条件立即过滤）。
  * 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单。
  * 地址栏：?catalog=&view=&category=&configuration=&item=&tab=&page=&focusRow=。
  */
@@ -142,6 +147,19 @@ const globalSearchDocuments = computed(() =>
   // 遍历「Tab × 二级 Tab」时，每次取行都会重新归一化 Sensor/工序/字典；
   // batchRead 让这些归一化结果在本次构建里只算一次。
   store.batchRead(() => buildMachineSearchDocuments(store)),
+);
+const searchMachineModelIds = ref<Array<string | number>>([]);
+const searchProcessStepIds = ref<Array<string | number>>([]);
+const searchBoardCharacteristicIds = ref<Array<string | number>>([]);
+const searchQuery = ref('');
+/** 不设条件时就是全部结构；任一条件变化都会重算并让结果列表回到第一页 */
+const globalSearchResults = computed(() =>
+  searchMachineStructures(globalSearchDocuments.value, {
+    boardCharacteristicIds: searchBoardCharacteristicIds.value.map(Number),
+    machineModelIds: searchMachineModelIds.value.map(Number),
+    processStepIds: searchProcessStepIds.value.map(Number),
+    query: searchQuery.value,
+  }),
 );
 
 // ── 地址栏 ──────────────────────────────────────────────────────
@@ -360,7 +378,6 @@ async function removeTab(tabId: number) {
       class="selection-split"
       :class="{
         'selection-split--machine': activeMachineView === 'browse',
-        'selection-split--global-search': activeMachineView === 'find',
       }"
     >
       <div class="machine-source-stack">
@@ -379,14 +396,20 @@ async function removeTab(tabId: number) {
           :locked-branches="lockedBranches"
           @select="selectEntity"
         />
+        <MachineGlobalSearchFilters
+          v-else
+          v-model:machine-model-ids="searchMachineModelIds"
+          v-model:process-step-ids="searchProcessStepIds"
+          v-model:board-characteristic-ids="searchBoardCharacteristicIds"
+          v-model:query="searchQuery"
+          :machine-model-options="machineModelOptions"
+          :process-step-options="processStepOptions"
+          :board-characteristic-options="boardCharacteristicOptions"
+        />
       </div>
-      <MachineGlobalSearch
+      <MachineGlobalSearchResults
         v-if="activeMachineView === 'find'"
-        class="machine-global-search"
-        :documents="globalSearchDocuments"
-        :machine-model-options="machineModelOptions"
-        :process-step-options="processStepOptions"
-        :board-characteristic-options="boardCharacteristicOptions"
+        :results="globalSearchResults"
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">

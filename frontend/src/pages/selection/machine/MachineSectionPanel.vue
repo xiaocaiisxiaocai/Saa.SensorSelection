@@ -7,11 +7,13 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   PAGINATION_PROPS,
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   rowClick,
   scrollX,
-  sortFromChange,
-  sortRows,
-  type TableSortState,
+  setColumnFilter,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -38,12 +40,11 @@ const writable = computed(() => canWrite('selection:write'));
 const rowDialog = ref<InstanceType<typeof MachineRowDialog>>();
 const query = ref('');
 const sensorTypeFilters = ref<Array<string | number>>([]);
-const machineModelFilter = ref<string | number | null>(null);
-const processStepFilter = ref<string | number | null>(null);
-const boardCharacteristicFilter = ref<string | number | null>(null);
+const machineModelFilters = ref<Array<string | number>>([]);
+const processStepFilters = ref<Array<string | number>>([]);
+const boardCharacteristicFilters = ref<Array<string | number>>([]);
 const page = ref(1);
 const pageSize = ref(20);
-const sort = ref<TableSortState | null>(null);
 const selectedTableRow = ref<string | number | null>(null);
 const tableHost = ref<HTMLElement | null>(null);
 const isStructure = computed(() => props.section.kind === 'structure');
@@ -85,9 +86,9 @@ const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
     sensorTypeFilters.value.length > 0 ||
-    machineModelFilter.value !== null ||
-    processStepFilter.value !== null ||
-    boardCharacteristicFilter.value !== null,
+    machineModelFilters.value.length > 0 ||
+    processStepFilters.value.length > 0 ||
+    boardCharacteristicFilters.value.length > 0,
 );
 const filtered = computed(() =>
   filterSectionRows(
@@ -96,9 +97,9 @@ const filtered = computed(() =>
     {
       query: query.value,
       sensorTypes: sensorTypeFilters.value,
-      machineModelId: machineModelFilter.value,
-      processStepId: processStepFilter.value,
-      boardCharacteristicId: boardCharacteristicFilter.value,
+      machineModelIds: machineModelFilters.value,
+      processStepIds: processStepFilters.value,
+      boardCharacteristicIds: boardCharacteristicFilters.value,
     },
     {
       sensorById: sensorById.value,
@@ -108,13 +109,10 @@ const filtered = computed(() =>
     },
   ),
 );
-// 排序必须发生在分页切片之前，否则只会把当前这一页重排。结构视图带合并
-// 单元格（rowSpan），重排会打乱分组，ATable 会整表忽略排序，这里也排不到。
-const sortedItems = computed(() => sortRows(filtered.value, sort.value));
 const tableData = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return buildMachineTableRows(
-    sortedItems.value.slice(start, start + pageSize.value),
+    filtered.value.slice(start, start + pageSize.value),
     store.sensors,
     isStructure.value,
     store.processSteps,
@@ -122,22 +120,66 @@ const tableData = computed(() => {
     boardCharacteristicItems.value,
   );
 });
-const columns = computed(() =>
-  sectionColumns({
+const columns = computed(() => {
+  const base = sectionColumns({
     structure: isStructure.value,
-    sort: sort.value,
     writable: writable.value,
-  }),
-);
+  });
+  if (!isStructure.value) return base;
+  return base.map((column) => {
+    if (column.key === 'sensorType') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: typeOptions.value,
+          value: sensorTypeFilters.value,
+          search: true,
+        }),
+      };
+    }
+    if (column.key === 'machineModelName') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: machineModelOptions.value,
+          value: machineModelFilters.value,
+          search: true,
+        }),
+      };
+    }
+    if (column.key === 'processStepName') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: processStepOptions.value,
+          value: processStepFilters.value,
+          search: true,
+        }),
+      };
+    }
+    if (column.key === 'boardCharacteristicName') {
+      return {
+        ...column,
+        ...columnFilter({
+          options: boardCharacteristicOptions.value,
+          value: boardCharacteristicFilters.value,
+          search: true,
+        }),
+      };
+    }
+    return column;
+  });
+});
+
 
 watch(
   () => [props.section.id, props.machineName] as const,
   () => {
     query.value = '';
     sensorTypeFilters.value = [];
-    machineModelFilter.value = null;
-    processStepFilter.value = null;
-    boardCharacteristicFilter.value = null;
+    machineModelFilters.value = [];
+    processStepFilters.value = [];
+    boardCharacteristicFilters.value = [];
     page.value = 1;
   },
 );
@@ -145,11 +187,10 @@ watch(
   [
     query,
     sensorTypeFilters,
-    machineModelFilter,
-    processStepFilter,
-    boardCharacteristicFilter,
+    machineModelFilters,
+    processStepFilters,
+    boardCharacteristicFilters,
     pageSize,
-    sort,
   ],
   () => {
     page.value = 1;
@@ -171,10 +212,35 @@ watch(
 function resetFilters() {
   query.value = '';
   sensorTypeFilters.value = [];
-  machineModelFilter.value = null;
-  processStepFilter.value = null;
-  boardCharacteristicFilter.value = null;
+  machineModelFilters.value = [];
+  processStepFilters.value = [];
+  boardCharacteristicFilters.value = [];
   page.value = 1;
+}
+
+function onTableChange(
+  _pagination: unknown,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (!isColumnFilterChange(extra)) return;
+  setColumnFilter(
+    sensorTypeFilters,
+    columnFilterValues(filters, 'sensorType'),
+  );
+  setColumnFilter(
+    machineModelFilters,
+    columnFilterValues(filters, 'machineModelName'),
+  );
+  setColumnFilter(
+    processStepFilters,
+    columnFilterValues(filters, 'processStepName'),
+  );
+  setColumnFilter(
+    boardCharacteristicFilters,
+    columnFilterValues(filters, 'boardCharacteristicName'),
+  );
 }
 
 // 已经定位过的目标（分区 + 机型 + 制程 + 行 id）。依赖 items.length 是为了
@@ -212,7 +278,7 @@ watch(
     // 否则目标行在第 2 页以后时会被拉回第 1 页而定位失败。
     await nextTick();
     if (handledFocusKey !== key) return;
-    const rowIndex = sortedItems.value.findIndex(
+    const rowIndex = filtered.value.findIndex(
       (item) => item.id === focusRowId,
     );
     if (rowIndex < 0) return;
@@ -259,51 +325,6 @@ const customRow = computed(() =>
   <div class="machine-body">
     <div ref="tableHost" class="selection-panel">
       <div class="selection-toolbar">
-        <a-select
-          v-if="isStructure"
-          v-model:value="sensorTypeFilters"
-          mode="multiple"
-          class="selection-toolbar__filter"
-          :options="typeOptions"
-          placeholder="传感器类型"
-          aria-label="传感器类型筛选"
-          :max-tag-count="1"
-          allow-clear
-          option-filter-prop="label"
-        />
-        <a-select
-          v-if="isStructure"
-          v-model:value="machineModelFilter"
-          class="selection-toolbar__filter"
-          :options="machineModelOptions"
-          placeholder="机型"
-          aria-label="机型筛选"
-          show-search
-          option-filter-prop="label"
-          allow-clear
-        />
-        <a-select
-          v-if="isStructure"
-          v-model:value="processStepFilter"
-          class="selection-toolbar__filter"
-          :options="processStepOptions"
-          placeholder="工艺制程"
-          aria-label="工艺制程筛选"
-          show-search
-          option-filter-prop="label"
-          allow-clear
-        />
-        <a-select
-          v-if="isStructure"
-          v-model:value="boardCharacteristicFilter"
-          class="selection-toolbar__filter"
-          :options="boardCharacteristicOptions"
-          placeholder="板件特性"
-          aria-label="板件特性筛选"
-          show-search
-          option-filter-prop="label"
-          allow-clear
-        />
         <a-input
           v-model:value="query"
           class="selection-toolbar__filter"
@@ -351,16 +372,13 @@ const customRow = computed(() =>
           emptyText:
             query.trim() ||
             sensorTypeFilters.length ||
-            machineModelFilter !== null ||
-            processStepFilter !== null ||
-            boardCharacteristicFilter !== null
+            machineModelFilters.length ||
+            processStepFilters.length ||
+            boardCharacteristicFilters.length
               ? '没有匹配的记录'
               : '暂无记录',
         }"
-        @change="
-          (_p: unknown, _f: unknown, sorter: unknown) =>
-            (sort = sortFromChange(sorter))
-        "
+        @change="onTableChange"
       >
         <template #bodyCell="{ column, record: row, text }">
           <template v-if="isStructure && column.key === 'sensorType'">

@@ -174,9 +174,9 @@ describe('filterSectionRows', () => {
   const none = {
     query: '',
     sensorTypes: [],
-    machineModelId: null,
-    processStepId: null,
-    boardCharacteristicId: null,
+    machineModelIds: [],
+    processStepIds: [],
+    boardCharacteristicIds: [],
   };
   const other = { ...row, id: 8, sensorIds: [], processStepId: null };
 
@@ -186,11 +186,14 @@ describe('filterSectionRows', () => {
       filterSectionRows(rows, true, { ...none, sensorTypes: ['对射'] }, lookup),
     ).toEqual([row]);
     expect(
-      filterSectionRows(rows, true, { ...none, processStepId: 21 }, lookup),
+      filterSectionRows(rows, true, { ...none, processStepIds: [21, 99] }, lookup),
     ).toEqual([row]);
-    // 下拉筛选只对结构分区生效
     expect(
-      filterSectionRows(rows, false, { ...none, processStepId: 21 }, lookup),
+      filterSectionRows(rows, true, { ...none, processStepIds: [99] }, lookup),
+    ).toEqual([]);
+    // 表头筛选只对结构分区生效
+    expect(
+      filterSectionRows(rows, false, { ...none, processStepIds: [21] }, lookup),
     ).toEqual(rows);
   });
 
@@ -205,23 +208,28 @@ describe('filterSectionRows', () => {
   });
 });
 
+function columnHeaderSorts(column: object) {
+  return Object.entries(column).some(
+    ([key, value]) =>
+      key !== 'sortOrder' &&
+      key.toLowerCase().startsWith('sort') &&
+      value != null,
+  );
+}
+
 describe('sectionColumns', () => {
-  it('only offers sorting on note sections and adds actions when writable', () => {
+  it('keeps store order and adds actions when writable', () => {
     const structure = sectionColumns({
       structure: true,
-      sort: null,
       writable: true,
     });
     const notes = sectionColumns({
       structure: false,
-      sort: null,
       writable: false,
     });
-    expect(structure.some((column) => column.sorter)).toBe(false);
+    expect(structure.some(columnHeaderSorts)).toBe(false);
+    expect(notes.some(columnHeaderSorts)).toBe(false);
     expect(structure.at(-1)?.key).toBe('actions');
-    expect(
-      notes.filter((column) => column.sorter).map((column) => column.key),
-    ).toEqual(['role', 'name']);
     expect(notes.some((column) => column.key === 'actions')).toBe(false);
   });
 
@@ -251,7 +259,7 @@ describe('sectionColumns', () => {
     expect(rows.map((item) => item.previousRow?.id ?? null)).toEqual([
       null, null, null, null, 2, null,
     ]);
-    const columns = sectionColumns({ structure: true, sort: null, writable: true });
+    const columns = sectionColumns({ structure: true, writable: true });
     expect(columns.slice(-2).map((column) => column.key)).toEqual(['image', 'actions']);
     // 展开列：a 的 3 个传感器是 rows[0..2]，b 是 rows[3]，没图的 c 是 rows[4]，
     // 不相邻、自己一张 X 的 d 是 rows[5]

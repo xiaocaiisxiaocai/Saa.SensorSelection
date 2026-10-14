@@ -10,7 +10,6 @@ import {
   groupSensorCatalog,
   relationText,
   sensorColumns,
-  sortSensorGroups,
   type SensorLookup,
 } from './sensor-table';
 
@@ -51,7 +50,7 @@ const lookup: SensorLookup = {
 describe('sensor-table', () => {
   it('matches the keyword against the replaced model and the linked catalog', () => {
     const rows = [current, old];
-    const filters = { status: '全部', sensorTypes: [] };
+    const filters = { statuses: [] as string[], sensorTypes: [] };
     // 新型号本身不含 PZ-G，但它替换了 PZ-G，所以和 PZ-G 一起被搜出来
     expect(filterSensors(rows, { ...filters, query: 'pz-g' }, lookup)).toEqual([
       current,
@@ -61,8 +60,19 @@ describe('sensor-table', () => {
       current,
     ]);
     expect(
-      filterSensors(rows, { ...filters, status: '03 停用', query: '' }, lookup),
+      filterSensors(
+        rows,
+        { ...filters, statuses: ['03 停用'], query: '' },
+        lookup,
+      ),
     ).toEqual([old]);
+    expect(
+      filterSensors(
+        rows,
+        { ...filters, statuses: ['01 现用', '03 停用'], query: '' },
+        lookup,
+      ),
+    ).toEqual([current, old]);
   });
 
   it('describes and exports the replacement relation', () => {
@@ -78,7 +88,7 @@ describe('sensor-table', () => {
   it('drops hidden columns, adds disabled details and the action column', () => {
     const keys = (options: Parameters<typeof sensorColumns>[0]) =>
       sensorColumns(options).map((column) => column.key);
-    const base = { sort: null, hidden: new Set<string>(), writable: false };
+    const base = { hidden: new Set<string>(), writable: false };
     expect(keys({ ...base, showDisabledDetails: false })).not.toContain(
       'replacedAt',
     );
@@ -93,12 +103,24 @@ describe('sensor-table', () => {
     });
     expect(visible).not.toContain('spec');
     expect(visible.at(-1)).toBe('actions');
-    // 排序认列 key；dataIndex 指到行上的 item，两者不能混成一个路径。
+    // dataIndex 指到行上的 item；key 仍是字段名，两者不能混成一个路径。
     const columns = sensorColumns({ ...base, showDisabledDetails: true });
     expect(columns.find((column) => column.key === 'brand')?.dataIndex).toEqual(
       ['item', 'brand'],
     );
     expect(columns.find((column) => column.key === 'brand')?.key).toBe('brand');
+    expect(
+      columns.every(
+        (column) =>
+          column.sortOrder == null &&
+          !Object.entries(column).some(
+            ([key, value]) =>
+              key !== 'sortOrder' &&
+              key.toLowerCase().startsWith('sort') &&
+              value != null,
+          ),
+      ),
+    ).toBe(true);
   });
 
   it('places same-type alternates under each current and leaves unlinked disabled rows at the end', () => {
@@ -483,7 +505,7 @@ describe('sensor-table', () => {
     );
   });
 
-  it('keeps a group when one member matches both filters, and sorts heads without reordering members', () => {
+  it('keeps a group when one member matches both filters', () => {
     const left = sensor({
       id: 1,
       model: '左',
@@ -544,17 +566,6 @@ describe('sensor-table', () => {
         (unit) => unit.head.model,
       ),
     ).toEqual(['左', '右']);
-
-    const sorted = sortSensorGroups(units, { key: 'brand', order: 'descend' });
-    expect(sorted.map((unit) => unit.head.model)).toEqual(['右', '左']);
-    expect(sorted[0]?.members.map((item) => item.model)).toEqual([
-      '备选',
-      '停用字',
-    ]);
-    expect(sorted[1]?.members.map((item) => item.model)).toEqual(['备选']);
-    expect(sortSensorGroups(units, null).map((unit) => unit.head.model)).toEqual(
-      ['左', '右'],
-    );
   });
 
   it('merges catalog and 3d cells across the whole group, including disabled rows', () => {
@@ -619,7 +630,6 @@ describe('sensor-table', () => {
     ]);
 
     const options = {
-      sort: null,
       showDisabledDetails: false,
       hidden: new Set<string>(),
       writable: false,

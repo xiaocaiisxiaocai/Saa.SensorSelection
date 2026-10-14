@@ -13,43 +13,41 @@ import '../shared/selection-page.css';
 
 /*
  * Sensor 型号页：只负责页签切换和地址栏同步。
- * mainTab 是状态名（型号页签下的状态筛选）或资源页签 sop-library / sop / 3d。
+ * section 是型号或资源页签。状态筛选在型号表头，空选就是分组的「全部」。
  */
 const route = useRoute();
 const store = useSelectionStore();
 
-const RESOURCE_TABS = ['sop-library', 'sop', '3d'];
+const RESOURCE_TABS = ['sop-library', 'sop', '3d'] as const;
+type ResourceTab = (typeof RESOURCE_TABS)[number];
 
-const mainTab = ref(initialTab());
+const section = ref<'models' | ResourceTab>(initialSection());
 const query = ref(String(route.query.model || ''));
+const statusFilters = ref<string[]>(initialStatusFilters());
 const sensorTypeFilters = ref<Array<string | number>>(
   parseSensorTypeFilters(String(route.query.sensorTypes || '')),
 );
 const focusSopId = ref<null | number>(positiveId(route.query.sopId));
 const focusModel3dId = ref<null | number>(positiveId(route.query.model3dId));
 
-// 切到资源页签再切回「型号」时，回到之前的状态筛选
-const lastStatusTab = ref(
-  RESOURCE_TABS.includes(mainTab.value) ? '全部' : mainTab.value,
-);
 const sectionTab = computed({
-  get: () => (RESOURCE_TABS.includes(mainTab.value) ? mainTab.value : 'models'),
+  get: () => section.value,
   set: (value: string) => {
-    mainTab.value = value === 'models' ? lastStatusTab.value : value;
+    section.value = isResourceTab(value) ? value : 'models';
   },
 });
 
 useSyncedQuery(() => {
-  if (mainTab.value === 'sop-library') {
+  if (section.value === 'sop-library') {
     return { tab: 'sop-library' };
   }
-  if (mainTab.value === 'sop') {
+  if (section.value === 'sop') {
     return {
       tab: 'sop',
       sopId: focusSopId.value ? String(focusSopId.value) : undefined,
     };
   }
-  if (mainTab.value === '3d') {
+  if (section.value === '3d') {
     return {
       tab: '3d',
       model3dId: focusModel3dId.value
@@ -58,7 +56,9 @@ useSyncedQuery(() => {
     };
   }
   return {
-    tab: mainTab.value === '全部' ? undefined : mainTab.value,
+    tab: statusFilters.value.length
+      ? statusFilters.value.join(',')
+      : undefined,
     model: query.value.trim() || undefined,
     sensorTypes: sensorTypeFilters.value.length
       ? sensorTypeFilters.value.map(String).join(',')
@@ -70,9 +70,9 @@ watch(
   () => String(route.query.model || ''),
   (model) => {
     // 搜索框输入会经 useSyncedQuery 回写 ?model=，那次变化与当前搜索词相同，
-    // 不能当成外部深链接把状态页签重置为“全部”。
+    // 不能当成外部深链接把状态筛选清掉。
     if (!model || model === query.value.trim()) return;
-    mainTab.value = '全部';
+    statusFilters.value = [];
     query.value = model;
   },
 );
@@ -90,26 +90,49 @@ watch(
   ([tab, sopId, model3dId]) => {
     const nextTab = String(tab || '');
     if (nextTab === 'sop-library') {
-      mainTab.value = 'sop-library';
+      section.value = 'sop-library';
     } else if (nextTab === 'sop') {
-      mainTab.value = 'sop';
+      section.value = 'sop';
       focusSopId.value = positiveId(sopId);
     }
     if (nextTab === '3d') {
-      mainTab.value = '3d';
+      section.value = '3d';
       focusModel3dId.value = positiveId(model3dId);
     }
   },
 );
-watch(mainTab, (tab) => {
-  if (!RESOURCE_TABS.includes(tab)) lastStatusTab.value = tab;
-});
 
-function initialTab() {
+function isResourceTab(value: string): value is ResourceTab {
+  return (RESOURCE_TABS as readonly string[]).includes(value);
+}
+
+function initialSection(): 'models' | ResourceTab {
   const tab = String(route.query.tab || '');
-  if (RESOURCE_TABS.includes(tab)) return tab;
-  if (route.query.model) return '全部';
-  return tab || '全部';
+  return isResourceTab(tab) ? tab : 'models';
+}
+
+/** 空或「全部」是分组视图。认不出的状态名留着，让列表滤成空的扁平表。 */
+function initialStatusFilters() {
+  const tab = String(route.query.tab || '');
+  if (isResourceTab(tab) || route.query.model) return [];
+  return parseStatusFilters(tab);
+}
+
+function parseStatusFilters(value: string) {
+  const parts = [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (parts.length === 0 || (parts.length === 1 && parts[0] === '全部')) {
+    return [];
+  }
+  const allowed = new Set(store.dictionaryNames('sensor-status'));
+  const known = parts.filter((item) => allowed.has(item));
+  return known.length > 0 ? known : parts;
 }
 
 function parseSensorTypeFilters(value: string) {
@@ -140,7 +163,7 @@ function positiveId(value: unknown) {
     >
       <a-tab-pane key="models" tab="型号">
         <SensorModelsPanel
-          v-model:status="mainTab"
+          v-model:statuses="statusFilters"
           v-model:query="query"
           v-model:sensor-types="sensorTypeFilters"
         />

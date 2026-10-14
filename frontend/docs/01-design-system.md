@@ -39,7 +39,7 @@
 - 外壳：`a-layout` + 暗色 `a-layout-sider`（宽屏常驻、不可折叠，菜单项不带图标，分组标题 14px 加粗、白色实色（只有分组标题加粗）且仅多分组时显示、与品牌左对齐，组内菜单项缩进 16px；960px 以下改为 `a-drawer`）+ 48px `a-layout-header` + `a-layout-content`（内边距 12px）。
 - 业务页：白底圆角卡片 `.selection-page`（内边距 16px）；左侧目录树 + 右侧内容的页面用 `.selection-split`；
   表格/列表占满剩余高度：表头固定、表体在内部滚动，分页条始终显示（单页也显示）并固定在卡片最下面（见 `pages/shared/selection-page.css`）。
-- 表头不换行：列宽至少容得下标题文字 + 排序图标 + 左右 16px 内边距（两个汉字的可排序列 ≥ 88px）。
+- 表头不换行，也不提供列排序（没有排序箭头）。按单列筛选的条件放在该列表头漏斗里（多选命中任一即可，空选表示全部；长列表打开 `filterSearch`）。列宽至少容得下标题、漏斗和左右 16px 内边距；短表头不能折行。原先为排序图标留出的列宽可以保留。
 - 弹窗表单：`a-modal` + `a-form layout="vertical"`，多列用 `a-row` / `a-col`（`:span="12"` 两列，`8` 三列，`24` 整行）。
 
 ## 状态色
@@ -62,4 +62,4 @@ Sensor 类型前的圆点用 `a-badge` 的预设色（`cyan`、`geekblue`、`pur
 - 图标按钮必须有 `aria-label`，并用 `a-tooltip` 给出同样的文字。
 - 被禁用的操作保留按钮、设为 `disabled`，原因写在 `a-tooltip` 里。
 - 内容完整显示，不截断：长文本折行（`overflow-wrap: anywhere`），不用 `text-overflow` / `line-clamp` / `a-typography` 的 `ellipsis`；
-  表单多选不设 `max-tag-count`（工具栏筛选框除外）。表格要紧凑就重新分配列宽：内容短的列窄、长描述列宽，减少折行。
+  表单多选不设 `max-tag-count`。表格要紧凑就重新分配列宽：内容短的列窄、长描述列宽，减少折行。

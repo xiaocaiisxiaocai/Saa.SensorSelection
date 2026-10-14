@@ -16,12 +16,13 @@ import { api, ApiError, type AuditLogItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
 import {
   cellText,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
   PAGINATION_PROPS,
   rowClick,
   scrollX,
-  sortFromChange,
-  sortOrderOf,
-  type TableSortState,
+  type ColumnFilterMap,
 } from '@/pages/shared/table';
 import AuditDetailDialog from '@/pages/system/audit/AuditDetailDialog.vue';
 import { ACTION_LABELS, actionLabel } from '@/pages/system/audit/audit-actions';
@@ -29,12 +30,11 @@ import { formatAuditTarget } from '@/pages/system/audit-target';
 
 import '../shared/selection-page.css';
 
-const actionOptions = [
-  { label: '全部操作', value: '' },
-  ...Object.entries(ACTION_LABELS).map(([value, label]) => ({ label, value })),
-];
+const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({
+  label,
+  value,
+}));
 const resultOptions = [
-  { label: '全部结果', value: '' },
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
 ];
@@ -45,8 +45,6 @@ const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
 const selectedLog = ref<AuditLogItem | null>(null);
-// 日志是服务端分页的，排序必须下推给后端，否则只排到当前这 20 条。
-const sort = ref<TableSortState | null>(null);
 const filters = reactive({
   action: '' as string | null,
   dateRange: null as [string, string] | null,
@@ -61,7 +59,6 @@ const hasActiveFilters = computed(
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
-// 受控排序：sortOrder 要跟着 sort 变，所以列定义必须是 computed
 const columns = computed<TableColumnType[]>(() => [
   // 192 而非 180：完整时间戳实测要 168px 文字宽 + 16px 内边距，180 会被截成
   // 「2026-08-17 20:00:…」，而审计日志里精确到秒是有意义的。
@@ -71,20 +68,25 @@ const columns = computed<TableColumnType[]>(() => [
     title: '时间',
     width: 192,
     fixed: 'left',
-    sorter: true,
-    sortOrder: sortOrderOf(sort.value, 'timestamp'),
   },
   {
     key: 'username',
     dataIndex: 'username',
     title: '用户',
     width: 120,
-    sorter: true,
-    sortOrder: sortOrderOf(sort.value, 'username'),
   },
-  // 「操作」列显示的是中文标签、排序依据却是底层操作码，排出来看着像乱序，
-  // 且已有专门的操作类型筛选，这里不提供排序。
-  { key: 'action', dataIndex: 'action', title: '操作', width: 120 },
+  {
+    key: 'action',
+    dataIndex: 'action',
+    title: '操作',
+    width: 120,
+    ...columnFilter({
+      options: actionOptions,
+      value: filters.action ? [filters.action] : [],
+      multiple: false,
+      search: true,
+    }),
+  },
   // 失败原因不再单独占一列（绝大多数行是空的），失败时显示在目标下方
   {
     key: 'target',
@@ -98,19 +100,30 @@ const columns = computed<TableColumnType[]>(() => [
     key: 'result',
     dataIndex: 'result',
     title: '结果',
-    width: 88,
-    sorter: true,
-    sortOrder: sortOrderOf(sort.value, 'result'),
+    width: 112,
+    ...columnFilter({
+      options: resultOptions,
+      value: filters.result ? [filters.result] : [],
+      multiple: false,
+    }),
   },
   { key: 'ip', dataIndex: 'ip', title: 'IP', width: 120 },
 ]);
 
+function onTableChange(
+  _pagination: unknown,
+  nextFilters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (!isColumnFilterChange(extra)) return;
+  const action = columnFilterValues(nextFilters, 'action').map(String)[0] ?? '';
+  const result = columnFilterValues(nextFilters, 'result').map(String)[0] ?? '';
+  filters.action = action;
+  filters.result = result === 'true' || result === 'false' ? result : '';
+}
+
 watch([page, pageSize], loadData);
-watch(sort, () => {
-  // 换了排序，原来的页码没有意义了，回到第一页重新取。
-  if (page.value === 1) void loadData();
-  else page.value = 1;
-});
 
 onMounted(loadData);
 
@@ -165,16 +178,10 @@ async function loadData() {
     const [from, to] = filters.dateRange ?? [null, null];
     const pageData = await api.listAuditLogs({
       action: filters.action || undefined,
-      direction: sort.value
-        ? sort.value.order === 'ascend'
-          ? 'asc'
-          : 'desc'
-        : undefined,
       from: toIsoStart(from),
       page: page.value,
       pageSize: pageSize.value,
       result: resultFilter(),
-      sort: sort.value?.key,
       to: toIsoEnd(to),
       username: filters.username.trim() || undefined,
     });
@@ -220,20 +227,6 @@ async function resetFilters() {
         aria-label="操作用户"
         allow-clear
       />
-      <a-select
-        v-model:value="filters.action"
-        class="selection-toolbar__filter audit-toolbar__action"
-        :options="actionOptions"
-        placeholder="全部操作"
-        aria-label="操作类型筛选"
-      />
-      <a-select
-        v-model:value="filters.result"
-        class="selection-toolbar__filter audit-toolbar__result"
-        :options="resultOptions"
-        placeholder="全部结果"
-        aria-label="操作结果筛选"
-      />
       <a-range-picker
         v-model:value="filters.dateRange"
         class="audit-toolbar__date"
@@ -259,10 +252,7 @@ async function resetFilters() {
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无日志' }"
       :custom-row="rowClick(openDetail)"
-      @change="
-        (_p: unknown, _f: unknown, sorter: unknown) =>
-          (sort = sortFromChange(sorter))
-      "
+      @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'timestamp'">

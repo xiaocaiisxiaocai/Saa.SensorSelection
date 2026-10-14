@@ -170,6 +170,27 @@ function selectBox(control) {
   return control.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " ant-select-selector ")][1]')
 }
 
+/** 打开表头漏斗。标题按列文字精确匹配，避免「制程」命中「工艺制程」。 */
+async function openHeaderFilter(title) {
+  const headers = page.locator('.ant-table-thead th')
+  const count = await headers.count()
+  let target = null
+  for (let index = 0; index < count; index += 1) {
+    const cell = headers.nth(index)
+    const label = cell.locator('.ant-table-column-title')
+    const text = (await label.count()) > 0 ? await label.innerText() : await cell.innerText()
+    if (text.trim() === title) {
+      target = cell
+      break
+    }
+  }
+  if (!target) throw new Error(`header "${title}" not found`)
+  await target.locator('.ant-table-filter-trigger').click()
+  const dropdown = page.locator('.ant-table-filter-dropdown').last()
+  await dropdown.waitFor({ state: 'visible', timeout: 5000 })
+  return dropdown
+}
+
 async function pickSelect(scope, labelText, optionText) {
   const trigger = await controlFor(scope, labelText)
   await selectBox(trigger).click()
@@ -493,6 +514,22 @@ async function runCustomerCrud() {
     }
   })
 
+  await check('客户通用要求: the category filter lives in the column header', async () => {
+    await page.getByRole('tab', { name: '客户通用要求' }).click()
+    await settle()
+    assertEqual(
+      await page.locator('[aria-label="要求分类筛选"]').count(),
+      0,
+      'toolbar category filter should be gone',
+    )
+    const dropdown = await openHeaderFilter('要求分类')
+    await dropdown.getByRole('button', { name: '确定', exact: true }).waitFor({ state: 'visible' })
+    await dropdown.getByRole('button', { name: '重置', exact: true }).waitFor({ state: 'visible' })
+    // 漏斗不吃 Escape。确定会套用当前勾选并关掉面板；这里没改勾选，等于原样关闭。
+    await dropdown.getByRole('button', { name: '确定', exact: true }).click()
+    await dropdown.waitFor({ state: 'hidden', timeout: 5000 })
+  })
+
   // ---- 客户通用要求
   await check('客户通用要求: create a requirement', async () => {
     await page.getByRole('tab', { name: '客户通用要求' }).click()
@@ -794,20 +831,18 @@ async function runSensorCrud() {
   })
 
   await check('Sensor: the status filter switches the visible set', async () => {
-    // 状态是工具栏上的下拉筛选，不是分段控件的 tab。
-    const statusFilter = page.locator('[aria-label="状态筛选"]')
-    await statusFilter.click()
-    const panel = page.locator('.ant-select-dropdown:visible')
-    await panel.waitFor({ state: 'visible', timeout: 5000 })
-    await panel.locator('.ant-select-item-option-content', { hasText: '停用' }).first().click()
-    await panel.waitFor({ state: 'hidden', timeout: 5000 })
+    // 状态在表头漏斗里。勾选停用后点确定；重置只清勾选，要点确定才生效。
+    const dropdown = await openHeaderFilter('状态')
+    await dropdown.locator('.ant-dropdown-menu-item', { hasText: '停用' }).click()
+    await dropdown.getByRole('button', { name: '确定', exact: true }).click()
+    await dropdown.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     assertEqual(await tableRow(NAMES.sensorModel).count(), 0, 'a 现用 model must not show under 停用')
 
-    await statusFilter.click()
-    await panel.waitFor({ state: 'visible', timeout: 5000 })
-    await panel.locator('.ant-select-item-option-content', { hasText: '全部' }).first().click()
-    await panel.waitFor({ state: 'hidden', timeout: 5000 })
+    const again = await openHeaderFilter('状态')
+    await again.getByRole('button', { name: '重置', exact: true }).click()
+    await again.getByRole('button', { name: '确定', exact: true }).click()
+    await again.waitFor({ state: 'hidden', timeout: 5000 })
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
   })
@@ -1511,6 +1546,8 @@ async function runUiAudit() {
               }
               const gap = Math.round(cardBottom - bar.getBoundingClientRect().bottom)
               if (gap < 0 || gap > 40) out.problems.push(`pagination ${gap}px above the card bottom`)
+              const sortControls = list.querySelectorAll('.ant-table-column-sorter').length
+              if (sortControls !== 0) out.problems.push(`${sortControls} column sort controls`)
               const scroller = list.querySelector('.ant-table-content') || list.querySelector(':scope > .ant-spin-nested-loading')
               const th = list.querySelector('thead th')
               if (scroller && th && scroller.scrollHeight > scroller.clientHeight) {

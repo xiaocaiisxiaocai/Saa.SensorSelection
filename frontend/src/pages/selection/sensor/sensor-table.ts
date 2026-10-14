@@ -1,11 +1,6 @@
 import type { TableColumnType } from 'ant-design-vue';
 
 import { isSensorStatus, type SensorItem } from '@/domain';
-import {
-  sortBy,
-  sortOrderOf,
-  type TableSortState,
-} from '@/pages/shared/table';
 
 /** 型号表格里需要的反查：替换关系的另一方、型录 / 3D 标题 */
 export interface SensorLookup {
@@ -26,7 +21,6 @@ export const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
 ];
 
 export function sensorColumns(options: {
-  sort: TableSortState | null;
   /** 停用页签多显示「停用时间 / 停用原因」 */
   showDisabledDetails: boolean;
   hidden: ReadonlySet<string>;
@@ -34,52 +28,40 @@ export function sensorColumns(options: {
   /** 「全部」分组：关联型录 / 关联 3D 按组跨行合并 */
   grouped?: boolean;
 }): TableColumnType<SensorTableRow>[] {
-  const { sort } = options;
   const shared = options.grouped ? { customCell: associationCell } : {};
-  // 行数据是 { item, rowKey, muted }。dataIndex 指到 item 上的字段，单元格才能取到值；
-  // key 保持字段名，表头排序回传的 columnKey 才对得上 sortRows。
+  // 行数据是 { item, rowKey, muted }。dataIndex 指到 item 上的字段，单元格才能取到值。
   const field = (key: string): TableColumnType['dataIndex'] => ['item', key];
   const baseColumns: TableColumnType[] = [
     {
       key: 'status',
       dataIndex: field('status'),
       title: '状态',
-      width: 88,
+      width: 112,
       fixed: 'left',
-      sorter: true,
-      sortOrder: sortOrderOf(sort, 'status'),
     },
     {
       key: 'partNumber',
       dataIndex: field('partNumber'),
       title: '料号',
       width: 120,
-      sorter: true,
-      sortOrder: sortOrderOf(sort, 'partNumber'),
     },
     {
       key: 'sensorType',
       dataIndex: field('sensorType'),
       title: '感应器类型',
       width: 136,
-      sorter: true,
-      sortOrder: sortOrderOf(sort, 'sensorType'),
     },
     {
       key: 'brand',
       dataIndex: field('brand'),
       title: '品牌',
       width: 88,
-      sorter: true,
-      sortOrder: sortOrderOf(sort, 'brand'),
     },
     {
       key: 'model',
       dataIndex: field('model'),
       title: '型号',
       width: 140,
-      sorter: true,
-      sortOrder: sortOrderOf(sort, 'model'),
     },
     ...(options.showDisabledDetails
       ? [
@@ -88,8 +70,6 @@ export function sensorColumns(options: {
             dataIndex: field('replacedAt'),
             title: '停用时间',
             width: 112,
-            sorter: true,
-            sortOrder: sortOrderOf(sort, 'replacedAt'),
           },
           {
             key: 'problemNote',
@@ -160,18 +140,24 @@ function matchesTypeAndQuery(
   return haystack.includes(value);
 }
 
-/** 按状态、类型和关键字筛选型号；关键字也匹配替换关系另一方与关联文件标题 */
+/**
+ * 按状态、类型和关键字筛选型号；关键字也匹配替换关系另一方与关联文件标题。
+ * `statuses` 为空表示不限状态。
+ */
 export function filterSensors(
   sensors: readonly SensorItem[],
   filters: {
-    status: string;
+    statuses: readonly string[];
     sensorTypes: readonly (string | number)[];
     query: string;
   },
   lookup: SensorLookup,
 ): SensorItem[] {
   return sensors.filter((item) => {
-    if (filters.status !== '全部' && item.status !== filters.status) {
+    if (
+      filters.statuses.length > 0 &&
+      !filters.statuses.includes(item.status)
+    ) {
       return false;
     }
     return matchesTypeAndQuery(
@@ -441,19 +427,6 @@ export function filterSensorGroups(
     [unit.head, ...unit.members].some((item) =>
       matchesTypeAndQuery(item, filters.sensorTypes, filters.query, lookup),
     ),
-  );
-}
-
-/** 按组头（落单行就是它自己）排序。成员保持组内顺序，不另排。 */
-export function sortSensorGroups(
-  units: readonly SensorGroupUnit[],
-  sort: TableSortState | null,
-): SensorGroupUnit[] {
-  if (!sort) return [...units];
-  const direction = sort.order === 'ascend' ? 1 : -1;
-  const compare = sortBy<SensorItem>(sort.key);
-  return [...units].sort(
-    (left, right) => compare(left.head, right.head) * direction,
   );
 }
 

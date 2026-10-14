@@ -12,9 +12,10 @@ import { useSelectionStore } from '@/stores/selection';
 import type { SensorTableRow } from './sensor/sensor-table';
 import {
   activeTabText,
+  chooseColumnFilter,
   clickTab,
   findButton,
-  findSelect,
+  findColumn,
   tagColor,
 } from '@/test-helpers';
 import SensorPage from './SensorPage.vue';
@@ -43,9 +44,9 @@ async function mountPage(
   return mount(SensorPage, { global: { plugins: [pinia, router] } });
 }
 
-/** 状态筛选（型号工作区里的第一个 a-select） */
-function statusSelect(wrapper: VueWrapper) {
-  return wrapper.findAllComponents({ name: 'ASelect' })[0]!;
+/** 状态列的表头漏斗。空选（filteredValue 为 null）就是分组的「全部」。 */
+function statusFilter(wrapper: VueWrapper) {
+  return findColumn(wrapper, '状态').column;
 }
 
 function searchInput(wrapper: VueWrapper) {
@@ -61,17 +62,6 @@ function searchInput(wrapper: VueWrapper) {
 function tableRows(wrapper: VueWrapper) {
   return wrapper.getComponent({ name: 'ATable' }).props('dataSource') as
     SensorTableRow[];
-}
-
-/** 当前表格某列的受控排序状态 */
-function sortOrder(wrapper: VueWrapper, key: string) {
-  const columns = wrapper
-    .getComponent({ name: 'ATable' })
-    .props('columns') as Array<{
-    key: string;
-    sortOrder?: string | null;
-  }>;
-  return columns.find((column) => column.key === key)?.sortOrder ?? null;
 }
 
 describe('SensorPage', () => {
@@ -94,10 +84,13 @@ describe('SensorPage', () => {
 
     expect(labels).toEqual(['型号', 'SOP', '型录', '3D']);
     expect(wrapper.text()).toContain('现用');
-    expect(statusSelect(wrapper).props('options')).toContainEqual({
-      label: '全部',
-      value: '全部',
-    });
+    const status = statusFilter(wrapper);
+    expect(
+      (status.filters as Array<{ value: string }>).map((item) => item.value),
+    ).toEqual(['现用', '备选', '停用']);
+    expect(status.filteredValue).toBeNull();
+    expect(status.filterSearch).toBeUndefined();
+    expect(findColumn(wrapper, '感应器类型').column.filterSearch).toBe(true);
     expect(wrapper.text()).toContain('感应器类型');
     wrapper.unmount();
   });
@@ -116,34 +109,41 @@ describe('SensorPage', () => {
     wrapper.unmount();
   });
 
-  it('sorts the whole result set, not just the rows on the current page', async () => {
-    const wrapper = await mountPage({ tab: '全部' }, writer);
-    const store = useSelectionStore();
-    // 排在最后一页的型号：只排当前页的话，它永远不会浮到第一行。
-    expect(
-      store.saveSensor({
-        brand: 'AAA排序测试品牌',
-        model: '排序测试型号',
-        sensorType: '漫反射',
-        status: '现用',
-      }),
-    ).toMatchObject({ ok: true });
-    await nextTick();
-
-    const brandHeader = wrapper
+  it('does not sort the model table from column headers', async () => {
+    const columnsOf = (current: VueWrapper) =>
+      current.getComponent({ name: 'ATable' }).props('columns') as Array<{
+        key: string;
+        sortOrder?: unknown;
+      }>;
+    const keepsStoreOrder = (column: object) =>
+      !(
+        'sortOrder' in column &&
+        (column as { sortOrder?: unknown }).sortOrder != null
+      ) &&
+      !Object.entries(column).some(
+        ([key, value]) =>
+          key !== 'sortOrder' &&
+          key.toLowerCase().startsWith('sort') &&
+          value != null,
+      );
+    const grouped = await mountPage({ tab: '全部' });
+    expect(columnsOf(grouped).every(keepsStoreOrder)).toBe(true);
+    const before = tableRows(grouped).map((row) => row.item.model);
+    const brandHeader = grouped
       .findAll('th')
       .find((header) => header.text().includes('品牌'));
-    expect(brandHeader).toBeDefined();
     await brandHeader!.trigger('click');
     await nextTick();
+    expect(tableRows(grouped).map((row) => row.item.model)).toEqual(before);
+    grouped.unmount();
 
-    const dataRows = wrapper
-      .findAll('tbody tr')
-      .filter((row) => !row.classes().includes('ant-table-measure-row'));
-    expect(dataRows[0]?.text()).toContain('AAA排序测试品牌');
-    expect(sortOrder(wrapper, 'brand')).toBe('ascend');
-
-    wrapper.unmount();
+    const disabled = await mountPage({ tab: '停用' });
+    const disabledColumns = columnsOf(disabled);
+    expect(disabledColumns.some((column) => column.key === 'replacedAt')).toBe(
+      true,
+    );
+    expect(disabledColumns.every(keepsStoreOrder)).toBe(true);
+    disabled.unmount();
   });
 
   it('hides and restores optional columns via the column menu, persisting the choice', async () => {
@@ -279,7 +279,7 @@ describe('SensorPage', () => {
     await clickTab(wrapper, 'SOP');
     await clickTab(wrapper, '型号');
 
-    expect(statusSelect(wrapper).props('value')).toBe('备选');
+    expect(statusFilter(wrapper).filteredValue).toEqual(['备选']);
     expect(activeTabText(wrapper)).toBe('型号');
     wrapper.unmount();
   });
@@ -475,17 +475,17 @@ describe('SensorPage', () => {
       tab: '全部',
       sensorTypes: '漫反射,对照式',
     });
-    const typeFilter = findSelect(wrapper, '感应器类型');
+    const typeFilter = () => findColumn(wrapper, '感应器类型').column;
     const rows = wrapper.findAll('tbody tr').map((row) => row.text());
 
-    expect(typeFilter.props('value')).toEqual(['漫反射', '对照式']);
+    expect(typeFilter().filteredValue).toEqual(['漫反射', '对照式']);
     expect(rows.some((row) => row.includes('WL12-2B530'))).toBe(true);
     expect(rows.some((row) => row.includes('E3Z-T61'))).toBe(true);
     expect(rows.some((row) => row.includes('E2E-X5MF1'))).toBe(false);
 
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await nextTick();
-    expect(typeFilter.props('value')).toEqual([]);
+    expect(typeFilter().filteredValue).toBeNull();
     expect(
       wrapper
         .findAll('tbody tr')
@@ -978,25 +978,25 @@ describe('SensorPage', () => {
   it('keeps the status tab when typing in the search box but honours external model deep links', async () => {
     const wrapper = await mountPage({ tab: '备选' });
     const router = wrapper.vm.$router;
-    expect(statusSelect(wrapper).props('value')).toBe('备选');
+    expect(statusFilter(wrapper).filteredValue).toEqual(['备选']);
 
     searchInput(wrapper).vm.$emit('update:value', 'E3Z');
     await flushPromises();
     expect(router.currentRoute.value.query.model).toBe('E3Z');
-    expect(statusSelect(wrapper).props('value')).toBe('备选');
+    expect(statusFilter(wrapper).filteredValue).toEqual(['备选']);
 
     await router.push({
       path: '/selection/sensor',
       query: { tab: '备选', model: 'WL12' },
     });
     await flushPromises();
-    expect(statusSelect(wrapper).props('value')).toBe('全部');
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
     expect(searchInput(wrapper).props('value')).toBe('WL12');
 
     wrapper.unmount();
   });
 
-  it('exports rows in the same order as the sorted table', async () => {
+  it('exports grouped members in catalog order', async () => {
     const wrapper = await mountPage({ tab: '全部', model: '导出排序' }, writer);
     const store = useSelectionStore();
     for (const brand of ['MMM导出排序', 'ZZZ导出排序', 'AAA导出排序']) {
@@ -1010,15 +1010,6 @@ describe('SensorPage', () => {
       ).toMatchObject({ ok: true });
     }
     await nextTick();
-
-    const brandHeader = wrapper
-      .findAll('th')
-      .find((header) => header.text().includes('品牌'));
-    await brandHeader!.trigger('click');
-    await nextTick();
-    await brandHeader!.trigger('click');
-    await nextTick();
-    expect(sortOrder(wrapper, 'brand')).toBe('descend');
 
     let exportedBlob: Blob | undefined;
     const NativeUrl = URL;
@@ -1037,12 +1028,12 @@ describe('SensorPage', () => {
     await nextTick();
 
     const text = new TextDecoder().decode(await exportedBlob!.arrayBuffer());
-    const zzz = text.indexOf('ZZZ导出排序型号');
     const mmm = text.indexOf('MMM导出排序型号');
+    const zzz = text.indexOf('ZZZ导出排序型号');
     const aaa = text.indexOf('AAA导出排序型号');
-    expect(zzz).toBeGreaterThan(-1);
-    expect(zzz).toBeLessThan(mmm);
-    expect(mmm).toBeLessThan(aaa);
+    expect(mmm).toBeGreaterThan(-1);
+    expect(mmm).toBeLessThan(zzz);
+    expect(zzz).toBeLessThan(aaa);
 
     wrapper.unmount();
   });
@@ -1287,7 +1278,7 @@ describe('SensorPage', () => {
     expect(wrapper.text()).not.toContain('备选型录WL12');
     expect(wrapper.text()).not.toContain('备选三维WL12');
 
-    await statusSelect(wrapper).vm.$emit('update:value', '现用');
+    await chooseColumnFilter(wrapper, '状态', ['现用']);
     await nextTick();
     const currentRow = wrapper
       .findAll('tbody tr.ant-table-row')
@@ -1298,7 +1289,7 @@ describe('SensorPage', () => {
     expect(cellsWith('现用型录E3Z')).toHaveLength(1);
     expect(cellsWith('现用型录E3Z')[0]!.attributes('rowspan')).toBeUndefined();
 
-    await statusSelect(wrapper).vm.$emit('update:value', '备选');
+    await chooseColumnFilter(wrapper, '状态', ['备选']);
     await nextTick();
     const alternateRow = wrapper
       .findAll('tbody tr.ant-table-row')
@@ -1331,34 +1322,6 @@ describe('SensorPage', () => {
     expect(wrapper.get('.selection-panel').classes()).not.toContain(
       'sensor-models--grouped',
     );
-
-    wrapper.unmount();
-  });
-
-  it('sorts current rows by the column key and keeps alternates under their parent', async () => {
-    const wrapper = await mountPage({}, writer);
-    const brandHeader = wrapper
-      .findAll('th')
-      .find((header) => header.text().includes('品牌'));
-    await brandHeader!.trigger('click');
-    await nextTick();
-
-    expect(sortOrder(wrapper, 'brand')).toBe('ascend');
-    const rows = tableRows(wrapper);
-    const parents = rows.filter((row) => !row.muted);
-    expect(parents[0]?.item.model).toBe('LV-H62');
-    expect(parents.at(-1)?.item.model).toBe('UM30-213113');
-    let parentType = '';
-    for (const row of rows) {
-      if (!row.muted) parentType = row.item.sensorType;
-      else expect(row.item.sensorType).toBe(parentType);
-    }
-    const omron = rows.findIndex((row) => row.item.model === 'E3Z-D61');
-    expect(rows.slice(omron, omron + 3).map((row) => row.item.model)).toEqual([
-      'E3Z-D61',
-      'WL12-2B530',
-      'PZ-G61CP',
-    ]);
 
     wrapper.unmount();
   });
@@ -1403,18 +1366,68 @@ describe('SensorPage', () => {
     const wrapper = await mountPage();
     const router = wrapper.vm.$router;
     await flushPromises();
-    expect(statusSelect(wrapper).props('value')).toBe('全部');
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
     expect(router.currentRoute.value.query.tab).toBeUndefined();
 
-    await statusSelect(wrapper).vm.$emit('update:value', '现用');
+    await chooseColumnFilter(wrapper, '状态', ['现用']);
     await flushPromises();
     expect(router.currentRoute.value.query.tab).toBe('现用');
 
-    await statusSelect(wrapper).vm.$emit('update:value', '全部');
+    findColumn(wrapper, '状态').table.vm.$emit(
+      'change',
+      {},
+      { status: null },
+      {},
+      { action: 'paginate' },
+    );
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe('现用');
+
+    await chooseColumnFilter(wrapper, '状态', ['现用', '备选']);
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe('现用,备选');
+    expect(wrapper.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+
+    await chooseColumnFilter(wrapper, '状态', ['现用', '备选', '停用']);
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe('现用,备选,停用');
+    expect(wrapper.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+    const headers = wrapper.findAll('th').map((item) => item.text());
+    expect(headers).toContain('停用时间');
+    expect(headers).toContain('停用原因');
+
+    await chooseColumnFilter(wrapper, '状态', []);
     await flushPromises();
     expect(router.currentRoute.value.query.tab).toBeUndefined();
+    expect(wrapper.get('.selection-panel').classes()).toContain(
+      'sensor-models--grouped',
+    );
 
     wrapper.unmount();
+  });
+
+  it('keeps an unknown status token as a flat empty filter', async () => {
+    const unknown = await mountPage({ tab: '不是状态' });
+    expect(statusFilter(unknown).filteredValue).toEqual(['不是状态']);
+    expect(unknown.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+    expect(tableRows(unknown)).toHaveLength(0);
+    unknown.unmount();
+
+    const mixed = await mountPage({ tab: '现用,不是状态' });
+    expect(statusFilter(mixed).filteredValue).toEqual(['现用']);
+    expect(mixed.get('.selection-panel').classes()).not.toContain(
+      'sensor-models--grouped',
+    );
+    searchInput(mixed).vm.$emit('update:value', 'E3Z');
+    await flushPromises();
+    expect(mixed.vm.$router.currentRoute.value.query.tab).toBe('现用');
+    mixed.unmount();
   });
 
   it('explains a guarded current and keeps 停用 selectable only when already disabled', async () => {

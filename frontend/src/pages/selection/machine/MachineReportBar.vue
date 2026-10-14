@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { message } from 'ant-design-vue';
+import { ChevronDown } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 import { api, ApiError } from '@/api';
@@ -9,8 +10,9 @@ import { useSelectionStore } from '@/stores/selection';
 import { buildReportSections, hasReportContent } from './machine-report';
 
 /**
- * 机型结构示意图报告：显示已勾选的二级 Tab 数，提供全选 / 清空、
- * 后端生成下载和浏览器预览打印。勾选状态由父页面持有。
+ * 机型结构示意图报告：显示已勾选的二级 Tab 数，「报告」下拉里提供全选 / 清空、
+ * 后端生成下载和浏览器预览打印（收进下拉，给同一行的一级 Tab 让出位置）。
+ * 勾选状态由父页面持有。
  */
 const props = defineProps<{
   /** 勾选的二级 Tab id */
@@ -24,6 +26,8 @@ const store = useSelectionStore();
 const generating = ref(false);
 const noneSelected = computed(() => props.pageIds.length === 0);
 const NONE_SELECTED_HINT = '请先勾选至少一个二级 Tab';
+// 菜单项禁用时原因直接写在菜单文字里
+const NONE_SELECTED_SUFFIX = '（请先勾选）';
 
 const reportSections = computed(() =>
   buildReportSections(store, props.pageIds),
@@ -58,6 +62,13 @@ function preview() {
   }
 }
 
+function onMenuClick({ key }: { key: string | number }) {
+  if (key === 'select-all') emit('selectAll');
+  else if (key === 'clear') emit('clear');
+  else if (key === 'generate') void generate();
+  else if (key === 'preview') preview();
+}
+
 async function generate() {
   if (!ready()) return;
   generating.value = true;
@@ -90,37 +101,25 @@ async function generate() {
     <span class="selection-toolbar__count">
       已选 {{ pageIds.length }} / {{ availableCount }}
     </span>
-    <a-button type="text" size="small" @click="emit('selectAll')">
-      全选
-    </a-button>
-    <a-button
-      type="text"
-      :disabled="noneSelected"
-      size="small"
-      @click="emit('clear')"
-    >
-      清空
-    </a-button>
-    <a-tooltip :title="noneSelected ? NONE_SELECTED_HINT : ''">
-      <span class="inline-flex">
-        <a-button
-          type="primary"
-          :disabled="noneSelected"
-          :loading="generating"
-          size="small"
-          @click="generate"
-        >
-          生成并下载报告
-        </a-button>
-      </span>
-    </a-tooltip>
-    <a-tooltip :title="noneSelected ? NONE_SELECTED_HINT : ''">
-      <span class="inline-flex">
-        <a-button :disabled="noneSelected" size="small" @click="preview">
-          预览 / 打印 PDF
-        </a-button>
-      </span>
-    </a-tooltip>
+    <a-dropdown :trigger="['click']">
+      <a-button size="small" :loading="generating" aria-label="报告操作">
+        报告
+        <ChevronDown :size="14" />
+      </a-button>
+      <template #overlay>
+        <a-menu @click="onMenuClick">
+          <a-menu-item key="select-all">全选</a-menu-item>
+          <a-menu-item key="clear" :disabled="noneSelected">清空</a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="generate" :disabled="noneSelected || generating">
+            生成并下载报告{{ noneSelected ? NONE_SELECTED_SUFFIX : '' }}
+          </a-menu-item>
+          <a-menu-item key="preview" :disabled="noneSelected">
+            预览 / 打印 PDF{{ noneSelected ? NONE_SELECTED_SUFFIX : '' }}
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
   </div>
 </template>
 

@@ -98,10 +98,12 @@ describe('sensor-table', () => {
     const visible = keys({
       ...base,
       showDisabledDetails: false,
-      hidden: new Set(['spec']),
+      hidden: new Set(['spec', 'partNumber']),
       writable: true,
     });
     expect(visible).not.toContain('spec');
+    // 料号常整列为空，也能隐藏
+    expect(visible).not.toContain('partNumber');
     expect(visible.at(-1)).toBe('actions');
     // dataIndex 指到行上的 item；key 仍是字段名，两者不能混成一个路径。
     const columns = sensorColumns({ ...base, showDisabledDetails: true });

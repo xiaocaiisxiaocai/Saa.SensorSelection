@@ -97,3 +97,42 @@ export function nodeFromQuery(
   const node: MachineNodeRef = { category, configuration, item };
   return nodeHasChildren(groups, node) === null ? null : node;
 }
+
+/**
+ * 目录树节点 key → 它自己和子孙节点下全部二级 Tab 的 id。
+ * 目录树勾选一个节点就是勾选这里的全部二级 Tab；不在表里的节点勾选框禁用。
+ */
+export function pageIdsByTreeKey(
+  tabs: readonly MachineTab[],
+): Map<string, number[]> {
+  const map = new Map<string, number[]>();
+  const add = (key: string, id: number) => {
+    const ids = map.get(key);
+    if (ids) ids.push(id);
+    else map.set(key, [id]);
+  };
+  for (const tab of tabs) {
+    for (const page of tab.pages) {
+      const { category, configuration, item } = page.node;
+      add(nodeTreeKey(page.node), page.id);
+      if (item && configuration)
+        add(configurationKey(category, configuration), page.id);
+      if (item || configuration) add(groupKey(category), page.id);
+    }
+  }
+  return map;
+}
+
+/** 按已勾选的二级 Tab 算目录树的勾选 / 半选节点 */
+export function treeCheckState(
+  pageIds: ReadonlyMap<string, readonly number[]>,
+  checked: ReadonlySet<number>,
+): { checked: string[]; halfChecked: string[] } {
+  const state = { checked: [] as string[], halfChecked: [] as string[] };
+  for (const [key, ids] of pageIds) {
+    const count = ids.filter((id) => checked.has(id)).length;
+    if (count === ids.length) state.checked.push(key);
+    else if (count > 0) state.halfChecked.push(key);
+  }
+  return state;
+}

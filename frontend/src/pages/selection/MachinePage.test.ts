@@ -190,11 +190,15 @@ describe('MachinePage', () => {
     const split = wrapper.get('.selection-split');
     expect(split.classes()).not.toContain('selection-split--global-search');
     expect(
-      split.get('.machine-source-stack').find('.machine-global-search-filters')
+      split
+        .get('.machine-source-stack')
+        .find('.machine-global-search-filters')
         .exists(),
     ).toBe(true);
     expect(
-      split.find('.machine-source-stack .machine-global-search-results').exists(),
+      split
+        .find('.machine-source-stack .machine-global-search-results')
+        .exists(),
     ).toBe(false);
     expect(split.find('.machine-global-search-results').exists()).toBe(true);
     expect(wrapper.text()).not.toContain('上层制程');
@@ -301,10 +305,27 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
+  async function openReportMenu(wrapper: VueWrapper) {
+    await findButton(wrapper, '报告')?.trigger('click');
+    await flushPromises();
+  }
+  const reportMenuElements = () => [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ];
+  const reportMenuItems = () =>
+    reportMenuElements().map((item) => item.textContent?.trim() ?? '');
+  async function clickReportMenu(label: string) {
+    const item = reportMenuElements().find(
+      (element) => element.textContent?.trim() === label,
+    );
+    if (!item) throw new Error(`menu item "${label}" not found`);
+    item.click();
+    await flushPromises();
+  }
+
   it('hides every report operation when not signed in', async () => {
     const wrapper = await mountPage();
-    expect(wrapper.text()).not.toContain('生成并下载报告');
-    expect(wrapper.text()).not.toContain('预览 / 打印 PDF');
+    expect(findButton(wrapper, '报告')).toBeUndefined();
     expect(wrapper.find('.machine-sub-tab .ant-checkbox').exists()).toBe(false);
     expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
     expect(wrapper.text()).toMatch(/输送机构|分类/);
@@ -313,12 +334,32 @@ describe('MachinePage', () => {
 
   it('shows report operations to an authenticated read-only user', async () => {
     const wrapper = await mountPage(true);
-    expect(wrapper.text()).toContain('生成并下载报告');
-    expect(wrapper.text()).toContain('预览 / 打印 PDF');
-    expect(findButton(wrapper, '全选')).toBeDefined();
-    // 报告勾的是二级 Tab，目录树不再有勾选框
+    // 报告操作收在一个「报告」下拉里，给同一行的一级 Tab 让位
+    expect(reportMenuItems()).toEqual([]);
+    await openReportMenu(wrapper);
+    expect(reportMenuItems()).toEqual([
+      '全选',
+      '清空',
+      '生成并下载报告（请先勾选）',
+      '预览 / 打印 PDF（请先勾选）',
+    ]);
+    // 报告勾的是二级 Tab；目录树上有二级 Tab 的节点也能勾（勾它下面的全部二级 Tab）
     expect(wrapper.find('.machine-sub-tab .ant-checkbox').exists()).toBe(true);
-    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('checks every second-level tab under a tree node from the tree', async () => {
+    const wrapper = await mountPage(true);
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
+    await wrapper.get('.ant-tree-checkbox').trigger('click');
+    expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+1/);
+    expect(
+      wrapper.get<HTMLInputElement>('.machine-sub-tab input[type="checkbox"]')
+        .element.checked,
+    ).toBe(true);
+    await wrapper.get('.ant-tree-checkbox').trigger('click');
+    expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
     wrapper.unmount();
   });
 
@@ -327,9 +368,11 @@ describe('MachinePage', () => {
     expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+1/);
     await wrapper.get('.machine-sub-tab input[type="checkbox"]').setValue(true);
     expect(wrapper.text()).toMatch(/已选\s+1\s+\/\s+1/);
-    await findButton(wrapper, '清空')?.trigger('click');
+    await openReportMenu(wrapper);
+    expect(reportMenuItems()).toContain('生成并下载报告');
+    await clickReportMenu('清空');
     expect(wrapper.text()).toMatch(/已选\s+0\s+\//);
-    await findButton(wrapper, '全选')?.trigger('click');
+    await clickReportMenu('全选');
     expect(wrapper.text()).toMatch(/已选\s+1\s+\//);
     wrapper.unmount();
   });
@@ -376,7 +419,8 @@ describe('MachinePage', () => {
 
     const openSpy = vi.spyOn(window, 'open');
     const warning = vi.spyOn(message, 'warning');
-    await findButton(wrapper, '预览/打印PDF')?.trigger('click');
+    await openReportMenu(wrapper);
+    await clickReportMenu('预览 / 打印 PDF');
 
     expect(openSpy).not.toHaveBeenCalled();
     expect(warning).toHaveBeenLastCalledWith('所选二级 Tab 暂无可生成的内容');
@@ -948,10 +992,9 @@ describe('MachinePage machine tabs', () => {
 
   async function createPage(wrapper: VueWrapper, name: string) {
     // 已有二级 Tab 时在栏右侧，还没有时是空态里的按钮
-    const button =
-      wrapper.find('button[aria-label="新建二级 Tab"]').exists()
-        ? wrapper.get('button[aria-label="新建二级 Tab"]')
-        : findButton(wrapper, '新建二级Tab')!;
+    const button = wrapper.find('button[aria-label="新建二级 Tab"]').exists()
+      ? wrapper.get('button[aria-label="新建二级 Tab"]')
+      : findButton(wrapper, '新建二级Tab')!;
     await button.trigger('click');
     await flushPromises();
     await fillPageDialog(name);
@@ -1023,9 +1066,9 @@ describe('MachinePage machine tabs', () => {
     const category = store
       .entityGroups('machine')
       .find((group) => group.configurations?.length)!.name;
-    expect(store.saveMachineConfiguration(category, { name: '空配置' }).ok).toBe(
-      true,
-    );
+    expect(
+      store.saveMachineConfiguration(category, { name: '空配置' }).ok,
+    ).toBe(true);
     await flushPromises();
 
     // 没有子节点的配置是末级节点，可以选中

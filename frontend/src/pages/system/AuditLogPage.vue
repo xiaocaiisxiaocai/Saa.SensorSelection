@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
+import dayjs, { type Dayjs } from 'dayjs';
 import { RotateCcw } from 'lucide-vue-next';
 import {
   computed,
@@ -155,6 +156,37 @@ function resultFilter(): boolean | undefined {
   return undefined;
 }
 
+// 日志只会有过去的记录：快捷范围都截止到今天，今天之后的日期不可选，
+// 面板默认显示上个月和本月（而不是本月和全是禁用日期的下个月）。
+// antd-vue 的 presets 不接受函数值，所以每次打开时按当天重新生成。
+function buildDatePicker() {
+  const today = dayjs();
+  const lastDays = (days: number): [Dayjs, Dayjs] => [
+    today.subtract(days - 1, 'day'),
+    today,
+  ];
+  return {
+    defaultPickerValue: [
+      today.subtract(1, 'month').format('YYYY-MM-DD'),
+      today.format('YYYY-MM-DD'),
+    ] as [string, string],
+    presets: [
+      { label: '今天', value: lastDays(1) },
+      { label: '最近 7 天', value: lastDays(7) },
+      { label: '最近 30 天', value: lastDays(30) },
+    ],
+  };
+}
+const datePicker = ref(buildDatePicker());
+
+function onDatePickerOpenChange(open: boolean) {
+  if (open) datePicker.value = buildDatePicker();
+}
+
+function isFutureDate(date: Dayjs): boolean {
+  return date.isAfter(dayjs(), 'day');
+}
+
 function toIsoStart(dateStr: string | null): string | undefined {
   if (!dateStr) return undefined;
   const date = new Date(`${dateStr}T00:00:00`);
@@ -231,7 +263,11 @@ async function resetFilters() {
         v-model:value="filters.dateRange"
         class="audit-toolbar__date"
         value-format="YYYY-MM-DD"
-        :placeholder="['开始时间', '结束时间']"
+        :placeholder="['开始日期', '结束日期']"
+        :presets="datePicker.presets"
+        :default-picker-value="datePicker.defaultPickerValue"
+        :disabled-date="isFutureDate"
+        @open-change="onDatePickerOpenChange"
       />
       <a-button
         type="text"

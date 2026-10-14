@@ -160,6 +160,7 @@ export const useSelectionStore = defineStore('selection', () => {
       machineSectionHits,
       processSteps: repository.getProcessSteps(),
       sensors: repository.getSensors(),
+      customerCrud: repository.getCrud,
     });
   }
 

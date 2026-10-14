@@ -1456,8 +1456,25 @@ async function run() {
     machineSectionHits,
     processSteps: repository.getProcessSteps(),
     sensors: repository.getSensors(),
+    customerCrud: repository.getCrud,
   })
   assert.equal(index.some((item) => item.title.includes('E3Z-D61')), true)
+  // 客户资料（通用要求 / 制程注意事项 / 厂外反馈）的内容也能被全局搜到，
+  // 结果指向该客户区域并打开对应的标签页
+  const reqHit = index.find(
+    (item) => item.type === 'customer' && item.title === '板件有无检测距离不大于 300mm',
+  )
+  assert.ok(reqHit, 'customer requirement content is searchable')
+  assert.equal(reqHit.category, '庆鼎')
+  assert.deepEqual(reqHit.query, { category: '庆鼎', item: '华东', tab: 'req' })
+  assert.match(reqHit.sub, /客户通用要求/)
+  assert.match(reqHit.sub, /示例备注/, 'requirement note is indexed')
+  const feedbackHit = index.find(
+    (item) => item.type === 'customer' && item.title === '字典分类验证',
+  )
+  assert.ok(feedbackHit, 'customer feedback problem is searchable')
+  assert.deepEqual(feedbackHit.query, { category: '庆鼎', item: '华东', tab: 'feedback' })
+  assert.match(feedbackHit.sub, /更换真空表头/, 'feedback measure is indexed')
   assert.equal(
     index.some(
       (item) =>

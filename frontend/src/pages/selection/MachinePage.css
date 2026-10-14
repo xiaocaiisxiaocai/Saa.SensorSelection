@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  width: 280px;
+  width: var(--source-list-width);
   min-height: 0;
 }
 
@@ -35,8 +35,25 @@
   display: none;
 }
 
-@media (width <= 60rem) {
+/*
+ * 与 selection-page.css 的上下排列断点一致。目录在上方时：两排切换按钮并成一排，
+ * 目录区高一些（机型树层级深），把高度留给树本身
+ */
+@media (width < 80rem) {
+  .selection-split--machine {
+    grid-template-rows: minmax(16rem, 40vh) minmax(0, 1fr);
+  }
+
   .machine-source-stack {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .machine-source-stack > .entity-source,
+  .machine-source-stack > .machine-global-search-filters,
+  .machine-source-stack:not(:has(.machine-view-tabs)) > .machine-catalog-tabs {
+    grid-column: 1 / -1;
   }
 }

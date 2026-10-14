@@ -241,7 +241,9 @@ public class AuditLogService(
         }
         if (!string.IsNullOrWhiteSpace(username))
         {
-            query = query.Where(log => log.Username == username);
+            // 工具栏是搜索框：按包含匹配，输入部分用户名也能筛到
+            var keyword = username.Trim();
+            query = query.Where(log => log.Username != null && log.Username.Contains(keyword));
         }
         if (!string.IsNullOrWhiteSpace(target))
         {

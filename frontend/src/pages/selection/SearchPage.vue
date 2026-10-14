@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { Empty } from 'ant-design-vue';
+import { computed, h, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { searchItemDetail, type SearchItem } from '@/domain';
@@ -50,6 +51,15 @@ const tabs = computed(() => [
   { label: '机型', value: 'machine', count: resultCounts.value.machine },
   { label: 'Sensor', value: 'sensor', count: resultCounts.value.sensor },
 ]);
+
+// 和其它页面一样用 antd 的空状态插图
+const emptyLocale = {
+  emptyText: h(Empty, {
+    image: Empty.PRESENTED_IMAGE_SIMPLE,
+    description:
+      '没有匹配的结果，换个关键词试试。可搜索客户及其要求 / 注意事项 / 反馈、制程、机型和 Sensor 型号',
+  }),
+};
 
 const typeLabel: Record<SearchItem['type'], string> = {
   customer: '客户',
@@ -112,10 +122,7 @@ const { listPagination } = useTablePagination(
           :data-source="results"
           :pagination="listPagination"
           item-layout="vertical"
-          :locale="{
-            emptyText:
-              '没有匹配的结果，换个关键词试试，可搜索客户、制程、机型和 Sensor 型号',
-          }"
+          :locale="emptyLocale"
         >
           <template #renderItem="{ item }">
             <a-list-item class="search-list__item">

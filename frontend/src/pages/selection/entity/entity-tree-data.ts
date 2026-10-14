@@ -16,8 +16,17 @@ export interface EntityNode {
   hasChildren?: boolean;
   selectable: boolean;
   checkable: boolean;
+  /** 显示勾选框但不能勾（下面没有可勾选的内容） */
+  disableCheckbox?: boolean;
   isLeaf?: boolean;
   children?: EntityNode[];
+}
+
+/** 目录树的勾选状态：checkable 是能勾选的节点 key，其余节点的勾选框禁用 */
+export interface TreeCheckState {
+  checked: string[];
+  halfChecked: string[];
+  checkable: ReadonlySet<string>;
 }
 
 export interface ItemPayload {
@@ -125,6 +134,22 @@ export function branchKeys(nodes: readonly EntityNode[]): string[] {
   return nodes.flatMap((node) =>
     node.children ? [node.key, ...branchKeys(node.children)] : [],
   );
+}
+
+/** 节点 key 的全部祖先分支 key（由外到内）；找不到节点时为空 */
+export function ancestorKeys(
+  nodes: readonly EntityNode[],
+  key: string,
+): string[] {
+  for (const node of nodes) {
+    if (node.key === key) return [];
+    if (!node.children) continue;
+    const path = ancestorKeys(node.children, key);
+    if (path.length || node.children.some((child) => child.key === key)) {
+      return [node.key, ...path];
+    }
+  }
+  return [];
 }
 
 /** 按叶子名找节点 key（没有 selectedKey 时的退路） */

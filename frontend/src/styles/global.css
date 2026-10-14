@@ -59,3 +59,19 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/*
+ * 树形层级缩进：antd 默认每层 24px，叶子节点前还留一个展开占位，子节点离父节点太远。
+ * 统一收成 12px（每层一致；拖拽落点的缩进由 antd 按实际宽度计算）。
+ * a-tree-select 的下拉层渲染在应用树外，所以放在全局样式里。
+ */
+.ant-tree .ant-tree-indent-unit,
+.ant-select-dropdown .ant-select-tree .ant-select-tree-indent-unit {
+  width: var(--space-4);
+}
+
+/* 拖动左侧目录宽度期间（SourcePane）：全局保持列宽光标，不误选文字 */
+body.is-resizing-pane {
+  cursor: col-resize;
+  user-select: none;
+}

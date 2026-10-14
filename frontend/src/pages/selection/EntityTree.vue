@@ -7,11 +7,13 @@ import {
   Plus,
   Search,
 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import type { EntityGroup } from '@/domain';
+import type { TreeCheckState } from '@/pages/selection/entity/entity-tree-data';
 import EntityTreeNode from '@/pages/selection/entity/EntityTreeNode.vue';
 import {
+  ancestorKeys,
   branchKeys,
   buildEntityTree,
   dropMove,
@@ -32,7 +34,8 @@ const props = withDefaults(
     groups: EntityGroup[];
     selected: string;
     selectedKey?: string;
-    checkedItems?: string[];
+    /** 传入时每个节点都显示勾选框，只有 checkable 里的能勾；勾选状态由父组件计算 */
+    checkState?: TreeCheckState;
     editable?: boolean;
     sortable?: boolean;
     allowConfigurations?: boolean;
@@ -53,13 +56,13 @@ const props = withDefaults(
     sortable: false,
     allowConfigurations: false,
     selectedKey: undefined,
-    checkedItems: undefined,
+    checkState: undefined,
   },
 );
 
 const emit = defineEmits<{
   select: [payload: ItemPayload];
-  toggleCheck: [payload: ItemPayload & { checked: boolean }];
+  checkNode: [payload: { key: string; checked: boolean }];
   createGroup: [];
   editGroup: [name: string];
   deleteGroup: [name: string];
@@ -89,9 +92,29 @@ const canSort = computed(
   () => props.sortable && props.editable && keyword.value === '',
 );
 
-const treeData = computed(() =>
-  buildEntityTree(props.groups, keyword.value, props.selectableBranches),
-);
+function withCheckable(
+  nodes: EntityNode[],
+  checkable: ReadonlySet<string>,
+): EntityNode[] {
+  // 不能勾的节点也显示（禁用的）勾选框，同一层的名称才对得齐
+  return nodes.map((node) => ({
+    ...node,
+    checkable: true,
+    disableCheckbox: !checkable.has(node.key),
+    children: node.children && withCheckable(node.children, checkable),
+  }));
+}
+
+const treeData = computed(() => {
+  const nodes = buildEntityTree(
+    props.groups,
+    keyword.value,
+    props.selectableBranches,
+  );
+  return props.checkState
+    ? withCheckable(nodes, props.checkState.checkable)
+    : nodes;
+});
 
 // 默认全部展开；之后新增的分组/配置也自动展开，用户手动收起的保持收起。
 const expandedKeys = ref<string[]>(branchKeys(treeData.value));
@@ -132,9 +155,30 @@ const selectedKeys = computed(() => {
   return key ? [key] : [];
 });
 
+// 选中节点变化（含首次进入、从搜索 / 地址栏跳转）时：展开它所在的分支，
+// 并把它滚动到可见位置，免得选中项藏在收起的分组里或列表下方
+const body = ref<HTMLElement>();
+watch(
+  () => selectedKeys.value[0],
+  async (key) => {
+    if (!key) return;
+    const ancestors = ancestorKeys(treeData.value, key);
+    const collapsed = ancestors.filter(
+      (ancestor) => !expandedKeys.value.includes(ancestor),
+    );
+    if (collapsed.length)
+      expandedKeys.value = [...expandedKeys.value, ...collapsed];
+    await nextTick();
+    body.value
+      ?.querySelector('.ant-tree-treenode-selected')
+      ?.scrollIntoView?.({ block: 'nearest' });
+  },
+  { immediate: true, flush: 'post' },
+);
+
 const checkedKeys = computed(() => ({
-  checked: props.checkedItems ?? [],
-  halfChecked: [],
+  checked: props.checkState?.checked ?? [],
+  halfChecked: props.checkState?.halfChecked ?? [],
 }));
 
 const nodeOf = (node: unknown) =>
@@ -146,9 +190,10 @@ const onSelect: TreeProps['onSelect'] = (_keys, info) => {
 };
 
 const onCheck: TreeProps['onCheck'] = (_keys, info) => {
-  const node = nodeOf(info.node);
-  if (node.kind !== 'item') return;
-  emit('toggleCheck', { ...payloadOf(node), checked: Boolean(info.checked) });
+  emit('checkNode', {
+    key: nodeOf(info.node).key,
+    checked: Boolean(info.checked),
+  });
 };
 
 // 只允许同一父节点下的同级排序（拖到兄弟节点的前/后），不允许改挂父级。
@@ -157,8 +202,6 @@ const allowDrop: TreeProps['allowDrop'] = ({
   dropNode,
   dropPosition,
 }) => dropPosition !== 0 && sameParent(nodeOf(dragNode), nodeOf(dropNode));
-
-const draggable = (node: unknown) => canSort.value && Boolean(nodeOf(node));
 
 const onDrop: TreeProps['onDrop'] = (info) => {
   const drag = nodeOf(info.dragNode);
@@ -337,17 +380,17 @@ function runAction(node: EntityNode, key: string) {
       </a-input>
     </div>
 
-    <div class="entity-tree__body">
+    <div ref="body" class="entity-tree__body">
       <a-tree
         v-if="treeData.length"
         block-node
         :tree-data="treeData"
         :expanded-keys="visibleExpandedKeys"
         :selected-keys="selectedKeys"
-        :checkable="checkedItems !== undefined"
+        :checkable="checkState !== undefined"
         check-strictly
         :checked-keys="checkedKeys"
-        :draggable="canSort ? draggable : false"
+        :draggable="canSort"
         :allow-drop="allowDrop"
         @expand="onExpand"
         @select="onSelect"

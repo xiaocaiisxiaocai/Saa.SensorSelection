@@ -101,12 +101,12 @@ describe('AuditLogPage', () => {
     wrapper.unmount();
   });
 
-  it('uses a compact deterministic desktop toolbar and a narrow-screen layout', () => {
+  it('keeps the date range at a fixed width on desktop and lets it fill narrow screens', () => {
     expect(auditCss).toMatch(
-      /\.audit-toolbar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/s,
+      /^\.audit-toolbar__date\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*16rem;/m,
     );
     expect(auditCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
+      /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar__date\s*\{[^}]*flex:\s*1 1 16rem;/s,
     );
   });
 

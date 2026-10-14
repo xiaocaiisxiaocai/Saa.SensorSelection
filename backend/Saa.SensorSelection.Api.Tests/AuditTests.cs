@@ -102,6 +102,12 @@ public class AuditTests
         // TestServer 没有真实 socket 地址，生产 Kestrel 的 ::1/映射地址由
         // AuditLogService.NormalizeIp 统一转为 127.0.0.1；此处只防止回归为 ::1。
         Assert.NotEqual("::1", successEntry.GetProperty("ip").GetString());
+
+        // 用户筛选是搜索框，输入部分用户名也能筛到；不匹配的则为空
+        var partial = await QueryAuditLogsAsync(admin, "?action=auth.login&username=adm");
+        Assert.Equal(page.GetProperty("total").GetInt32(), partial.GetProperty("total").GetInt32());
+        var none = await QueryAuditLogsAsync(admin, "?action=auth.login&username=nobody");
+        Assert.Equal(0, none.GetProperty("total").GetInt32());
     }
 
     [Fact]
@@ -143,6 +149,55 @@ public class AuditTests
             item.GetProperty("action").GetString() == "store.upsert" &&
             item.GetProperty("target").GetString() == "customer-req:历史客户" &&
             item.GetProperty("detail").GetString() == "数据类型：数组；记录数：2");
+    }
+
+    [Fact]
+    public async Task AuditLogs_FilterByTimeRange()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AuditLogs.AddRange(
+                new AuditLog
+                {
+                    Action = "test.range",
+                    Target = "before",
+                    Result = true,
+                    Timestamp = new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.Zero),
+                },
+                new AuditLog
+                {
+                    // 非 UTC 偏移也按 UTC 存，范围比较才正确（= 2026-01-02 10:00Z）
+                    Action = "test.range",
+                    Target = "inside",
+                    Result = true,
+                    Timestamp = new DateTimeOffset(2026, 1, 2, 18, 0, 0, TimeSpan.FromHours(8)),
+                },
+                new AuditLog
+                {
+                    Action = "test.range",
+                    Target = "after",
+                    Result = true,
+                    Timestamp = new DateTimeOffset(2026, 1, 3, 10, 0, 0, TimeSpan.Zero),
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await QueryAuditLogsAsync(
+            admin,
+            "?action=test.range" +
+            $"&from={Uri.EscapeDataString("2026-01-02T00:00:00.000Z")}" +
+            $"&to={Uri.EscapeDataString("2026-01-02T23:59:59.999Z")}");
+
+        Assert.Equal(1, page.GetProperty("total").GetInt32());
+        var entry = Assert.Single(page.GetProperty("items").EnumerateArray());
+        Assert.Equal("inside", entry.GetProperty("target").GetString());
+        Assert.Equal(
+            new DateTimeOffset(2026, 1, 2, 10, 0, 0, TimeSpan.Zero),
+            entry.GetProperty("timestamp").GetDateTimeOffset());
     }
 
     [Fact]

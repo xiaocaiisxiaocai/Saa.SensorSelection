@@ -19,6 +19,17 @@ public static class RbacDefaults
         ("audit:view", "查看操作日志", "系统"),
     ];
 
+    /// <summary>
+    /// 权限在界面上的展示顺序：按上面的定义顺序（业务 → 系统 → 日志）。
+    /// 不按 Module/Name 字符串排序——中文按区域文化排序会把「系统」排到「业务」前面。
+    /// 未定义的权限码排在最后。
+    /// </summary>
+    public static int PermissionOrder(string code)
+    {
+        var index = Array.FindIndex(Permissions, permission => permission.Code == code);
+        return index < 0 ? int.MaxValue : index;
+    }
+
     public static readonly (string Code, string Name, string Description, bool IsSystem, string[] Permissions)[] Roles =
     [
         (

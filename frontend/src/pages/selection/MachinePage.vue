@@ -12,6 +12,7 @@ import {
   type MachineTabPage,
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
+import SourcePane from '@/pages/selection/SourcePane.vue';
 import MachineCatalogSwitch from '@/pages/selection/machine/MachineCatalogSwitch.vue';
 import MachineGlobalSearchFilters from '@/pages/selection/machine/MachineGlobalSearchFilters.vue';
 import MachineGlobalSearchResults from '@/pages/selection/machine/MachineGlobalSearchResults.vue';
@@ -26,7 +27,9 @@ import {
   nodeHasChildren,
   nodeLabel,
   nodeTreeKey,
+  pageIdsByTreeKey,
   pagesOf,
+  treeCheckState,
 } from '@/pages/selection/machine/machine-nodes';
 import {
   machineCatalogFromQuery,
@@ -90,7 +93,9 @@ const node = computed<MachineNodeRef | null>(() => {
     : null;
 });
 const nodeIsBranch = computed(() =>
-  node.value ? nodeHasChildren(catalogGroups.value, node.value) === true : false,
+  node.value
+    ? nodeHasChildren(catalogGroups.value, node.value) === true
+    : false,
 );
 const nodeName = computed(() => (node.value ? nodeLabel(node.value) : ''));
 
@@ -102,6 +107,16 @@ const availablePageIds = computed(() =>
   tabs.value.flatMap((tab) => tab.pages.map((page) => page.id)),
 );
 const checkedPages = computed(() => new Set(checkedPageIds.value));
+// 目录树勾选：勾一个节点 = 勾它（含子孙）下面的全部二级 Tab，部分勾选时显示半选
+const treePageIds = computed(() => pageIdsByTreeKey(tabs.value));
+const treeChecks = computed(() =>
+  auth.isAuthenticated
+    ? {
+        ...treeCheckState(treePageIds.value, checkedPages.value),
+        checkable: new Set(treePageIds.value.keys()),
+      }
+    : undefined,
+);
 const current = computed(() =>
   resolveTabSelection(tabs.value, node.value, route.query),
 );
@@ -296,6 +311,16 @@ function openGlobalSearchResult(result: MachineStructureSearchResult) {
 
 // ── 报告勾选 ────────────────────────────────────────────────────
 
+function onTreeCheck({ key, checked }: { key: string; checked: boolean }) {
+  if (!auth.isAuthenticated) return;
+  const next = new Set(checkedPageIds.value);
+  for (const id of treePageIds.value.get(key) ?? []) {
+    if (checked) next.add(id);
+    else next.delete(id);
+  }
+  checkedPageIds.value = [...next];
+}
+
 function setChecked(pageId: number, checked: boolean) {
   if (!auth.isAuthenticated) return;
   const next = new Set(checkedPageIds.value);
@@ -380,43 +405,47 @@ async function removeTab(tabId: number) {
         'selection-split--machine': activeMachineView === 'browse',
       }"
     >
-      <div class="machine-source-stack">
-        <MachineCatalogSwitch
-          :catalog="activeMachineType"
-          :view="activeMachineView"
-          @catalog="selectMachineCatalog"
-          @view="selectMachineView"
-        />
-        <EntitySource
-          v-if="activeMachineView === 'browse'"
-          kind="machine"
-          :machine-type="activeMachineType"
-          :selected="node?.item ?? ''"
-          :selected-key="node ? nodeTreeKey(node) : undefined"
-          :locked-branches="lockedBranches"
-          @select="selectEntity"
-        />
-        <MachineGlobalSearchFilters
-          v-else
-          v-model:machine-model-ids="searchMachineModelIds"
-          v-model:process-step-ids="searchProcessStepIds"
-          v-model:board-characteristic-ids="searchBoardCharacteristicIds"
-          v-model:query="searchQuery"
-          :machine-model-options="machineModelOptions"
-          :process-step-options="processStepOptions"
-          :board-characteristic-options="boardCharacteristicOptions"
-        />
-      </div>
+      <SourcePane
+        storage-key="symtek:source-width:machine"
+        :default-width="280"
+      >
+        <div class="machine-source-stack">
+          <MachineCatalogSwitch
+            :catalog="activeMachineType"
+            :view="activeMachineView"
+            @catalog="selectMachineCatalog"
+            @view="selectMachineView"
+          />
+          <EntitySource
+            v-if="activeMachineView === 'browse'"
+            kind="machine"
+            :machine-type="activeMachineType"
+            :selected="node?.item ?? ''"
+            :selected-key="node ? nodeTreeKey(node) : undefined"
+            :locked-branches="lockedBranches"
+            :check-state="treeChecks"
+            @select="selectEntity"
+            @check-node="onTreeCheck"
+          />
+          <MachineGlobalSearchFilters
+            v-else
+            v-model:machine-model-ids="searchMachineModelIds"
+            v-model:process-step-ids="searchProcessStepIds"
+            v-model:board-characteristic-ids="searchBoardCharacteristicIds"
+            v-model:query="searchQuery"
+            :machine-model-options="machineModelOptions"
+            :process-step-options="processStepOptions"
+            :board-characteristic-options="boardCharacteristicOptions"
+          />
+        </div>
+      </SourcePane>
       <MachineGlobalSearchResults
         v-if="activeMachineView === 'find'"
         :results="globalSearchResults"
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">
-        <a-empty
-          v-if="!node"
-          description="暂无机型，请在左侧新建分类和机型"
-        />
+        <a-empty v-if="!node" description="暂无机型，请在左侧新建分类和机型" />
         <!-- 有子选单的节点没有二级 Tab -->
         <a-empty v-else-if="nodeIsBranch">
           <template #description>

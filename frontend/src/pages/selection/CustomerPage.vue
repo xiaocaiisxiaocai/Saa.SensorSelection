@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { entityDataName, entityTreeItemKey } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
+import SourcePane from '@/pages/selection/SourcePane.vue';
 import CustomerDocsPanel from '@/pages/selection/customer/CustomerDocsPanel.vue';
 import CustomerFeedbackPanel from '@/pages/selection/customer/CustomerFeedbackPanel.vue';
 import CustomerProcPanel from '@/pages/selection/customer/CustomerProcPanel.vue';
@@ -16,7 +17,25 @@ import '../shared/selection-page.css';
 const route = useRoute();
 const router = useRouter();
 const store = useSelectionStore();
-const customerTab = ref('req');
+// 全局搜索结果带 ?tab= 直接打开对应标签页；之后手动切换标签页时把它从地址栏去掉，
+// 免得刷新又跳回搜索时的那一页
+const CUSTOMER_TABS = ['req', 'proc', 'sop', 'feedback'];
+function tabFromQuery(value: unknown): string | null {
+  return CUSTOMER_TABS.includes(String(value)) ? String(value) : null;
+}
+const customerTab = ref(tabFromQuery(route.query.tab) ?? 'req');
+watch(
+  () => route.query.tab,
+  (value) => {
+    const tab = tabFromQuery(value);
+    if (tab) customerTab.value = tab;
+  },
+);
+watch(customerTab, (tab) => {
+  if (route.query.tab === undefined || route.query.tab === tab) return;
+  const { tab: _tab, ...query } = route.query;
+  void router.replace({ path: route.path, query });
+});
 
 const groups = computed(() => store.entityGroups('customer'));
 
@@ -115,13 +134,18 @@ function selectEntity(payload: { category: string; item: string }) {
   <section class="selection-page">
     <h1 class="visually-hidden">客户管理</h1>
     <div class="selection-split">
-      <EntitySource
-        kind="customer"
-        :selected="selection.item"
-        :selected-category="selection.category"
-        :selected-key="selectedKey"
-        @select="selectEntity"
-      />
+      <SourcePane
+        storage-key="symtek:source-width:customer"
+        :default-width="240"
+      >
+        <EntitySource
+          kind="customer"
+          :selected="selection.item"
+          :selected-category="selection.category"
+          :selected-key="selectedKey"
+          @select="selectEntity"
+        />
+      </SourcePane>
       <div v-if="selection.item" class="selection-panel">
         <h2 class="visually-hidden">{{ panelLabel }}</h2>
         <a-tabs

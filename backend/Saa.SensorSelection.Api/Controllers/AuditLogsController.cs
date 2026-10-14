@@ -12,7 +12,7 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
 {
     /// <summary>
     /// 分页查询操作日志（默认按时间倒序）。
-    /// 支持筛选：action（操作码）、username（操作用户）、target（操作目标，如数据 key）、
+    /// 支持筛选：action（操作码）、username（操作用户，包含匹配）、target（操作目标，如数据 key）、
     /// result（true/false）、from/to（UTC 时间范围，ISO 8601）。
     /// 支持排序：sort（timestamp/username/action/result）、direction（asc/desc）。
     /// </summary>

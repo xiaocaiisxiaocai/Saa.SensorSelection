@@ -13,6 +13,8 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
+import type { TreeCheckState } from '@/pages/selection/entity/entity-tree-data';
+
 import EntityTree from './EntityTree.vue';
 
 const props = defineProps<{
@@ -21,7 +23,7 @@ const props = defineProps<{
   /** 当前选中叶子所在的分组；客户目录里区域名会在不同客户下重复，需要它区分 */
   selectedCategory?: string;
   selectedKey?: string;
-  checkedItems?: string[];
+  checkState?: TreeCheckState;
   machineType?: MachineCatalogKind;
   /** 机型：已有二级 Tab 的分组 / 配置 key，不能再加子节点 */
   lockedBranches?: ReadonlySet<string>;
@@ -31,14 +33,7 @@ const emit = defineEmits<{
   select: [
     payload: { category: string; configuration?: string | null; item: string },
   ];
-  toggleCheck: [
-    payload: {
-      category?: string;
-      configuration?: string | null;
-      item: string;
-      checked: boolean;
-    },
-  ];
+  checkNode: [payload: { key: string; checked: boolean }];
 }>();
 
 const store = useSelectionStore();
@@ -229,7 +224,7 @@ function onReorderItems(payload: {
       :groups="treeGroups"
       :selected="selected"
       :selected-key="selectedKey"
-      :checked-items="checkedItems"
+      :check-state="checkState"
       :editable="writable"
       :sortable="writable"
       :allow-configurations="kind === 'machine' && machineType !== 'project'"
@@ -238,7 +233,7 @@ function onReorderItems(payload: {
       :selectable-branches="kind === 'machine'"
       :locked-branches="lockedBranches"
       @select="onSelect"
-      @toggle-check="emit('toggleCheck', $event)"
+      @check-node="emit('checkNode', $event)"
       @create-group="groupDialog?.openCreate()"
       @edit-group="groupDialog?.openEdit($event)"
       @delete-group="removeGroup"

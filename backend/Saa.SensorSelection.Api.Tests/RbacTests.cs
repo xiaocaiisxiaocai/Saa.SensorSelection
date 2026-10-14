@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Saa.SensorSelection.Api.Models;
+
 namespace Saa.SensorSelection.Api.Tests;
 
 public class RbacTests
@@ -321,6 +323,15 @@ public class RbacTests
 
         // 创建自定义角色（带 selection:read 权限）
         var permissions = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+        // 权限按 RbacDefaults 的定义顺序返回（业务在前），不受区域文化的中文排序影响
+        Assert.Equal(
+            RbacDefaults.Permissions.Select(permission => permission.Code),
+            permissions.EnumerateArray().Select(item => item.GetProperty("code").GetString()));
+        var adminCodes = adminRole.GetProperty("permissions").EnumerateArray()
+            .Select(item => item.GetProperty("code").GetString())
+            .ToArray();
+        Assert.Equal("selection:read", adminCodes[0]);
+        Assert.Equal("audit:view", adminCodes[^1]);
         var readPermission = permissions.EnumerateArray().First(item =>
             item.GetProperty("code").GetString() == "selection:read");
         var create = await admin.PostAsJsonAsync(

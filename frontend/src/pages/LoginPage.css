@@ -17,6 +17,13 @@
   box-shadow: var(--box-shadow-tertiary);
 }
 
+.login__title {
+  margin-bottom: var(--space-7);
+  font: var(--font-heading-4);
+  color: var(--color-text);
+  text-align: center;
+}
+
 .login__error {
   margin-bottom: var(--space-7);
 }

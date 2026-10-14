@@ -116,6 +116,8 @@ onMounted(async () => {
     <main class="login-layout__main">
       <a-card class="login__card" :bordered="false">
         <h1 class="visually-hidden">登录感应器选型系统</h1>
+        <!-- 只显示系统名称，不放 logo -->
+        <p class="login__title" aria-hidden="true">感应器选型</p>
 
         <a-alert
           v-if="loginError"

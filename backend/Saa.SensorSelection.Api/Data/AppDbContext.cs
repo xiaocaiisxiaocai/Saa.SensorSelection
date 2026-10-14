@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Microsoft.EntityFrameworkCore;
 
 using Saa.SensorSelection.Api.Models;
@@ -79,6 +81,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(log => log.Action).HasMaxLength(64).IsRequired();
             entity.Property(log => log.Target).HasMaxLength(200);
             entity.Property(log => log.Ip).HasMaxLength(64);
+            // SQLite 无法翻译 DateTimeOffset 的大小比较（按时间范围筛选会 500）。
+            // 统一存成 UTC 的有序文本，与 EF 默认写入的格式一致，旧数据无需迁移，
+            // 且字符串比较即时间先后。
+            entity.Property(log => log.Timestamp).HasConversion(
+                value => value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture),
+                value => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture));
             entity.HasIndex(log => log.Timestamp);
             entity.HasIndex(log => log.Username);
             entity.HasIndex(log => log.Action);

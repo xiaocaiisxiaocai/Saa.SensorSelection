@@ -36,13 +36,12 @@
 
 .entity-source {
   display: flex;
+
+  /* 撑满所在的列（SourcePane）：上下排列时是整行宽 */
+  flex: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;
-}
-
-.entity-source--machine {
-  --source-list-width: 280px;
 }
 
 /* a-tabs 撑满剩余高度，内容区内部的表格自己滚动 */
@@ -205,19 +204,24 @@
   height: calc(100dvh - 160px);
 }
 
+/*
+ * 1280px 以下左右并排时右侧表格太挤（客户要求表各列合计约 930px）：
+ * 改成上下排列，目录在上（约三分之一高度，内部滚动），内容占满整行宽度
+ */
+@media (width < 80rem) {
+  .selection-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(12rem, 32vh) minmax(0, 1fr);
+  }
+
+  .entity-source {
+    --source-list-width: 100%;
+  }
+}
+
 @media (width <= 60rem) {
   .selection-page {
     padding: var(--space-5);
-  }
-
-  .selection-split {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(12rem, 42vh) minmax(0, 1fr);
-  }
-
-  .entity-source,
-  .entity-source--machine {
-    --source-list-width: 100%;
   }
 
   .selection-toolbar__filter,

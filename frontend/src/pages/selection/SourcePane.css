@@ -1,0 +1,45 @@
+.source-pane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 拖拽热区落在目录与右侧内容之间的间隙正中，平时不可见，悬停/拖动时显示一条主色竖线 */
+.source-pane__handle {
+  position: absolute;
+  inset-block: 0;
+  right: calc(var(--space-5) / -2 - var(--space-2));
+  z-index: 1;
+  width: var(--space-3);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.source-pane__handle::after {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 2px;
+  content: '';
+  background-color: transparent;
+  transform: translateX(-50%);
+  transition: background-color var(--motion-duration-fast);
+}
+
+.source-pane__handle:hover::after,
+.source-pane__handle:focus-visible::after,
+.source-pane--dragging .source-pane__handle::after {
+  background-color: var(--color-primary);
+}
+
+.source-pane__handle:focus-visible {
+  outline: none;
+}
+
+/* 1280px 以下是上下布局（见 selection-page.css），目录占满整行，不需要调宽 */
+@media (width < 80rem) {
+  .source-pane__handle {
+    display: none;
+  }
+}

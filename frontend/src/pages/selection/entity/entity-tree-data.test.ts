@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { EntityGroup } from '@/domain';
 
 import {
+  ancestorKeys,
   branchKeys,
   buildEntityTree,
   dropMove,
+  configurationKey,
   findItemKey,
+  groupKey,
   type EntityNode,
 } from './entity-tree-data';
 
@@ -27,6 +30,20 @@ const titles = (nodes: EntityNode[]): string[] =>
   nodes.flatMap((node) => [node.title, ...titles(node.children ?? [])]);
 
 describe('entity-tree-data', () => {
+  it('finds the branches to expand for a selected node', () => {
+    const tree = buildEntityTree(groups, '');
+    const leaf = findItemKey(tree, '机型3') ?? '';
+    expect(ancestorKeys(tree, leaf)).toEqual([
+      groupKey('分类A'),
+      configurationKey('分类A', '配置X'),
+    ]);
+    expect(ancestorKeys(tree, findItemKey(tree, '机型1') ?? '')).toEqual([
+      groupKey('分类A'),
+    ]);
+    expect(ancestorKeys(tree, groupKey('庆鼎'))).toEqual([]);
+    expect(ancestorKeys(tree, '不存在')).toEqual([]);
+  });
+
   it('counts leaves including those under configurations', () => {
     const tree = buildEntityTree(groups, '');
     expect(tree.map((node) => node.count)).toEqual([2, 3]);

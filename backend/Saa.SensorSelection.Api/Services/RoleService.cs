@@ -27,8 +27,8 @@ public class RoleService(AppDbContext db)
                 role.Description,
                 role.IsSystem,
                 role.Permissions
-                    .OrderBy(permission => permission.Module)
-                    .ThenBy(permission => permission.Code)
+                    .OrderBy(permission => RbacDefaults.PermissionOrder(permission.Code))
+                    .ThenBy(permission => permission.Code, StringComparer.Ordinal)
                     .Select(permission => new PermissionInfo(
                         permission.Id,
                         permission.Code,
@@ -45,10 +45,10 @@ public class RoleService(AppDbContext db)
     {
         var permissions = await db.Permissions
             .AsNoTracking()
-            .OrderBy(permission => permission.Module)
-            .ThenBy(permission => permission.Code)
             .ToListAsync(ct);
         return permissions
+            .OrderBy(permission => RbacDefaults.PermissionOrder(permission.Code))
+            .ThenBy(permission => permission.Code, StringComparer.Ordinal)
             .Select(permission => new PermissionInfo(
                 permission.Id,
                 permission.Code,

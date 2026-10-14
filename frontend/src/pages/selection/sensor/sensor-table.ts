@@ -9,9 +9,10 @@ export interface SensorLookup {
   model3dTitle(model3dId: null | number | undefined): string;
 }
 
-// 状态/料号/类型/品牌/型号/操作是识别与操作的必需列，不提供隐藏；
-// 其余描述性列允许按需隐藏。
+// 状态/类型/品牌/型号/操作是识别与操作的必需列，不提供隐藏；
+// 料号经常整列为空，和其余描述性列一样允许按需隐藏。
 export const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
+  { key: 'partNumber', label: '料号' },
   { key: 'relation', label: '替换关系' },
   { key: 'spec', label: '规格参数' },
   { key: 'feature', label: '特性与注意' },

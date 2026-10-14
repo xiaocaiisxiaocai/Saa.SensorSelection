@@ -299,6 +299,19 @@ public class AuditTests
             item.GetProperty("target").GetString() == "audit_user" &&
             !item.GetProperty("result").GetBoolean() &&
             item.GetProperty("error").GetString() == "用户名已存在");
+        // 删除后目标仍写名称，而不是只剩 #id
+        var orgId = (await org.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await admin.DeleteAsync($"/api/rbac/users/{userId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.DeleteAsync($"/api/rbac/org-units/{orgId}")).StatusCode);
+        var deletes = (await QueryAuditLogsAsync(admin, "?username=admin"))
+            .GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(deletes, item =>
+            item.GetProperty("action").GetString() == "user.delete" &&
+            item.GetProperty("target").GetString() == "audit_user");
+        Assert.Contains(deletes, item =>
+            item.GetProperty("action").GetString() == "org.delete" &&
+            item.GetProperty("target").GetString() == "审计部");
+
         Assert.Contains(entries, item =>
             item.GetProperty("action").GetString() == "org.create" &&
             item.GetProperty("target").GetString() == "审计部" &&

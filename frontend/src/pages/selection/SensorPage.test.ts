@@ -60,8 +60,9 @@ function searchInput(wrapper: VueWrapper) {
 }
 
 function tableRows(wrapper: VueWrapper) {
-  return wrapper.getComponent({ name: 'ATable' }).props('dataSource') as
-    SensorTableRow[];
+  return wrapper
+    .getComponent({ name: 'ATable' })
+    .props('dataSource') as SensorTableRow[];
 }
 
 describe('SensorPage', () => {
@@ -198,6 +199,10 @@ describe('SensorPage', () => {
     expect(width('feature')).toBe(260);
     expect(width('scene')).toBe(200);
     expect(width('actions')).toBe(120);
+    // 1920 宽屏（减去 200 侧栏与页面内边距后约 1664px）放得下全部列，不出横向滚动
+    expect(
+      columns.reduce((sum, column) => sum + (column.width ?? 0), 0),
+    ).toBeLessThanOrEqual(1664);
     // 长描述列完整显示不截断，宽度要从内容很短的列里匀过来
     for (const short of ['relation', 'sop', 'model3d']) {
       expect(width(short)).toBeLessThan(width('scene'));
@@ -754,9 +759,9 @@ describe('SensorPage', () => {
     );
     expect(document.querySelector('#sensor-target-id')).toBeNull();
 
-    const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
-      (button) => button.textContent?.includes('取消'),
-    );
+    const cancel = [
+      ...document.querySelectorAll('[role="dialog"] button'),
+    ].find((button) => button.textContent?.includes('取消'));
     cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushPromises();
     expect(document.body.textContent).not.toContain('放弃未保存的修改');
@@ -807,9 +812,9 @@ describe('SensorPage', () => {
     });
     if (!catalog.ok || !model.ok) throw new Error('link files missing');
 
-    const base =
-      '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用';
-    const hint = () => document.querySelector('.replace-hint')?.textContent ?? '';
+    const base = '替换后，E3Z-D61 记为停用并保存问题点，WL12-2B530 转为现用';
+    const hint = () =>
+      document.querySelector('.replace-hint')?.textContent ?? '';
     const openReplace = async () => {
       await nextTick();
       const row = wrapper
@@ -819,9 +824,9 @@ describe('SensorPage', () => {
       await nextTick();
     };
     const closeReplace = async () => {
-      const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
-        (button) => button.textContent?.includes('取消'),
-      );
+      const cancel = [
+        ...document.querySelectorAll('[role="dialog"] button'),
+      ].find((button) => button.textContent?.includes('取消'));
       cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await nextTick();
     };
@@ -889,9 +894,7 @@ describe('SensorPage', () => {
     expect(document.querySelector('#sensor-target-id')).toBeTruthy();
     const targetSelect = wrapper
       .findAllComponents({ name: 'ASelect' })
-      .find(
-        (component) => component.props('placeholder') === '请选择现用型号',
-      );
+      .find((component) => component.props('placeholder') === '请选择现用型号');
     targetSelect!.vm.$emit('update:value', parent!.id);
     await nextTick();
     expect(dialogText()).toContain('漫反射 · OMRON');
@@ -928,7 +931,8 @@ describe('SensorPage', () => {
       .findAll('tbody tr.ant-table-row')
       .find((row) => row.text().includes('WL12-2B530'));
     const currentSlots = currentRow!.get('.sensor-actions').element.children;
-    const alternateSlots = alternateRow!.get('.sensor-actions').element.children;
+    const alternateSlots =
+      alternateRow!.get('.sensor-actions').element.children;
 
     const labeled = (slot: Element | undefined, label: string) =>
       slot?.matches(`[aria-label="${label}"]`) ||
@@ -1095,9 +1099,7 @@ describe('SensorPage', () => {
     expect(hovered().some((row) => row.text().includes('WL12-2B530'))).toBe(
       true,
     );
-    expect(hovered().some((row) => row.text().includes('PZ-G61CP'))).toBe(
-      true,
-    );
+    expect(hovered().some((row) => row.text().includes('PZ-G61CP'))).toBe(true);
     expect(hovered().some((row) => row.text().includes('LV-H62'))).toBe(false);
 
     alternateRow!.element.dispatchEvent(
@@ -1111,9 +1113,9 @@ describe('SensorPage', () => {
     );
     await nextTick();
     expect(hovered()).toHaveLength(0);
-    expect(
-      alternateRow?.find('[aria-label="替换现用 E3Z-D61"]').exists(),
-    ).toBe(true);
+    expect(alternateRow?.find('[aria-label="替换现用 E3Z-D61"]').exists()).toBe(
+      true,
+    );
     expect(alternateRow?.find('[aria-label="编辑"]').exists()).toBe(true);
     expect(alternateRow?.find('[aria-label="删除"]').exists()).toBe(true);
     expect(
@@ -1175,9 +1177,9 @@ describe('SensorPage', () => {
       document.querySelector<HTMLInputElement>('#sensor-model')?.value,
     ).toBe('WL12-2B530');
 
-    const cancel = [...document.querySelectorAll('[role="dialog"] button')].find(
-      (button) => button.textContent?.includes('取消'),
-    );
+    const cancel = [
+      ...document.querySelectorAll('[role="dialog"] button'),
+    ].find((button) => button.textContent?.includes('取消'));
     cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await nextTick();
 
@@ -1228,9 +1230,9 @@ describe('SensorPage', () => {
       title: '备选三维WL12',
       uploadedAt: '2026-08-28T00:00:00.000Z',
     });
-    expect(parentSop.ok && parent3d.ok && alternateSop.ok && alternate3d.ok).toBe(
-      true,
-    );
+    expect(
+      parentSop.ok && parent3d.ok && alternateSop.ok && alternate3d.ok,
+    ).toBe(true);
     if (!parentSop.ok || !parent3d.ok || !alternateSop.ok || !alternate3d.ok) {
       throw new Error('测试文件保存失败');
     }
@@ -1351,7 +1353,9 @@ describe('SensorPage', () => {
 
     const grouped = await exportText();
     expect(grouped.indexOf('E3Z-D61')).toBeGreaterThan(-1);
-    expect(grouped.indexOf('E3Z-D61')).toBeLessThan(grouped.indexOf('WL12-2B530'));
+    expect(grouped.indexOf('E3Z-D61')).toBeLessThan(
+      grouped.indexOf('WL12-2B530'),
+    );
     expect(grouped.indexOf('WL12-2B530')).toBeLessThan(
       grouped.indexOf('PZ-G61CP'),
     );
@@ -1535,9 +1539,7 @@ describe('SensorPage', () => {
     expect(struck).toContain('链式停用测试');
     expect(struck).toContain('停用规格整段');
     expect(struck.join('')).not.toContain('激光式');
-    expect(
-      row?.get('.ant-tag').element.closest('.sensor-struck'),
-    ).toBeNull();
+    expect(row?.get('.ant-tag').element.closest('.sensor-struck')).toBeNull();
     expect(
       row?.get('[aria-label="编辑"]').element.closest('.sensor-struck'),
     ).toBeNull();

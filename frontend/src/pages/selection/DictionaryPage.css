@@ -6,3 +6,9 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* 字典类型多，窄屏放不下时横向滚动，不能被卡片裁掉 */
+.dictionary-header :deep(.ant-segmented) {
+  max-width: 100%;
+  overflow-x: auto;
+}

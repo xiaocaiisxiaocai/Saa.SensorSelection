@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Empty } from 'ant-design-vue';
 import { ArrowRight } from 'lucide-vue-next';
+import { h } from 'vue';
 
 import { useTablePagination } from '@/pages/shared/table';
 
@@ -18,6 +20,14 @@ const { listPagination } = useTablePagination(
   () => props.results.length,
   [() => props.results],
 );
+
+// 和其它页面一样用 antd 的空状态插图
+const emptyLocale = {
+  emptyText: h(Empty, {
+    image: Empty.PRESENTED_IMAGE_SIMPLE,
+    description: '没有找到符合条件的结构，换个条件试试',
+  }),
+};
 
 function path(result: MachineStructureSearchResult): string {
   return [result.category, result.configuration, result.machineName]
@@ -47,7 +57,7 @@ function resultTags(result: MachineStructureSearchResult): string[] {
       class="search-list"
       :data-source="results"
       :pagination="listPagination"
-      :locale="{ emptyText: '没有找到符合条件的结构' }"
+      :locale="emptyLocale"
       bordered
       size="small"
     >

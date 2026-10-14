@@ -12,6 +12,10 @@ namespace Saa.SensorSelection.Api.Services;
 /// </summary>
 public class RoleService(AppDbContext db)
 {
+    /// <summary>操作日志用：删除前先取角色标识，删掉后就查不到了。</summary>
+    public Task<string?> FindCodeAsync(int id, CancellationToken ct = default) =>
+        db.Roles.Where(role => role.Id == id).Select(role => (string?)role.Code).FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<RoleListItem>> ListAsync(CancellationToken ct = default)
     {
         var roles = await db.Roles

@@ -13,6 +13,10 @@ namespace Saa.SensorSelection.Api.Services;
 /// </summary>
 public class UserService(AppDbContext db, ProfileService profiles)
 {
+    /// <summary>操作日志用：删除前先取用户名，删掉后就查不到了。</summary>
+    public Task<string?> FindUsernameAsync(int id, CancellationToken ct = default) =>
+        db.Users.Where(user => user.Id == id).Select(user => (string?)user.Username).FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<UserListItem>> ListAsync(CancellationToken ct = default)
     {
         var users = await db.Users

@@ -68,10 +68,11 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
+        var name = await users.FindUsernameAsync(id, ct);
         var result = await users.ResetPasswordAsync(id, request.Password, ct);
         await audit.WriteAsync(
             "user.reset-password",
-            target: $"#{id}",
+            target: name ?? $"#{id}",
             detail: result.Success ? "密码已重置" : "密码重置失败",
             success: result.Success,
             error: result.Error,
@@ -89,10 +90,11 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var name = await users.FindUsernameAsync(id, ct);
         var result = await users.DeleteAsync(id, username, ct);
         await audit.WriteAsync(
             "user.delete",
-            target: $"#{id}",
+            target: name ?? $"#{id}",
             detail: $"用户ID：{id}",
             success: result.Success,
             error: result.Error,

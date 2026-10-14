@@ -78,10 +78,11 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
+        var code = await roles.FindCodeAsync(id, ct);
         var result = await roles.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "role.delete",
-            target: $"#{id}",
+            target: code ?? $"#{id}",
             detail: $"角色ID：{id}",
             success: result.Success,
             error: result.Error,

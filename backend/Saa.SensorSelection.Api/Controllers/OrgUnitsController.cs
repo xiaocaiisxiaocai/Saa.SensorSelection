@@ -70,10 +70,11 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
+        var name = await orgUnits.FindNameAsync(id, ct);
         var result = await orgUnits.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "org.delete",
-            target: $"#{id}",
+            target: name ?? $"#{id}",
             detail: $"组织ID：{id}",
             success: result.Success,
             error: result.Error,

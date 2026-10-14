@@ -12,6 +12,10 @@ namespace Saa.SensorSelection.Api.Services;
 /// </summary>
 public class OrgUnitService(AppDbContext db)
 {
+    /// <summary>操作日志用：删除前先取组织名称，删掉后就查不到了。</summary>
+    public Task<string?> FindNameAsync(int id, CancellationToken ct = default) =>
+        db.OrgUnits.Where(org => org.Id == id).Select(org => (string?)org.Name).FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<OrgUnitListItem>> ListAsync(CancellationToken ct = default)
     {
         var orgUnits = await db.OrgUnits

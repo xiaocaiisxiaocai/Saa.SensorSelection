@@ -47,6 +47,8 @@ export const PAGINATION_PROPS = {
   showSizeChanger: true,
   showTotal: (count: number) => `共 ${count} 条`,
   itemRender: labelPagerItem,
+  // 手机宽度下自动换成小号分页条，页码少时不会把「下一页」挤到第二行
+  responsive: true,
 } as const;
 
 /**

@@ -60,7 +60,13 @@
 
 .machine-body :deep(tr.ant-table-row:hover > td.machine-image-cell--shared),
 .machine-body :deep(tr.ant-table-row-selected > td.machine-image-cell--shared),
-.machine-body :deep(tr.ant-table-row-selected:hover > td.machine-image-cell--shared),
+.machine-body
+  :deep(tr.ant-table-row-selected:hover > td.machine-image-cell--shared),
 .machine-body :deep(td.machine-image-cell--shared.ant-table-cell-row-hover) {
   background: var(--color-primary-bg);
+}
+
+/* 空表格的说明 + 新增按钮：窄屏上下排列时表体只剩不到 200px，去掉 antd 默认的上下外边距才放得下 */
+.machine-body :deep(.ant-table-placeholder .ant-empty-normal) {
+  margin-block: 0;
 }

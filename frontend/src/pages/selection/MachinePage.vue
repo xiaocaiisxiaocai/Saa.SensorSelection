@@ -68,6 +68,8 @@ const pageDialog = ref<InstanceType<typeof MachineTabPageDialog>>();
 const checkedPageIds = ref<number[]>([]);
 /** 勾选的、还没有二级 Tab 的末级节点 key（有二级 Tab 的节点勾的是它的二级 Tab） */
 const checkedLeafKeys = ref<string[]>([]);
+/** 挑选报告内容时才显示勾选框（平时浏览不需要），在「报告」下拉里切换 */
+const selectingReport = ref(false);
 
 const groups = computed(() => store.entityGroups('machine'));
 const activeMachineType = computed<MachineCatalogKind>(() =>
@@ -129,7 +131,7 @@ const selectedCount = computed(() =>
   ),
 );
 const treeChecks = computed(() =>
-  auth.isAuthenticated
+  auth.isAuthenticated && selectingReport.value
     ? {
         ...treeCheckState(
           treeSelection.value,
@@ -174,6 +176,22 @@ const pageSection = computed<MachineSectionItem | null>(() =>
         scope: 'machine',
       }
     : null,
+);
+
+/** 右侧标题：选中节点的完整路径（分类 / 配置 / 机型），树里选中项可能不在视野内 */
+const nodePath = computed(() =>
+  node.value
+    ? [node.value.category, node.value.configuration, node.value.item].filter(
+        (part): part is string => Boolean(part),
+      )
+    : [],
+);
+const directEmptyHint = computed(() =>
+  activeTab.value
+    ? `「${nodeName.value}」在「${activeTab.value.name}」下还没有${
+        activeTab.value.kind === 'notes' ? '注意事项' : '选型记录'
+      }`
+    : '',
 );
 
 /** 机型在当前 Tab 下还没有直属表格：先显示空表，第一次新增记录时再建 */
@@ -310,7 +328,10 @@ watch(
 watch(
   () => auth.isAuthenticated,
   (isAuthenticated) => {
-    if (!isAuthenticated) clearChecks();
+    if (!isAuthenticated) {
+      clearChecks();
+      selectingReport.value = false;
+    }
   },
 );
 
@@ -456,9 +477,14 @@ async function onPageAction(
 
 // ── Tab 增删改 ──────────────────────────────────────────────────
 
-function onTabEdit(target: unknown, action: 'add' | 'remove') {
+// Tab 上不放「×」：删除 Tab 会连同所有节点在它下面的内容一起删掉，
+// 只在「编辑 Tab」对话框里提供
+function onTabEdit(_target: unknown, action: 'add' | 'remove') {
   if (action === 'add') tabDialog.value?.openAdd(tabs.value.length + 1);
-  else void removeTab(Number(target));
+}
+
+async function onTabDelete(tabId: number) {
+  if (await removeTab(tabId)) tabDialog.value?.close();
 }
 
 function onTabSaved(tabId: number) {
@@ -468,9 +494,9 @@ function onTabSaved(tabId: number) {
   }
 }
 
-async function removeTab(tabId: number) {
+async function removeTab(tabId: number): Promise<boolean> {
   const tab = tabs.value.find((item) => item.id === tabId);
-  if (!tab) return;
+  if (!tab) return false;
   // 机型的直属表格和分类 / 配置的二级 Tab 分开说
   const tables = tab.pages.filter((page) => page.direct).length;
   const subTabs = tab.pages.length - tables;
@@ -484,8 +510,8 @@ async function removeTab(tabId: number) {
       ? `确认删除“${tab.name}”吗？它下面的${parts.join('和')}及内容会一起删除。`
       : `确认删除“${tab.name}”吗？`,
   );
-  if (!ok) return;
-  notifyResult(store.deleteMachineTab(tabId), 'Tab 已删除', {
+  if (!ok) return false;
+  return notifyResult(store.deleteMachineTab(tabId), 'Tab 已删除', {
     stale: '该 Tab 已被删除，请刷新后重试',
   });
 }
@@ -562,7 +588,7 @@ async function removeTab(tabId: number) {
             <a-tab-pane
               v-for="tab in tabs"
               :key="String(tab.id)"
-              :closable="writable"
+              :closable="false"
             >
               <template #tab>
                 <span class="machine-section-tabs__label">
@@ -594,12 +620,24 @@ async function removeTab(tabId: number) {
                 :page-ids="checkedPageIds"
                 :selected-count="selectedCount"
                 :available-count="treeSelection.leafPages.size"
+                :selecting="selectingReport"
                 @select-all="selectAll"
                 @clear="clearChecks"
+                @toggle-selecting="selectingReport = !selectingReport"
               />
             </template>
           </a-tabs>
 
+          <!-- 右侧标题：选中节点的路径（树里的选中项可能不在视野内） -->
+          <a-breadcrumb
+            v-if="tabs.length && activeTab"
+            class="machine-node-path"
+            aria-label="当前选单节点"
+          >
+            <a-breadcrumb-item v-for="part in nodePath" :key="part">
+              {{ part }}
+            </a-breadcrumb-item>
+          </a-breadcrumb>
           <a-empty v-if="tabs.length === 0">
             <template #description>
               <div>还没有 Tab</div>
@@ -624,6 +662,7 @@ async function removeTab(tabId: number) {
             :machine-name="MACHINE_TAB_PAGE_OWNER"
             :section="pageSection ?? placeholderSection"
             :ensure-section="pageSection ? undefined : ensureDirectSection"
+            :empty-hint="directEmptyHint"
             :focus-row-id="Number(route.query.focusRow) || undefined"
           />
           <template v-else-if="activeTab">
@@ -633,7 +672,7 @@ async function removeTab(tabId: number) {
               :node-name="nodeName"
               :active-page-id="activePage?.id ?? null"
               :writable="writable"
-              :checkable="auth.isAuthenticated"
+              :checkable="auth.isAuthenticated && selectingReport"
               :checked="checkedPages"
               @select="showTab(activeTab.id, $event)"
               @check="setChecked"
@@ -654,6 +693,7 @@ async function removeTab(tabId: number) {
       ref="tabDialog"
       :catalog="activeMachineType"
       @saved="onTabSaved"
+      @delete="onTabDelete"
     />
     <MachineTabPageDialog ref="pageDialog" @saved="onPageSaved" />
   </section>

@@ -21,8 +21,14 @@ const props = defineProps<{
   selectedCount: number;
   /** 当前目录的机型（目录树末级节点）总数 */
   availableCount: number;
+  /** 是否在挑选报告内容：挑选时目录树和二级 Tab 上才显示勾选框 */
+  selecting: boolean;
 }>();
-const emit = defineEmits<{ selectAll: []; clear: [] }>();
+const emit = defineEmits<{
+  selectAll: [];
+  clear: [];
+  toggleSelecting: [];
+}>();
 
 const store = useSelectionStore();
 const generating = ref(false);
@@ -66,7 +72,8 @@ function preview() {
 }
 
 function onMenuClick({ key }: { key: string | number }) {
-  if (key === 'select-all') emit('selectAll');
+  if (key === 'toggle-selecting') emit('toggleSelecting');
+  else if (key === 'select-all') emit('selectAll');
   else if (key === 'clear') emit('clear');
   else if (key === 'generate') void generate();
   else if (key === 'preview') preview();
@@ -111,6 +118,9 @@ async function generate() {
       </a-button>
       <template #overlay>
         <a-menu @click="onMenuClick">
+          <a-menu-item key="toggle-selecting">
+            {{ selecting ? '完成选择' : '选择机型' }}
+          </a-menu-item>
           <a-menu-item key="select-all">全选</a-menu-item>
           <a-menu-item key="clear" :disabled="noneSelected">清空</a-menu-item>
           <a-menu-divider />

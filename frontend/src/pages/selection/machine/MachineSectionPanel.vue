@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Empty } from 'ant-design-vue';
 import { Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -34,7 +35,10 @@ const props = defineProps<{
   section: MachineSectionItem;
   /** 表格还没建时传入（机型的直属表格按需创建）：显示空表，第一次新增前调用 */
   ensureSection?: () => number | null;
+  /** 没有记录时的说明（如「XX 在 YY 下还没有选型记录」）；传了会在空态里附新增按钮 */
+  emptyHint?: string;
 }>();
+const EMPTY_IMAGE = Empty.PRESENTED_IMAGE_SIMPLE;
 
 const store = useSelectionStore();
 const { canWrite } = useAccess();
@@ -366,18 +370,24 @@ const customRow = computed(() =>
           (row: MachineTableRow) =>
             row.displayId === selectedTableRow ? 'ant-table-row-selected' : ''
         "
-        :locale="{
-          emptyText:
-            query.trim() ||
-            sensorTypeFilters.length ||
-            machineModelFilters.length ||
-            processStepFilters.length ||
-            boardCharacteristicFilters.length
-              ? '没有匹配的记录'
-              : '暂无记录',
-        }"
         @change="onTableChange"
       >
+        <template #emptyText>
+          <a-empty
+            :image="EMPTY_IMAGE"
+            :description="
+              hasActiveFilters ? '没有匹配的记录' : emptyHint || '暂无记录'
+            "
+          >
+            <a-button
+              v-if="!hasActiveFilters && emptyHint && writable"
+              type="primary"
+              @click="rowDialog?.open()"
+            >
+              {{ isStructure ? '新增选型' : '新增事项' }}
+            </a-button>
+          </a-empty>
+        </template>
         <template #bodyCell="{ column, record: row, text }">
           <template v-if="isStructure && column.key === 'sensorType'">
             <a-space

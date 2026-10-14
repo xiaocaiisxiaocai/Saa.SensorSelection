@@ -40,7 +40,6 @@ const machineSectionPanelCss = readFileSync(
   'utf8',
 );
 
-
 async function mountPage(
   authenticated = false,
   writable = false,
@@ -311,6 +310,10 @@ describe('MachinePage', () => {
   ];
   const reportMenuItems = () =>
     reportMenuElements().map((item) => item.textContent?.trim() ?? '');
+  async function startSelecting(wrapper: VueWrapper) {
+    await openReportMenu(wrapper);
+    await clickReportMenu('选择机型');
+  }
   async function clickReportMenu(label: string) {
     const item = reportMenuElements().find(
       (element) => element.textContent?.trim() === label,
@@ -335,14 +338,21 @@ describe('MachinePage', () => {
     expect(reportMenuItems()).toEqual([]);
     await openReportMenu(wrapper);
     expect(reportMenuItems()).toEqual([
+      '选择机型',
       '全选',
       '清空',
       '生成并下载报告（请先勾选）',
       '预览 / 打印 PDF（请先勾选）',
     ]);
-    // 选中的是机型：没有二级 Tab，报告在目录树上勾
+    // 平时不显示勾选框；点「选择机型」后目录树才出现勾选框，再点「完成选择」收起
     expect(wrapper.find('.machine-sub-tab').exists()).toBe(false);
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
+    await clickReportMenu('选择机型');
     expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(true);
+    await openReportMenu(wrapper);
+    expect(reportMenuItems()[0]).toBe('完成选择');
+    await clickReportMenu('完成选择');
+    expect(wrapper.find('.ant-tree-checkbox').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -350,6 +360,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true);
     // 「已选 N / M」按机型（目录树末级节点）计数，没有二级 Tab 的机型也能勾
     expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
+    await startSelecting(wrapper);
     await wrapper.get('.ant-tree-checkbox').trigger('click');
     expect(wrapper.text()).toMatch(/已选\s+29\s+\/\s+101/);
     expect(wrapper.find('.ant-tree-checkbox-disabled').exists()).toBe(false);
@@ -364,6 +375,7 @@ describe('MachinePage', () => {
   it('checks one machine for the report and selects all of them', async () => {
     const wrapper = await mountPage(true);
     expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
+    await startSelecting(wrapper);
     await wrapper
       .get('.ant-tree-treenode-selected .ant-tree-checkbox')
       .trigger('click');
@@ -415,6 +427,7 @@ describe('MachinePage', () => {
 
   it('explains why a selected page with no rows or images cannot be reported', async () => {
     const wrapper = await mountPage(true);
+    await startSelecting(wrapper);
     await wrapper
       .get('.ant-tree-treenode-selected .ant-tree-checkbox')
       .trigger('click');
@@ -1034,6 +1047,16 @@ describe('MachinePage machine tabs', () => {
       ensureSection: undefined,
     });
 
+    // 表格上方写出选中节点的完整路径；空表格说明是哪个机型、哪个 Tab，并附新增按钮
+    expect(wrapper.get('.machine-node-path').text()).toContain(
+      direct.node.item!,
+    );
+    expect(wrapper.getComponent(MachineSectionPanel).props('emptyHint')).toBe(
+      `「${direct.node.item}」在「输送机构」下还没有选型记录`,
+    );
+    expect(wrapper.text()).toContain('还没有选型记录');
+    expect(findButton(wrapper, '新增选型')).toBeDefined();
+
     // 换一个还没有表格的机型：同样直接显示（空）表格，第一次新增记录时才建表
     await clickTreeNode(wrapper, OTHER_MACHINE);
     expect(wrapper.vm.$route.query).toMatchObject({
@@ -1177,7 +1200,13 @@ describe('MachinePage machine tabs', () => {
     await flushPromises();
     const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
 
-    await wrapper.get('.ant-tabs-tab-remove').trigger('click');
+    // Tab 上没有「×」：删除放在「编辑 Tab」对话框里
+    expect(wrapper.find('.ant-tabs-tab-remove').exists()).toBe(false);
+    await wrapper.get('button[aria-label="编辑 Tab"]').trigger('click');
+    await flushPromises();
+    [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
+      .find((button) => button.textContent?.trim() === '删除 Tab')
+      ?.click();
     await flushPromises();
 
     expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个机型的选型表');

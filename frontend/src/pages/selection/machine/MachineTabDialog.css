@@ -1,0 +1,4 @@
+/* 危险操作靠左，和取消 / 保存分开 */
+.machine-tab-dialog__delete {
+  float: inline-start;
+}

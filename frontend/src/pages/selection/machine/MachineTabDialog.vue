@@ -12,7 +12,7 @@ import { useSelectionStore } from '@/stores/selection';
  * 保存成功后发出 saved，带上 Tab id，新建时页面据此切到新 Tab。
  */
 const props = defineProps<{ catalog: MachineCatalogKind }>();
-const emit = defineEmits<{ saved: [tabId: number] }>();
+const emit = defineEmits<{ saved: [tabId: number]; delete: [tabId: number] }>();
 const store = useSelectionStore();
 
 const KIND_OPTIONS = [
@@ -80,7 +80,11 @@ function save() {
   }
 }
 
-defineExpose({ openAdd, openEdit });
+function close() {
+  visible.value = false;
+}
+
+defineExpose({ openAdd, openEdit, close });
 </script>
 
 <template>
@@ -137,8 +141,19 @@ defineExpose({ openAdd, openEdit });
       </a-row>
     </a-form>
     <template #footer>
+      <!-- 删除 Tab 会连同所有机型在它下面的内容一起删掉：放在编辑对话框里，不放在 Tab 上 -->
+      <a-button
+        v-if="editId"
+        class="machine-tab-dialog__delete"
+        danger
+        @click="emit('delete', editId)"
+      >
+        删除 Tab
+      </a-button>
       <a-button @click="cancel">取消</a-button>
       <a-button type="primary" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>
+
+<style scoped src="./MachineTabDialog.css"></style>

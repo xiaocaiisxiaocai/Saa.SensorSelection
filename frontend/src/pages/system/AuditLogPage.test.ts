@@ -333,6 +333,7 @@ describe('AuditLogPage', () => {
     const backendActions = [
       'auth.change-password',
       'auth.login',
+      'file.download',
       'file.upload',
       'org.create',
       'org.delete',

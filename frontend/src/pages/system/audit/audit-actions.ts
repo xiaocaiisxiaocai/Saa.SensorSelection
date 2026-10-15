@@ -2,6 +2,7 @@
 export const ACTION_LABELS: Record<string, string> = {
   'auth.change-password': '修改密码',
   'auth.login': '登录',
+  'file.download': '下载文件',
   'file.upload': '上传文件',
   'org.create': '创建组织',
   'org.delete': '删除组织',
@@ -31,6 +32,8 @@ export function actionLabel(action: string) {
  */
 export const PERMISSION_LABELS: Record<string, string> = {
   'audit:view': '查看操作日志',
+  'data:transfer': '导入导出数据',
+  'file:download': '下载文件',
   'rbac:org:write': '管理组织架构',
   'rbac:role:write': '管理角色',
   'rbac:user:write': '管理用户',

@@ -8,13 +8,17 @@ import {
   type Sensor3dFileItem,
 } from '@/domain';
 import { createFilePicker } from '@/pages/shared/file-rules';
-import { formatFileSize, uploadFile } from '@/pages/shared/files';
+import {
+  fileIdFromReference,
+  formatFileSize,
+  uploadFile,
+  useFileDownload,
+} from '@/pages/shared/files';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import { APdfViewer } from '@/ui';
-import { message } from 'ant-design-vue';
 import { useTablePagination } from '@/pages/shared/table';
 
 const props = defineProps<{ focusModel3dId?: null | number }>();
@@ -23,6 +27,7 @@ const emit = defineEmits<{ previewed: [id: number] }>();
 const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
+const { canDownload, downloadStoredFile } = useFileDownload();
 const query = ref('');
 const preview = ref<Sensor3dFileItem | null>(null);
 const { uploading, runUpload } = useUploadLock();
@@ -97,16 +102,6 @@ async function uploadPicked(picked: File[]) {
   }
 }
 
-function download(item: Sensor3dFileItem) {
-  const anchor = document.createElement('a');
-  anchor.href = item.dataUrl;
-  anchor.download = item.fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  message.success('3D 文件已开始下载');
-}
-
 async function remove(item: Sensor3dFileItem) {
   const ok = await confirmDelete('删除 3D 文件', `确认删除“${item.title}”吗？`);
   if (!ok) return;
@@ -172,12 +167,16 @@ async function remove(item: Sensor3dFileItem) {
                 <template #icon><Eye :size="14" /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip title="下载">
+            <a-tooltip
+              v-if="canDownload"
+              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+            >
               <a-button
                 type="text"
                 size="small"
                 aria-label="下载"
-                @click="download(item)"
+                :disabled="!fileIdFromReference(item.dataUrl)"
+                @click="downloadStoredFile(item.dataUrl, item.fileName)"
               >
                 <template #icon><Download :size="14" /></template>
               </a-button>

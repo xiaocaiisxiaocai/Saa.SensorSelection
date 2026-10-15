@@ -76,11 +76,13 @@ export const OPERATION_LABELS = {
   deleteSensorSopFile: () => '删除 Sensor SOP',
   ensureMachineDirectPage: (_tabId: number, node: MachineNodeRef) =>
     `新建表格${onMachine(node.item ?? node.configuration ?? node.category)}`,
+  importSensors: () => '导入 Sensor 型号',
   moveMachineTabPage: () => '调整二级 Tab 顺序',
   reorderEntityGroups: (kind: EntityKind) => `调整${groupLabel(kind)}顺序`,
   reorderEntityItems: (kind: EntityKind, groupName: string) =>
     `调整${itemLabel(kind)}顺序 · ${groupName}`,
   replaceSensorCurrent: () => '用备选替换现用型号',
+  restoreDictionaries: () => '还原数据字典',
   saveControlledFile: () => '上传文件',
   saveCrud: (
     listId: string,

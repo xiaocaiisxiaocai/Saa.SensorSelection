@@ -169,6 +169,8 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 | --- | --- | --- |
 | `selection:read` | 查看业务数据 | 业务 |
 | `selection:write` | 编辑业务数据 | 业务 |
+| `file:download` | 下载文件 | 业务 |
+| `data:transfer` | 导入导出数据 | 业务 |
 | `rbac:view` | 查看系统管理 | 系统 |
 | `rbac:user:write` | 管理用户 | 系统 |
 | `rbac:role:write` | 管理角色 | 系统 |

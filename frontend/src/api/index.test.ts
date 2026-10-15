@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  API_BASE,
   ApiError,
   api,
+  fileIdFromReference,
   getStoredToken,
   readTokenDisplayName,
   storeToken,
@@ -128,5 +130,41 @@ describe('api client', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       `/store/by-key?key=${encodeURIComponent(key)}`,
     );
+  });
+
+  it('extracts a file id only from a stored content reference', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(fileIdFromReference(`${API_BASE}/files/${id}/content`)).toBe(id);
+    expect(
+      fileIdFromReference(`${API_BASE}/files/${id.toUpperCase()}/content`),
+    ).toBe(id);
+    expect(fileIdFromReference(`${API_BASE}/files/${id}/download`)).toBeNull();
+    expect(fileIdFromReference(`${API_BASE}/files/not-a-guid/content`)).toBeNull();
+    expect(fileIdFromReference('data:application/pdf;base64,QQ==')).toBeNull();
+    expect(fileIdFromReference('')).toBeNull();
+    expect(fileIdFromReference(null)).toBeNull();
+  });
+
+  it('downloads a stored file with the bearer token', async () => {
+    storeToken('tok');
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(new Blob(['pdf-bytes']), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const id = '11111111-1111-4111-8111-111111111111';
+
+    const blob = await api.downloadFile(id);
+
+    expect(await blob.text()).toBe('pdf-bytes');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      `${API_BASE}/files/${id}/download`,
+    );
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers;
+    expect(headers).toBeInstanceOf(Headers);
+    expect(
+      headers instanceof Headers ? headers.get('Authorization') : null,
+    ).toBe('Bearer tok');
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

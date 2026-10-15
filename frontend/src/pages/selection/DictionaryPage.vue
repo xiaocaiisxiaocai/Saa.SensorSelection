@@ -1,20 +1,36 @@
 <script setup lang="ts">
-import type { TableColumnType } from 'ant-design-vue';
-import { Pencil, Trash2 } from 'lucide-vue-next';
+import { message, type TableColumnType } from 'ant-design-vue';
+import { Download, Pencil, Trash2, Upload } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
+import {
+  buildExcelWorkbook,
+  downloadExcelFile,
+  formatExcelDate,
+  readWorkbook,
+} from '@/pages/shared/excel';
+import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { rowClick, useTablePagination } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
+import {
+  DICTIONARY_EXPORT_HEADERS,
+  mapDictionaryWorkbook,
+} from './dictionary-excel';
+
 import '../shared/selection-page.css';
 
 const store = useSelectionStore();
-const { canWrite } = useAccess();
+const { canWrite, has } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
+const canExport = computed(() => has('data:transfer'));
+const canImport = computed(() => canExport.value && writable.value);
+const importResult = ref<InstanceType<typeof ImportResultDialog>>();
+const importInput = ref<HTMLInputElement>();
 
 const activeCode = ref(DICTIONARY_DEFINITIONS[0]?.code || '');
 const dialogOpen = ref(false);
@@ -136,6 +152,73 @@ async function deleteItem(item: DictionaryItem) {
   }
 }
 
+function exportExcel() {
+  const now = new Date();
+  const bytes = buildExcelWorkbook(
+    {
+      sheets: DICTIONARY_DEFINITIONS.map((definition) => ({
+        headers: [...DICTIONARY_EXPORT_HEADERS],
+        name: definition.title,
+        rows: store
+          .dictionaryItems(definition.code)
+          .map((item) => [String(item.sort), item.name]),
+      })),
+      title: '数据字典',
+    },
+    now,
+  );
+  downloadExcelFile(`数据字典-${formatExcelDate(now)}.xlsx`, bytes);
+  message.success('已导出数据字典');
+}
+
+function openImport() {
+  importInput.value?.click();
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  let sheets: Awaited<ReturnType<typeof readWorkbook>>;
+  try {
+    sheets = await readWorkbook(new Uint8Array(await file.arrayBuffer()));
+  } catch {
+    message.error('无法读取该 Excel 文件');
+    return;
+  }
+  const result = store.restoreDictionaries(mapDictionaryWorkbook(sheets));
+  if (!result.ok) {
+    message.error('数据保存失败，本次修改未保存');
+    return;
+  }
+  importResult.value?.open({
+    categories: result.categories.map((item) => ({
+      created: item.created,
+      deleted: item.deleted,
+      kept: item.kept,
+      skipped: item.skipped.length,
+      title: item.title,
+      unchangedReason: item.unchangedReason,
+      updated: item.updated,
+    })),
+    notes: [
+      ...result.missingSheets.map(
+        (title) => `「${title}」未包含在文件中，未改动`,
+      ),
+      ...result.unknownSheets.map((name) => `未识别的工作表「${name}」`),
+    ],
+    skips: result.categories.flatMap((category) =>
+      category.skipped.map((item) => ({
+        location: `${category.title} · 第 ${item.rowNumber} 行`,
+        reason: item.reason,
+      })),
+    ),
+    title: '还原数据字典',
+  });
+}
+
 // 分页条始终显示；筛选变化回到第一页
 const { pagination, onChange: onPageChange } = useTablePagination(
   () => items.value.length,
@@ -148,7 +231,32 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     <h1 class="visually-hidden">数据字典</h1>
     <div class="dictionary-header">
       <a-segmented v-model:value="activeCode" :options="tabs" />
-      <a-button v-if="writable" type="primary" @click="addItem">新增</a-button>
+      <div class="dictionary-header__actions">
+        <a-tooltip v-if="canExport" title="导出 Excel">
+          <a-button aria-label="导出 Excel" @click="exportExcel">
+            <template #icon><Download :size="14" /></template>
+            导出 Excel
+          </a-button>
+        </a-tooltip>
+        <a-tooltip v-if="canImport" title="导入 Excel">
+          <a-button aria-label="导入 Excel" @click="openImport">
+            <template #icon><Upload :size="14" /></template>
+            导入 Excel
+          </a-button>
+        </a-tooltip>
+        <input
+          v-if="canImport"
+          ref="importInput"
+          class="visually-hidden"
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          aria-label="选择数据字典 Excel"
+          @change="onImportFile"
+        >
+        <a-button v-if="writable" type="primary" @click="addItem">
+          新增
+        </a-button>
+      </div>
     </div>
     <div class="selection-panel">
       <a-table
@@ -232,6 +340,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <a-button type="primary" @click="saveItem">保存</a-button>
       </template>
     </a-modal>
+    <ImportResultDialog ref="importResult" />
   </section>
 </template>
 

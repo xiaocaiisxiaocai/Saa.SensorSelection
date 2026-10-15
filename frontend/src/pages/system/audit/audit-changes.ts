@@ -223,9 +223,9 @@ export function operationTitle(operation: AuditOperationItem): string {
   return first ? actionLabel(first.action) : '—';
 }
 
-/** 一条日志的对象：上传文件的目标是文件编号，换成详情里的文件名 */
+/** 一条日志的对象：上传或下载的目标是文件编号，换成详情里的文件名 */
 export function entryObject(entry: AuditLogItem): string {
-  if (entry.action === 'file.upload') {
+  if (entry.action === 'file.upload' || entry.action === 'file.download') {
     const fileName = parseAuditDetail(entry.detail)?.pairs.find(
       (pair) => pair.label === '文件名',
     )?.value;
@@ -299,7 +299,7 @@ export function displayFieldValue(
 /**
  * 「操作」筛选的选项：后端给出日志里出现过的操作类型（如「删除机型」）和
  * 没有操作名称的操作码（如 auth.login）。操作码翻成中文；显示文字相同的
- * （file.upload 与「上传文件」）合成一项，选中时两者都查。
+ * （file.upload 与「上传文件」、file.download 与「下载文件」）合成一项，选中时两者都查。
  */
 export function operationKindOptions(
   kinds: readonly string[],

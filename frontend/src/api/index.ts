@@ -4,6 +4,39 @@ export const TOKEN_STORAGE_KEY = 'symtek_token';
 
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
+const STORED_FILE_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function fileReferencePrefixes(base: string): string[] {
+  const normalized = base.replace(/\/+$/, '');
+  const prefixes = [normalized];
+  if (/^https?:\/\//i.test(normalized)) {
+    try {
+      const path = new URL(normalized).pathname.replace(/\/+$/, '');
+      if (path) prefixes.push(path);
+    } catch {
+      /* 非法基址只按原样匹配 */
+    }
+  }
+  return [...new Set(prefixes)];
+}
+
+/** 从库存引用 `/api/files/{id}/content` 取出文件 id；其他形式返回 null。 */
+export function fileIdFromReference(
+  reference: string | null | undefined,
+): null | string {
+  if (!reference) return null;
+  const lower = reference.toLowerCase();
+  for (const prefix of fileReferencePrefixes(API_BASE)) {
+    const head = `${prefix.toLowerCase()}/files/`;
+    const tail = '/content';
+    if (!lower.startsWith(head) || !lower.endsWith(tail)) continue;
+    const id = lower.slice(head.length, lower.length - tail.length);
+    if (STORED_FILE_ID.test(id)) return id;
+  }
+  return null;
+}
+
 export const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT) || 30_000;
 
 export type ApiErrorKind = 'error' | 'forbidden' | 'offline' | 'unauthorized';
@@ -354,6 +387,12 @@ export const api = {
     return request<UploadedFile>('/files', {
       method: 'POST',
       body,
+      signal: AbortSignal.timeout(UPLOAD_TIMEOUT),
+    });
+  },
+
+  downloadFile(id: string): Promise<Blob> {
+    return requestBlob(`/files/${encodeURIComponent(id)}/download`, {
       signal: AbortSignal.timeout(UPLOAD_TIMEOUT),
     });
   },

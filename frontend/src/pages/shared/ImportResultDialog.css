@@ -1,0 +1,14 @@
+.import-result__summary,
+.import-result__categories,
+.import-result__notes {
+  margin: 0 0 var(--space-3);
+}
+
+.import-result__categories,
+.import-result__notes {
+  padding-left: var(--space-5);
+}
+
+.import-result :deep(td) {
+  overflow-wrap: anywhere;
+}

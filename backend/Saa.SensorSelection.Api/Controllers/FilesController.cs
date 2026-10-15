@@ -90,4 +90,39 @@ public class FilesController(StoredFileService storedFiles, AuditLogService audi
             inline ? file.MimeType : "application/octet-stream",
             enableRangeProcessing: true);
     }
+
+    /// <summary>带权限的附件下载。预览仍走匿名的 content。</summary>
+    [HttpGet("{id:guid}/download")]
+    [Authorize(Policy = "file:download")]
+    public async Task<IActionResult> Download(Guid id, CancellationToken ct)
+    {
+        var file = await storedFiles.OpenReadAsync(id, ct);
+        if (file is null)
+        {
+            await audit.WriteAsync(
+                "file.download",
+                target: id.ToString("D"),
+                success: false,
+                error: "文件不存在或已被删除",
+                ct: ct);
+            return NotFound(new { message = "文件不存在或已被删除" });
+        }
+
+        HttpContext.Response.RegisterForDisposeAsync(file.Connection);
+        var size = file.Content.CanSeek ? file.Content.Length : 0L;
+        await audit.WriteAsync(
+            "file.download",
+            target: id.ToString("D"),
+            detail: $"文件名：{file.FileName}；大小：{size} B",
+            ct: ct);
+
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.ContentDisposition =
+            $"attachment; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
+        var mimeType = string.IsNullOrWhiteSpace(file.MimeType)
+            ? "application/octet-stream"
+            : file.MimeType;
+        return File(file.Content, mimeType);
+    }
 }

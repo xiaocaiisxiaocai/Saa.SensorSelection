@@ -1,6 +1,11 @@
 import type { TableColumnType } from 'ant-design-vue';
 
-import { isSensorStatus, type SensorItem } from '@/domain';
+import {
+  isSensorStatus,
+  type SensorImportField,
+  type SensorImportRequest,
+  type SensorItem,
+} from '@/domain';
 
 /** 型号表格里需要的反查：替换关系的另一方、型录 / 3D 标题 */
 export interface SensorLookup {
@@ -193,6 +198,45 @@ export function relationText(item: SensorItem, related: SensorItem | null) {
       : `被 ${target} 替换`;
   }
   return '';
+}
+
+const SENSOR_IMPORT_HEADERS: Record<string, SensorImportField> = {
+  品牌: 'brand',
+  料号: 'partNumber',
+  型号: 'model',
+  感应器类型: 'sensorType',
+  规格参数: 'spec',
+  特性与注意: 'feature',
+  适用场景: 'scene',
+  状态: 'status',
+};
+
+/**
+ * 按表头文字对应可导入栏位。同一表头出现多次时用第一列。
+ * 替换关系、关联文件和停用信息没有对应栏位，导入时不读。
+ */
+export function mapSensorImportSheet(
+  rows: readonly string[][],
+): SensorImportRequest {
+  const headers = rows[0] ?? [];
+  const used = new Set<SensorImportField>();
+  const columns = headers.map((header) => {
+    const field = SENSOR_IMPORT_HEADERS[header.trim()];
+    if (!field || used.has(field)) return null;
+    used.add(field);
+    return field;
+  });
+  return {
+    hasModelColumn: columns.includes('model'),
+    rows: rows.slice(1).map((row, index) => {
+      const values: Partial<Record<SensorImportField, string>> = {};
+      columns.forEach((field, column) => {
+        if (!field) return;
+        values[field] = row[column] ?? '';
+      });
+      return { rowNumber: index + 2, values };
+    }),
+  };
 }
 
 /** 导出 Excel 时一个单元格的文字，与表格里看到的一致 */

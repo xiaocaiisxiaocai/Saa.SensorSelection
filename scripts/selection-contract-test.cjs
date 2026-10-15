@@ -2499,6 +2499,319 @@ async function run() {
   assert.deepEqual(Object.keys(seededRead).sort(), Object.keys(defaultStore).sort())
   assert.deepEqual(seededRead['sensor-catalog:all'], defaultStore['sensor-catalog:all'])
 
+  // Excel 导入 / 字典还原：一次写入、按型号合并、按名称保留 id，被引用的字典项不删
+  function transferFixture() {
+    let raw = null
+    let writes = 0
+    const storage = {
+      getItem: () => raw,
+      setItem: (_key, value) => {
+        writes += 1
+        raw = value
+        return true
+      },
+    }
+    const repo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage,
+      demoData: false,
+    })
+    return { repo, get writes() { return writes } }
+  }
+
+  assert.equal(domain.sanitizeExcelSheetName('History'), 'History (1)')
+  assert.equal(domain.sanitizeExcelSheetName("'要求分类'"), '要求分类')
+
+  {
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveDictionaryItem('sensor-type', { name: '漫反射', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-type', { name: '对射', sort: 2 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '现用', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '备选', sort: 2 }).ok, true)
+    const base = {
+      sensorType: '漫反射',
+      status: '现用',
+      brand: 'ACME',
+      spec: '原规格',
+      feature: '特性',
+      scene: '场景',
+    }
+    assert.equal(repo.saveSensor({ ...base, model: 'M-STAY', partNumber: 'PN-STAY' }).ok, true)
+    const sop = repo.saveSensorSop({
+      title: '型录',
+      fileName: 'catalog.pdf',
+      mimeType: 'application/pdf',
+      dataUrl: 'data:application/pdf;base64,YQ==',
+      size: 12,
+      uploadedAt: '2026-10-14',
+    })
+    assert.equal(sop.ok, true)
+    const linked = repo.saveSensor({
+      ...base,
+      model: 'M-KEEP',
+      partNumber: 'PN-KEEP',
+      sopId: sop.item.id,
+      problemNote: '保留问题',
+    })
+    assert.equal(linked.ok, true)
+    const before = fx.writes
+    assert.deepEqual(repo.importSensors({ hasModelColumn: false, rows: [] }), {
+      ok: false,
+      reason: 'validation',
+      message: '缺少「型号」列，无法导入',
+    })
+    const invalid = repo.importSensors({
+      hasModelColumn: true,
+      rows: [
+        { rowNumber: 2, values: { partNumber: 'PN-X', model: '—', status: '现用', sensorType: '漫反射' } },
+        { rowNumber: 3, values: { partNumber: 'PN-BAD-STATUS', model: 'X1', status: '不存在', sensorType: '漫反射' } },
+        { rowNumber: 4, values: { partNumber: 'PN-BAD-TYPE', model: 'X2', status: '现用', sensorType: '不存在' } },
+        { rowNumber: 5, values: { partNumber: 'PN-NO-STATUS', model: 'X3', sensorType: '漫反射' } },
+      ],
+    })
+    assert.equal(invalid.ok, true)
+    assert.equal(invalid.created, 0)
+    assert.equal(invalid.updated, 0)
+    assert.deepEqual(
+      invalid.skipped.map((item) => item.reason),
+      ['型号为空', '状态不在数据字典中', '感应器类型不在数据字典中', '缺少状态'],
+    )
+    assert.equal(fx.writes, before)
+
+    // 型号是匹配键（全局唯一）：已有的更新、没有的新增；料号可以为空
+    const newRow = {
+      partNumber: '',
+      model: 'M-NEW',
+      status: '现用',
+      sensorType: '漫反射',
+      brand: 'N',
+      spec: '新规格',
+      feature: '',
+      scene: '',
+    }
+    const created = repo.importSensors({
+      hasModelColumn: true,
+      rows: [
+        { rowNumber: 2, values: newRow },
+        { rowNumber: 3, values: { ...newRow } },
+        { rowNumber: 4, values: { ...newRow, brand: 'OTHER' } },
+        { rowNumber: 5, values: { partNumber: 'PN-ALT', model: 'M-ALT', status: '备选', sensorType: '对射', brand: 'N' } },
+        { rowNumber: 6, values: { partNumber: 'PN-OFF', model: 'M-OFF', status: '停用', sensorType: '漫反射', brand: 'N' } },
+        { rowNumber: 7, values: { partNumber: 'PN-STAY-2', model: 'm-stay', status: '现用', sensorType: '漫反射', brand: 'N' } },
+      ],
+    })
+    assert.equal(created.ok, true)
+    assert.equal(created.created, 1)
+    assert.equal(created.updated, 1)
+    assert.deepEqual(created.skipped, [
+      { rowNumber: 4, reason: '型号重复' },
+      { rowNumber: 5, reason: domain.SENSOR_NEEDS_CURRENT },
+      { rowNumber: 6, reason: domain.SENSOR_DISABLED_MANUAL },
+    ])
+    assert.equal(fx.writes, before + 1)
+    const stay = repo.getSensors().find((item) => item.partNumber === 'PN-STAY-2')
+    assert.equal(stay.model, 'm-stay')
+    assert.equal(stay.brand, 'N')
+    assert.equal(repo.getSensors().find((item) => item.model === 'M-NEW').partNumber, '')
+    assert.equal(repo.getSensors().some((item) => item.model === 'M-OFF'), false)
+
+    // 缺的列保留原值；关联与替换信息不受影响
+    const writesAfterCreate = fx.writes
+    const updated = repo.importSensors({
+      hasModelColumn: true,
+      rows: [
+        {
+          rowNumber: 2,
+          values: {
+            model: 'M-KEEP',
+            status: '现用',
+            sensorType: '漫反射',
+            brand: 'ACME-2',
+          },
+        },
+      ],
+    })
+    assert.equal(updated.ok, true)
+    assert.equal(updated.updated, 1)
+    assert.equal(updated.created, 0)
+    assert.deepEqual(updated.skipped, [])
+    const keptSensor = repo.getSensors().find((item) => item.model === 'M-KEEP')
+    assert.equal(keptSensor.brand, 'ACME-2')
+    assert.equal(keptSensor.partNumber, 'PN-KEEP')
+    assert.equal(keptSensor.spec, '原规格')
+    assert.equal(keptSensor.feature, '特性')
+    assert.equal(keptSensor.sopId, sop.item.id)
+    assert.equal(keptSensor.problemNote, '保留问题')
+    assert.equal(fx.writes, writesAfterCreate + 1)
+
+    // 原样再导入一次：没有变化，不计更新也不写入
+    const writesAfterUpdate = fx.writes
+    const unchanged = repo.importSensors({
+      hasModelColumn: true,
+      rows: [{ rowNumber: 2, values: { model: 'M-KEEP', status: '现用', sensorType: '漫反射', brand: 'ACME-2' } }],
+    })
+    assert.deepEqual(unchanged, { created: 0, ok: true, skipped: [], updated: 0 })
+    assert.equal(fx.writes, writesAfterUpdate)
+  }
+
+  {
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveEntityGroup('customer', { name: '导入客户' }).ok, true)
+    assert.equal(repo.saveEntityItem('customer', { category: '导入客户', name: '华东' }).ok, true)
+    assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Alpha', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Beta', sort: 2 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Gamma', sort: 3 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('customer-req-source', { name: '其他', sort: 1 }).ok, true)
+    const alpha = repo.getDictionaryItems('customer-req').find((item) => item.name === 'Alpha')
+    assert.equal(repo.saveCrud('customer-req', '导入客户/华东', {
+      type: 'Alpha',
+      content: '距离限制',
+      source: '其他',
+    }).ok, true)
+    assert.equal(repo.saveDictionaryItem('process-layer', { name: '内层', sort: 1 }).ok, true)
+    assert.equal(repo.saveProcessStep({ name: '导入步骤', layer: '内层' }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-type', { name: '漫反射', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '现用', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '备选', sort: 2 }).ok, true)
+    const sensor = repo.saveSensor({
+      model: 'M-ROW',
+      sensorType: '漫反射',
+      status: '现用',
+      partNumber: 'PN-ROW',
+    })
+    assert.equal(sensor.ok, true)
+    assert.equal(repo.saveDictionaryItem('machine-model', { name: '机型甲', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('machine-model', { name: '机型乙', sort: 2 }).ok, true)
+    const modelA = repo.getDictionaryItems('machine-model').find((item) => item.name === '机型甲')
+    assert.equal(repo.saveDictionaryItem('board-characteristic', { name: '板A', sort: 1 }).ok, true)
+    assert.equal(repo.saveEntityGroup('machine', { name: '导入分类' }).ok, true)
+    assert.equal(repo.saveEntityItem('machine', { category: '导入分类', name: '导入机型' }).ok, true)
+    const section = repo.saveExtraMachineSection('导入机型', { kind: 'structure', name: '结构', sort: 1 })
+    assert.equal(section.ok, true)
+    assert.equal(repo.saveMachineSectionRow(section.item.id, '导入机型', {
+      role: '进板检测',
+      sensorIds: [sensor.item.id],
+      machineModelId: modelA.id,
+    }).ok, true)
+
+    const before = fx.writes
+    const restored = repo.restoreDictionaries([
+      {
+        name: '要求分类',
+        hasNameColumn: true,
+        rows: [
+          { rowNumber: 5, name: 'alpha', sort: 'nope' },
+          { rowNumber: 3, name: 'Gamma', sort: '10' },
+          { rowNumber: 6, name: 'Gamma', sort: '1' },
+          { rowNumber: 7, name: '  ', sort: '4' },
+        ],
+      },
+      {
+        name: '制程分层',
+        hasNameColumn: true,
+        rows: [{ rowNumber: 4, name: '内层', sort: 'nope' }],
+      },
+      {
+        name: '机型',
+        hasNameColumn: true,
+        rows: [{ rowNumber: 2, name: '机型丙', sort: '1' }],
+      },
+      {
+        name: 'Sensor 状态',
+        hasNameColumn: true,
+        rows: [{ rowNumber: 2, name: '现用', sort: '1' }],
+      },
+      { name: '感应器类型', hasNameColumn: false, rows: [] },
+      { name: '板件特性', hasNameColumn: true, rows: [{ rowNumber: 2, name: '', sort: '1' }] },
+      { name: '随便', hasNameColumn: true, rows: [{ rowNumber: 2, name: '无关', sort: '1' }] },
+    ])
+    assert.equal(restored.ok, true)
+    assert.equal(fx.writes, before + 1)
+    assert.equal(restored.unknownSheets.join(), '随便')
+    assert.equal(restored.missingSheets.includes('要求来源'), true)
+    assert.equal(restored.missingSheets.includes('要求分类'), false)
+
+    const req = restored.categories.find((item) => item.code === 'customer-req')
+    assert.equal(req.created, 0)
+    assert.equal(req.updated, 2)
+    assert.equal(req.deleted, 1)
+    assert.equal(req.kept, 0)
+    assert.deepEqual(req.skipped, [
+      { rowNumber: 6, reason: '名称重复' },
+      { rowNumber: 7, reason: '名称为空' },
+    ])
+    const reqItems = repo.getDictionaryItems('customer-req')
+    assert.deepEqual(reqItems.map((item) => [item.name, item.sort]), [
+      ['alpha', 5],
+      ['Gamma', 10],
+    ])
+    assert.equal(reqItems.find((item) => item.name === 'alpha').id, alpha.id)
+    assert.equal(
+      repo.getCrud('customer-req', '导入客户/华东').some((item) => item.type === 'alpha'),
+      true,
+    )
+    assert.equal(repo.getDictionaryItems('customer-req-source')[0].name, '其他')
+
+    const layer = restored.categories.find((item) => item.code === 'process-layer')
+    assert.equal(layer.updated, 1)
+    assert.deepEqual(
+      repo.getDictionaryItems('process-layer').map((item) => [item.name, item.sort]),
+      [['内层', 4]],
+    )
+    assert.equal(repo.getProcessSteps()[0].layer, '内层')
+
+    const models = restored.categories.find((item) => item.code === 'machine-model')
+    assert.equal(models.created, 1)
+    assert.equal(models.deleted, 1)
+    assert.equal(models.kept, 1)
+    const modelItems = repo.getDictionaryItems('machine-model')
+    assert.deepEqual(modelItems.map((item) => item.name), ['机型丙', '机型甲'])
+    assert.equal(modelItems.find((item) => item.name === '机型甲').id, modelA.id)
+    assert.equal(
+      repo.getMachineSectionRows(section.item.id, '导入机型')[0].machineModelId,
+      modelA.id,
+    )
+
+    const statuses = restored.categories.find((item) => item.code === 'sensor-status')
+    assert.equal(statuses.deleted, 1)
+    assert.equal(statuses.kept, 1)
+    assert.equal(
+      repo.getDictionaryItems('sensor-status').some((item) => item.name === '停用'),
+      true,
+    )
+    assert.equal(
+      repo.getDictionaryItems('sensor-status').some((item) => item.name === '备选'),
+      false,
+    )
+    const types = restored.categories.find((item) => item.code === 'sensor-type')
+    assert.equal(types.unchangedReason, '缺少「字典项名称」列')
+    assert.equal(repo.getDictionaryItems('sensor-type')[0].name, '漫反射')
+    const boards = restored.categories.find((item) => item.code === 'board-characteristic')
+    assert.equal(boards.unchangedReason, '至少保留一个字典项')
+    assert.equal(repo.getDictionaryItems('board-characteristic')[0].name, '板A')
+
+    const quietWrites = fx.writes
+    const mirror = domain.DICTIONARY_DEFINITIONS.map((definition) => ({
+      name: definition.title,
+      hasNameColumn: true,
+      rows: repo.getDictionaryItems(definition.code).map((item) => ({
+        rowNumber: item.sort,
+        name: item.name,
+        sort: String(item.sort),
+      })),
+    }))
+    const quiet = repo.restoreDictionaries(mirror)
+    assert.equal(quiet.ok, true)
+    assert.equal(fx.writes, quietWrites)
+    assert.equal(
+      quiet.categories.every((item) => item.created === 0 && item.updated === 0 && item.deleted === 0 && item.kept === 0),
+      true,
+    )
+  }
+
   console.log('Selection domain contract checks passed.')
   } finally {
     await server.close()

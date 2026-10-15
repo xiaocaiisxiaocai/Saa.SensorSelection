@@ -263,4 +263,112 @@ public class StoredFileTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(route)).StatusCode);
     }
+
+    private static async Task<HttpClient> CreateRoleClientAsync(
+        ApiFactory factory,
+        string roleCode,
+        string username)
+    {
+        using var admin = await CreateLoggedInClientAsync(factory);
+        var roles = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+        var roleId = roles.EnumerateArray()
+            .First(role => role.GetProperty("code").GetString() == roleCode)
+            .GetProperty("id")
+            .GetInt32();
+        var created = await admin.PostAsJsonAsync(
+            "/api/rbac/users",
+            new
+            {
+                username,
+                password = "pass123456",
+                displayName = username,
+                isActive = true,
+                roleIds = new[] { roleId },
+            });
+        created.EnsureSuccessStatusCode();
+
+        using var login = factory.CreateClient();
+        var response = await login.PostAsJsonAsync(
+            "/api/auth/login",
+            new { username, password = "pass123456" });
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        return client;
+    }
+
+    private static string DownloadRoute(string fileId) => $"/api/files/{fileId}/download";
+
+    [Fact]
+    public async Task Download_RequiresFileDownloadPermission_AndWritesAudit()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateLoggedInClientAsync(factory);
+        var bytes = Encoding.UTF8.GetBytes("%PDF-1.7\ndownload-permission");
+        var uploaded = await (await UploadAsync(admin, bytes, "下载 测试.pdf"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var fileId = uploaded.GetProperty("fileId").GetString()!;
+        var route = DownloadRoute(fileId);
+
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(route)).StatusCode);
+
+        using var viewer = await CreateRoleClientAsync(factory, "viewer", "download-viewer");
+        var viewerResponse = await viewer.GetAsync(route);
+        Assert.Equal(HttpStatusCode.Forbidden, viewerResponse.StatusCode);
+        Assert.Equal(
+            "无权限执行此操作",
+            (await viewerResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+
+        using var editor = await CreateRoleClientAsync(factory, "editor", "download-editor");
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.GetAsync(route)).StatusCode);
+
+        var content = await admin.GetAsync(route);
+        Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+        Assert.Equal(bytes, await content.Content.ReadAsByteArrayAsync());
+        Assert.Equal("application/pdf", content.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", content.Headers.CacheControl?.ToString());
+        Assert.Equal("nosniff", content.Headers.GetValues("X-Content-Type-Options").Single());
+        var disposition = content.Content.Headers.GetValues("Content-Disposition").Single();
+        Assert.StartsWith("attachment;", disposition, StringComparison.Ordinal);
+        Assert.Contains(
+            $"filename*=UTF-8''{Uri.EscapeDataString("下载 测试.pdf")}",
+            disposition,
+            StringComparison.Ordinal);
+
+        // 预览端点仍匿名可读。
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await anonymous.GetAsync(uploaded.GetProperty("dataUrl").GetString())).StatusCode);
+
+        var logs = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs?action=file.download");
+        var entry = logs.GetProperty("items").EnumerateArray().Single(item =>
+            item.GetProperty("result").GetBoolean() &&
+            item.GetProperty("target").GetString() == fileId);
+        Assert.Equal("file.download", entry.GetProperty("action").GetString());
+        Assert.Contains("文件名：下载 测试.pdf", entry.GetProperty("detail").GetString());
+        Assert.Contains($"大小：{bytes.Length} B", entry.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task Download_MissingFile_Returns404AndFailedAudit()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateLoggedInClientAsync(factory);
+        var missingId = Guid.NewGuid();
+
+        var response = await admin.GetAsync(DownloadRoute(missingId.ToString("D")));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(
+            "文件不存在或已被删除",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+
+        var logs = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs?action=file.download");
+        var entry = logs.GetProperty("items").EnumerateArray().Single();
+        Assert.False(entry.GetProperty("result").GetBoolean());
+        Assert.Equal(missingId.ToString("D"), entry.GetProperty("target").GetString());
+        Assert.Equal("文件不存在或已被删除", entry.GetProperty("error").GetString());
+    }
 }

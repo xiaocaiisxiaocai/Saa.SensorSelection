@@ -168,6 +168,8 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | --- | --- | --- |
 | `selection:read` | 查看业务数据（客户/制程/机型/Sensor/字典/搜索） | 业务 |
 | `selection:write` | 编辑业务数据（增删改） | 业务 |
+| `file:download` | 下载文件 | 业务 |
+| `data:transfer` | 导入导出数据（Sensor 型号与数据字典的 Excel；导入还要有 `selection:write`） | 业务 |
 | `rbac:view` | 进入系统管理（用户/角色/组织页面） | 系统 |
 | `rbac:user:write` | 管理用户（增删改/重置密码） | 系统 |
 | `rbac:role:write` | 管理角色 | 系统 |

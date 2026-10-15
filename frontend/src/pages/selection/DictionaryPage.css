@@ -8,6 +8,13 @@
 }
 
 /* 字典类型多，窄屏放不下时横向滚动，不能被卡片裁掉 */
+.dictionary-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
 .dictionary-header :deep(.ant-segmented) {
   max-width: 100%;
   overflow-x: auto;

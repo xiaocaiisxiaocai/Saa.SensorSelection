@@ -16,6 +16,7 @@ import {
   type CustomerProcItem,
   type CustomerReqItem,
   type DictionaryItem,
+  type DictionaryRestoreSheet,
   type EntityKind,
   type MachineCatalogKind,
   type MachineRowImage,
@@ -26,6 +27,7 @@ import {
   type ProcessStepItem,
   type SaveFailure,
   type SearchItem,
+  type SensorImportRequest,
   type SensorItem,
   type Sensor3dFileItem,
   type SensorSopFileItem,
@@ -371,6 +373,8 @@ export const useSelectionStore = defineStore('selection', () => {
       mutate(() => repository.deleteCrud(listId, entityName, id)),
     deleteDictionaryItem: (code: string, id: number) =>
       mutate(() => repository.deleteDictionaryItem(code, id)),
+    importSensors: (input: SensorImportRequest) =>
+      mutate(() => repository.importSensors(input)),
     deleteEntityGroup: (kind: EntityKind, name: string) =>
       mutate(() => repository.deleteEntityGroup(kind, name)),
     deleteEntityItem: (
@@ -472,6 +476,8 @@ export const useSelectionStore = defineStore('selection', () => {
       >,
       editId?: number,
     ) => mutate(() => repository.saveCrud(listId, entityName, payload, editId)),
+    restoreDictionaries: (sheets: DictionaryRestoreSheet[]) =>
+      mutate(() => repository.restoreDictionaries(sheets)),
     saveDictionaryItem: (
       code: string,
       payload: Partial<DictionaryItem>,

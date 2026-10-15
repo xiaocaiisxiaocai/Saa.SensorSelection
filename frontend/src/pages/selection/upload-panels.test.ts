@@ -1,10 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import type { Component } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import { UPLOADING_TITLE } from '@/pages/shared/upload-lock';
 import { useAuthStore } from '@/stores/auth';
+import { useSelectionStore } from '@/stores/selection';
 import { message } from 'ant-design-vue';
 import CustomerDocsPanel from './customer/CustomerDocsPanel.vue';
 import ProcessIntroPanel from './process/ProcessIntroPanel.vue';
@@ -80,4 +82,67 @@ describe('upload panels', () => {
       wrapper.unmount();
     },
   );
+
+  it('shows the 3D download button only for file:download, and disables a reference without an id', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const auth = useAuthStore();
+    auth.applyProfile({
+      displayName: '维护员',
+      orgUnit: null,
+      permissions: ['selection:write'],
+      roles: [{ code: 'editor', id: 3, name: '业务维护员' }],
+      username: 'editor',
+    });
+    const store = useSelectionStore();
+    const stored = '/api/files/11111111-1111-4111-8111-111111111111/content';
+    expect(
+      store.saveSensor3dFile({
+        dataUrl: stored,
+        fileName: '可下载.pdf',
+        mimeType: 'application/pdf',
+        size: 128,
+        title: '可下载',
+        uploadedAt: '2026-10-14T00:00:00.000Z',
+      }),
+    ).toMatchObject({ ok: true });
+    expect(
+      store.saveSensor3dFile({
+        dataUrl: 'data:application/pdf;base64,QQ==',
+        fileName: '无法下载.pdf',
+        mimeType: 'application/pdf',
+        size: 128,
+        title: '无法下载',
+        uploadedAt: '2026-10-14T00:00:00.000Z',
+      }),
+    ).toMatchObject({ ok: true });
+
+    const wrapper = mount(Sensor3dPanel, { global: { plugins: [pinia] } });
+    await flushPromises();
+    expect(wrapper.find('[aria-label="下载"]').exists()).toBe(false);
+
+    auth.applyProfile({
+      displayName: '管理员',
+      orgUnit: null,
+      permissions: ['selection:write', 'file:download'],
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      username: 'admin',
+    });
+    await nextTick();
+
+    const item = (fileName: string) =>
+      wrapper
+        .findAll('.ant-list-item')
+        .find((node) => node.text().includes(fileName))!;
+    const ready = item('可下载.pdf').get('[aria-label="下载"]');
+    expect((ready.element as HTMLButtonElement).disabled).toBe(false);
+    const blockedItem = item('无法下载.pdf');
+    const blocked = blockedItem.get('[aria-label="下载"]');
+    expect((blocked.element as HTMLButtonElement).disabled).toBe(true);
+    const blockedTip = blockedItem
+      .findAllComponents({ name: 'ATooltip' })
+      .find((tip: VueWrapper) => tip.find('[aria-label="下载"]').exists());
+    expect(blockedTip?.props('title')).toBe('该文件无法下载');
+    wrapper.unmount();
+  });
 });

@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Microsoft.Data.Sqlite;
+
 namespace Saa.SensorSelection.Api.Tests;
 
 public class SeederTests
@@ -71,6 +73,190 @@ public class SeederTests
             var body2 = await response.Content.ReadFromJsonAsync<JsonElement>();
             var roles = body2.GetProperty("roles").EnumerateArray().ToArray();
             Assert.Contains(roles, role => role.GetProperty("code").GetString() == "admin");
+        }
+        finally
+        {
+            foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
+            {
+                try
+                {
+                    if (File.Exists(dbPath + suffix))
+                    {
+                        File.Delete(dbPath + suffix);
+                    }
+                }
+                catch (IOException)
+                {
+                    // 忽略文件占用
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Seeder_AddsFileDownloadToExistingAdmin_AndNotToEditorOrViewer()
+    {
+        var dbPath = Path.Combine(
+            Path.GetTempPath(),
+            $"saa-sensor-selection-api-file-download-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using (var first = new ApiFactory(dbPath))
+            {
+                using var client = first.CreateClient();
+                var login = await client.PostAsJsonAsync(
+                    "/api/auth/login",
+                    new { username = "admin", password = "admin123" });
+                Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            }
+
+            await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    DELETE FROM PermissionRole
+                    WHERE PermissionsId IN (SELECT Id FROM Permissions WHERE Code = 'file:download');
+                    DELETE FROM Permissions WHERE Code = 'file:download';
+                    """;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using var second = new ApiFactory(dbPath);
+            using var client2 = second.CreateClient();
+            var response = await client2.PostAsJsonAsync(
+                "/api/auth/login",
+                new { username = "admin", password = "admin123" });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var loginPermissions = body.GetProperty("permissions")
+                .EnumerateArray()
+                .Select(item => item.GetString())
+                .ToArray();
+            Assert.Contains("file:download", loginPermissions);
+
+            client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                body.GetProperty("token").GetString());
+            var roles = await client2.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+            foreach (var role in roles.EnumerateArray())
+            {
+                var codes = role.GetProperty("permissions")
+                    .EnumerateArray()
+                    .Select(item => item.GetProperty("code").GetString())
+                    .ToArray();
+                var roleCode = role.GetProperty("code").GetString();
+                if (roleCode == "admin")
+                {
+                    Assert.Contains("file:download", codes);
+                }
+                else if (roleCode is "editor" or "viewer")
+                {
+                    Assert.DoesNotContain("file:download", codes);
+                }
+            }
+
+            var catalogue = await client2.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+            var listed = catalogue.EnumerateArray().ToArray();
+            var codesInOrder = listed.Select(item => item.GetProperty("code").GetString()).ToArray();
+            var writeIndex = Array.IndexOf(codesInOrder, "selection:write");
+            Assert.Equal("file:download", codesInOrder[writeIndex + 1]);
+            var permission = listed.Single(item => item.GetProperty("code").GetString() == "file:download");
+            Assert.Equal("下载文件", permission.GetProperty("name").GetString());
+            Assert.Equal("业务", permission.GetProperty("module").GetString());
+        }
+        finally
+        {
+            foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
+            {
+                try
+                {
+                    if (File.Exists(dbPath + suffix))
+                    {
+                        File.Delete(dbPath + suffix);
+                    }
+                }
+                catch (IOException)
+                {
+                    // 忽略文件占用
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Seeder_AddsDataTransferToExistingAdmin_AndNotToEditorOrViewer()
+    {
+        var dbPath = Path.Combine(
+            Path.GetTempPath(),
+            $"saa-sensor-selection-api-data-transfer-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using (var first = new ApiFactory(dbPath))
+            {
+                using var client = first.CreateClient();
+                var login = await client.PostAsJsonAsync(
+                    "/api/auth/login",
+                    new { username = "admin", password = "admin123" });
+                Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            }
+
+            await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    DELETE FROM PermissionRole
+                    WHERE PermissionsId IN (SELECT Id FROM Permissions WHERE Code = 'data:transfer');
+                    DELETE FROM Permissions WHERE Code = 'data:transfer';
+                    """;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using var second = new ApiFactory(dbPath);
+            using var client2 = second.CreateClient();
+            var response = await client2.PostAsJsonAsync(
+                "/api/auth/login",
+                new { username = "admin", password = "admin123" });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var loginPermissions = body.GetProperty("permissions")
+                .EnumerateArray()
+                .Select(item => item.GetString())
+                .ToArray();
+            Assert.Contains("data:transfer", loginPermissions);
+
+            client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                body.GetProperty("token").GetString());
+            var roles = await client2.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+            foreach (var role in roles.EnumerateArray())
+            {
+                var codes = role.GetProperty("permissions")
+                    .EnumerateArray()
+                    .Select(item => item.GetProperty("code").GetString())
+                    .ToArray();
+                var roleCode = role.GetProperty("code").GetString();
+                if (roleCode == "admin")
+                {
+                    Assert.Contains("data:transfer", codes);
+                }
+                else if (roleCode is "editor" or "viewer")
+                {
+                    Assert.DoesNotContain("data:transfer", codes);
+                }
+            }
+
+            var catalogue = await client2.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+            var listed = catalogue.EnumerateArray().ToArray();
+            var codesInOrder = listed.Select(item => item.GetProperty("code").GetString()).ToArray();
+            var downloadIndex = Array.IndexOf(codesInOrder, "file:download");
+            Assert.Equal("data:transfer", codesInOrder[downloadIndex + 1]);
+            var permission = listed.Single(item => item.GetProperty("code").GetString() == "data:transfer");
+            Assert.Equal("导入导出数据", permission.GetProperty("name").GetString());
+            Assert.Equal("业务", permission.GetProperty("module").GetString());
         }
         finally
         {

@@ -36,6 +36,7 @@ import {
 } from './normalize';
 import { entityDataName, machineCatalogKind } from './entity-tree';
 import { migrateSelectionSeedStore } from './seed-migration';
+import { sanitizeExcelSheetName } from './sheet-name';
 import {
   SENSOR_DISABLED_MANUAL,
   SENSOR_HAS_ALTERNATES,
@@ -67,6 +68,9 @@ import type {
   DeleteResult,
   DictionaryDefinition,
   DictionaryItem,
+  DictionaryRestoreResult,
+  DictionaryRestoreSheet,
+  ImportSkip,
   EntityGroup,
   EntityKind,
   EntityTreeItem,
@@ -82,6 +86,10 @@ import type {
   ProcessStepItem,
   ReorderResult,
   SaveResult,
+  SensorImportField,
+  SensorImportRequest,
+  SensorImportResult,
+  SensorImportRow,
   SensorItem,
   Sensor3dFileItem,
   SensorSopFileItem,
@@ -207,6 +215,30 @@ export function createSelectionRepository({
     }
     if (!persist(snapshot)) return { ok: false, reason: 'storage' } as T;
     return result;
+  }
+
+  // 和 transaction 一样把多步写入合成一次提交；没有任何改动时恢复快照，
+  // 避免空导入也写一笔操作日志。
+  function commitIfChanged<T extends { ok: true }>(
+    run: () => { changed: boolean; result: T },
+  ): T | { ok: false; reason: 'storage' } {
+    const snapshot = cloneStore(store);
+    transactionDepth += 1;
+    let outcome: { changed: boolean; result: T };
+    try {
+      outcome = run();
+    } catch (error) {
+      store = snapshot;
+      throw error;
+    } finally {
+      transactionDepth -= 1;
+    }
+    if (!outcome.changed) {
+      store = snapshot;
+      return outcome.result;
+    }
+    if (!persist(snapshot)) return { ok: false, reason: 'storage' };
+    return outcome.result;
   }
 
   function getCrud(listId: string, entityName: string): CrudRecord[] {
@@ -3235,6 +3267,477 @@ export function createSelectionRepository({
     return { ok: true };
   }
 
+  function blankImportCell(value: unknown) {
+    const text = storedText(value).trim();
+    return text === '—' ? '' : text;
+  }
+
+  function rawImportFingerprint(
+    values: Partial<Record<SensorImportField, string>>,
+  ) {
+    return Object.keys(values)
+      .sort()
+      .map(
+        (key) =>
+          `${key}\u0000${String(values[key as SensorImportField] ?? '')}`,
+      )
+      .join('\u0001');
+  }
+
+  function sensorImportFailure(result: SaveResult<SensorItem>) {
+    if (result.ok) return '';
+    if (result.message) return result.message;
+    if (result.reason === 'duplicate') return '型号已存在';
+    return '数据未通过校验';
+  }
+
+  function mergedSensorImport(
+    values: Partial<Record<SensorImportField, string>>,
+    existing: SensorItem | undefined,
+    typeNames: string[],
+    statusNames: string[],
+  ): { payload: Partial<SensorItem> } | { reason: string } {
+    const has = (field: SensorImportField) => Object.hasOwn(values, field);
+    const read = (field: SensorImportField, fallback: string) =>
+      has(field) ? blankImportCell(values[field]) : fallback;
+    const model = blankImportCell(values.model);
+    const status = read('status', existing?.status ?? '');
+    const sensorType = read('sensorType', existing?.sensorType ?? '');
+    if (!model) return { reason: '缺少型号' };
+    if (!status) return { reason: '缺少状态' };
+    if (!statusNames.includes(status)) return { reason: '状态不在数据字典中' };
+    if (!sensorType) return { reason: '缺少感应器类型' };
+    if (!typeNames.includes(sensorType)) {
+      return { reason: '感应器类型不在数据字典中' };
+    }
+    return {
+      payload: {
+        brand: read('brand', existing?.brand ?? ''),
+        feature: read('feature', existing?.feature ?? ''),
+        model,
+        partNumber: read('partNumber', existing?.partNumber ?? ''),
+        scene: read('scene', existing?.scene ?? ''),
+        sensorType,
+        spec: read('spec', existing?.spec ?? ''),
+        status,
+      },
+    };
+  }
+
+  function classifySensorImportRows(rows: SensorImportRow[]) {
+    const skipped: ImportSkip[] = [];
+    const firsts: SensorImportRow[] = [];
+    const seen = new Map<string, string>();
+    for (const row of rows) {
+      const model = blankImportCell(row.values.model);
+      if (!model) {
+        skipped.push({ reason: '型号为空', rowNumber: row.rowNumber });
+        continue;
+      }
+      const key = model.toLocaleLowerCase('zh-CN');
+      const fingerprint = rawImportFingerprint(row.values);
+      const previous = seen.get(key);
+      if (previous !== undefined) {
+        if (previous !== fingerprint) {
+          skipped.push({ reason: '型号重复', rowNumber: row.rowNumber });
+        }
+        continue;
+      }
+      seen.set(key, fingerprint);
+      firsts.push(row);
+    }
+    return { firsts, skipped };
+  }
+
+  function importSensors(input: SensorImportRequest): SensorImportResult {
+    if (!input.hasModelColumn) {
+      return {
+        message: '缺少「型号」列，无法导入',
+        ok: false,
+        reason: 'validation',
+      };
+    }
+    const classified = classifySensorImportRows(input.rows);
+    if (classified.firsts.length === 0) {
+      return {
+        created: 0,
+        ok: true,
+        skipped: classified.skipped,
+        updated: 0,
+      };
+    }
+    return commitIfChanged(() => {
+      // 型号全局唯一（saveSensor 的 duplicate 校验），是导入的匹配键
+      const byModel = new Map<string, SensorItem[]>();
+      for (const sensor of getSensors()) {
+        const key = sensor.model.trim().toLocaleLowerCase('zh-CN');
+        if (!key) continue;
+        const list = byModel.get(key);
+        if (list) list.push(sensor);
+        else byModel.set(key, [sensor]);
+      }
+      const typeNames = getDictionaryItems('sensor-type').map(
+        (item) => item.name,
+      );
+      const statusNames = getDictionaryItems('sensor-status').map(
+        (item) => item.name,
+      );
+      const skipped = [...classified.skipped];
+      const actions: {
+        existing?: SensorItem;
+        payload: Partial<SensorItem>;
+        rowNumber: number;
+      }[] = [];
+      for (const row of classified.firsts) {
+        const key = blankImportCell(row.values.model).toLocaleLowerCase(
+          'zh-CN',
+        );
+        const matches = byModel.get(key) ?? [];
+        if (matches.length > 1) {
+          skipped.push({
+            reason: '型号对应多条记录',
+            rowNumber: row.rowNumber,
+          });
+          continue;
+        }
+        const merged = mergedSensorImport(
+          row.values,
+          matches[0],
+          typeNames,
+          statusNames,
+        );
+        if ('reason' in merged) {
+          skipped.push({ reason: merged.reason, rowNumber: row.rowNumber });
+          continue;
+        }
+        actions.push({
+          existing: matches[0],
+          payload: merged.payload,
+          rowNumber: row.rowNumber,
+        });
+      }
+      let created = 0;
+      let updated = 0;
+      for (const action of actions) {
+        // 内容与现有记录完全相同的行不算更新，也不写入
+        const existing = action.existing;
+        if (
+          existing &&
+          Object.entries(action.payload).every(
+            ([field, value]) => existing[field as keyof SensorItem] === value,
+          )
+        ) {
+          continue;
+        }
+        const saved = saveSensor(action.payload, action.existing?.id);
+        if (!saved.ok) {
+          skipped.push({
+            reason: sensorImportFailure(saved),
+            rowNumber: action.rowNumber,
+          });
+          continue;
+        }
+        if (action.existing) updated += 1;
+        else created += 1;
+      }
+      skipped.sort((left, right) => left.rowNumber - right.rowNumber);
+      return {
+        changed: created + updated > 0,
+        result: { created, ok: true, skipped, updated },
+      };
+    });
+  }
+
+  function dictionaryItemReferenced(
+    definition: DictionaryDefinition,
+    item: DictionaryItem,
+  ) {
+    const field = definition.field || 'type';
+    for (const listId of definition.listIds) {
+      const prefix = `${listId}:`;
+      for (const [key, value] of Object.entries(store)) {
+        if (!key.startsWith(prefix) || !Array.isArray(value)) continue;
+        if (
+          value.some(
+            (row) =>
+              isRecord(row) &&
+              (row as Record<string, unknown>)[field] === item.name,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    if (definition.catalog === 'sensor') {
+      const sensors = store[keyFor('sensor-catalog', 'all')];
+      if (
+        Array.isArray(sensors) &&
+        sensors.some(
+          (row) =>
+            isRecord(row) &&
+            (row as Record<string, unknown>)[field] === item.name,
+        )
+      ) {
+        return true;
+      }
+    }
+    if (definition.catalog === 'process-step') {
+      const steps = store[keyFor('process-steps', 'all')];
+      if (
+        Array.isArray(steps) &&
+        steps.some(
+          (row) =>
+            isRecord(row) &&
+            (row as Record<string, unknown>)[field] === item.name,
+        )
+      ) {
+        return true;
+      }
+    }
+    if (definition.machineRowField) {
+      const rowField = definition.machineRowField;
+      for (const [key, value] of Object.entries(store)) {
+        if (!key.startsWith('machine-section-rows:') || !Array.isArray(value)) {
+          continue;
+        }
+        if (
+          value.some(
+            (row) => isRecord(row) && row[rowField] === item.id,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function importSortValue(sortText: string, rowNumber: number) {
+    const text = sortText.trim();
+    if (/^-?\d+$/.test(text)) {
+      const value = Number(text);
+      if (Number.isSafeInteger(value)) return value;
+    }
+    return rowNumber;
+  }
+
+  function restoreDictionarySheet(
+    definition: DictionaryDefinition,
+    sheet: DictionaryRestoreSheet,
+  ) {
+    const skipped: { reason: string; rowNumber: number }[] = [];
+    if (!sheet.hasNameColumn) {
+      return {
+        changed: false,
+        code: definition.code,
+        created: 0,
+        deleted: 0,
+        kept: 0,
+        skipped,
+        title: definition.title,
+        unchangedReason: '缺少「字典项名称」列',
+        updated: 0,
+      };
+    }
+
+    const items = getDictionaryItems(definition.code).map((item) => ({
+      ...item,
+    }));
+    const accepted: { key: string; name: string; sort: number }[] = [];
+    const seen = new Set<string>();
+    for (const row of sheet.rows) {
+      const name = storedText(row.name).trim().slice(0, 40);
+      const sortText = storedText(row.sort).trim();
+      if (!name && !sortText) continue;
+      if (!name) {
+        skipped.push({ reason: '名称为空', rowNumber: row.rowNumber });
+        continue;
+      }
+      const key = name.toLocaleLowerCase('zh-CN');
+      if (seen.has(key)) {
+        skipped.push({ reason: '名称重复', rowNumber: row.rowNumber });
+        continue;
+      }
+      seen.add(key);
+      accepted.push({
+        key,
+        name,
+        sort: importSortValue(sortText, row.rowNumber),
+      });
+    }
+
+    const used = new Set<number>();
+    const next: DictionaryItem[] = [];
+    const renames: { from: string; to: string }[] = [];
+    let created = 0;
+    let updated = 0;
+    for (const row of accepted) {
+      const existing = items.find(
+        (item) =>
+          !used.has(item.id) &&
+          item.name.toLocaleLowerCase('zh-CN') === row.key,
+      );
+      if (existing) {
+        used.add(existing.id);
+        if (existing.name !== row.name) {
+          renames.push({ from: existing.name, to: row.name });
+        }
+        if (existing.name !== row.name || existing.sort !== row.sort) {
+          updated += 1;
+        }
+        next.push({ id: existing.id, name: row.name, sort: row.sort });
+      } else {
+        created += 1;
+        next.push({
+          id: nextAvailableId([...items, ...next]),
+          name: row.name,
+          sort: row.sort,
+        });
+      }
+    }
+
+    let deleted = 0;
+    let kept = 0;
+    const keptItems: DictionaryItem[] = [];
+    for (const item of items) {
+      if (used.has(item.id)) continue;
+      if (dictionaryItemReferenced(definition, item)) {
+        kept += 1;
+        keptItems.push(item);
+      } else {
+        deleted += 1;
+      }
+    }
+
+    if (
+      definition.code === 'sensor-status' &&
+      ![...next, ...keptItems].some((item) =>
+        isSensorStatus(item.name, 'disabled'),
+      )
+    ) {
+      const plain = items.find(
+        (item) =>
+          item.name === '停用' &&
+          !used.has(item.id) &&
+          !keptItems.some((keptItem) => keptItem.id === item.id),
+      );
+      if (plain) {
+        deleted -= 1;
+        kept += 1;
+        keptItems.push(plain);
+      } else {
+        kept += 1;
+        keptItems.push({
+          id: nextAvailableId([...items, ...next, ...keptItems]),
+          name: '停用',
+          sort: 0,
+        });
+      }
+    }
+
+    let maxSort = next.reduce((max, item) => Math.max(max, item.sort), 0);
+    for (const item of keptItems) {
+      maxSort += 1;
+      next.push({ ...item, sort: maxSort });
+    }
+
+    const base = {
+      code: definition.code,
+      skipped,
+      title: definition.title,
+    };
+    if (next.length === 0) {
+      return {
+        ...base,
+        changed: false,
+        created: 0,
+        deleted: 0,
+        kept: 0,
+        unchangedReason: '至少保留一个字典项',
+        updated: 0,
+      };
+    }
+
+    const normalized = normalizeDictionaryItems(next);
+    const current = normalizeDictionaryItems(items);
+    if (
+      renames.length === 0 &&
+      JSON.stringify(normalized) === JSON.stringify(current)
+    ) {
+      return {
+        ...base,
+        changed: false,
+        created: 0,
+        deleted: 0,
+        kept: 0,
+        updated: 0,
+      };
+    }
+
+    store[dictionaryStorageKey(definition.code)] = normalized;
+    for (const rename of renames) {
+      renameDictionaryValue(definition, rename.from, rename.to);
+    }
+    return {
+      ...base,
+      changed: true,
+      created,
+      deleted,
+      kept,
+      updated,
+    };
+  }
+
+  function restoreDictionaries(
+    sheets: DictionaryRestoreSheet[],
+  ): DictionaryRestoreResult {
+    const usedCodes = new Set<string>();
+    const unknownSheets: string[] = [];
+    const matched: {
+      definition: DictionaryDefinition;
+      sheet: DictionaryRestoreSheet;
+    }[] = [];
+    for (const sheet of sheets) {
+      const sheetName = sanitizeExcelSheetName(sheet.name);
+      const definition = DICTIONARY_DEFINITIONS.find(
+        (item) => sanitizeExcelSheetName(item.title) === sheetName,
+      );
+      if (!definition || usedCodes.has(definition.code)) {
+        unknownSheets.push(sheet.name);
+        continue;
+      }
+      usedCodes.add(definition.code);
+      matched.push({ definition, sheet });
+    }
+    const missingSheets = DICTIONARY_DEFINITIONS.filter(
+      (item) => !usedCodes.has(item.code),
+    ).map((item) => item.title);
+
+    return commitIfChanged(() => {
+      let changed = false;
+      const categories = matched.map(({ definition, sheet }) => {
+        const restored = restoreDictionarySheet(definition, sheet);
+        if (restored.changed) changed = true;
+        return {
+          code: restored.code,
+          created: restored.created,
+          deleted: restored.deleted,
+          kept: restored.kept,
+          skipped: restored.skipped,
+          title: restored.title,
+          ...(restored.unchangedReason
+            ? { unchangedReason: restored.unchangedReason }
+            : {}),
+          updated: restored.updated,
+        };
+      });
+      return {
+        changed,
+        result: { categories, missingSheets, ok: true, unknownSheets },
+      };
+    });
+  }
+
   function replaceFromStorage(rawValue: null | string) {
     store = parsePersistedStore(rawValue);
   }
@@ -3288,6 +3791,8 @@ export function createSelectionRepository({
     listResolvedMachineSections,
     moveMachineTabPage,
     replaceFromStorage,
+    importSensors,
+    restoreDictionaries,
     reorderEntityGroups,
     reorderEntityItems,
     saveControlledFile,

@@ -8,6 +8,7 @@ import {
   filterSensorGroups,
   filterSensors,
   groupSensorCatalog,
+  mapSensorImportSheet,
   relationText,
   sensorColumns,
   type SensorLookup,
@@ -668,5 +669,24 @@ describe('sensor-table', () => {
     expect(sop?.customCell?.(rows[5]!)).toEqual({ rowSpan: 0 });
     expect(sop?.customCell?.(rows[6]!)).toEqual({ rowSpan: 1 });
     expect(model3d?.customCell?.(rows[6]!)).toEqual({ rowSpan: 1 });
+  });
+});
+
+describe('mapSensorImportSheet', () => {
+  it('keeps the raw first column for each known header', () => {
+    const mapped = mapSensorImportSheet([
+      ['状态', '替换关系', '料号', '料号', '型号'],
+      ['现用', '—', ' PN-1 ', 'OTHER', 'M1'],
+      ['', '', '', '', ''],
+    ]);
+    expect(mapped.hasModelColumn).toBe(true);
+    expect(mapped.rows[0]).toEqual({
+      rowNumber: 2,
+      values: { model: 'M1', partNumber: ' PN-1 ', status: '现用' },
+    });
+    expect(mapped.rows[1]?.rowNumber).toBe(3);
+    expect(mapSensorImportSheet([['料号'], ['PN']]).hasModelColumn).toBe(
+      false,
+    );
   });
 });

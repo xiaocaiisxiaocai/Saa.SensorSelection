@@ -99,7 +99,7 @@ public class AuditTests
         var successEntry = entries.First(item => item.GetProperty("result").GetBoolean());
         Assert.Contains("登录成功", successEntry.GetProperty("detail").GetString());
         // 权限写中文名（按定义顺序），不写权限码
-        Assert.Contains("权限：查看业务数据、编辑业务数据、查看系统管理", successEntry.GetProperty("detail").GetString());
+        Assert.Contains("权限：查看业务数据、编辑业务数据、下载文件、导入导出数据、查看系统管理", successEntry.GetProperty("detail").GetString());
         Assert.DoesNotContain("selection:read", successEntry.GetProperty("detail").GetString());
         // TestServer 没有真实 socket 地址，生产 Kestrel 的 ::1/映射地址由
         // AuditLogService.NormalizeIp 统一转为 127.0.0.1；此处只防止回归为 ::1。

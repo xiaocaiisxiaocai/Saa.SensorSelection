@@ -328,6 +328,8 @@ async function main() {
     editorToken = session.data.token
     assert(session.data.permissions.includes('selection:write'), 'editor lacks selection:write')
     assert(!session.data.permissions.includes('rbac:view'), 'editor should not have rbac:view')
+    assert(!session.data.permissions.includes('file:download'), 'editor should not have file:download')
+    assert(!session.data.permissions.includes('data:transfer'), 'editor should not have data:transfer')
 
     const key = `${E2E_PREFIX}editor-write:auto`
     const write = await request('PUT', storeRoute(key), {
@@ -368,6 +370,8 @@ async function main() {
     const session = await login(`${E2E_PREFIX}viewer`, 'viewer123')
     assertEqual(session.status, 200, 'viewer login status')
     viewerToken = session.data.token
+    assert(!session.data.permissions.includes('file:download'), 'viewer should not have file:download')
+    assert(!session.data.permissions.includes('data:transfer'), 'viewer should not have data:transfer')
 
     const read = await request('GET', '/store', { token: viewerToken })
     assertEqual(read.status, 200, 'viewer read status')
@@ -504,10 +508,32 @@ async function main() {
     const res = await request('GET', '/rbac/roles/permissions', { token: adminToken })
     assertEqual(res.status, 200, 'status')
     permissions = res.data
-    assertEqual(permissions.length, 7, 'permission count')
+    assertEqual(permissions.length, 9, 'permission count')
     assert(
       permissions.some((permission) => permission.code === 'selection:write'),
       'selection:write missing',
+    )
+    const downloadPermission = permissions.find(
+      (permission) => permission.code === 'file:download',
+    )
+    assert(downloadPermission, 'file:download missing')
+    assertEqual(downloadPermission.name, '下载文件', 'file:download name')
+    assertEqual(downloadPermission.module, '业务', 'file:download module')
+    assertEqual(
+      permissions.findIndex((permission) => permission.code === 'file:download'),
+      permissions.findIndex((permission) => permission.code === 'selection:write') + 1,
+      'file:download order',
+    )
+    const transferPermission = permissions.find(
+      (permission) => permission.code === 'data:transfer',
+    )
+    assert(transferPermission, 'data:transfer missing')
+    assertEqual(transferPermission.name, '导入导出数据', 'data:transfer name')
+    assertEqual(transferPermission.module, '业务', 'data:transfer module')
+    assertEqual(
+      permissions.findIndex((permission) => permission.code === 'data:transfer'),
+      permissions.findIndex((permission) => permission.code === 'file:download') + 1,
+      'data:transfer order',
     )
   })
 

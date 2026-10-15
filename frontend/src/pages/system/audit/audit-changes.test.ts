@@ -148,6 +148,23 @@ describe('audit changes', () => {
     expect(entryName(upload)).toBe('上传文件 · e2e-sample.png');
   });
 
+  it('names a downloaded file by its file name and merges its filter label', () => {
+    const download = entry({
+      action: 'file.download',
+      detail: '文件名：e2e-sample.png；大小：6775 B',
+      target: 'd2159766-e2e7-466a-90d7-5f137d724f5c',
+    });
+    expect(entryObject(download)).toBe('e2e-sample.png');
+    expect(entryName(download)).toBe('下载文件 · e2e-sample.png');
+    expect(operationKindOptions(['file.download', '下载文件'])).toEqual([
+      {
+        label: '下载文件',
+        value: '下载文件',
+        kinds: ['file.download', '下载文件'],
+      },
+    ]);
+  });
+
   it('merges filter options that read the same and sorts them', () => {
     expect(
       operationKindOptions([

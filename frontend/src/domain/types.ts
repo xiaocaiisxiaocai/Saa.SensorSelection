@@ -22,6 +22,68 @@ export type DeleteResult =
 export type ReorderResult =
   { ok: false; reason: 'stale' | 'storage' | 'validation' } | { ok: true };
 
+export interface ImportSkip {
+  rowNumber: number;
+  reason: string;
+}
+
+export type SensorImportField =
+  | 'brand'
+  | 'feature'
+  | 'model'
+  | 'partNumber'
+  | 'scene'
+  | 'sensorType'
+  | 'spec'
+  | 'status';
+
+export interface SensorImportRow {
+  rowNumber: number;
+  /** 表头里出现的栏位才有键，值是单元格原文 */
+  values: Partial<Record<SensorImportField, string>>;
+}
+
+export interface SensorImportRequest {
+  hasModelColumn: boolean;
+  rows: SensorImportRow[];
+}
+
+export type SensorImportResult =
+  | { created: number; ok: true; skipped: ImportSkip[]; updated: number }
+  | { message?: string; ok: false; reason: 'storage' | 'validation' };
+
+export interface DictionaryRestoreRow {
+  name: string;
+  rowNumber: number;
+  sort: string;
+}
+
+export interface DictionaryRestoreSheet {
+  hasNameColumn: boolean;
+  name: string;
+  rows: DictionaryRestoreRow[];
+}
+
+export interface DictionaryRestoreCategory {
+  code: string;
+  created: number;
+  deleted: number;
+  kept: number;
+  skipped: ImportSkip[];
+  title: string;
+  unchangedReason?: string;
+  updated: number;
+}
+
+export type DictionaryRestoreResult =
+  | {
+      categories: DictionaryRestoreCategory[];
+      missingSheets: string[];
+      ok: true;
+      unknownSheets: string[];
+    }
+  | { ok: false; reason: 'storage' };
+
 export type EntityKind = 'customer' | 'machine';
 export type MachineCatalogKind = 'mechanism' | 'project';
 

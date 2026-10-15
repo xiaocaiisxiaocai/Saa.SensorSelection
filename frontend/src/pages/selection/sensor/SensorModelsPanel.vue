@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  Upload,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -20,6 +21,8 @@ import {
   type SensorFileItem,
   type SensorItem,
 } from '@/domain';
+import { readWorkbook } from '@/pages/shared/excel';
+import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -44,6 +47,7 @@ import {
   expandSensorGroups,
   exportCell,
   filterSensorGroups,
+  mapSensorImportSheet,
   filterSensors,
   groupSensorCatalog,
   HIDEABLE_COLUMNS,
@@ -67,10 +71,14 @@ const sensorTypes = defineModel<Array<string | number>>('sensorTypes', {
 });
 
 const store = useSelectionStore();
-const { canWrite } = useAccess();
+const { canWrite, has } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
+const canExport = computed(() => has('data:transfer'));
+const canImport = computed(() => canExport.value && writable.value);
 
 const formDialog = ref<InstanceType<typeof SensorFormDialog>>();
+const importResult = ref<InstanceType<typeof ImportResultDialog>>();
+const importInput = ref<HTMLInputElement>();
 const replaceDialog = ref<InstanceType<typeof SensorReplaceDialog>>();
 const linkedPreview = ref<{
   file: SensorFileItem;
@@ -277,10 +285,7 @@ function onTableChange(
   extra: { action?: string },
 ) {
   if (!isColumnFilterChange(extra)) return;
-  setColumnFilter(
-    statuses,
-    columnFilterValues(filters, 'status').map(String),
-  );
+  setColumnFilter(statuses, columnFilterValues(filters, 'status').map(String));
   setColumnFilter(sensorTypes, columnFilterValues(filters, 'sensorType'));
 }
 
@@ -298,8 +303,7 @@ function exportExcel() {
     (column) => column.key !== 'actions',
   );
   downloadSensorExcel({
-    pageName:
-      statuses.value.length === 0 ? '全部' : statuses.value.join('、'),
+    pageName: statuses.value.length === 0 ? '全部' : statuses.value.join('、'),
     headers: exportColumns.map((column) => String(column.title)),
     rows: rows.map((item) =>
       exportColumns.map((column) =>
@@ -308,6 +312,44 @@ function exportExcel() {
     ),
   });
   message.success(`已导出 ${rows.length} 条 Sensor 型号`);
+}
+
+function openImport() {
+  importInput.value?.click();
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  // 只有读文件失败才算「无法读取」；写入阶段的异常照常抛出，不被误报
+  let first: Awaited<ReturnType<typeof readWorkbook>>[number] | undefined;
+  try {
+    first = (await readWorkbook(new Uint8Array(await file.arrayBuffer())))[0];
+  } catch {
+    first = undefined;
+  }
+  if (!first) {
+    message.error('无法读取该 Excel 文件');
+    return;
+  }
+  const result = store.importSensors(mapSensorImportSheet(first.rows));
+  if (!result.ok) {
+    message.error(result.message || '数据保存失败，本次修改未保存');
+    return;
+  }
+  importResult.value?.open({
+    categories: [],
+    notes: [],
+    skips: result.skipped.map((item) => ({
+      location: `第 ${item.rowNumber} 行`,
+      reason: item.reason,
+    })),
+    summary: `新增 ${result.created} / 更新 ${result.updated} / 跳过 ${result.skipped.length}`,
+    title: '导入 Sensor 型号',
+  });
 }
 
 function editItem(item: SensorItem) {
@@ -359,9 +401,7 @@ function showCurrent() {
 }
 
 function replaceTitle(row: SensorTableRow) {
-  return row.parent !== row.item
-    ? `替换现用 ${row.parent.model}`
-    : '替换现用';
+  return row.parent !== row.item ? `替换现用 ${row.parent.model}` : '替换现用';
 }
 
 function openReplace(row: SensorTableRow) {
@@ -402,10 +442,27 @@ function openReplace(row: SensorTableRow) {
         :hidden="hiddenColumns"
         @change="columnVisibility.setVisible"
       />
-      <a-button aria-label="导出 Excel" @click="exportExcel">
-        <Download :size="14" :stroke-width="1.5" aria-hidden="true" />
-        导出 Excel
-      </a-button>
+      <a-tooltip v-if="canExport" title="导出 Excel">
+        <a-button aria-label="导出 Excel" @click="exportExcel">
+          <template #icon><Download :size="14" /></template>
+          导出 Excel
+        </a-button>
+      </a-tooltip>
+      <a-tooltip v-if="canImport" title="导入 Excel">
+        <a-button aria-label="导入 Excel" @click="openImport">
+          <template #icon><Upload :size="14" /></template>
+          导入 Excel
+        </a-button>
+      </a-tooltip>
+      <input
+        v-if="canImport"
+        ref="importInput"
+        class="visually-hidden"
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        aria-label="选择 Sensor 型号 Excel"
+        @change="onImportFile"
+      >
       <a-button v-if="writable" type="primary" @click="formDialog?.open()">
         新增型号
       </a-button>
@@ -481,11 +538,15 @@ function openReplace(row: SensorTableRow) {
           <span v-else>未关联</span>
         </template>
         <template v-else-if="column.key === 'replacedAt'">
-          <span v-if="row.struck" class="sensor-struck">{{ value || '—' }}</span>
+          <span v-if="row.struck" class="sensor-struck">{{
+            value || '—'
+          }}</span>
           <template v-else>{{ value || '—' }}</template>
         </template>
         <template v-else-if="column.key === 'problemNote'">
-          <span v-if="row.struck" class="sensor-struck">{{ value || '—' }}</span>
+          <span v-if="row.struck" class="sensor-struck">{{
+            value || '—'
+          }}</span>
           <template v-else>{{ value || '—' }}</template>
         </template>
         <template v-else-if="column.key === 'relation'">
@@ -558,6 +619,7 @@ function openReplace(row: SensorTableRow) {
     <SensorLinkedPreview v-model="linkedPreview" />
     <SensorFormDialog ref="formDialog" />
     <SensorReplaceDialog ref="replaceDialog" @replaced="showCurrent" />
+    <ImportResultDialog ref="importResult" />
   </div>
 </template>
 

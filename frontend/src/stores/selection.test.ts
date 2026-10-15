@@ -367,7 +367,9 @@ describe('selection store', () => {
     const store = useSelectionStore();
     const writeMethods = Object.keys(store).filter(
       (name) =>
-        /^(save|delete|reorder|replace|move|ensure)[A-Z]/.test(name) &&
+        /^(save|delete|reorder|replace|move|ensure|import|restore)[A-Z]/.test(
+          name,
+        ) &&
         name !== 'ensureBackendInit' &&
         typeof (store as unknown as Record<string, unknown>)[name] ===
           'function',

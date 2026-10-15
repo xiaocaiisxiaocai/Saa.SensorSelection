@@ -24,7 +24,7 @@ const writer: UserProfile = {
   username: 'admin',
   displayName: '管理员',
   roles: [],
-  permissions: ['selection:write'],
+  permissions: ['selection:write', 'data:transfer'],
   orgUnit: null,
 };
 
@@ -66,6 +66,29 @@ function tableRows(wrapper: VueWrapper) {
 }
 
 describe('SensorPage', () => {
+  it('shows export only with data:transfer and import only with write as well', async () => {
+    const guest = await mountPage();
+    expect(guest.find('button[aria-label="导出 Excel"]').exists()).toBe(false);
+    expect(guest.find('button[aria-label="导入 Excel"]').exists()).toBe(false);
+    guest.unmount();
+
+    const transferOnly = await mountPage(
+      {},
+      { ...writer, permissions: ['data:transfer'] },
+    );
+    expect(transferOnly.find('button[aria-label="导出 Excel"]').exists()).toBe(
+      true,
+    );
+    expect(transferOnly.find('button[aria-label="导入 Excel"]').exists()).toBe(
+      false,
+    );
+    transferOnly.unmount();
+
+    const both = await mountPage({}, writer);
+    expect(both.find('button[aria-label="导入 Excel"]').exists()).toBe(true);
+    both.unmount();
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     message.destroy();

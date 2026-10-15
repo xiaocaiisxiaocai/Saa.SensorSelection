@@ -63,6 +63,7 @@ export {
 } from './sensor-status';
 export type { SensorStatusKind } from './sensor-status';
 export { migrateSelectionSeedStore } from './seed-migration';
+export { sanitizeExcelSheetName } from './sheet-name';
 export {
   buildMachineSchematicReportHtml,
   openMachineSchematicReport,

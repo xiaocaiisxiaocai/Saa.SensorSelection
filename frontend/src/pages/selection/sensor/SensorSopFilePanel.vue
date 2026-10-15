@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Eye, Inbox, Search, Trash2 } from 'lucide-vue-next';
+import { Download, Eye, Inbox, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 import {
@@ -8,7 +8,12 @@ import {
   type SensorSopFileItem,
 } from '@/domain';
 import { createFilePicker } from '@/pages/shared/file-rules';
-import { formatFileSize, uploadFile } from '@/pages/shared/files';
+import {
+  fileIdFromReference,
+  formatFileSize,
+  uploadFile,
+  useFileDownload,
+} from '@/pages/shared/files';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
@@ -19,6 +24,7 @@ import { useTablePagination } from '@/pages/shared/table';
 const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
+const { canDownload, downloadStoredFile } = useFileDownload();
 const query = ref('');
 const preview = ref<SensorSopFileItem | null>(null);
 const { uploading, runUpload } = useUploadLock();
@@ -134,6 +140,20 @@ const { listPagination } = useTablePagination(
                 @click="preview = item"
               >
                 <template #icon><Eye :size="14" /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip
+              v-if="canDownload"
+              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+            >
+              <a-button
+                type="text"
+                size="small"
+                aria-label="下载"
+                :disabled="!fileIdFromReference(item.dataUrl)"
+                @click="downloadStoredFile(item.dataUrl, item.fileName)"
+              >
+                <template #icon><Download :size="14" /></template>
               </a-button>
             </a-tooltip>
             <a-tooltip v-if="writable" title="删除">

@@ -98,6 +98,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("perm", "selection:read"));
     options.AddPolicy("selection:write", policy =>
         policy.RequireClaim("perm", "selection:write"));
+    options.AddPolicy("file:download", policy =>
+        policy.RequireClaim("perm", "file:download"));
     options.AddPolicy("rbac:view", policy =>
         policy.RequireClaim("perm", "rbac:view"));
     options.AddPolicy("rbac:user:write", policy =>

@@ -188,6 +188,26 @@
   flex-shrink: 0;
 }
 
+/* 文件列表：每条一行，名称在前，大小和时间是次要文字；名称过长时折行，不截断 */
+.file-list__line {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.file-list__name {
+  overflow-wrap: anywhere;
+}
+
+.file-list__meta {
+  color: var(--color-text-secondary);
+  font: var(--font-sm);
+  white-space: nowrap;
+}
+
 /* 文件列表：从别处跳转来定位的文件高亮一下 */
 .file-list__item--focus {
   background: var(--color-primary-bg);

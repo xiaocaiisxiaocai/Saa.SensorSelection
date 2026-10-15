@@ -130,13 +130,13 @@ describe('upload panels', () => {
     });
     await nextTick();
 
-    const item = (fileName: string) =>
+    const item = (title: string) =>
       wrapper
         .findAll('.ant-list-item')
-        .find((node) => node.text().includes(fileName))!;
-    const ready = item('可下载.pdf').get('[aria-label="下载"]');
+        .find((node) => node.text().includes(title))!;
+    const ready = item('可下载').get('[aria-label="下载"]');
     expect((ready.element as HTMLButtonElement).disabled).toBe(false);
-    const blockedItem = item('无法下载.pdf');
+    const blockedItem = item('无法下载');
     const blocked = blockedItem.get('[aria-label="下载"]');
     expect((blocked.element as HTMLButtonElement).disabled).toBe(true);
     const blockedTip = blockedItem

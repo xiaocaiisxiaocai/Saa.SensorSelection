@@ -151,10 +151,14 @@ async function remove(item: SensorSopItem) {
         <a-list-item
           :class="{ 'file-list__item--focus': item.id === focusSopId }"
         >
-          <a-list-item-meta
-            :title="item.title"
-            :description="`${item.fileName} · ${formatFileSize(item.size)} · ${formatLocalDateTime(new Date(item.uploadedAt))}`"
-          />
+          <!-- 一行显示：名称在前，大小和上传时间用次要文字跟在后面 -->
+          <div class="file-list__line">
+            <span class="file-list__name">{{ item.title }}</span>
+            <span class="file-list__meta">
+              {{ formatFileSize(item.size) }} ·
+              {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
+            </span>
+          </div>
           <template #actions>
             <a-tooltip title="预览">
               <a-button

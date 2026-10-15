@@ -141,10 +141,14 @@ const { listPagination } = useTablePagination(
     >
       <template #renderItem="{ item }">
         <a-list-item>
-          <a-list-item-meta
-            :title="item.fileName"
-            :description="`${formatFileSize(item.size)} · ${formatLocalDateTime(new Date(item.uploadedAt))}`"
-          />
+          <!-- 一行显示：名称在前，大小和上传时间用次要文字跟在后面 -->
+          <div class="file-list__line">
+            <span class="file-list__name">{{ item.fileName }}</span>
+            <span class="file-list__meta">
+              {{ formatFileSize(item.size) }} ·
+              {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
+            </span>
+          </div>
           <template #actions>
             <a-tooltip v-if="item.kind === 'pdf'" title="预览">
               <a-button

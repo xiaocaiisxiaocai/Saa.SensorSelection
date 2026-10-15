@@ -162,7 +162,11 @@ $publishArgs = @('publish', $backendProject, '--configuration', $Configuration, 
 if ($SelfContained) { $publishArgs += @('--runtime', 'win-x64', '--self-contained', 'true') }
 else { $publishArgs += @('--self-contained', 'false') }
 Invoke-Checked 'dotnet' $publishArgs
-if (-not (Test-Path (Join-Path $OutputDir 'web.config'))) { throw '后端发布产物缺少 web.config' }
+$webConfigPath = Join-Path $OutputDir 'web.config'
+if (-not (Test-Path $webConfigPath)) { throw '后端发布产物缺少 web.config' }
+if ((Get-Content -LiteralPath $webConfigPath -Raw) -notmatch 'maxAllowedContentLength') {
+  throw 'web.config 缺少 requestLimits，IIS 会拦截大于约 28.6 MB 的上传'
+}
 
 $demoStorePath = Join-Path $OutputDir 'Data\demo-store.json'
 if (Test-Path $demoStorePath) {
@@ -192,7 +196,7 @@ $productionSettings = [ordered]@{
   Cors = [ordered]@{ AllowedOrigins = $CorsAllowedOrigins }
 }
 Write-Utf8NoBom (Join-Path $OutputDir 'appsettings.Production.json') ($productionSettings | ConvertTo-Json -Depth 4)
- $credentials = @"
+$credentials = @"
 SAA 感应器选型初始部署凭据
 
 管理员账号：admin
@@ -202,7 +206,7 @@ SAA 感应器选型初始部署凭据
 本文件不在 wwwroot 中，不会作为前端静态文件发布，但仍应限制文件系统权限。
 "@
 Write-Utf8NoBom (Join-Path $OutputDir 'DEPLOYMENT-CREDENTIALS.txt') $credentials
-Write-Host "==> 初始管理员密码为 admin123，详见：$OutputDir\DEPLOYMENT-CREDENTIALS.txt"
+Write-Host "==> 初始管理员密码为 $AdminPassword，详见：$OutputDir\DEPLOYMENT-CREDENTIALS.txt"
 
 $guide = @"
 # IIS 单目录部署说明
@@ -219,7 +223,7 @@ $guide = @"
 3. 应用程序池选择“无托管代码”，启用 64 位应用程序。
 4. 给 `App_Data` 授予 IIS 应用程序池身份读写权限。
 5. 脚本已自动生成 `appsettings.Production.json`，其中包含随机 JWT 密钥、初始管理员密码和 CORS 来源。
-6. 如果管理员密码是脚本自动生成的，请读取 `DEPLOYMENT-CREDENTIALS.txt`，首次登录后立即修改并删除该文件。
+6. 初始管理员密码见 `DEPLOYMENT-CREDENTIALS.txt`，首次登录后立即修改并删除该文件。
 7. 更新站点时必须保留服务器原有的 `App_Data`；不要清空服务器站点目录，也不要使用会删除目标多余文件的 `/MIR`。
 
 前端 API 基地址：`$ApiBase`。当前默认同源 `/api`，不需要 ARR/URL Rewrite。

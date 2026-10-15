@@ -6,7 +6,6 @@ import {
   machineCatalogFromQuery,
   resolveMachineSelection,
   resolveTabSelection,
-  tabOfPage,
 } from './machine-selection';
 
 const mechanism = {
@@ -95,7 +94,5 @@ describe('machine-selection', () => {
       page: null,
     });
     expect(resolveTabSelection([], leaf, {})).toEqual({ tab: null, page: null });
-    expect(tabOfPage(tabs, 21)).toBe(tabs[1]);
-    expect(tabOfPage(tabs, 99)).toBeNull();
   });
 });

@@ -105,11 +105,3 @@ export function resolveTabSelection(
     null;
   return { tab, page };
 }
-
-/** 二级 Tab 所在的 Tab */
-export function tabOfPage(
-  tabs: readonly MachineTab[],
-  pageId: number,
-): MachineTab | null {
-  return tabs.find((tab) => tab.pages.some((page) => page.id === pageId)) ?? null;
-}

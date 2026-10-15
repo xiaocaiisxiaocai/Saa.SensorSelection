@@ -11,30 +11,11 @@ type AnyWrapper = Pick<
   'find' | 'findAll' | 'findAllComponents' | 'get'
 >;
 
-/** 按 placeholder 找 a-select（含多选）。 */
-export function findSelect(wrapper: AnyWrapper, placeholder: string) {
-  const select = wrapper
-    .findAllComponents({ name: 'ASelect' })
-    .find((item) => item.props('placeholder') === placeholder);
-  if (!select) throw new Error(`a-select "${placeholder}" not found`);
-  return select;
-}
-
 /** 页面上的 a-select，排除分页条里的「每页条数」下拉。 */
 export function formSelects(wrapper: AnyWrapper) {
   return wrapper
     .findAllComponents({ name: 'ASelect' })
     .filter((item) => !item.element.closest?.('.ant-pagination'));
-}
-
-/** 等价于用户在 a-select 里选中（多选时传数组）。 */
-export async function chooseSelect(
-  wrapper: AnyWrapper,
-  placeholder: string,
-  value: unknown,
-) {
-  findSelect(wrapper, placeholder).vm.$emit('update:value', value);
-  await flushPromises();
 }
 
 /** 点击 a-tabs 里文字以 label 开头的标签。 */
@@ -152,18 +133,6 @@ export function treeNodes(wrapper: AnyWrapper, text: string) {
     const title = node.find('.ant-tree-node-content-wrapper');
     return title.exists() && title.text().trim() === text;
   });
-}
-
-/** 勾选 / 取消勾选第 index 个标题为 text 的树节点。 */
-export async function toggleTreeCheck(
-  wrapper: AnyWrapper,
-  text: string,
-  index = 0,
-) {
-  const node = treeNodes(wrapper, text)[index];
-  if (!node) throw new Error(`tree node "${text}" #${index} not found`);
-  await node.get('.ant-tree-checkbox').trigger('click');
-  await flushPromises();
 }
 
 /** 树节点勾选状态。 */

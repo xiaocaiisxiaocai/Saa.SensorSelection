@@ -92,8 +92,8 @@ describe('auth store', () => {
 
   it('requires every listed permission', () => {
     expect(hasAllPermissions(['rbac:view'], ['rbac:view'])).toBe(true);
-    expect(
-      hasAllPermissions(['rbac:view'], ['rbac:view', 'audit:view']),
-    ).toBe(false);
+    expect(hasAllPermissions(['rbac:view'], ['rbac:view', 'audit:view'])).toBe(
+      false,
+    );
   });
 });

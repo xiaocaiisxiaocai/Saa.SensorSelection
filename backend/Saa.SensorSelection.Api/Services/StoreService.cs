@@ -134,6 +134,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         db.StoredFiles.AddRange(detached.Files);
         var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
         var droppedFileIds = StoredFileService.ReferencedFileIds(entry?.Json);
+        var previousJson = entry?.Json;
         if (entry == null)
         {
             var added = db.StoreEntries.Add(new StoreEntry
@@ -157,6 +158,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                 }
 
                 droppedFileIds = StoredFileService.ReferencedFileIds(existing.Json);
+                previousJson = existing.Json;
                 existing.Json = json;
                 existing.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
@@ -171,7 +173,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
         droppedFileIds.ExceptWith(StoredFileService.ReferencedFileIds(json));
         await storedFiles.ReleaseAsync(droppedFileIds, ct);
-        return StoreWriteResult.Ok(json);
+        return StoreWriteResult.Ok(json, previousJson);
     }
 
     /// <summary>
@@ -362,27 +364,32 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return new StoreDeleteResult(false);
         }
 
+        var previousJson = entry.Json;
         var droppedFileIds = StoredFileService.ReferencedFileIds(entry.Json);
         db.StoreEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
         await storedFiles.ReleaseAsync(droppedFileIds, ct);
-        return new StoreDeleteResult(true);
+        return new StoreDeleteResult(true, previousJson);
     }
 }
 
 /// <summary>单个 key 的读取结果。</summary>
 public record StoreReadResult(bool Found, string? Json);
 
-/// <summary>写操作结果：Success=false 且 Error 非空表示校验失败。</summary>
-public record StoreWriteResult(bool Success, string? Error, string? Json)
+/// <summary>
+/// 写操作结果：Success=false 且 Error 非空表示校验失败。
+/// PreviousJson 是写入前的值（新 key 为 null），供操作日志比较改了什么。
+/// </summary>
+public record StoreWriteResult(bool Success, string? Error, string? Json, string? PreviousJson = null)
 {
-    public static StoreWriteResult Ok(string? json = null) => new(true, null, json);
+    public static StoreWriteResult Ok(string? json = null, string? previousJson = null) =>
+        new(true, null, json, previousJson);
 
     public static StoreWriteResult Validation(string message) => new(false, message, null);
 }
 
-/// <summary>删除结果：Found=false 表示 key 不存在。</summary>
-public record StoreDeleteResult(bool Found);
+/// <summary>删除结果：Found=false 表示 key 不存在；PreviousJson 是删掉的值。</summary>
+public record StoreDeleteResult(bool Found, string? PreviousJson = null);
 
 /// <summary>实体分类排序的后端存储形状。</summary>
 public sealed record EntityGroupPayload(

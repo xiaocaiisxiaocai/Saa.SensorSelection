@@ -13,10 +13,9 @@ import {
   watch,
 } from 'vue';
 
-import { api, ApiError, type AuditLogItem } from '@/api';
+import { api, ApiError, type AuditOperationItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
 import {
-  cellText,
   columnFilter,
   columnFilterValues,
   isColumnFilterChange,
@@ -25,11 +24,22 @@ import {
   scrollX,
   type ColumnFilterMap,
 } from '@/pages/shared/table';
-import AuditDetailDialog from '@/pages/system/audit/AuditDetailDialog.vue';
-import { ACTION_LABELS, actionLabel } from '@/pages/system/audit/audit-actions';
-import { formatAuditTarget } from '@/pages/system/audit-target';
+import AuditOperationDrawer from '@/pages/system/audit/AuditOperationDrawer.vue';
+import { ACTION_LABELS } from '@/pages/system/audit/audit-actions';
+import {
+  entryName,
+  entrySummary,
+  operationObject,
+  operationSummary,
+  operationTitle,
+} from '@/pages/system/audit/audit-changes';
 
 import '../shared/selection-page.css';
+
+/*
+ * 操作日志按「一次操作」列出：用户在界面上点一下保存 / 删除产生的多条日志归成一行，
+ * 变更摘要说清改了什么，点开右侧抽屉看每个字段改前改后。
+ */
 
 const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({
   label,
@@ -41,74 +51,61 @@ const resultOptions = [
 ];
 
 const loading = ref(false);
-const items = ref<AuditLogItem[]>([]);
+const items = ref<AuditOperationItem[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
-const selectedLog = ref<AuditLogItem | null>(null);
+const selected = ref<AuditOperationItem | null>(null);
 const filters = reactive({
-  action: '' as string | null,
+  actions: [] as string[],
   dateRange: null as [string, string] | null,
+  hideLogin: false,
+  keyword: '',
   result: '' as string | null,
-  username: '',
 });
 const hasActiveFilters = computed(
   () =>
-    Boolean(filters.username.trim()) ||
-    Boolean(filters.action) ||
+    Boolean(filters.keyword.trim()) ||
+    filters.actions.length > 0 ||
     Boolean(filters.result) ||
+    filters.hideLogin ||
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
 const columns = computed<TableColumnType[]>(() => [
-  // 192 而非 180：完整时间戳实测要 168px 文字宽 + 16px 内边距，180 会被截成
-  // 「2026-08-17 20:00:…」，而审计日志里精确到秒是有意义的。
+  // 完整时间戳实测要 140px 文字宽 + 内边距；精确到秒在审计里是有意义的
   {
     key: 'timestamp',
     dataIndex: 'timestamp',
     title: '时间',
-    width: 192,
+    width: 168,
     fixed: 'left',
   },
-  {
-    key: 'username',
-    dataIndex: 'username',
-    title: '用户',
-    width: 120,
-  },
+  { key: 'user', title: '用户', width: 112 },
   {
     key: 'action',
-    dataIndex: 'action',
     title: '操作',
-    width: 120,
+    width: 176,
     ...columnFilter({
       options: actionOptions,
-      value: filters.action ? [filters.action] : [],
-      multiple: false,
+      value: filters.actions,
       search: true,
     }),
   },
-  // 失败原因不再单独占一列（绝大多数行是空的），失败时显示在目标下方
-  {
-    key: 'target',
-    dataIndex: 'target',
-    title: '目标',
-    width: 240,
-    align: 'left',
-  },
-  { key: 'detail', dataIndex: 'detail', title: '详情', width: 96 },
+  // 列宽合计 976：1280 屏（内容区约 1024，含展开列）不出横向滚动，宽屏按比例放大
+  { key: 'object', title: '对象', width: 176 },
+  { key: 'summary', title: '变更摘要', width: 256 },
   {
     key: 'result',
     dataIndex: 'result',
     title: '结果',
-    width: 112,
+    width: 88,
     ...columnFilter({
       options: resultOptions,
       value: filters.result ? [filters.result] : [],
       multiple: false,
     }),
   },
-  { key: 'ip', dataIndex: 'ip', title: 'IP', width: 120 },
 ]);
 
 function onTableChange(
@@ -118,9 +115,8 @@ function onTableChange(
   extra: { action?: string },
 ) {
   if (!isColumnFilterChange(extra)) return;
-  const action = columnFilterValues(nextFilters, 'action').map(String)[0] ?? '';
+  filters.actions = columnFilterValues(nextFilters, 'action').map(String);
   const result = columnFilterValues(nextFilters, 'result').map(String)[0] ?? '';
-  filters.action = action;
   filters.result = result === 'true' || result === 'false' ? result : '';
 }
 
@@ -128,14 +124,15 @@ watch([page, pageSize], loadData);
 
 onMounted(loadData);
 
-// 和其它页面一样即改即筛；输入框防抖，避免每敲一个字就请求一次后端。
+// 即改即筛；输入框防抖，避免每敲一个字就请求一次后端。
 const FILTER_DEBOUNCE_MS = 300;
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch(
   () => [
-    filters.username.trim(),
-    filters.action,
+    filters.keyword.trim(),
+    filters.actions.join(','),
     filters.result,
+    filters.hideLogin,
     filters.dateRange?.[0] ?? null,
     filters.dateRange?.[1] ?? null,
   ],
@@ -146,8 +143,12 @@ watch(
 );
 onBeforeUnmount(() => clearTimeout(filterTimer));
 
-function openDetail(log: AuditLogItem) {
-  selectedLog.value = log;
+function openDetail(operation: AuditOperationItem) {
+  selected.value = operation;
+}
+
+function rowExpandable(operation: AuditOperationItem): boolean {
+  return operation.entryCount > 1;
 }
 
 function resultFilter(): boolean | undefined {
@@ -208,14 +209,15 @@ async function loadData() {
   loading.value = true;
   try {
     const [from, to] = filters.dateRange ?? [null, null];
-    const pageData = await api.listAuditLogs({
-      action: filters.action || undefined,
+    const pageData = await api.listAuditOperations({
+      actions: filters.actions,
       from: toIsoStart(from),
+      hideLogin: filters.hideLogin,
+      keyword: filters.keyword.trim() || undefined,
       page: page.value,
       pageSize: pageSize.value,
       result: resultFilter(),
       to: toIsoEnd(to),
-      username: filters.username.trim() || undefined,
     });
     if (seq !== loadSeq) return;
     items.value = pageData.items;
@@ -237,9 +239,10 @@ function applyFilters() {
 }
 
 async function resetFilters() {
-  filters.username = '';
-  filters.action = '';
+  filters.keyword = '';
+  filters.actions = [];
   filters.result = '';
+  filters.hideLogin = false;
   filters.dateRange = null;
   // 重置是明确的一次性操作，不必等防抖
   await nextTick();
@@ -253,10 +256,10 @@ async function resetFilters() {
     <div class="selection-toolbar audit-toolbar">
       <h1 class="visually-hidden">操作日志</h1>
       <a-input
-        v-model:value="filters.username"
-        class="selection-toolbar__filter audit-toolbar__user"
-        placeholder="搜索操作用户"
-        aria-label="操作用户"
+        v-model:value="filters.keyword"
+        class="selection-toolbar__filter"
+        placeholder="搜索用户、对象或改动内容"
+        aria-label="搜索操作日志"
         allow-clear
       >
         <template #prefix><Search :size="14" /></template>
@@ -271,6 +274,7 @@ async function resetFilters() {
         :disabled-date="isFutureDate"
         @open-change="onDatePickerOpenChange"
       />
+      <a-checkbox v-model:checked="filters.hideLogin">隐藏登录</a-checkbox>
       <a-button
         type="text"
         :disabled="!hasActiveFilters"
@@ -284,44 +288,68 @@ async function resetFilters() {
     <a-table
       :columns="columns"
       :data-source="items"
-      row-key="id"
+      row-key="operationId"
       :loading="loading"
       :pagination="false"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无日志' }"
       :custom-row="rowClick(openDetail)"
+      :row-expandable="rowExpandable"
       @change="onTableChange"
     >
-      <template #bodyCell="{ column, record: row, text: value }">
+      <template #bodyCell="{ column, record: row }">
         <template v-if="column.key === 'timestamp'">
           {{ formatLocalDateTime(new Date(row.timestamp)) }}
         </template>
-        <template v-else-if="column.key === 'username'">
-          {{ value || '—' }}
+        <template v-else-if="column.key === 'user'">
+          <span class="audit-user">{{
+            row.displayName || row.username || '—'
+          }}</span>
+          <span
+            v-if="row.displayName && row.username !== row.displayName"
+            class="audit-user__account"
+          >
+            {{ row.username }}
+          </span>
         </template>
         <template v-else-if="column.key === 'action'">
-          {{ actionLabel(row.action) }}
-        </template>
-        <template v-else-if="column.key === 'target'">
-          <span class="audit-target" :title="row.target || undefined">
-            {{ formatAuditTarget(row.target) || '—' }}
-          </span>
-          <span v-if="!row.result && row.error" class="audit-target__error">
-            {{ row.error }}
+          <span class="audit-text">{{ operationTitle(row) }}</span>
+          <span v-if="row.entryCount > 1" class="audit-count">
+            {{ row.entryCount }} 条记录
           </span>
         </template>
-        <template v-else-if="column.key === 'detail'">
-          <a-button type="link" size="small" @click.stop="openDetail(row)">
-            查看
-          </a-button>
+        <template v-else-if="column.key === 'object'">
+          <span class="audit-text">{{ operationObject(row) }}</span>
+        </template>
+        <template v-else-if="column.key === 'summary'">
+          <span
+            v-if="operationSummary(row)"
+            class="audit-text"
+            :class="{ 'audit-text--error': !row.result }"
+          >
+            {{ operationSummary(row) }}
+          </span>
+          <span v-else class="audit-text audit-text--muted">—</span>
         </template>
         <template v-else-if="column.key === 'result'">
           <a-tag :color="row.result ? 'green' : 'red'">
             {{ row.result ? '成功' : '失败' }}
           </a-tag>
         </template>
-        <template v-else-if="column.key === 'ip'">{{ value || '—' }}</template>
-        <template v-else>{{ cellText(value) }}</template>
+      </template>
+      <!-- 一次操作含多条记录时展开看每一条 -->
+      <template #expandedRowRender="{ record: row }">
+        <ol class="audit-entries">
+          <li v-for="entry in row.entries" :key="entry.id">
+            <span class="audit-entries__name">{{ entryName(entry) }}</span>
+            <span
+              v-if="entrySummary(entry)"
+              :class="{ 'audit-text--error': !entry.result }"
+            >
+              {{ entrySummary(entry) }}
+            </span>
+          </li>
+        </ol>
       </template>
     </a-table>
     <a-pagination
@@ -331,7 +359,7 @@ async function resetFilters() {
       :total="total"
       v-bind="PAGINATION_PROPS"
     />
-    <AuditDetailDialog v-model="selectedLog" />
+    <AuditOperationDrawer v-model="selected" />
   </section>
 </template>
 

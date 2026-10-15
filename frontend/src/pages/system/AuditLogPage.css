@@ -13,13 +13,43 @@
   }
 }
 
-.audit-target,
-.audit-target__error {
+.audit-text,
+.audit-user,
+.audit-user__account,
+.audit-count {
   display: block;
+  overflow-wrap: anywhere;
 }
 
-.audit-target__error {
-  margin-top: var(--space-1);
+/* 账号、记录条数是辅助信息，比主文字小一号 */
+.audit-user__account,
+.audit-count {
   font: var(--font-sm);
+  color: var(--color-text-tertiary);
+}
+
+.audit-text--muted {
+  color: var(--color-text-tertiary);
+}
+
+.audit-text--error {
   color: var(--color-error);
+}
+
+/* 展开行：这次操作里的每一条记录 */
+.audit-entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-left: var(--space-6);
+  margin: 0;
+}
+
+.audit-entries li {
+  overflow-wrap: anywhere;
+}
+
+.audit-entries__name {
+  margin-right: var(--space-3);
+  color: var(--color-text-secondary);
 }

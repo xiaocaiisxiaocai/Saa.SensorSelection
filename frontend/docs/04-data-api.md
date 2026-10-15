@@ -144,8 +144,15 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 | 方法 | 路径 | 权限 | 查询参数 |
 | --- | --- | --- | --- |
 | GET | `/audit-logs` | `audit:view` | `page`、`pageSize`、`action`、`username`、`target`、`result`、`from`、`to` |
+| GET | `/audit-logs/operations` | `audit:view` | `page`、`pageSize`、`keyword`、`action`（可重复，多选）、`result`、`from`、`to`、`hideLogin` |
 
-返回 `{ items: [...], total }`。
+`/audit-logs` 返回 `{ items: [...], total }`，每条带 `changes`（变更明细 JSON 字符串，可能为 null）、`operationId`、`operationLabel`。
+
+`/audit-logs/operations` 按操作分页：返回 `{ items: [{ operationId, label, timestamp, username, displayName, ip, result, entryCount, entries: [日志…] }], total }`，`total` 是操作数。筛选落在单条日志上，任一条命中，整组都返回；`result` 只有组内全部成功才为 true；`entries` 最多 200 条。
+
+**操作编号**：业务写入（`PUT/DELETE /store/by-key`、`PUT /store/entity-groups/{kind}`）可带请求头 `X-Operation-Id`（8–64 位字母数字和 `-`）与 `X-Operation-Label`（URL 编码的操作名称，最长 120 字）。同一编号的日志归为一次操作；服务端存成「用户名:编号」，别的用户无法串组。不带时每条日志自成一次操作。前端由 `api/audit-operation.ts` 的 `runAsOperation` 设置，`BackendStorage` 在写入入队时用 `captureContext` 取走。
+
+**变更明细**（`changes`）：`{ added, removed, modified, addedCount, removedCount, modifiedCount, reordered, truncated }`。数据写入按记录的 `id`（没有用 `name`，标量数组用值本身）比较写入前后；每条是 `{ label, fields: [{ name, before?, after? }] }`，`name` 是原始字段名（用户 / 角色 / 组织直接是中文字段名，不含密码）。每类最多 50 条、每个值最多 300 字，超出时 `truncated: true`，总数看 `*Count`。没有任何变化时为 null。
 
 **健康检查**：`GET /health`。
 

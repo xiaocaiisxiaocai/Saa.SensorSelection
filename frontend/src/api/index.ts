@@ -1,3 +1,5 @@
+import { type AuditOperation, operationHeaders } from './audit-operation';
+
 export const TOKEN_STORAGE_KEY = 'symtek_token';
 
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -99,6 +101,62 @@ export interface AuditLogItem {
   ip: null | string;
   result: boolean;
   error: null | string;
+  /** 变更明细 JSON（见 AuditChangeSummary），旧日志与登录等操作没有 */
+  changes?: null | string;
+  operationId?: null | string;
+  operationLabel?: null | string;
+}
+
+export interface AuditFieldChange {
+  name: string;
+  before?: string;
+  after?: string;
+}
+
+export interface AuditRowChange {
+  label: string;
+  fields: AuditFieldChange[];
+}
+
+/** 一条日志的变更明细：每类最多 50 条，truncated 时总数看 *Count */
+export interface AuditChangeSummary {
+  added: AuditRowChange[];
+  removed: AuditRowChange[];
+  modified: AuditRowChange[];
+  addedCount: number;
+  removedCount: number;
+  modifiedCount: number;
+  reordered: boolean;
+  truncated: boolean;
+}
+
+/** 一次操作：同一个操作编号下的全部日志 */
+export interface AuditOperationItem {
+  operationId: string;
+  label: null | string;
+  timestamp: string;
+  username: null | string;
+  displayName: null | string;
+  ip: null | string;
+  result: boolean;
+  entryCount: number;
+  entries: AuditLogItem[];
+}
+
+export interface AuditOperationPage {
+  items: AuditOperationItem[];
+  total: number;
+}
+
+export interface AuditOperationQuery {
+  actions?: string[];
+  from?: string;
+  hideLogin?: boolean;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+  result?: boolean;
+  to?: string;
 }
 
 export interface AuditLogPage {
@@ -277,12 +335,17 @@ export const api = {
     return request<Record<string, unknown[]>>('/store');
   },
 
-  async putKey(key: string, value: unknown[]): Promise<unknown[]> {
+  async putKey(
+    key: string,
+    value: unknown[],
+    operation?: AuditOperation | null,
+  ): Promise<unknown[]> {
     const result = await request<{ value: unknown[] }>(
       `/store/by-key?key=${encodeURIComponent(key)}`,
       {
         method: 'PUT',
         body: JSON.stringify(value),
+        headers: operationHeaders(operation),
       },
     );
     return result.value;
@@ -291,10 +354,12 @@ export const api = {
   async putEntityGroups(
     kind: 'customer' | 'machine',
     groups: unknown[],
+    operation?: AuditOperation | null,
   ): Promise<void> {
     await request(`/store/entity-groups/${kind}`, {
       method: 'PUT',
       body: JSON.stringify(groups),
+      headers: operationHeaders(operation),
     });
   },
 
@@ -308,9 +373,13 @@ export const api = {
     });
   },
 
-  async deleteKey(key: string): Promise<void> {
+  async deleteKey(
+    key: string,
+    operation?: AuditOperation | null,
+  ): Promise<void> {
     await request(`/store/by-key?key=${encodeURIComponent(key)}`, {
       method: 'DELETE',
+      headers: operationHeaders(operation),
     });
   },
 
@@ -461,5 +530,26 @@ export const api = {
     if (params.direction) query.set('direction', params.direction);
     const qs = query.toString();
     return request<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
+  },
+
+  /** 按操作分页查询日志：同一次界面操作的多条日志归成一组 */
+  listAuditOperations(
+    params: AuditOperationQuery = {},
+  ): Promise<AuditOperationPage> {
+    const query = new URLSearchParams();
+    if (params.page !== undefined) query.set('page', String(params.page));
+    if (params.pageSize !== undefined) {
+      query.set('pageSize', String(params.pageSize));
+    }
+    if (params.keyword) query.set('keyword', params.keyword);
+    for (const action of params.actions ?? []) query.append('action', action);
+    if (params.result !== undefined) query.set('result', String(params.result));
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.hideLogin) query.set('hideLogin', 'true');
+    const qs = query.toString();
+    return request<AuditOperationPage>(
+      `/audit-logs/operations${qs ? `?${qs}` : ''}`,
+    );
   },
 };

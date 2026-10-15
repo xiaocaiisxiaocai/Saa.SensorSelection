@@ -31,4 +31,16 @@ public class AuditLog
 
     /// <summary>失败原因（Result=false 时的错误信息）。</summary>
     public string? Error { get; set; }
+
+    /// <summary>
+    /// 操作编号：同一次界面操作产生的多条日志共用一个编号（前端用 X-Operation-Id 传入，
+    /// 服务端加上用户名前缀，不同用户之间不会串组）；没传时每条日志自成一组。
+    /// </summary>
+    public string? OperationId { get; set; }
+
+    /// <summary>操作名称（前端用 X-Operation-Label 传入，如「删除机型「04 特殊定位」」）。</summary>
+    public string? OperationLabel { get; set; }
+
+    /// <summary>变更明细（JSON）：新增 / 删除 / 修改了哪些记录、哪些字段从什么改成什么，见 AuditChanges。</summary>
+    public string? Changes { get; set; }
 }

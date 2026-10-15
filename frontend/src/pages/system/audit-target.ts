@@ -5,6 +5,13 @@
  * 详情弹窗仍给出原始 key 供排查。认不出的 key 原样返回，不猜。
  */
 
+import { DICTIONARY_DEFINITIONS } from '@/domain';
+
+/** 字典的 key 是 dict:{字典编码}，编码换成字典页上的名称 */
+const DICTIONARY_TITLES = new Map(
+  DICTIONARY_DEFINITIONS.map((item) => [item.code, item.title]),
+);
+
 const NAMESPACE_LABELS: Record<string, string> = {
   'customer-feedback': '厂外反馈问题项',
   'customer-proc': '制程注意事项',
@@ -56,6 +63,9 @@ export function formatAuditTarget(target: null | string | undefined): string {
     .split(':')
     .map((part) => part.trim())
     .filter((part) => part && part !== 'all' && !/^\d+$/.test(part))
-    .map((part) => (part === TAB_PAGE_OWNER ? 'Tab 内容' : part));
+    .map((part) => (part === TAB_PAGE_OWNER ? 'Tab 内容' : part))
+    .map((part) =>
+      namespace === 'dict' ? (DICTIONARY_TITLES.get(part) ?? part) : part,
+    );
   return parts.length ? `${label} · ${parts.join(' · ')}` : label;
 }

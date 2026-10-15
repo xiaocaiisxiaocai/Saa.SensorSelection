@@ -19,6 +19,7 @@ describe('formatAuditTarget', () => {
     expect(formatAuditTarget('sensor-catalog:all')).toBe('Sensor 型号');
     expect(formatAuditTarget('process-steps:all')).toBe('工艺制程');
     expect(formatAuditTarget('machine-tabs:all')).toBe('机型 Tab');
+    expect(formatAuditTarget('dict:customer-req')).toBe('数据字典 · 要求分类');
   });
 
   it('names the content of a tab page instead of its reserved owner', () => {

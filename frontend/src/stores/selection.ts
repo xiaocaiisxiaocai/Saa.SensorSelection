@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 import { api } from '@/api';
+import { currentOperation, type AuditOperation } from '@/api/audit-operation';
+import { labelOperations } from '@/stores/operation-labels';
 import {
   BackendStorage,
   buildSearchIndex,
@@ -260,7 +262,7 @@ export const useSelectionStore = defineStore('selection', () => {
       const bridge: BackendStorage = new BackendStorage({
         transport: {
           fetchStore: () => api.getStore(),
-          writeKey: (key, value) => {
+          writeKey: (key, value, operation) => {
             const entityGroupsMatch = /^entity-groups:(customer|machine)$/.exec(
               key,
             );
@@ -268,15 +270,19 @@ export const useSelectionStore = defineStore('selection', () => {
               return api.putEntityGroups(
                 entityGroupsMatch[1] as 'customer' | 'machine',
                 value,
+                operation as AuditOperation | null,
               );
             }
-            return api.putKey(key, value);
+            return api.putKey(key, value, operation as AuditOperation | null);
           },
-          deleteKey: (key) => api.deleteKey(key),
+          deleteKey: (key, operation) =>
+            api.deleteKey(key, operation as AuditOperation | null),
           writeAll: (store) => api.replaceAll(store),
         },
         // 不传 local：浏览器不缓存业务数据，后端为空时也不能用本地内容回灌。
         migrateOnEmpty: false,
+        // 写入入队时记下属于哪一次操作，操作日志据此把它们归成一行
+        captureContext: currentOperation,
         onStatus: (status) => {
           if (bridge !== activeBridge) return;
           backendStatus.value = status;
@@ -352,7 +358,8 @@ export const useSelectionStore = defineStore('selection', () => {
     return initPromise;
   }
 
-  return {
+  // 每个写方法在一次「操作」里执行，操作日志按它归组并显示名称
+  return labelOperations({
     backendMessage,
     batchRead: <T>(run: () => T): T => repository.batchRead(run),
     backendStatus,
@@ -588,5 +595,5 @@ export const useSelectionStore = defineStore('selection', () => {
     sensor3dFiles,
     sensorSopFiles,
     sensorSops,
-  };
+  });
 });

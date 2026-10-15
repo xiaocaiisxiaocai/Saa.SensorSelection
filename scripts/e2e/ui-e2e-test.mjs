@@ -1292,6 +1292,23 @@ async function runSystemCrud() {
     assert(/创建用户|创建角色|创建组织|写入数据|登录/.test(body), `no audit rows from this run: ${body.slice(0, 200)}`)
     assert(body.includes(ADMIN_USERNAME), 'audit rows do not mention the acting user')
   })
+
+  await check('Audit log searches changes and shows each field before and after', async () => {
+    await page.getByRole('textbox', { name: '搜索操作日志' }).fill(TAG)
+    await settle()
+    const row = page.locator('.ant-table-tbody tr.ant-table-row').first()
+    await row.waitFor({ state: 'visible', timeout: 10000 })
+    const summary = await row.innerText()
+    assert(/新增|修改|删除/.test(summary), `no change summary for this run: ${summary.slice(0, 200)}`)
+    await row.click()
+    const drawer = page.locator('.ant-drawer-content')
+    await drawer.waitFor({ state: 'visible', timeout: 8000 })
+    await drawer.locator('.audit-diff').first().waitFor({ state: 'visible', timeout: 8000 })
+    await page.keyboard.press('Escape')
+    await drawer.waitFor({ state: 'hidden', timeout: 8000 })
+    await page.getByRole('button', { name: '重置筛选' }).click()
+    await settle()
+  })
 }
 
 // ---------------------------------------------------------------- read-only

@@ -90,6 +90,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(log => log.Timestamp);
             entity.HasIndex(log => log.Username);
             entity.HasIndex(log => log.Action);
+            entity.Property(log => log.OperationId).HasMaxLength(160);
+            entity.Property(log => log.OperationLabel).HasMaxLength(120);
+            entity.HasIndex(log => log.OperationId);
         });
 
         modelBuilder.Entity<StoredFile>(entity =>

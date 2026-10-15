@@ -58,6 +58,9 @@ namespace Saa.SensorSelection.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Changes")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Detail")
                         .HasColumnType("TEXT");
 
@@ -68,6 +71,14 @@ namespace Saa.SensorSelection.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("OperationId")
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationLabel")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Result")
                         .HasColumnType("INTEGER");
 
@@ -75,7 +86,8 @@ namespace Saa.SensorSelection.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("Timestamp")
+                    b.Property<string>("Timestamp")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Username")
@@ -85,6 +97,8 @@ namespace Saa.SensorSelection.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Action");
+
+                    b.HasIndex("OperationId");
 
                     b.HasIndex("Timestamp");
 

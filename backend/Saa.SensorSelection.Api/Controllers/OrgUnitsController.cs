@@ -27,6 +27,7 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     public async Task<IActionResult> Create([FromBody] CreateOrgUnitRequest request, CancellationToken ct)
     {
         var result = await orgUnits.CreateAsync(request, ct);
+        var all = result.Success ? await orgUnits.ListAsync(ct) : [];
         await audit.WriteAsync(
             "org.create",
             target: result.Value?.Name ?? request.Name,
@@ -35,6 +36,9 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
                 : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(result.Value!.Name, null, RbacAuditSnapshots.Org(result.Value!, all))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -48,7 +52,10 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateOrgUnitRequest request, CancellationToken ct)
     {
+        var beforeAll = await orgUnits.ListAsync(ct);
+        var before = beforeAll.FirstOrDefault(item => item.Id == id);
         var result = await orgUnits.UpdateAsync(id, request, ct);
+        var afterAll = result.Success ? await orgUnits.ListAsync(ct) : [];
         await audit.WriteAsync(
             "org.update",
             target: result.Value?.Name ?? $"#{id}",
@@ -57,6 +64,12 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
                 : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(
+                    result.Value!.Name,
+                    before is null ? null : RbacAuditSnapshots.Org(before, beforeAll),
+                    RbacAuditSnapshots.Org(result.Value!, afterAll))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -70,14 +83,18 @@ public class OrgUnitsController(OrgUnitService orgUnits, AuditLogService audit) 
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var name = await orgUnits.FindNameAsync(id, ct);
+        var beforeAll = await orgUnits.ListAsync(ct);
+        var before = beforeAll.FirstOrDefault(item => item.Id == id);
         var result = await orgUnits.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "org.delete",
-            target: name ?? $"#{id}",
+            target: before?.Name ?? $"#{id}",
             detail: $"组织ID：{id}",
             success: result.Success,
             error: result.Error,
+            changes: result.Success && before is not null
+                ? AuditChanges.DiffRecord(before.Name, RbacAuditSnapshots.Org(before, beforeAll), null)
+                : null,
             ct: ct);
         return result.Success
             ? Ok(new { ok = true })

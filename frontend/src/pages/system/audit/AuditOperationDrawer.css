@@ -1,0 +1,108 @@
+/* 每条日志一段：标题、失败原因、改动明细 */
+.audit-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.audit-entry__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.audit-entry__title {
+  font: var(--font-body-strong);
+  overflow-wrap: anywhere;
+}
+
+.audit-entry__note,
+.audit-entry__key {
+  margin: 0;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.audit-entry__key {
+  font: var(--font-sm);
+}
+
+.audit-change {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.audit-change__label {
+  font: var(--font-body-strong);
+  overflow-wrap: anywhere;
+}
+
+/* 字段 | 值：两列网格，字段名定宽，值完整显示、过长折行 */
+.audit-diff {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+}
+
+.audit-diff dt,
+.audit-diff dd {
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.audit-diff dt {
+  color: var(--color-text-secondary);
+  background: var(--color-fill-alter);
+}
+
+.audit-diff dd {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.audit-diff dt:first-of-type,
+.audit-diff dt:first-of-type + dd {
+  border-top: 0;
+}
+
+.audit-diff__before,
+.audit-diff__after {
+  padding: 0 var(--space-1);
+  text-decoration: none;
+  border-radius: var(--radius-xs);
+}
+
+.audit-diff__before {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  background: var(--color-error-bg);
+}
+
+.audit-diff__after {
+  background: var(--color-success-bg);
+}
+
+.audit-diff__arrow {
+  margin: 0 var(--space-2);
+  color: var(--color-text-tertiary);
+}
+
+@media (width <= 40rem) {
+  .audit-diff {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .audit-diff dt + dd {
+    border-top: 0;
+  }
+}

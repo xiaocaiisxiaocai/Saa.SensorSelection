@@ -60,6 +60,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
                 : $"数据类型：{JsonKind(payload.ValueKind)}",
             success: result.Success,
             error: result.Error,
+            changes: result.Success ? AuditChanges.DiffArrays(result.PreviousJson, result.Json) : null,
             ct: ct);
         if (!result.Success)
         {
@@ -108,6 +109,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             detail: $"数据类型：{JsonKind(value.ValueKind)}；记录数：{itemCount}",
             success: result.Success,
             error: result.Error,
+            changes: result.Success ? AuditChanges.DiffArrays(result.PreviousJson, result.Json) : null,
             ct: ct);
         if (!result.Success)
         {
@@ -133,6 +135,7 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
             detail: result.Found ? $"删除目标：{key}" : "删除目标不存在",
             success: result.Found,
             error: result.Found ? null : "key 不存在",
+            changes: result.Found ? AuditChanges.DiffArrays(result.PreviousJson, null) : null,
             ct: ct);
         if (!result.Found)
         {

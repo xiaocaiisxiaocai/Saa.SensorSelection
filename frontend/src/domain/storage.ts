@@ -36,9 +36,9 @@ function parseStoreJson(value: string): Record<string, unknown[]> {
 function isUnauthorized(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      ((error as { kind?: string }).kind === 'unauthorized' ||
-        (error as { kind?: string }).kind === 'forbidden'),
+    typeof error === 'object' &&
+    ((error as { kind?: string }).kind === 'unauthorized' ||
+      (error as { kind?: string }).kind === 'forbidden'),
   );
 }
 
@@ -66,6 +66,7 @@ export class BackendStorage implements StorageLike {
   private readonly local?: StorageLike;
   private readonly onStatus?: (status: BackendSyncStatus) => void;
   private readonly onWriteFailure?: (message: string) => void;
+  private readonly captureContext?: () => unknown;
   private readonly migrateOnEmpty: boolean;
   private readonly seedDefaults?: Record<string, unknown[]>;
   private readonly seedMigration?: BackendStorageOptions['seedMigration'];
@@ -78,6 +79,7 @@ export class BackendStorage implements StorageLike {
     this.local = options.local;
     this.onStatus = options.onStatus;
     this.onWriteFailure = options.onWriteFailure;
+    this.captureContext = options.captureContext;
     this.migrateOnEmpty = options.migrateOnEmpty !== false;
     this.seedDefaults = options.seedDefaults;
     this.seedMigration = options.seedMigration;
@@ -93,9 +95,10 @@ export class BackendStorage implements StorageLike {
       this.snapshotLocal();
       return;
     }
+    const context = this.captureContext?.();
     this.queue = this.queue.then(async () => {
       try {
-        await this.transport.deleteKey?.(key);
+        await this.transport.deleteKey?.(key, context);
         this.synced.delete(key);
         this.markWriteSucceeded();
       } catch (error) {
@@ -105,9 +108,10 @@ export class BackendStorage implements StorageLike {
   }
 
   private enqueueWrite(key: string, value: unknown[]) {
+    const context = this.captureContext?.();
     this.queue = this.queue.then(async () => {
       try {
-        const returned = await this.transport.writeKey(key, value);
+        const returned = await this.transport.writeKey(key, value, context);
         const persisted = Array.isArray(returned) ? returned : value;
         this.synced.set(key, persisted);
         // 若排队期间没有更新的本地编辑，用后端剥离文件正文后的值替换缓存；
@@ -215,7 +219,9 @@ export class BackendStorage implements StorageLike {
     let migrated = false;
     let seeded = false;
     if (this.migrateOnEmpty && remoteKeys.length === 0) {
-      const localStore = parsePersistedStore(this.local?.getItem(STORAGE_KEY) ?? null);
+      const localStore = parsePersistedStore(
+        this.local?.getItem(STORAGE_KEY) ?? null,
+      );
       const localKeys = Object.keys(localStore);
       if (localKeys.length > 0) {
         try {
@@ -239,15 +245,16 @@ export class BackendStorage implements StorageLike {
     if (this.seedDefaults) {
       const currentVersion =
         Number(
-          (remote['meta:seed-version']?.[0] as { version?: unknown } | undefined)
-            ?.version,
+          (
+            remote['meta:seed-version']?.[0] as
+              { version?: unknown } | undefined
+          )?.version,
         ) || 0;
       const seedVersion =
         Number(
           (
             this.seedDefaults['meta:seed-version']?.[0] as
-              | { version?: unknown }
-              | undefined
+              { version?: unknown } | undefined
           )?.version,
         ) || 0;
       if (seedVersion > currentVersion) {
@@ -285,7 +292,12 @@ export class BackendStorage implements StorageLike {
           this.lastError = null;
           this.snapshotLocal();
           this.emitStatus();
-          return { migrated, seeded, keyCount: this.cache.size, status: 'online' };
+          return {
+            migrated,
+            seeded,
+            keyCount: this.cache.size,
+            status: 'online',
+          };
         }
         try {
           for (const [key, value] of Object.entries(this.seedDefaults)) {
@@ -374,5 +386,4 @@ export class BackendStorage implements StorageLike {
     }
     return true;
   }
-
 }

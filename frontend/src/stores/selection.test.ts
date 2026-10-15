@@ -2,7 +2,14 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, api } from '@/api';
-import { STORAGE_KEY } from '@/domain';
+import { MACHINE_TAB_PAGE_OWNER, STORAGE_KEY } from '@/domain';
+import {
+  currentOperation,
+  operationHeaders,
+  runAsOperation,
+  type AuditOperation,
+} from '@/api/audit-operation';
+import { OPERATION_LABELS } from './operation-labels';
 import { useSelectionStore } from './selection';
 
 describe('selection store', () => {
@@ -289,5 +296,83 @@ describe('selection store', () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(getStore).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends every write of one action under one operation id and label', async () => {
+    vi.spyOn(api, 'getStore').mockResolvedValue({
+      'entity-groups:customer': [{ name: '演示客户', items: ['华东'] }],
+    });
+    const store = useSelectionStore();
+    await store.initBackend();
+    const putGroups = vi.mocked(api.putEntityGroups);
+    putGroups.mockClear();
+
+    // 新建区域、新建客户都要写目录（putEntityGroups）
+    expect(
+      store.saveEntityItem('customer', { category: '演示客户', name: '华南' })
+        .ok,
+    ).toBe(true);
+    expect(store.saveEntityGroup('customer', { name: '新客户' }).ok).toBe(true);
+    // 新建客户会连带归一化机型目录，写入次数不止两次；按名称找各自的操作
+    const operationNamed = (label: string) =>
+      putGroups.mock.calls
+        .map((call) => call[2])
+        .find((op) => op?.label === label);
+    await vi.waitFor(() =>
+      expect(operationNamed('新建客户「新客户」')).toBeTruthy(),
+    );
+
+    const itemOperation = operationNamed('新建区域「华南」');
+    const groupOperation = operationNamed('新建客户「新客户」');
+    expect(itemOperation?.label).toBe('新建区域「华南」');
+    expect(groupOperation?.label).toBe('新建客户「新客户」');
+    // 两次点击是两次操作
+    expect(itemOperation?.id).toBeTruthy();
+    expect(groupOperation?.id).not.toBe(itemOperation?.id);
+  });
+
+  it('names a rename with both the old and the new name', () => {
+    expect(
+      OPERATION_LABELS.saveEntityItem('customer', { name: '华南' }, '华东'),
+    ).toBe('编辑区域「华东」→「华南」');
+    expect(
+      OPERATION_LABELS.saveEntityGroup(
+        'machine',
+        { name: '输送机构' },
+        '输送机构',
+      ),
+    ).toBe('编辑分类「输送机构」');
+    expect(
+      OPERATION_LABELS.deleteMachineSectionRow(1, MACHINE_TAB_PAGE_OWNER),
+    ).toBe('删除选型记录');
+  });
+
+  it('shares one operation across all writes made inside it', () => {
+    const seen: Array<AuditOperation | null> = [];
+    runAsOperation('删除机型「A」', () => {
+      seen.push(currentOperation());
+      // 嵌套调用沿用外层操作
+      runAsOperation('内层', () => seen.push(currentOperation()));
+    });
+    expect(seen[0]?.label).toBe('删除机型「A」');
+    expect(seen[1]).toBe(seen[0]);
+    expect(currentOperation()).toBeNull();
+    expect(operationHeaders(seen[0])).toEqual({
+      'X-Operation-Id': seen[0]!.id,
+      'X-Operation-Label': encodeURIComponent('删除机型「A」'),
+    });
+  });
+
+  it('names every write method in the operation log', () => {
+    const store = useSelectionStore();
+    const writeMethods = Object.keys(store).filter(
+      (name) =>
+        /^(save|delete|reorder|replace|move|ensure)[A-Z]/.test(name) &&
+        name !== 'ensureBackendInit' &&
+        typeof (store as unknown as Record<string, unknown>)[name] ===
+          'function',
+    );
+    const missing = writeMethods.filter((name) => !(name in OPERATION_LABELS));
+    expect(missing).toEqual([]);
   });
 });

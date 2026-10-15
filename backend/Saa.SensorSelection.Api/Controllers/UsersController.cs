@@ -35,6 +35,9 @@ public class UsersController(UserService users, AuditLogService audit) : Control
             detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(result.Value!.Username, null, RbacAuditSnapshots.User(result.Value!))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -48,6 +51,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request, CancellationToken ct)
     {
+        var before = await FindAsync(id, ct);
         var result = await users.UpdateAsync(id, request, ct);
         await audit.WriteAsync(
             "user.update",
@@ -55,6 +59,12 @@ public class UsersController(UserService users, AuditLogService audit) : Control
             detail: result.Success ? FormatDetail(result.Value!) : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(
+                    result.Value!.Username,
+                    before is null ? null : RbacAuditSnapshots.User(before),
+                    RbacAuditSnapshots.User(result.Value!))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -90,19 +100,25 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var name = await users.FindUsernameAsync(id, ct);
+        var before = await FindAsync(id, ct);
         var result = await users.DeleteAsync(id, username, ct);
         await audit.WriteAsync(
             "user.delete",
-            target: name ?? $"#{id}",
+            target: before?.Username ?? $"#{id}",
             detail: $"用户ID：{id}",
             success: result.Success,
             error: result.Error,
+            changes: result.Success && before is not null
+                ? AuditChanges.DiffRecord(before.Username, RbacAuditSnapshots.User(before), null)
+                : null,
             ct: ct);
         return result.Success
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
     }
+
+    private async Task<UserListItem?> FindAsync(int id, CancellationToken ct) =>
+        (await users.ListAsync(ct)).FirstOrDefault(user => user.Id == id);
 
     private static string FormatDetail(UserListItem user)
     {

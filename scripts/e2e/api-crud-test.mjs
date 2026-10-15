@@ -40,8 +40,8 @@ function assertEqual(actual, expected, message) {
   }
 }
 
-async function request(method, path, { token, body, raw } = {}) {
-  const headers = {}
+async function request(method, path, { token, body, raw, headers: extraHeaders } = {}) {
+  const headers = { ...extraHeaders }
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${BASE}${path}`, {
@@ -744,6 +744,22 @@ async function main() {
     for (const item of res.data.items) {
       assertEqual(item.result, false, 'result filter')
     }
+  })
+
+  await check('GET /audit-logs/operations groups writes of one operation and records changes', async () => {
+    const key = `${E2E_PREFIX}-audit-ops:auto`
+    const headers = { 'X-Operation-Id': `e2e-op-${Date.now()}`, 'X-Operation-Label': encodeURIComponent(`${E2E_PREFIX} 操作`) }
+    await request('PUT', `/store/by-key?key=${encodeURIComponent(key)}`, { token: adminToken, body: [{ id: 1, name: '旧' }] })
+    await request('PUT', `/store/by-key?key=${encodeURIComponent(key)}`, { token: adminToken, body: [{ id: 1, name: '新' }], headers })
+    await request('DELETE', `/store/by-key?key=${encodeURIComponent(key)}`, { token: adminToken, headers })
+    const res = await request('GET', `/audit-logs/operations?keyword=${encodeURIComponent(key)}&pageSize=5`, { token: adminToken })
+    assertEqual(res.status, 200, 'status')
+    const grouped = res.data.items.find((item) => item.label === `${E2E_PREFIX} 操作`)
+    assert(grouped, 'labelled operation missing')
+    assertEqual(grouped.entryCount, 2, 'entries in the operation')
+    const changes = JSON.parse(grouped.entries[0].changes)
+    assertEqual(changes.modified[0].fields[0].before, '旧', 'before value')
+    assertEqual(changes.modified[0].fields[0].after, '新', 'after value')
   })
 
   await check('GET /audit-logs caps pageSize at 200', async () => {

@@ -279,8 +279,13 @@ export type BackendSyncStatus =
 
 export interface BackendStoreTransport {
   fetchStore(): Promise<Record<string, unknown[]>>;
-  writeKey(key: string, value: unknown[]): Promise<unknown[] | void>;
-  deleteKey?(key: string): Promise<void>;
+  /** context：入队时 captureContext 取到的值（如操作日志的操作编号），原样带给后端 */
+  writeKey(
+    key: string,
+    value: unknown[],
+    context?: unknown,
+  ): Promise<unknown[] | void>;
+  deleteKey?(key: string, context?: unknown): Promise<void>;
   writeAll(store: Record<string, unknown[]>): Promise<void>;
 }
 
@@ -290,6 +295,11 @@ export interface BackendStorageOptions {
   local?: StorageLike;
   onStatus?: (status: BackendSyncStatus) => void;
   onWriteFailure?: (message: string) => void;
+  /**
+   * 写入入队时同步调用，返回值随这次写入交给 transport。写入是排队异步发出的，
+   * 必须在入队那一刻取，才能知道它属于哪一次界面操作。
+   */
+  captureContext?: () => unknown;
   migrateOnEmpty?: boolean;
   seedDefaults?: Record<string, unknown[]>;
   seedMigration?: (

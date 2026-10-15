@@ -43,6 +43,9 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
                 : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(result.Value!.Name, null, RbacAuditSnapshots.Role(result.Value!))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -56,6 +59,7 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateRoleRequest request, CancellationToken ct)
     {
+        var before = (await roles.ListAsync(ct)).FirstOrDefault(role => role.Id == id);
         var result = await roles.UpdateAsync(id, request, ct);
         await audit.WriteAsync(
             "role.update",
@@ -65,6 +69,12 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
                 : null,
             success: result.Success,
             error: result.Error,
+            changes: result.Success
+                ? AuditChanges.DiffRecord(
+                    result.Value!.Name,
+                    before is null ? null : RbacAuditSnapshots.Role(before),
+                    RbacAuditSnapshots.Role(result.Value!))
+                : null,
             ct: ct);
         return result.Success
             ? Ok(result.Value)
@@ -78,14 +88,17 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var code = await roles.FindCodeAsync(id, ct);
+        var before = (await roles.ListAsync(ct)).FirstOrDefault(role => role.Id == id);
         var result = await roles.DeleteAsync(id, ct);
         await audit.WriteAsync(
             "role.delete",
-            target: code ?? $"#{id}",
+            target: before?.Code ?? $"#{id}",
             detail: $"角色ID：{id}",
             success: result.Success,
             error: result.Error,
+            changes: result.Success && before is not null
+                ? AuditChanges.DiffRecord(before.Name, RbacAuditSnapshots.Role(before), null)
+                : null,
             ct: ct);
         return result.Success
             ? Ok(new { ok = true })

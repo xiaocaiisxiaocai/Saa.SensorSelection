@@ -320,6 +320,90 @@ public class AuditTests
             item.GetProperty("detail").GetString() == "层级：事业部；父级：无；排序：0；子级：0；用户：0");
     }
 
+    private static HttpRequestMessage StoreWrite(string key, string json, string operationId, string? label = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, StoreRoute(key))
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add(AuditLogService.OperationIdHeader, operationId);
+        if (label is not null)
+        {
+            request.Headers.Add(AuditLogService.OperationLabelHeader, Uri.EscapeDataString(label));
+        }
+        return request;
+    }
+
+    [Fact]
+    public async Task Operations_GroupWritesOfOneOperation_AndRecordWhatChanged()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        await admin.SendAsync(StoreWrite("customer-req:分组客户", """[{"id":1,"content":"旧要求"}]""", "op-first-0001"));
+        // 同一次操作的两次写入：带同一个操作编号和名称
+        (await admin.SendAsync(StoreWrite(
+            "customer-req:分组客户",
+            """[{"id":1,"content":"新要求"},{"id":2,"content":"加一条"}]""",
+            "op-second-0002",
+            "保存客户通用要求"))).EnsureSuccessStatusCode();
+        (await admin.SendAsync(StoreWrite(
+            "customer-proc:分组客户",
+            """[{"id":1,"content":"注意事项"}]""",
+            "op-second-0002",
+            "保存客户通用要求"))).EnsureSuccessStatusCode();
+
+        var page = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?hideLogin=true");
+        var latest = page.GetProperty("items")[0];
+        Assert.Equal("保存客户通用要求", latest.GetProperty("label").GetString());
+        Assert.Equal("管理员", latest.GetProperty("displayName").GetString());
+        Assert.Equal(2, latest.GetProperty("entryCount").GetInt32());
+        Assert.True(latest.GetProperty("result").GetBoolean());
+        var changes = JsonDocument.Parse(
+            latest.GetProperty("entries")[0].GetProperty("changes").GetString()!).RootElement;
+        Assert.Equal(1, changes.GetProperty("addedCount").GetInt32());
+        var field = changes.GetProperty("modified")[0].GetProperty("fields")[0];
+        Assert.Equal("旧要求", field.GetProperty("before").GetString());
+        Assert.Equal("新要求", field.GetProperty("after").GetString());
+        // 编号前面加了用户名，别的用户伪造同一个编号也串不进来
+        Assert.StartsWith("admin:", latest.GetProperty("operationId").GetString());
+
+        // 关键词也搜变更明细；隐藏登录后没有登录组
+        var search = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?keyword=加一条");
+        Assert.Equal(1, search.GetProperty("total").GetInt32());
+        var all = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?hideLogin=true&action=store.upsert");
+        Assert.DoesNotContain(all.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("entries").EnumerateArray().Any(entry =>
+                entry.GetProperty("action").GetString() == "auth.login"));
+        Assert.Equal(2, all.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task RoleUpdate_RecordsPermissionsBeforeAndAfter()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var permissions = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+        int PermissionId(string code) => permissions.EnumerateArray()
+            .First(item => item.GetProperty("code").GetString() == code).GetProperty("id").GetInt32();
+
+        var created = await admin.PostAsJsonAsync(
+            "/api/rbac/roles",
+            new { code = "audit_diff", name = "审计比对", permissionIds = new[] { PermissionId("selection:read") } });
+        var roleId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        (await admin.PutAsJsonAsync(
+            $"/api/rbac/roles/{roleId}",
+            new { name = "审计比对", permissionIds = new[] { PermissionId("selection:read"), PermissionId("selection:write") } }))
+            .EnsureSuccessStatusCode();
+
+        var page = await QueryAuditLogsAsync(admin, "?action=role.update");
+        var changes = JsonDocument.Parse(page.GetProperty("items")[0].GetProperty("changes").GetString()!).RootElement;
+        var field = changes.GetProperty("modified")[0].GetProperty("fields")[0];
+        Assert.Equal("权限", field.GetProperty("name").GetString());
+        Assert.Equal("查看业务数据", field.GetProperty("before").GetString());
+        Assert.Equal("查看业务数据、编辑业务数据", field.GetProperty("after").GetString());
+    }
+
     [Fact]
     public async Task UserWithoutAuditPermission_ReadAuditLogs_Returns403()
     {

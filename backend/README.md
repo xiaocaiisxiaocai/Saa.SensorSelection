@@ -213,9 +213,9 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 - 业务数据写入/删除/整体导入（`store.upsert` / `store.delete` / `store.replace-all`，含 key 与条目数）
 - 用户/角色/组织管理（`user.*` / `role.*` / `org.*`）
 
-每条记录包含：时间、操作人、操作码、目标、详情、结果、失败原因、客户端 IP。审计写入失败只记服务端日志、**不影响主业务请求**；超过 `Audit:MaxEntries`（默认 5 万条）自动清理最旧记录。**敏感字段（密码等）绝不会写入日志**。
+每条记录包含：时间、操作人、操作码、目标、详情、结果、失败原因、客户端 IP，以及变更明细（`Changes`：数据写入按记录比较前后，新增 / 删除 / 修改了哪些记录、哪些字段从什么改成什么；用户 / 角色 / 组织记改前改后的字段快照，见 `Services/AuditChanges.cs`）和操作编号 / 名称（`OperationId` / `OperationLabel`：前端用 `X-Operation-Id` / `X-Operation-Label` 请求头传入，同一次界面操作的多条日志归成一组）。审计写入失败只记服务端日志、**不影响主业务请求**；超过 `Audit:MaxEntries`（默认 5 万条）自动清理最旧记录。**敏感字段（密码等）绝不会写入日志**。
 
-查询接口：`GET /api/audit-logs?page=&pageSize=&action=&username=&target=&result=&from=&to=`（分页 + 多条件筛选，时间倒序）。
+查询接口：`GET /api/audit-logs?page=&pageSize=&action=&username=&target=&result=&from=&to=`（逐条分页 + 多条件筛选，时间倒序）；`GET /api/audit-logs/operations?page=&pageSize=&keyword=&action=&result=&from=&to=&hideLogin=`（按操作分页，日志页使用）。
 
 ## 数据存储结构
 
@@ -254,3 +254,4 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | `PUT` | `/api/rbac/org-units/{id}` | `rbac:org:write` | 更新组织节点 |
 | `DELETE` | `/api/rbac/org-units/{id}` | `rbac:org:write` | 删除组织节点 |
 | `GET` | `/api/audit-logs` | `audit:view` | 操作日志分页查询（可筛选） |
+| `GET` | `/api/audit-logs/operations` | `audit:view` | 按操作分页查询（同一次操作的多条日志归组） |

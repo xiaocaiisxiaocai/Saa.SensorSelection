@@ -44,4 +44,34 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
             direction,
             ct));
     }
+
+    /// <summary>
+    /// 按操作分页查询：同一次界面操作产生的多条日志归成一组（最新的在前）。
+    /// 筛选：keyword（用户名 / 显示名 / 操作名称 / 目标 / 详情 / 变更明细，包含匹配）、
+    /// action（可重复，多选操作码）、result（true/false）、from/to（UTC，ISO 8601）、hideLogin（隐藏登录）。
+    /// </summary>
+    [HttpGet("operations")]
+    [ProducesResponseType(typeof(AuditOperationPage), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Operations(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? keyword = null,
+        [FromQuery(Name = "action")] string[]? actions = null,
+        [FromQuery] bool? result = null,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] bool hideLogin = false,
+        CancellationToken ct = default)
+    {
+        return Ok(await auditLogs.QueryOperationsAsync(
+            page,
+            pageSize,
+            keyword,
+            actions,
+            result,
+            from,
+            to,
+            hideLogin,
+            ct));
+    }
 }

@@ -285,6 +285,7 @@ describe('MachinePage', () => {
     query?.vm.$emit('update:value', '不会命中的关键词');
     await flushPromises();
     expect(results.text()).toContain('找到 0 个结构');
+    expect(results.text()).toContain('没有找到符合条件的结构');
     query?.vm.$emit('update:value', '');
     await flushPromises();
     expect(results.text()).toContain('找到 1 个结构');
@@ -1186,6 +1187,52 @@ describe('MachinePage machine tabs', () => {
     ].find((item) => item.textContent?.includes('新建机型'));
     expect(create?.textContent?.trim()).toBe('新建机型（已有二级 Tab）');
     expect(create?.getAttribute('aria-disabled')).toBe('true');
+    // 删除也一样：先禁用并写明原因，不用点了确认才被拒
+    const menuItem = (label: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent?.includes(label),
+      );
+    expect(menuItem('删除配置')?.textContent?.trim()).toBe(
+      '删除配置（已有二级 Tab）',
+    );
+    expect(menuItem('删除配置')?.getAttribute('aria-disabled')).toBe('true');
+    wrapper.unmount();
+  });
+
+  it('disables deleting a configuration or category that still has children', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const store = useSelectionStore();
+    const group = store
+      .entityGroups('machine')
+      .find((candidate) =>
+        candidate.configurations?.some((item) => item.items.length),
+      )!;
+    const configuration = group.configurations!.find(
+      (item) => item.items.length,
+    )!.name;
+    const menuItem = (label: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent?.includes(label),
+      );
+
+    await wrapper
+      .get(`button[aria-label="${configuration} 的更多操作"]`)
+      .trigger('click');
+    await flushPromises();
+    expect(menuItem('删除配置')?.textContent?.trim()).toBe(
+      '删除配置（下面还有内容）',
+    );
+    expect(menuItem('删除配置')?.getAttribute('aria-disabled')).toBe('true');
+
+    await wrapper
+      .get(`button[aria-label="${group.name} 的更多操作"]`)
+      .trigger('click');
+    await flushPromises();
+    expect(menuItem('删除分类')?.textContent?.trim()).toBe(
+      '删除分类（下面还有内容）',
+    );
+    expect(menuItem('删除分类')?.getAttribute('aria-disabled')).toBe('true');
     wrapper.unmount();
   });
 

@@ -161,7 +161,7 @@ async function removeItem(payload: {
       'in-use': `请先清空该${itemLabel.value}下的业务数据`,
       'not-empty':
         props.kind === 'machine'
-          ? `请先删除该${itemLabel.value}的二级 Tab 和内容`
+          ? `请先清空该${itemLabel.value}在各个 Tab 下的记录`
           : `请先清空该${itemLabel.value}下的业务数据`,
     },
   );

@@ -99,7 +99,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 
 - 不恢复 Next.js、iframe、`public/index.html` 旧入口，也不恢复 Vben / Element Plus 前端。
 - 新业务代码放在 `frontend/src/pages`、`frontend/src/domain` 或 `frontend/src/ui` 内。
-- 未登录允许只读预览业务数据；写入需要 JWT 与 `selection:write`。页面用 `useAccess().canWrite()` **隐藏**写入入口，而不是禁用。
+- 未登录允许只读预览业务数据（数据字典除外：菜单和路由都要求 `selection:read`，游客看不到）；写入需要 JWT 与 `selection:write`。页面用 `useAccess().canWrite()` **隐藏**写入入口，而不是禁用。
 - 操作按钮使用 Lucide 图标（放在 `a-button` 的 `#icon` 插槽）+ `a-tooltip` + `aria-label`；被禁用的操作保留按钮并 `disabled`，原因写进 tooltip。
 - 分页：**所有表格和列表（含文件列表、搜索结果）都要分页**，档位 20 / 50 / 100，分页条**始终显示**（单页也显示「共 N 条」，不要 `hide-on-single-page`）并固定在卡片最下面，表头固定、表体在内部滚动（`selection-page.css` 负责布局，`test:ui` 逐页检查）。交给 antd 分页的表格/`a-list` 用 `useTablePagination` 的内置分页，自己切片的页面用独立 `a-pagination v-bind="PAGINATION_PROPS"`。新增带 tab 的区域要给 `a-tabs` 加 `entity-tabs` 类，否则内容不会撑满高度。
 - 表单：业务校验在领域层，**不用 antd 表单校验**——`a-form` 不传 `:model`、`a-form-item` 不写 `name`（否则 `required` 会触发 antd 自带校验）；标签关联用 `a-form-item html-for="x"` + 控件 `id="x"`，错误用 `v-bind="fieldError(msg)"`。

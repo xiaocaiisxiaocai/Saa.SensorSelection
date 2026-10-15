@@ -76,7 +76,7 @@ describe('AuditLogPage', () => {
     const wrapper = mount(AuditLogPage);
     await vi.waitFor(() => expect(listAuditLogs).toHaveBeenCalled());
 
-    await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
+    await wrapper.get('input[aria-label="操作用户"]').setValue('admin');
     await chooseColumnFilter(wrapper, '操作', ['auth.login']);
     await chooseColumnFilter(wrapper, '结果', ['true']);
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
@@ -93,7 +93,7 @@ describe('AuditLogPage', () => {
       });
     });
     expect(
-      wrapper.get<HTMLInputElement>('input[placeholder="操作用户"]').element
+      wrapper.get<HTMLInputElement>('input[aria-label="操作用户"]').element
         .value,
     ).toBe('');
     expect(findColumn(wrapper, '操作').column.filteredValue).toBeNull();
@@ -160,12 +160,11 @@ describe('AuditLogPage', () => {
     expect(
       document.querySelector('.audit-detail__summary')?.textContent?.trim(),
     ).toBe('登录成功');
-    // 顿号分隔的权限列表拆成标签，而不是挤成一行
+    // 顿号分隔的权限列表拆成标签，而不是挤成一行；旧日志里的权限码翻成中文名
     const tags = [
       ...document.querySelectorAll('.audit-detail__pairs .ant-tag'),
     ].map((node) => node.textContent?.trim());
-    expect(tags).toContain('selection:read');
-    expect(tags).toContain('selection:write');
+    expect(tags).toEqual(['查看业务数据', '编辑业务数据']);
 
     wrapper.unmount();
   });
@@ -203,7 +202,7 @@ describe('AuditLogPage', () => {
       wrapper.findAll('button').some((button) => button.text() === '筛选'),
     ).toBe(false);
 
-    await wrapper.get('input[placeholder="操作用户"]').setValue('admin');
+    await wrapper.get('input[aria-label="操作用户"]').setValue('admin');
     await chooseColumnFilter(wrapper, '操作', ['auth.login']);
 
     await vi.waitFor(() => {

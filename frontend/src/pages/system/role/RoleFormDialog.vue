@@ -97,7 +97,7 @@ defineExpose({ openCreate, openEdit });
 <template>
   <a-modal
     :open="visible"
-    :title="editing ? '编辑角色' : '新建角色'"
+    :title="editing ? '编辑角色' : '新增角色'"
     :width="560"
     destroy-on-close
     @cancel="cancel"

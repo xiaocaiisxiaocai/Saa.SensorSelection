@@ -252,6 +252,14 @@ const globalSearchResults = computed(() =>
   }),
 );
 
+const globalSearchFiltered = computed(
+  () =>
+    searchMachineModelIds.value.length > 0 ||
+    searchProcessStepIds.value.length > 0 ||
+    searchBoardCharacteristicIds.value.length > 0 ||
+    searchQuery.value.trim() !== '',
+);
+
 // ── 地址栏 ──────────────────────────────────────────────────────
 
 function contextQuery(
@@ -563,6 +571,7 @@ async function removeTab(tabId: number): Promise<boolean> {
       <MachineGlobalSearchResults
         v-if="activeMachineView === 'find'"
         :results="globalSearchResults"
+        :filtered="globalSearchFiltered"
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">

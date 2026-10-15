@@ -18,6 +18,13 @@ describe('formatAuditTarget', () => {
   it('shows only the collection name for whole-list keys', () => {
     expect(formatAuditTarget('sensor-catalog:all')).toBe('Sensor 型号');
     expect(formatAuditTarget('process-steps:all')).toBe('工艺制程');
+    expect(formatAuditTarget('machine-tabs:all')).toBe('机型 Tab');
+  });
+
+  it('names the content of a tab page instead of its reserved owner', () => {
+    expect(formatAuditTarget('machine-section-rows:12:@tab-page')).toBe(
+      '机型选型 · Tab 内容',
+    );
   });
 
   it('names the entity group being reordered', () => {
@@ -29,7 +36,9 @@ describe('formatAuditTarget', () => {
     expect(formatAuditTarget('admin')).toBe('admin');
     expect(formatAuditTarget('#85')).toBe('#85');
     expect(formatAuditTarget('unknown-space:x')).toBe('unknown-space:x');
-    expect(formatAuditTarget('entity-groups:other')).toBe('entity-groups:other');
+    expect(formatAuditTarget('entity-groups:other')).toBe(
+      'entity-groups:other',
+    );
     expect(formatAuditTarget(null)).toBe('');
     expect(formatAuditTarget('  ')).toBe('');
   });

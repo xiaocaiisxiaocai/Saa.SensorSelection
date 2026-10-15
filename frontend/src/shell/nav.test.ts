@@ -28,6 +28,22 @@ describe('nav', () => {
     expect(activeNavKey(groups, '/selection/search')).toBeUndefined();
   });
 
+  it('hides the dictionary from guests, who have no permissions', () => {
+    const selectionItems = (permissions: string[]) =>
+      navGroupsFor(permissions)
+        .find((group) => group.id === 'selection')
+        ?.items.map((item) => item.to);
+    expect(selectionItems([])).not.toContain('/selection/dictionary');
+    expect(selectionItems([])).toEqual([
+      '/selection/customer',
+      '/selection/machine',
+      '/selection/sensor',
+    ]);
+    expect(selectionItems(['selection:read'])).toContain(
+      '/selection/dictionary',
+    );
+  });
+
   it('keeps system routes available for later permission gating', () => {
     expect(systemNav.items.map((item) => item.to)).toEqual([
       '/system/user',

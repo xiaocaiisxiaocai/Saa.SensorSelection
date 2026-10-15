@@ -24,6 +24,20 @@ export function actionLabel(action: string) {
   return ACTION_LABELS[action] ?? action;
 }
 
+/**
+ * 权限码 → 中文名（与后端 RbacDefaults.Permissions 一致）。新日志后端已写中文名，
+ * 这里给旧日志里的权限码翻译；认不出的权限码原样显示。
+ */
+export const PERMISSION_LABELS: Record<string, string> = {
+  'audit:view': '查看操作日志',
+  'rbac:org:write': '管理组织架构',
+  'rbac:role:write': '管理角色',
+  'rbac:user:write': '管理用户',
+  'rbac:view': '查看系统管理',
+  'selection:read': '查看业务数据',
+  'selection:write': '编辑业务数据',
+};
+
 export interface AuditDetailPair {
   label: string;
   value: string;
@@ -58,14 +72,19 @@ export function parseAuditDetail(
       continue;
     }
     const label = text.slice(0, at).trim();
-    const value = text.slice(at + 1).trim();
+    let value = text.slice(at + 1).trim();
     if (!label) return null;
-    const items = value.includes('、')
+    let items = value.includes('、')
       ? value
           .split('、')
           .map((item) => item.trim())
           .filter(Boolean)
       : undefined;
+    if (label === '权限') {
+      const name = (code: string) => PERMISSION_LABELS[code] ?? code;
+      items = items?.map(name);
+      value = items ? items.join('、') : name(value);
+    }
     pairs.push({ label, value: value || '—', items });
   }
 

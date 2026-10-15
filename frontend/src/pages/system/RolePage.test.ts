@@ -48,7 +48,7 @@ describe('RolePage', () => {
     await nextTick();
     await nextTick();
 
-    expect(document.body.textContent).toContain('新建角色');
+    expect(document.body.textContent).toContain('新增角色');
     // 描述占满整行
     expect(
       document.querySelector('#role-description')?.closest('.ant-col-24'),

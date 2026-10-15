@@ -30,6 +30,10 @@ public static class RbacDefaults
         return index < 0 ? int.MaxValue : index;
     }
 
+    /// <summary>权限码在界面和日志里的中文名；未定义的权限码原样返回。</summary>
+    public static string PermissionName(string code) =>
+        Array.Find(Permissions, permission => permission.Code == code).Name ?? code;
+
     public static readonly (string Code, string Name, string Description, bool IsSystem, string[] Permissions)[] Roles =
     [
         (

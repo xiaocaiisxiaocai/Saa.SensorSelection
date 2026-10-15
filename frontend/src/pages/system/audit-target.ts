@@ -17,6 +17,7 @@ const NAMESPACE_LABELS: Record<string, string> = {
   'machine-global-sections': '机型公共页签',
   'machine-section-images': '结构示意图',
   'machine-section-rows': '机型选型',
+  'machine-tabs': '机型 Tab',
   meta: '系统数据',
   'process-intro': '制程介绍',
   'process-steps': '工艺制程',
@@ -25,6 +26,9 @@ const NAMESPACE_LABELS: Record<string, string> = {
   'sensor-sop': 'Sensor 型录',
   'sensor-sop-file': 'Sensor SOP',
 };
+
+/** 二级 Tab / 机型直属表格的内容挂在这个保留名下，不是业务名 */
+const TAB_PAGE_OWNER = '@tab-page';
 
 const ENTITY_GROUP_LABELS: Record<string, string> = {
   customer: '客户目录',
@@ -51,6 +55,7 @@ export function formatAuditTarget(target: null | string | undefined): string {
   const parts = rest
     .split(':')
     .map((part) => part.trim())
-    .filter((part) => part && part !== 'all' && !/^\d+$/.test(part));
+    .filter((part) => part && part !== 'all' && !/^\d+$/.test(part))
+    .map((part) => (part === TAB_PAGE_OWNER ? 'Tab 内容' : part));
   return parts.length ? `${label} · ${parts.join(' · ')}` : label;
 }

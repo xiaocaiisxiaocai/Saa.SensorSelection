@@ -25,7 +25,12 @@ export const selectionNav: NavGroup = {
     },
     { to: '/selection/machine', label: '机型结构' },
     { to: '/selection/sensor', label: 'Sensor型号' },
-    { to: '/selection/dictionary', label: '数据字典' },
+    // 字典是维护用的基础数据，游客（未登录，没有任何权限）不显示
+    {
+      to: '/selection/dictionary',
+      label: '数据字典',
+      permissions: ['selection:read'],
+    },
   ],
 };
 
@@ -70,10 +75,12 @@ export function activeNavKey(
 }
 
 export function navGroupsFor(permissions: readonly string[]): NavGroup[] {
-  const groups: NavGroup[] = [selectionNav];
-  const systemItems = systemNav.items.filter((item) =>
-    (item.permissions ?? []).every((code) => permissions.includes(code)),
-  );
+  const allowed = (item: NavItem) =>
+    (item.permissions ?? []).every((code) => permissions.includes(code));
+  const groups: NavGroup[] = [
+    { ...selectionNav, items: selectionNav.items.filter(allowed) },
+  ];
+  const systemItems = systemNav.items.filter(allowed);
   if (systemItems.length > 0) {
     groups.push({ ...systemNav, items: systemItems });
   }

@@ -707,9 +707,14 @@ async function runCustomerCrud() {
   })
 
   await check('A customer that still has regions cannot be deleted', async () => {
-    await sourceListAction(NAMES.customer, '删除客户')
-    await confirmDelete()
-    await expectToast('请先清空该客户下的全部区域')
+    // 删除项直接禁用并写明原因，不用点了确认才被拒
+    const more = page.getByRole('button', { name: `${NAMES.customer} 的更多操作`, exact: true })
+    await more.click()
+    const remove = page.getByRole('menuitem', { name: '删除客户（下面还有内容）', exact: true })
+    await remove.waitFor({ state: 'visible', timeout: 8000 })
+    assertEqual(await remove.getAttribute('aria-disabled'), 'true', 'delete customer is not disabled')
+    await more.click()
+    await remove.waitFor({ state: 'hidden', timeout: 8000 })
   })
 }
 
@@ -971,7 +976,7 @@ async function runMachineCrud() {
   await check('Machine: create, edit and delete a 注意事项 row', async () => {
     await page.getByRole('button', { name: '新增事项', exact: true }).first().click()
     await sheet().waitFor({ state: 'visible', timeout: 8000 })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增记录', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增事项', 'sheet title')
     await fillField(sheet(), '注意分类', `${TAG}分类`)
     await fillField(sheet(), '事项名称', `${TAG}事项`)
     await fillField(sheet(), '说明', `${TAG}说明`)
@@ -981,7 +986,7 @@ async function runMachineCrud() {
 
     await rowAction(`${TAG}事项`, '编辑')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑记录', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '编辑事项', 'sheet title')
     await fillField(sheet(), '事项名称', `${TAG}事项改`)
     await saveSheet()
     await expectToast('记录已更新')
@@ -1123,7 +1128,7 @@ async function runSystemCrud() {
   await check('User: create', async () => {
     await page.getByRole('button', { name: '新增用户', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建用户', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增用户', 'sheet title')
     await fillField(sheet(), '用户名', NAMES.user)
     await fillField(sheet(), '初始密码', 'e2epass')
     await fillField(sheet(), '显示名', `${TAG} 界面用户`)
@@ -1181,7 +1186,7 @@ async function runSystemCrud() {
   await check('Role: create with permissions', async () => {
     await page.getByRole('button', { name: '新增角色', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建角色', 'sheet title')
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增角色', 'sheet title')
     await fillField(sheet(), '角色标识', NAMES.role)
     await fillField(sheet(), '角色名称', `${TAG} 界面角色`)
     await fillField(sheet(), '描述', `${TAG} 自动化创建`)
@@ -1827,10 +1832,13 @@ async function deleteMachineTabs(token) {
   if (JSON.stringify(next) === JSON.stringify(current.data)) return
   const res = await api('PUT', storeRoute(key), token, next)
   if (res.status !== 200) throw new Error(`failed to prune machine tabs: ${res.status}`)
-  // 删掉的二级 Tab 的内容
+  // 删掉的二级 Tab 的内容：只删真的存在的 key，否则每次都在操作日志里留一条「key 不存在」的失败记录
+  const store = await api('GET', '/store', token)
+  const existing = store.status === 200 ? new Set(Object.keys(store.data)) : new Set()
   for (const id of removedPageIds) {
     for (const prefix of ['machine-section-rows', 'machine-section-images']) {
-      await api('DELETE', storeRoute(`${prefix}:${id}:@tab-page`), token)
+      const pageKey = `${prefix}:${id}:@tab-page`
+      if (existing.has(pageKey)) await api('DELETE', storeRoute(pageKey), token)
     }
   }
 }

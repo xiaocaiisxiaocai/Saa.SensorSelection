@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Saa.SensorSelection.Api.Data;
+using Saa.SensorSelection.Api.Models;
 using Saa.SensorSelection.Api.Services;
 
 namespace Saa.SensorSelection.Api.Controllers;
@@ -148,7 +149,7 @@ public class AuthController(
         await audit.WriteAsync(
             "auth.login",
             target: username,
-            detail: $"登录成功；账号：{user.Username}；显示名：{user.DisplayName}；角色：{string.Join("、", profile.Roles.Select(role => role.Name))}；权限：{string.Join("、", profile.Permissions)}；组织：{profile.OrgUnit?.Path ?? "未分配"}",
+            detail: $"登录成功；账号：{user.Username}；显示名：{user.DisplayName}；角色：{string.Join("、", profile.Roles.Select(role => role.Name))}；权限：{string.Join("、", profile.Permissions.OrderBy(RbacDefaults.PermissionOrder).Select(RbacDefaults.PermissionName))}；组织：{profile.OrgUnit?.Path ?? "未分配"}",
             username: username,
             ip: ip,
             ct: ct);

@@ -257,7 +257,7 @@ defineExpose({ open });
 <template>
   <a-modal
     :open="visible"
-    :title="editId ? '编辑记录' : '新增记录'"
+    :title="`${editId ? '编辑' : '新增'}${structure ? '选型' : '事项'}`"
     :width="structure ? 640 : 480"
     destroy-on-close
     @cancel="cancel"

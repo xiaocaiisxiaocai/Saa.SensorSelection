@@ -126,7 +126,7 @@ defineExpose({ openCreate, openEdit });
 <template>
   <a-modal
     :open="visible"
-    :title="editingId ? '编辑用户' : '新建用户'"
+    :title="editingId ? '编辑用户' : '新增用户'"
     :width="520"
     destroy-on-close
     @cancel="cancel"
@@ -221,7 +221,7 @@ defineExpose({ openCreate, openEdit });
               id="user-org-unit-id"
               v-model:value="form.orgUnitId"
               :tree-data="orgNodes"
-              placeholder="可选择任意层级（支持跳级）"
+              placeholder="可选，事业部、部门或课别都可以"
               tree-default-expand-all
               tree-node-filter-prop="title"
               show-search

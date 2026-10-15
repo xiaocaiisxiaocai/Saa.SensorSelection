@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Empty } from 'ant-design-vue';
 import { ArrowRight } from 'lucide-vue-next';
-import { h } from 'vue';
+import { computed, h } from 'vue';
 
 import { useTablePagination } from '@/pages/shared/table';
 
@@ -9,6 +9,8 @@ import type { MachineStructureSearchResult } from './machine-structure-search';
 
 const props = defineProps<{
   results: MachineStructureSearchResult[];
+  /** 设了任一条件；没设条件时结果就是全部结构，空了是还没有记录，不是没匹配上 */
+  filtered: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,12 +24,14 @@ const { listPagination } = useTablePagination(
 );
 
 // 和其它页面一样用 antd 的空状态插图
-const emptyLocale = {
+const emptyLocale = computed(() => ({
   emptyText: h(Empty, {
     image: Empty.PRESENTED_IMAGE_SIMPLE,
-    description: '没有找到符合条件的结构，换个条件试试',
+    description: props.filtered
+      ? '没有找到符合条件的结构，换个条件试试'
+      : '还没有任何结构记录，先在「目录浏览」里给机型新增选型',
   }),
-};
+}));
 
 function path(result: MachineStructureSearchResult): string {
   return [result.category, result.configuration, result.machineName]

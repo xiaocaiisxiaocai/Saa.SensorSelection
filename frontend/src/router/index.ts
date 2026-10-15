@@ -56,7 +56,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/selection/dictionary',
     component: () => import('@/pages/selection/DictionaryPage.vue'),
-    meta: { title: '数据字典' },
+    meta: { title: '数据字典', permissions: ['selection:read'] },
   },
   {
     path: '/selection/search',

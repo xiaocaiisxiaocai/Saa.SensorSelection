@@ -252,6 +252,21 @@ function lockCreate(node: EntityNode, action: MenuAction): MenuAction {
     : action;
 }
 
+/** 下面还有子节点或二级 Tab 的节点删不掉：删除项直接禁用并写明原因，不用点了确认才被拒 */
+function lockDelete(node: EntityNode, action: MenuAction): MenuAction {
+  if (node.hasChildren) {
+    return {
+      ...action,
+      label: action.label + '（下面还有内容）',
+      disabled: true,
+    };
+  }
+  if (props.lockedBranches.has(node.key)) {
+    return { ...action, label: action.label + LOCKED_SUFFIX, disabled: true };
+  }
+  return action;
+}
+
 function actionsFor(node: EntityNode): MenuAction[] {
   if (node.kind === 'group') {
     return [
@@ -275,12 +290,12 @@ function actionsFor(node: EntityNode): MenuAction[] {
         label: `编辑${props.groupLabel}`,
         run: () => emit('editGroup', node.category),
       },
-      {
+      lockDelete(node, {
         key: 'delete',
         label: `删除${props.groupLabel}`,
         danger: true,
         run: () => emit('deleteGroup', node.category),
-      },
+      }),
     ];
   }
   if (node.kind === 'configuration') {
@@ -303,12 +318,12 @@ function actionsFor(node: EntityNode): MenuAction[] {
         label: '编辑配置',
         run: () => emit('editConfiguration', payload),
       },
-      {
+      lockDelete(node, {
         key: 'delete',
         label: '删除配置',
         danger: true,
         run: () => emit('deleteConfiguration', payload),
-      },
+      }),
     ];
   }
   return [

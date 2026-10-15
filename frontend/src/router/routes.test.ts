@@ -51,3 +51,10 @@ describe('客户/制程 routes', () => {
     }
   });
 });
+
+describe('数据字典 route', () => {
+  it('needs selection:read, so guests are sent back home', () => {
+    const resolved = makeRouter().resolve('/selection/dictionary');
+    expect(resolved.meta.permissions).toEqual(['selection:read']);
+  });
+});

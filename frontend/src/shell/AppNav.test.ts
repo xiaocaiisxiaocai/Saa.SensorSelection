@@ -38,11 +38,18 @@ describe('AppNav', () => {
     const wrapper = await mountNav(null);
 
     expect(groupTitles(wrapper)).toEqual([]);
-    expect(wrapper.findAll('.ant-menu-item')).toHaveLength(4);
+    // 游客没有任何权限：不显示数据字典
+    expect(
+      wrapper.findAll('.ant-menu-item').map((item) => item.text()),
+    ).toEqual(['客户/制程', '机型结构', 'Sensor型号']);
   });
 
   it('labels groups without repeating the brand name', async () => {
-    const wrapper = await mountNav(['rbac:view', 'audit:view']);
+    const wrapper = await mountNav([
+      'selection:read',
+      'rbac:view',
+      'audit:view',
+    ]);
 
     expect(groupTitles(wrapper)).toEqual(['选型数据', '系统管理']);
     expect(wrapper.get('.app-nav__name').text()).toBe('感应器选型');
@@ -50,7 +57,7 @@ describe('AppNav', () => {
   });
 
   it('marks only the current page as selected and shows no icons', async () => {
-    const wrapper = await mountNav(null);
+    const wrapper = await mountNav(['selection:read']);
     const selected = wrapper.findAll('.ant-menu-item-selected');
 
     expect(selected.map((item) => item.text())).toEqual(['数据字典']);

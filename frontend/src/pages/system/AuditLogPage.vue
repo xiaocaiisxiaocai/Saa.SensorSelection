@@ -2,7 +2,7 @@
 import type { TableColumnType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
-import { RotateCcw } from 'lucide-vue-next';
+import { RotateCcw, Search } from 'lucide-vue-next';
 import {
   computed,
   nextTick,
@@ -255,10 +255,12 @@ async function resetFilters() {
       <a-input
         v-model:value="filters.username"
         class="selection-toolbar__filter audit-toolbar__user"
-        placeholder="操作用户"
+        placeholder="搜索操作用户"
         aria-label="操作用户"
         allow-clear
-      />
+      >
+        <template #prefix><Search :size="14" /></template>
+      </a-input>
       <a-range-picker
         v-model:value="filters.dateRange"
         class="audit-toolbar__date"

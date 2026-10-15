@@ -7,7 +7,11 @@ import { api, ApiError } from '@/api';
 import { openMachineSchematicReport } from '@/domain';
 import { useSelectionStore } from '@/stores/selection';
 
-import { buildReportSections, hasReportContent } from './machine-report';
+import {
+  buildReportSections,
+  hasReportContent,
+  reportMachineNames,
+} from './machine-report';
 
 /**
  * 机型结构示意图报告：显示已勾选的机型数，「报告」下拉里提供全选 / 清空、
@@ -38,11 +42,7 @@ const reportSections = computed(() =>
   buildReportSections(store, props.pageIds),
 );
 // 报告抬头列出的名称：按报告里出现的顺序
-const pageNames = computed(() =>
-  reportSections.value.flatMap((section) =>
-    section.blocks.map((block) => block.machineName),
-  ),
-);
+const pageNames = computed(() => reportMachineNames(reportSections.value));
 
 function ready() {
   if (noneSelected.value) {

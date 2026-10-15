@@ -77,3 +77,20 @@ export function hasReportContent(sections: readonly MachineReportSection[]) {
     ),
   );
 }
+
+/**
+ * 报告抬头列出的机型名，按在报告里出现的顺序、同名只留一个：
+ * 机型的直属表格只用机型名，同一机型勾了几个一级 Tab 就会出现几次，
+ * 后端会拒绝重复的机型名。
+ */
+export function reportMachineNames(
+  sections: readonly MachineReportSection[],
+): string[] {
+  return [
+    ...new Set(
+      sections.flatMap((section) =>
+        section.blocks.map((block) => block.machineName),
+      ),
+    ),
+  ];
+}

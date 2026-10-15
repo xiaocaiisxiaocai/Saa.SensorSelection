@@ -18,6 +18,7 @@ import {
   canHaveOrgChildren,
   flattenOrgTree,
   ORG_LEAF_MESSAGE,
+  orgDeleteBlockedReason,
 } from '@/pages/system/org-tree';
 import { useAccess } from '@/stores/auth';
 
@@ -182,12 +183,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
                 <template #icon><Pencil :size="14" /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip title="删除">
+            <a-tooltip :title="orgDeleteBlockedReason(row) ?? '删除'">
               <a-button
                 type="text"
                 size="small"
                 danger
                 aria-label="删除"
+                :disabled="Boolean(orgDeleteBlockedReason(row))"
                 @click.stop="removeOrg(row)"
               >
                 <template #icon><Trash2 :size="14" /></template>

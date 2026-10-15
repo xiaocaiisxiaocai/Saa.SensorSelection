@@ -72,6 +72,15 @@ describe('OrgPage', () => {
     wrapper.unmount();
   });
 
+  it('disables deleting an organization that still has children or users', async () => {
+    const wrapper = await mountPage();
+    // 两个组织一个有下级、一个有用户，都不能删
+    for (const button of wrapper.findAll('[aria-label="删除"]')) {
+      expect(button.attributes('disabled')).toBeDefined();
+    }
+    wrapper.unmount();
+  });
+
   it('disables adding a child under a section, since 课别 is the last level', async () => {
     const wrapper = await mountPage();
     const addChild = wrapper.findAll('[aria-label="新建子节点"]');

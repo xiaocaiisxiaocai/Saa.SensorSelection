@@ -372,7 +372,12 @@ public class RbacTests
         var viewerRoleId = await GetRoleIdAsync(admin, "viewer");
         await CreateUserAsync(admin, "zhaoliu", roleIds: [viewerRoleId]);
 
-        var delete = await admin.DeleteAsync($"/api/rbac/roles/{viewerRoleId}");
+        // 列表带上用户数，前端据此禁用删除
+        var roles = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+        var viewer = roles.EnumerateArray().Single(role => role.GetProperty("code").GetString() == "viewer");
+        Assert.Equal(1, viewer.GetProperty("userCount").GetInt32());
+
+        var delete =await admin.DeleteAsync($"/api/rbac/roles/{viewerRoleId}");
         Assert.Equal(HttpStatusCode.BadRequest, delete.StatusCode);
         var body = await delete.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("该角色已分配给用户，请先移除后再删除", body.GetProperty("message").GetString());

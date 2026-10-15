@@ -395,7 +395,7 @@ describe('MachinePage', () => {
 
   it('checks every machine under a tree node from the tree', async () => {
     const wrapper = await mountPage(true);
-    // 「已选 N / M」按机型（目录树末级节点）计数，没有二级 Tab 的机型也能勾
+    // 「已选 N / M 个机型」按机型（目录树末级节点）计数，没有二级 Tab 的机型也能勾
     expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
     await startSelecting(wrapper);
     await wrapper.get('.ant-tree-checkbox').trigger('click');

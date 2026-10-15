@@ -42,6 +42,13 @@ const columns = computed<TableColumnType[]>(() => {
     { key: 'description', dataIndex: 'description', title: '描述', width: 180 },
     { key: 'permissions', dataIndex: 'permissions', title: '权限', width: 240 },
     { key: 'kind', dataIndex: 'kind', title: '类型', width: 100 },
+    {
+      key: 'userCount',
+      dataIndex: 'userCount',
+      title: '用户数',
+      width: 80,
+      align: 'center',
+    },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
@@ -75,6 +82,14 @@ function isProtected(role: RbacRole) {
 
 function protectedReason(role: RbacRole) {
   return isProtected(role) ? '系统内置角色，不可修改或删除' : undefined;
+}
+
+function deleteBlockedReason(role: RbacRole) {
+  const reason = protectedReason(role);
+  if (reason) return reason;
+  return role.userCount > 0
+    ? `已分配给 ${role.userCount} 个用户，请先在用户管理里移除该角色`
+    : undefined;
 }
 
 function openEdit(role: RbacRole) {
@@ -159,13 +174,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
                 <template #icon><Pencil :size="14" /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip :title="protectedReason(row) ?? '删除'">
+            <a-tooltip :title="deleteBlockedReason(row) ?? '删除'">
               <a-button
                 type="text"
                 size="small"
                 danger
                 aria-label="删除"
-                :disabled="isProtected(row)"
+                :disabled="Boolean(deleteBlockedReason(row))"
                 @click="removeRole(row)"
               >
                 <template #icon><Trash2 :size="14" /></template>

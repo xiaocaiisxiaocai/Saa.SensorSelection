@@ -4,6 +4,7 @@ import {
   buildOrgTree,
   canHaveOrgChildren,
   nextOrgSortOrder,
+  orgDeleteBlockedReason,
   orgLevelUnder,
   flattenOrgTree,
   toTreeSelectNodes,
@@ -45,6 +46,18 @@ describe('org-tree', () => {
     expect(tree[1]?.children[0]?.name).toBe('课别');
     expect(flattenOrgTree(tree)).toHaveLength(3);
     expect(toTreeSelectNodes(nodes).map((node) => node.value)).toEqual([3, 1]);
+  });
+
+  it('explains why an organization with children or users cannot be deleted', () => {
+    expect(orgDeleteBlockedReason({ childCount: 2, userCount: 1 })).toBe(
+      '下面还有下级组织，请先删除下级组织',
+    );
+    expect(orgDeleteBlockedReason({ childCount: 0, userCount: 1 })).toBe(
+      '还有 1 个用户属于该组织，请先在用户管理里调整',
+    );
+    expect(
+      orgDeleteBlockedReason({ childCount: 0, userCount: 0 }),
+    ).toBeUndefined();
   });
 
   it('treats 课别 as the last level that cannot have children', () => {

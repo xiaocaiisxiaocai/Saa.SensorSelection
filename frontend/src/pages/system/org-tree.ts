@@ -55,6 +55,17 @@ export const ORG_LEAF_MESSAGE = '课别是最末一级，下面不能再新建�
 export const ORG_PARENT_LEVEL_MISSING_MESSAGE =
   '上级组织没有设置层级，请先编辑上级组织';
 
+/** 不能删除的原因（与后端一致：先删下级组织、先移走用户）；能删时为 undefined */
+export function orgDeleteBlockedReason(
+  node: Pick<OrgUnitNode, 'childCount' | 'userCount'>,
+): string | undefined {
+  if (node.childCount > 0) return '下面还有下级组织，请先删除下级组织';
+  if (node.userCount > 0) {
+    return `还有 ${node.userCount} 个用户属于该组织，请先在用户管理里调整`;
+  }
+  return undefined;
+}
+
 export function canHaveOrgChildren(level: string | null | undefined): boolean {
   return level?.trim() !== ORG_LEAF_LEVEL;
 }

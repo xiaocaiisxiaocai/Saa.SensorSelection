@@ -40,8 +40,18 @@ function assertEqual(actual, expected, message) {
   }
 }
 
+// 清理阶段的写入带同一个操作编号和名称，操作日志里归成一行「E2E 测试清理」
+function cleanupOperationHeaders(label) {
+  return {
+    'X-Operation-Id': `e2e-cleanup-${Date.now()}`,
+    'X-Operation-Label': encodeURIComponent(label),
+  }
+}
+
+let requestOperationHeaders = {}
+
 async function request(method, path, { token, body, raw, headers: extraHeaders } = {}) {
-  const headers = { ...extraHeaders }
+  const headers = { ...requestOperationHeaders, ...extraHeaders }
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${BASE}${path}`, {
@@ -877,6 +887,7 @@ async function main() {
 
   // --------------------------------------------------------------- cleanup
   section('Cleanup')
+  requestOperationHeaders = cleanupOperationHeaders('E2E 测试清理（接口）')
   let cleanupErrors = 0
   for (const task of cleanup.reverse()) {
     try {

@@ -23,6 +23,10 @@ public class RoleService(AppDbContext db)
             .Include(role => role.Permissions)
             .OrderBy(role => role.Code)
             .ToListAsync(ct);
+        var userCounts = await db.Roles
+            .AsNoTracking()
+            .Select(role => new { role.Id, Count = role.Users.Count })
+            .ToDictionaryAsync(item => item.Id, item => item.Count, ct);
         return roles
             .Select(role => new RoleListItem(
                 role.Id,
@@ -39,7 +43,8 @@ public class RoleService(AppDbContext db)
                         permission.Name,
                         permission.Module))
                     .ToArray(),
-                role.CreatedAt))
+                role.CreatedAt,
+                userCounts.GetValueOrDefault(role.Id)))
             .ToArray();
     }
 

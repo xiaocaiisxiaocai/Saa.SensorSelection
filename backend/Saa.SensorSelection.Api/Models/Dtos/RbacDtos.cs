@@ -45,7 +45,9 @@ public record RoleListItem(
     string? Description,
     bool IsSystem,
     IReadOnlyList<PermissionInfo> Permissions,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    // 分配了该角色的用户数；大于 0 时不能删除
+    int UserCount = 0);
 
 public record CreateRoleRequest(
     [Required(ErrorMessage = "请输入角色标识")]

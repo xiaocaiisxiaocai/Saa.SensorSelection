@@ -68,6 +68,8 @@ export interface RbacRole {
   isSystem: boolean;
   permissions: PermissionInfo[];
   createdAt: string;
+  /** 分配了该角色的用户数；大于 0 时不能删除 */
+  userCount: number;
 }
 
 export interface OrgUnitNode {
@@ -159,25 +161,6 @@ export interface AuditOperationQuery {
   pageSize?: number;
   result?: boolean;
   to?: string;
-}
-
-export interface AuditLogPage {
-  items: AuditLogItem[];
-  total: number;
-}
-
-export interface AuditLogQuery {
-  action?: string;
-  direction?: 'asc' | 'desc';
-  from?: string;
-  page?: number;
-  pageSize?: number;
-  result?: boolean;
-  /** 仅支持 timestamp / username / action / result，其他值后端回落到时间倒序 */
-  sort?: string;
-  target?: string;
-  to?: string;
-  username?: string;
 }
 
 export function getStoredToken(): null | string {
@@ -514,24 +497,6 @@ export const api = {
 
   deleteOrgUnit(id: number): Promise<void> {
     return request(`/rbac/org-units/${id}`, { method: 'DELETE' });
-  },
-
-  listAuditLogs(params: AuditLogQuery = {}): Promise<AuditLogPage> {
-    const query = new URLSearchParams();
-    if (params.page !== undefined) query.set('page', String(params.page));
-    if (params.pageSize !== undefined) {
-      query.set('pageSize', String(params.pageSize));
-    }
-    if (params.action) query.set('action', params.action);
-    if (params.username) query.set('username', params.username);
-    if (params.target) query.set('target', params.target);
-    if (params.result !== undefined) query.set('result', String(params.result));
-    if (params.from) query.set('from', params.from);
-    if (params.to) query.set('to', params.to);
-    if (params.sort) query.set('sort', params.sort);
-    if (params.direction) query.set('direction', params.direction);
-    const qs = query.toString();
-    return request<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
   },
 
   /** 日志里出现过的操作类型（如「删除机型」；没有操作名称的是操作码） */

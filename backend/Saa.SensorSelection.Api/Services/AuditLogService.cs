@@ -443,9 +443,14 @@ public class AuditLogService(
         {
             query = query.Where(log => log.Action != "auth.login");
         }
-        if (result is bool expected)
+        if (result == false)
         {
-            query = query.Where(log => log.Result == expected);
+            query = query.Where(log => !log.Result);
+        }
+        else if (result == true)
+        {
+            // 一次操作只有全部成功才算成功：有任一条失败的整组都不算
+            query = query.Where(log => !db.AuditLogs.Any(other => other.OperationId == log.OperationId && !other.Result));
         }
         if (from is not null)
         {

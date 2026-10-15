@@ -1251,11 +1251,16 @@ async function runSystemCrud() {
   })
 
   await check('Org: a unit with children cannot be deleted', async () => {
-    await rowAction(NAMES.org, '删除')
-    await confirmDelete()
-    await page.locator('.ant-message-notice').first().waitFor({ state: 'visible', timeout: 8000 })
-    await settle()
-    assert((await tableRow(NAMES.org).count()) > 0, 'the parent must survive a rejected delete')
+    // 有下级组织时删除按钮保留但禁用，原因写在 tooltip 里
+    const remove = tableRow(NAMES.org).first().getByRole('button', { name: '删除', exact: true })
+    assert(await remove.isDisabled(), 'delete must be disabled while the unit has children')
+    await remove.hover({ force: true })
+    await page
+      .locator('.ant-tooltip:visible', { hasText: '下面还有下级组织，请先删除下级组织' })
+      .first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+    await page.mouse.move(0, 0)
+    assert((await tableRow(NAMES.org).count()) > 0, 'the parent must survive')
   })
 
   await check('Org: edit the child then delete both', async () => {
@@ -1764,6 +1769,7 @@ async function teardown() {
   section('Teardown')
   try {
     const token = await loginApi()
+    apiOperationHeaders = cleanupOperationHeaders('E2E 测试清理（界面）')
     // Remove the customer/machine created through the UI plus their store keys.
     // 改名步骤中途失败会留下「…改」，一并清掉，免得下次运行撞名
     for (const customer of [NAMES.customer, `${NAMES.customer}改`]) {
@@ -1786,8 +1792,18 @@ async function teardown() {
   if (browser) await browser.close().catch(() => {})
 }
 
+// 清理阶段的写入带同一个操作编号和名称，操作日志里归成一行「E2E 测试清理」
+function cleanupOperationHeaders(label) {
+  return {
+    'X-Operation-Id': `e2e-cleanup-${Date.now()}`,
+    'X-Operation-Label': encodeURIComponent(label),
+  }
+}
+
+let apiOperationHeaders = {}
+
 async function api(method, path, token, body) {
-  const headers = {}
+  const headers = { ...apiOperationHeaders }
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${API}${path}`, {

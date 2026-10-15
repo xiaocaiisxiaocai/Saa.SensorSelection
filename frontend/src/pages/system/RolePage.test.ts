@@ -95,6 +95,7 @@ describe('RolePage', () => {
         isSystem: true,
         name: '系统管理员',
         permissions: [],
+        userCount: 1,
       },
     ]);
     await vi.waitFor(() => expect(wrapper.text()).toContain('系统管理员'));
@@ -109,6 +110,31 @@ describe('RolePage', () => {
       .findAllComponents({ name: 'ATooltip' })
       .map((tooltip) => tooltip.props('title'));
     expect(titles.filter((title) => title === reason)).toHaveLength(2);
+    wrapper.unmount();
+  });
+
+  it('shows how many users hold a role and blocks deleting an assigned role', async () => {
+    const role = (id: number, userCount: number): RbacRole => ({
+      code: `role${id}`,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      description: null,
+      id,
+      isSystem: false,
+      name: `角色${id}`,
+      permissions: [],
+      userCount,
+    });
+    const wrapper = await mountPage([role(2, 3), role(3, 0)]);
+    await vi.waitFor(() => expect(wrapper.text()).toContain('角色2'));
+
+    expect(wrapper.text()).toContain('用户数');
+    const remove = wrapper.findAll('button[aria-label="删除"]');
+    expect(remove[0]?.attributes('disabled')).toBeDefined();
+    expect(remove[1]?.attributes('disabled')).toBeUndefined();
+    const titles = wrapper
+      .findAllComponents({ name: 'ATooltip' })
+      .map((tooltip) => tooltip.props('title'));
+    expect(titles).toContain('已分配给 3 个用户，请先在用户管理里移除该角色');
     wrapper.unmount();
   });
 });

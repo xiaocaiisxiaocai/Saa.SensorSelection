@@ -378,6 +378,31 @@ public class AuditTests
         Assert.Equal(2, all.GetProperty("total").GetInt32());
     }
 
+    [Fact]
+    public async Task Operations_FilterByResult_TreatsAnOperationAsSuccessfulOnlyWhenEveryWriteSucceeded()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        // 一次操作里一条成功、一条失败（不是数组）
+        (await admin.SendAsync(StoreWrite("customer-req:结果客户", """[{"id":1}]""", "op-mixed-0001", "保存结果客户"))).EnsureSuccessStatusCode();
+        var failed = await admin.SendAsync(StoreWrite("customer-proc:结果客户", """{"not":"array"}""", "op-mixed-0001", "保存结果客户"));
+        Assert.Equal(HttpStatusCode.BadRequest, failed.StatusCode);
+        (await admin.SendAsync(StoreWrite("customer-req:结果客户", """[{"id":2}]""", "op-clean-0002", "全部成功"))).EnsureSuccessStatusCode();
+
+        var succeeded = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?hideLogin=true&result=true");
+        var labels = succeeded.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("label").GetString()).ToArray();
+        Assert.Contains("全部成功", labels);
+        Assert.DoesNotContain("保存结果客户", labels);
+        Assert.All(succeeded.GetProperty("items").EnumerateArray(), item => Assert.True(item.GetProperty("result").GetBoolean()));
+
+        var failures = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?hideLogin=true&result=false");
+        var mixed = Assert.Single(failures.GetProperty("items").EnumerateArray());
+        Assert.Equal("保存结果客户", mixed.GetProperty("label").GetString());
+        Assert.False(mixed.GetProperty("result").GetBoolean());
+        Assert.Equal(2, mixed.GetProperty("entryCount").GetInt32());
+    }
+
     [Theory]
     [InlineData("删除机型「04 特殊定位」", "删除机型")]
     [InlineData("新增选型记录 · 机型A", "新增选型记录")]

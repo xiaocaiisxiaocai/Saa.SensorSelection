@@ -109,7 +109,7 @@ async function generate() {
 <template>
   <div class="machine-report">
     <span class="selection-toolbar__count">
-      已选 {{ selectedCount }} / {{ availableCount }}
+      已选 {{ selectedCount }} / {{ availableCount }} 个机型
     </span>
     <a-dropdown :trigger="['click']">
       <a-button size="small" :loading="generating" aria-label="报告操作">

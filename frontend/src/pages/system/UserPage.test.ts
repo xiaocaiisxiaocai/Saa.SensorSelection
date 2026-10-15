@@ -18,6 +18,7 @@ const roles: RbacRole[] = [
     isSystem: true,
     name: '系统管理员',
     permissions: [],
+    userCount: 0,
   },
   {
     code: 'editor',
@@ -27,6 +28,7 @@ const roles: RbacRole[] = [
     isSystem: false,
     name: '业务维护员',
     permissions: [],
+    userCount: 0,
   },
   {
     code: 'viewer',
@@ -36,6 +38,7 @@ const roles: RbacRole[] = [
     isSystem: false,
     name: '只读用户',
     permissions: [],
+    userCount: 0,
   },
 ];
 

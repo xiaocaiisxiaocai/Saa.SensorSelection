@@ -153,13 +153,13 @@ defineExpose({ open });
             />
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col :span="24">
           <a-form-item html-for="customer-proc-note" label="备注">
-            <a-input
+            <a-textarea
               id="customer-proc-note"
               v-model:value="form.note"
+              :rows="2"
               :maxlength="200"
-              allow-clear
               show-count
             />
           </a-form-item>

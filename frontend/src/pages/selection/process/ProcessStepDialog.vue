@@ -159,11 +159,11 @@ defineExpose({ open });
         </a-col>
         <a-col :span="24">
           <a-form-item html-for="process-note" label="备注">
-            <a-input
+            <a-textarea
               id="process-note"
               v-model:value="form.note"
+              :rows="2"
               :maxlength="300"
-              allow-clear
               show-count
             />
           </a-form-item>

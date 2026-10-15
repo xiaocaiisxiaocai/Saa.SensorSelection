@@ -231,3 +231,8 @@
     max-width: none;
   }
 }
+
+/* 多行文本列（备注）：保留录入时的换行 */
+.selection-page .ant-table-tbody > tr > td.cell-pre-line {
+  white-space: pre-line;
+}

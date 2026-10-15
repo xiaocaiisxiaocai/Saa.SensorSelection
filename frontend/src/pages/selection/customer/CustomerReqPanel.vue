@@ -100,7 +100,13 @@ const columns = computed(() => {
         value: sourceFilters.value,
       }),
     },
-    { key: 'note', dataIndex: 'note', title: '备注', width: 140 },
+    {
+      key: 'note',
+      dataIndex: 'note',
+      title: '备注',
+      width: 140,
+      className: 'cell-pre-line',
+    },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
@@ -190,7 +196,7 @@ function onTableChange(
         重置
       </a-button>
       <a-button v-if="writable" type="primary" @click="formDialog?.open()">
-        新增要求
+        新增
       </a-button>
     </div>
     <a-table

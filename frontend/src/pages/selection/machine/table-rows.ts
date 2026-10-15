@@ -208,7 +208,14 @@ export function sectionColumns(options: {
           width: 120,
           ...merged,
         },
-        { key: 'note', dataIndex: 'note', title: '备注', width: 96, ...merged },
+        {
+          key: 'note',
+          dataIndex: 'note',
+          title: '备注',
+          width: 96,
+          className: 'cell-pre-line',
+          ...merged,
+        },
         // 示意图放在操作列前；相邻记录同图时合并成一格
         {
           key: 'image',
@@ -238,7 +245,13 @@ export function sectionColumns(options: {
           width: 140,
         },
         { key: 'desc', dataIndex: 'desc', title: '说明', width: 180 },
-        { key: 'note', dataIndex: 'note', title: '备注', width: 120 },
+        {
+          key: 'note',
+          dataIndex: 'note',
+          title: '备注',
+          width: 120,
+          className: 'cell-pre-line',
+        },
       ];
   if (options.writable) {
     cols.push({

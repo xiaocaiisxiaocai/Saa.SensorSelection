@@ -84,7 +84,13 @@ const columns = computed<TableColumnType[]>(() => {
     },
     { key: 'role', dataIndex: 'role', title: '作用', width: 160 },
     { key: 'feature', dataIndex: 'feature', title: '制程特性', width: 160 },
-    { key: 'note', dataIndex: 'note', title: '备注', width: 120 },
+    {
+      key: 'note',
+      dataIndex: 'note',
+      title: '备注',
+      width: 120,
+      className: 'cell-pre-line',
+    },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });

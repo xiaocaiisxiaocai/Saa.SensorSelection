@@ -534,7 +534,7 @@ async function runCustomerCrud() {
   await check('客户通用要求: create a requirement', async () => {
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增要求', exact: true }).click()
+    await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增要求', 'sheet title')
     await fillField(sheet(), '适用机型', 'ALL')
@@ -546,7 +546,7 @@ async function runCustomerCrud() {
   })
 
   await check('客户通用要求: a requirement without content is rejected', async () => {
-    await page.getByRole('button', { name: '新增要求', exact: true }).click()
+    await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
     await expectToast('请检查标红的必填项')
@@ -589,7 +589,7 @@ async function runCustomerCrud() {
   })
 
   await check('客户通用要求: cancelling a delete keeps the row', async () => {
-    await page.getByRole('button', { name: '新增要求', exact: true }).click()
+    await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '要求内容', `${TAG} 保留项`)
     await saveSheet()
@@ -667,7 +667,7 @@ async function runCustomerCrud() {
     assertEqual(selected.get('item'), NAMES.region, 'selected region before writing')
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增要求', exact: true }).click()
+    await page.getByRole('button', { name: '新增', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '要求内容', `${TAG} 跟随改名`)
     await saveSheet()
@@ -1332,7 +1332,7 @@ async function runReadOnlyGuest() {
 
   await check('A signed-out visitor can still read business data but sees no write controls', async () => {
     await page.locator('.entity-tree').waitFor({ state: 'visible', timeout: 10000 })
-    for (const label of ['新建区域', '新建客户', '新增要求']) {
+    for (const label of ['新建区域', '新建客户', '新增']) {
       assertEqual(
         await page.getByRole('button', { name: label, exact: true }).count(),
         0,

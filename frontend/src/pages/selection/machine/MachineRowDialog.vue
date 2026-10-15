@@ -375,11 +375,11 @@ defineExpose({ open });
         </a-col>
         <a-col :span="24">
           <a-form-item html-for="machine-section-note" label="备注">
-            <a-input
+            <a-textarea
               id="machine-section-note"
               v-model:value="form.note"
+              :rows="2"
               :maxlength="200"
-              allow-clear
               show-count
             />
           </a-form-item>
@@ -479,11 +479,11 @@ defineExpose({ open });
         </a-col>
         <a-col :span="24">
           <a-form-item html-for="machine-section-note-2" label="备注">
-            <a-input
+            <a-textarea
               id="machine-section-note-2"
               v-model:value="form.note"
+              :rows="2"
               :maxlength="200"
-              allow-clear
               show-count
             />
           </a-form-item>

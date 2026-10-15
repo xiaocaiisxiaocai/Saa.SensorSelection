@@ -77,7 +77,13 @@ const columns = computed<TableColumnType[]>(() => {
       title: 'sensor使用注意事项',
       width: 190,
     },
-    { key: 'note', dataIndex: 'note', title: '备注', width: 130 },
+    {
+      key: 'note',
+      dataIndex: 'note',
+      title: '备注',
+      width: 130,
+      className: 'cell-pre-line',
+    },
   ];
   if (writable.value) {
     cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });

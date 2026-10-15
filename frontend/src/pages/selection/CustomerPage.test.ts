@@ -164,7 +164,7 @@ describe('CustomerPage', () => {
   it('switches the panel content with each customer tab', async () => {
     const wrapper = await mountPage(true);
     const expected = [
-      ['客户通用要求', '新增要求'],
+      ['客户通用要求', '要求内容'],
       ['制程注意事项', '新增'],
       ['感应器选用标准', '点击或将文件拖到此处上传'],
       ['厂外反馈问题项', '问题点'],
@@ -390,7 +390,7 @@ describe('CustomerPage', () => {
     expect(search).toBeDefined();
     await search!.setValue('庆鼎筛选');
 
-    const addButton = findButton(wrapper, '新增要求');
+    const addButton = findButton(wrapper, '新增');
     expect(addButton).toBeDefined();
     await addButton!.trigger('click');
     await flushPromises();

@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { message, type TableColumnType } from 'ant-design-vue';
+import {
+  message,
+  type TableColumnType,
+  type TablePaginationConfig,
+} from 'ant-design-vue';
 import { Download, Pencil, Trash2, Upload } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
@@ -13,7 +17,15 @@ import {
 } from '@/pages/shared/excel';
 import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
-import { rowClick, useTablePagination } from '@/pages/shared/table';
+import {
+  type ColumnFilterMap,
+  columnFilter,
+  columnFilterValues,
+  isColumnFilterChange,
+  rowClick,
+  setColumnFilter,
+  useTablePagination,
+} from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
@@ -51,6 +63,13 @@ const tabs = computed(() =>
 const items = computed(() =>
   activeCode.value ? store.dictionaryItems(activeCode.value) : [],
 );
+// 表头漏斗：按字典项名称多选筛选，在完整列表上筛完再分页
+const nameFilters = ref<string[]>([]);
+const visibleItems = computed(() =>
+  nameFilters.value.length === 0
+    ? items.value
+    : items.value.filter((item) => nameFilters.value.includes(item.name)),
+);
 const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
   const cols: TableColumnType<DictionaryItem>[] = [
     {
@@ -65,6 +84,14 @@ const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
       key: 'name',
       dataIndex: 'name',
       title: '字典项名称',
+      ...columnFilter({
+        options: items.value.map((item) => ({
+          label: item.name,
+          value: item.name,
+        })),
+        value: nameFilters.value,
+        search: true,
+      }),
     },
   ];
   if (writable.value) {
@@ -81,6 +108,7 @@ const sheetTitle = computed(() => (editId.value ? '编辑字典项' : '新增字
 
 watch(activeCode, () => {
   dialogOpen.value = false;
+  nameFilters.value = [];
   resetForm();
 });
 
@@ -221,9 +249,24 @@ async function onImportFile(event: Event) {
 
 // 分页条始终显示；筛选变化回到第一页
 const { pagination, onChange: onPageChange } = useTablePagination(
-  () => items.value.length,
-  [activeCode],
+  () => visibleItems.value.length,
+  [activeCode, nameFilters],
 );
+
+function onTableChange(
+  next: TablePaginationConfig,
+  filters: ColumnFilterMap,
+  _order: unknown,
+  extra: { action?: string },
+) {
+  if (isColumnFilterChange(extra)) {
+    setColumnFilter(
+      nameFilters,
+      columnFilterValues(filters, 'name').map(String),
+    );
+  }
+  onPageChange(next);
+}
 </script>
 
 <template>
@@ -261,13 +304,15 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     <div class="selection-panel">
       <a-table
         :columns="columns"
-        :data-source="items"
+        :data-source="visibleItems"
         row-key="id"
         :pagination="pagination"
         :custom-row="customRow"
         :scroll="{ x: 'max-content' }"
-        :locale="{ emptyText: '暂无字典项' }"
-        @change="onPageChange"
+        :locale="{
+          emptyText: nameFilters.length ? '没有匹配的字典项' : '暂无字典项',
+        }"
+        @change="onTableChange"
       >
         <template #bodyCell="{ column, record }">
           <a-space v-if="column.key === 'actions'" :size="4">

@@ -48,7 +48,8 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
     /// <summary>
     /// 按操作分页查询：同一次界面操作产生的多条日志归成一组（最新的在前）。
     /// 筛选：keyword（用户名 / 显示名 / 操作名称 / 目标 / 详情 / 变更明细，包含匹配）、
-    /// action（可重复，多选操作码）、result（true/false）、from/to（UTC，ISO 8601）、hideLogin（隐藏登录）。
+    /// action（可重复，多选操作码）、kind（可重复，多选操作类型；没有操作名称的日志按操作码匹配）、
+    /// result（true/false）、from/to（UTC，ISO 8601）、hideLogin（隐藏登录）。
     /// </summary>
     [HttpGet("operations")]
     [ProducesResponseType(typeof(AuditOperationPage), StatusCodes.Status200OK)]
@@ -61,6 +62,7 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
         [FromQuery] DateTimeOffset? from = null,
         [FromQuery] DateTimeOffset? to = null,
         [FromQuery] bool hideLogin = false,
+        [FromQuery(Name = "kind")] string[]? kinds = null,
         CancellationToken ct = default)
     {
         return Ok(await auditLogs.QueryOperationsAsync(
@@ -72,6 +74,15 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
             from,
             to,
             hideLogin,
+            kinds,
             ct));
+    }
+
+    /// <summary>日志里出现过的操作类型（如「删除机型」；没有操作名称的是操作码），供「操作」筛选。</summary>
+    [HttpGet("operations/kinds")]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> OperationKinds(CancellationToken ct)
+    {
+        return Ok(await auditLogs.ListOperationKindsAsync(ct));
     }
 }

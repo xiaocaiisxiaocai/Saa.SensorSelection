@@ -83,6 +83,29 @@ public class AuditLogService(
             : Guid.NewGuid().ToString("N");
     }
 
+    /// <summary>
+    /// 操作类型：去掉操作名称里的具体对象，只留动作 + 对象种类。
+    /// 「删除机型「04 特殊定位」」→「删除机型」，「新增选型记录 · 机型A」→「新增选型记录」。
+    /// </summary>
+    public static string? OperationKindOf(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+        var end = label.Length;
+        foreach (var marker in new[] { "「", " · " })
+        {
+            var at = label.IndexOf(marker, StringComparison.Ordinal);
+            if (at > 0 && at < end)
+            {
+                end = at;
+            }
+        }
+        var kind = label[..end].Trim();
+        return kind.Length == 0 ? null : kind;
+    }
+
     /// <summary>操作名称：请求头只能放 ASCII，前端按 URL 编码传中文。</summary>
     private string? ResolveOperationLabel()
     {
@@ -244,6 +267,7 @@ public class AuditLogService(
                 Error = error,
                 OperationId = operationId,
                 OperationLabel = operationLabel,
+                OperationKind = OperationKindOf(operationLabel),
                 Changes = changes,
             });
 
@@ -361,6 +385,16 @@ public class AuditLogService(
             total);
     }
 
+    /// <summary>日志里出现过的操作类型（没有操作名称的用操作码），供日志页的「操作」筛选。</summary>
+    public async Task<IReadOnlyList<string>> ListOperationKindsAsync(CancellationToken ct = default)
+    {
+        return await db.AuditLogs.AsNoTracking()
+            .Select(log => log.OperationKind ?? log.Action)
+            .Distinct()
+            .OrderBy(kind => kind)
+            .ToListAsync(ct);
+    }
+
     /// <summary>
     /// 按操作分页查询：先按条件筛出日志，再按操作编号归组（任一条命中，整组都显示），
     /// 按组里最新一条倒序。keyword 同时搜用户名、显示名、操作名称、目标、详情、失败原因和变更明细。
@@ -374,6 +408,7 @@ public class AuditLogService(
         DateTimeOffset? from = null,
         DateTimeOffset? to = null,
         bool hideLogin = false,
+        IReadOnlyCollection<string>? kinds = null,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -398,6 +433,11 @@ public class AuditLogService(
         if (actions is { Count: > 0 })
         {
             query = query.Where(log => actions.Contains(log.Action));
+        }
+        if (kinds is { Count: > 0 })
+        {
+            // 有操作名称的按操作类型，没有的（登录、直接调接口的写入）按操作码
+            query = query.Where(log => kinds.Contains(log.OperationKind ?? log.Action));
         }
         if (hideLogin)
         {

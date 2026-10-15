@@ -378,6 +378,53 @@ public class AuditTests
         Assert.Equal(2, all.GetProperty("total").GetInt32());
     }
 
+    [Theory]
+    [InlineData("删除机型「04 特殊定位」", "删除机型")]
+    [InlineData("新增选型记录 · 机型A", "新增选型记录")]
+    [InlineData("编辑区域「华东」→「华南」", "编辑区域")]
+    [InlineData("新建 Tab「输送」", "新建 Tab")]
+    [InlineData("删除 Sensor 型号", "删除 Sensor 型号")]
+    [InlineData("  ", null)]
+    [InlineData(null, null)]
+    public void OperationKind_DropsTheObjectFromTheLabel(string? label, string? kind)
+    {
+        Assert.Equal(kind, AuditLogService.OperationKindOf(label));
+    }
+
+    [Fact]
+    public async Task Operations_FilterByKind_FallingBackToActionWithoutLabel()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+
+        (await admin.SendAsync(StoreWrite(
+            "customer-req:类型客户",
+            """[{"id":1,"content":"A"}]""",
+            "op-kind-0001",
+            "新增客户通用要求 · 类型客户"))).EnsureSuccessStatusCode();
+        (await admin.SendAsync(StoreWrite(
+            "customer-req:类型客户",
+            """[{"id":1,"content":"B"}]""",
+            "op-kind-0002",
+            "编辑客户通用要求 · 类型客户"))).EnsureSuccessStatusCode();
+
+        var kinds = await admin.GetFromJsonAsync<string[]>("/api/audit-logs/operations/kinds");
+        Assert.Contains("新增客户通用要求", kinds!);
+        Assert.Contains("编辑客户通用要求", kinds!);
+        // 登录没有操作名称，按操作码出现
+        Assert.Contains("auth.login", kinds!);
+
+        var edited = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/audit-logs/operations?kind={Uri.EscapeDataString("编辑客户通用要求")}");
+        Assert.Equal(1, edited.GetProperty("total").GetInt32());
+        Assert.Equal("编辑客户通用要求 · 类型客户", edited.GetProperty("items")[0].GetProperty("label").GetString());
+
+        var logins = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?kind=auth.login");
+        Assert.All(logins.GetProperty("items").EnumerateArray(), item =>
+            Assert.Equal("auth.login", item.GetProperty("entries")[0].GetProperty("action").GetString()));
+        Assert.True(logins.GetProperty("total").GetInt32() >= 1);
+    }
+
     [Fact]
     public async Task RoleUpdate_RecordsPermissionsBeforeAndAfter()
     {

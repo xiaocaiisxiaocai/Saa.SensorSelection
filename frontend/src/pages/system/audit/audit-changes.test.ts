@@ -4,6 +4,9 @@ import type { AuditLogItem, AuditOperationItem } from '@/api';
 
 import {
   changeSummaryText,
+  entryName,
+  entryObject,
+  operationKindOptions,
   entrySummary,
   fieldLabel,
   operationObject,
@@ -133,6 +136,35 @@ describe('audit changes', () => {
     expect(
       entrySummary(entry({ action: 'store.delete', operationId: 'legacy-9' })),
     ).toBe('');
+  });
+
+  it('names an uploaded file by its file name instead of its id', () => {
+    const upload = entry({
+      action: 'file.upload',
+      detail: '文件名：e2e-sample.png；大小：6775 B',
+      target: 'd2159766-e2e7-466a-90d7-5f137d724f5c',
+    });
+    expect(entryObject(upload)).toBe('e2e-sample.png');
+    expect(entryName(upload)).toBe('上传文件 · e2e-sample.png');
+  });
+
+  it('merges filter options that read the same and sorts them', () => {
+    expect(
+      operationKindOptions([
+        '删除机型',
+        'file.upload',
+        '上传文件',
+        'auth.login',
+      ]),
+    ).toEqual([
+      { label: '登录', value: '登录', kinds: ['auth.login'] },
+      { label: '删除机型', value: '删除机型', kinds: ['删除机型'] },
+      {
+        label: '上传文件',
+        value: '上传文件',
+        kinds: ['file.upload', '上传文件'],
+      },
+    ]);
   });
 
   it('titles an operation by its label, falling back to the first action', () => {

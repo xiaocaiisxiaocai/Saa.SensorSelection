@@ -25,9 +25,9 @@ import {
   type ColumnFilterMap,
 } from '@/pages/shared/table';
 import AuditOperationDrawer from '@/pages/system/audit/AuditOperationDrawer.vue';
-import { ACTION_LABELS } from '@/pages/system/audit/audit-actions';
 import {
   entryName,
+  operationKindOptions,
   entrySummary,
   operationObject,
   operationSummary,
@@ -41,10 +41,25 @@ import '../shared/selection-page.css';
  * 变更摘要说清改了什么，点开右侧抽屉看每个字段改前改后。
  */
 
-const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({
-  label,
-  value,
-}));
+// 「操作」筛选按操作类型：选项是日志里实际出现过的类型，和「操作」列显示的名称对得上
+const kindOptions = ref<ReturnType<typeof operationKindOptions>>([]);
+
+async function loadKinds() {
+  try {
+    kindOptions.value = operationKindOptions(
+      await api.listAuditOperationKinds(),
+    );
+  } catch {
+    // 选项加载失败不影响列表，下次加载数据时再试
+  }
+}
+
+/** 选中的显示文字 → 后端的操作类型 / 操作码 */
+function selectedKinds(): string[] {
+  return kindOptions.value
+    .filter((option) => filters.actions.includes(option.value))
+    .flatMap((option) => option.kinds);
+}
 const resultOptions = [
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
@@ -87,7 +102,7 @@ const columns = computed<TableColumnType[]>(() => [
     title: '操作',
     width: 176,
     ...columnFilter({
-      options: actionOptions,
+      options: kindOptions.value,
       value: filters.actions,
       search: true,
     }),
@@ -122,7 +137,10 @@ function onTableChange(
 
 watch([page, pageSize], loadData);
 
-onMounted(loadData);
+onMounted(() => {
+  void loadKinds();
+  void loadData();
+});
 
 // 即改即筛；输入框防抖，避免每敲一个字就请求一次后端。
 const FILTER_DEBOUNCE_MS = 300;
@@ -210,7 +228,7 @@ async function loadData() {
   try {
     const [from, to] = filters.dateRange ?? [null, null];
     const pageData = await api.listAuditOperations({
-      actions: filters.actions,
+      kinds: selectedKinds(),
       from: toIsoStart(from),
       hideLogin: filters.hideLogin,
       keyword: filters.keyword.trim() || undefined,

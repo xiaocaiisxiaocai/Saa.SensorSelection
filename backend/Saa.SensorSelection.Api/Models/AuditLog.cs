@@ -41,6 +41,12 @@ public class AuditLog
     /// <summary>操作名称（前端用 X-Operation-Label 传入，如「删除机型「04 特殊定位」」）。</summary>
     public string? OperationLabel { get; set; }
 
+    /// <summary>
+    /// 操作类型：操作名称去掉具体对象（「删除机型「04 特殊定位」」→「删除机型」），日志页按它筛选。
+    /// 没有操作名称时为空，筛选时退回操作码。
+    /// </summary>
+    public string? OperationKind { get; set; }
+
     /// <summary>变更明细（JSON）：新增 / 删除 / 修改了哪些记录、哪些字段从什么改成什么，见 AuditChanges。</summary>
     public string? Changes { get; set; }
 }

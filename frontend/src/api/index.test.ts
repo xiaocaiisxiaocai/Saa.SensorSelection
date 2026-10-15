@@ -69,13 +69,16 @@ describe('api client', () => {
     const loginInit = fetchMock.mock.calls[0]?.[1];
     const headers = loginInit?.headers;
     expect(headers).toBeInstanceOf(Headers);
-    expect(headers instanceof Headers ? headers.get('Authorization') : null).toBe(
-      'Bearer tok',
-    );
+    expect(
+      headers instanceof Headers ? headers.get('Authorization') : null,
+    ).toBe('Bearer tok');
 
-    vi.stubGlobal('fetch', vi.fn(async () => {
-      throw new TypeError('Failed to fetch');
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
     await expect(api.getStore()).rejects.toMatchObject({ kind: 'offline' });
   });
 
@@ -102,13 +105,16 @@ describe('api client', () => {
 
     const headers = fetchMock.mock.calls[0]?.[1]?.headers;
     expect(headers).toBeInstanceOf(Headers);
-    expect(headers instanceof Headers ? headers.get('Content-Type') : null).toBeNull();
+    expect(
+      headers instanceof Headers ? headers.get('Content-Type') : null,
+    ).toBeNull();
   });
 
   it('sends store keys as query values so encoded slashes cannot become route segments', async () => {
     storeToken('tok');
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      jsonResponse({ ok: true }),
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ ok: true }),
     );
     vi.stubGlobal('fetch', fetchMock);
     const key = 'machine-section-rows:2:06 入料输送（平板%2FBOX）';

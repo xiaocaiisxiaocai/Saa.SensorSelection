@@ -6,7 +6,7 @@ import type {
 } from '@/api';
 import { formatAuditTarget } from '@/pages/system/audit-target';
 
-import { actionLabel, parseAuditDetail } from './audit-actions';
+import { ACTION_LABELS, actionLabel, parseAuditDetail } from './audit-actions';
 
 /*
  * 操作日志的变更明细：后端记下的是数据里的原始字段名（content、sensorIds…），
@@ -223,14 +223,21 @@ export function operationTitle(operation: AuditOperationItem): string {
   return first ? actionLabel(first.action) : '—';
 }
 
+/** 一条日志的对象：上传文件的目标是文件编号，换成详情里的文件名 */
+export function entryObject(entry: AuditLogItem): string {
+  if (entry.action === 'file.upload') {
+    const fileName = parseAuditDetail(entry.detail)?.pairs.find(
+      (pair) => pair.label === '文件名',
+    )?.value;
+    if (fileName) return fileName;
+  }
+  return formatAuditTarget(entry.target);
+}
+
 /** 列表里「对象」一列：第一条日志的目标，多个目标时注明一共几项 */
 export function operationObject(operation: AuditOperationItem): string {
   const targets = [
-    ...new Set(
-      operation.entries
-        .map((entry) => formatAuditTarget(entry.target))
-        .filter(Boolean),
-    ),
+    ...new Set(operation.entries.map(entryObject).filter(Boolean)),
   ];
   if (targets.length === 0) return '—';
   return targets.length > 1
@@ -289,9 +296,27 @@ export function displayFieldValue(
     .join('、');
 }
 
+/**
+ * 「操作」筛选的选项：后端给出日志里出现过的操作类型（如「删除机型」）和
+ * 没有操作名称的操作码（如 auth.login）。操作码翻成中文；显示文字相同的
+ * （file.upload 与「上传文件」）合成一项，选中时两者都查。
+ */
+export function operationKindOptions(
+  kinds: readonly string[],
+): Array<{ label: string; value: string; kinds: string[] }> {
+  const byText = new Map<string, string[]>();
+  for (const kind of kinds) {
+    const text = kind in ACTION_LABELS ? actionLabel(kind) : kind;
+    byText.set(text, [...(byText.get(text) ?? []), kind]);
+  }
+  return [...byText.entries()]
+    .map(([text, values]) => ({ label: text, value: text, kinds: values }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'));
+}
+
 /** 一条日志的名称：操作类型 · 对象 */
 export function entryName(entry: AuditLogItem): string {
-  return [actionLabel(entry.action), formatAuditTarget(entry.target)]
+  return [actionLabel(entry.action), entryObject(entry)]
     .filter(Boolean)
     .join(' · ');
 }

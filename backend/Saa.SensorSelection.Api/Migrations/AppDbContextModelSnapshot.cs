@@ -75,6 +75,10 @@ namespace Saa.SensorSelection.Api.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("OperationKind")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OperationLabel")
                         .HasMaxLength(120)
                         .HasColumnType("TEXT");
@@ -99,6 +103,8 @@ namespace Saa.SensorSelection.Api.Migrations
                     b.HasIndex("Action");
 
                     b.HasIndex("OperationId");
+
+                    b.HasIndex("OperationKind");
 
                     b.HasIndex("Timestamp");
 

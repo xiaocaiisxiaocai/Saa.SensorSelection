@@ -150,6 +150,8 @@ export interface AuditOperationPage {
 
 export interface AuditOperationQuery {
   actions?: string[];
+  /** 操作类型（如「删除机型」）；没有操作名称的日志按操作码匹配 */
+  kinds?: string[];
   from?: string;
   hideLogin?: boolean;
   keyword?: string;
@@ -532,6 +534,11 @@ export const api = {
     return request<AuditLogPage>(`/audit-logs${qs ? `?${qs}` : ''}`);
   },
 
+  /** 日志里出现过的操作类型（如「删除机型」；没有操作名称的是操作码） */
+  listAuditOperationKinds(): Promise<string[]> {
+    return request<string[]>('/audit-logs/operations/kinds');
+  },
+
   /** 按操作分页查询日志：同一次界面操作的多条日志归成一组 */
   listAuditOperations(
     params: AuditOperationQuery = {},
@@ -543,6 +550,7 @@ export const api = {
     }
     if (params.keyword) query.set('keyword', params.keyword);
     for (const action of params.actions ?? []) query.append('action', action);
+    for (const kind of params.kinds ?? []) query.append('kind', kind);
     if (params.result !== undefined) query.set('result', String(params.result));
     if (params.from) query.set('from', params.from);
     if (params.to) query.set('to', params.to);

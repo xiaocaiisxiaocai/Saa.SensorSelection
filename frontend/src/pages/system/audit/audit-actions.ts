@@ -2,6 +2,7 @@
 export const ACTION_LABELS: Record<string, string> = {
   'auth.change-password': '修改密码',
   'auth.login': '登录',
+  'file.upload': '上传文件',
   'org.create': '创建组织',
   'org.delete': '删除组织',
   'org.update': '更新组织',

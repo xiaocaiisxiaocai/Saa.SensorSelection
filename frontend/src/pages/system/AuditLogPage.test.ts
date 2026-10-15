@@ -80,7 +80,10 @@ function page(items: AuditOperationItem[]): AuditOperationPage {
   return { items, total: items.length };
 }
 
-function mountPage() {
+function mountPage(
+  kinds: string[] = ['auth.login', 'file.upload', '上传文件', '删除机型'],
+) {
+  vi.spyOn(api, 'listAuditOperationKinds').mockResolvedValue(kinds);
   return mount(AuditLogPage, {
     attachTo: document.body,
     global: { plugins: [createPinia()] },
@@ -246,12 +249,16 @@ describe('AuditLogPage', () => {
     ).toBe(false);
 
     await wrapper.get('input[aria-label="搜索操作日志"]').setValue('鹏鼎');
-    await chooseColumnFilter(wrapper, '操作', ['store.upsert', 'store.delete']);
+    await vi.waitFor(() =>
+      expect(findColumn(wrapper, '操作').column.filters).toHaveLength(3),
+    );
+    await chooseColumnFilter(wrapper, '操作', ['上传文件', '删除机型']);
     await wrapper.get('.audit-toolbar input[type="checkbox"]').setValue(true);
     await vi.waitFor(() =>
       expect(list).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          actions: ['store.upsert', 'store.delete'],
+          // 「上传文件」既是 file.upload 的中文名，也是带名称的操作类型：两者都查
+          kinds: ['删除机型', 'file.upload', '上传文件'],
           hideLogin: true,
           keyword: '鹏鼎',
           page: 1,
@@ -265,10 +272,10 @@ describe('AuditLogPage', () => {
     await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
     await vi.waitFor(() =>
       expect(list).toHaveBeenLastCalledWith({
-        actions: [],
         from: undefined,
         hideLogin: false,
         keyword: undefined,
+        kinds: [],
         page: 1,
         pageSize: 20,
         result: undefined,
@@ -277,6 +284,23 @@ describe('AuditLogPage', () => {
     );
     expect(findColumn(wrapper, '操作').column.filteredValue).toBeNull();
     expect(findColumn(wrapper, '结果').column.filteredValue).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('offers the operation kinds that appear in the log, named like the column', async () => {
+    vi.spyOn(api, 'listAuditOperations').mockResolvedValue(page([]));
+    const wrapper = mountPage();
+    await vi.waitFor(() =>
+      expect(findColumn(wrapper, '操作').column.filters).toHaveLength(3),
+    );
+    const texts = (
+      findColumn(wrapper, '操作').column.filters as Array<{ text: string }>
+    ).map((item) => item.text);
+    // 操作码翻成中文，和带名称的同名类型合成一项，不出现原始操作码
+    expect(texts).toEqual(
+      expect.arrayContaining(['登录', '上传文件', '删除机型']),
+    );
+    expect(texts.some((text) => text.includes('.'))).toBe(false);
     wrapper.unmount();
   });
 
@@ -309,6 +333,7 @@ describe('AuditLogPage', () => {
     const backendActions = [
       'auth.change-password',
       'auth.login',
+      'file.upload',
       'org.create',
       'org.delete',
       'org.update',
@@ -350,7 +375,10 @@ describe('AuditLogPage', () => {
     const wrapper = mountPage();
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
-    await chooseColumnFilter(wrapper, '操作', ['auth.login']);
+    await vi.waitFor(() =>
+      expect(findColumn(wrapper, '操作').column.filters).toHaveLength(3),
+    );
+    await chooseColumnFilter(wrapper, '操作', ['登录']);
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     const table = () => wrapper.getComponent({ name: 'ATable' });
 

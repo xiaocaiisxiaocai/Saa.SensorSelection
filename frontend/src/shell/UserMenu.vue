@@ -24,8 +24,8 @@ const form = reactive({
   newPassword: '',
 });
 
-// 访客没有用户菜单：拖过列宽后在「登录」旁边给一个恢复入口
-const guestCanResetWidths = computed(() => hasCustomColumnWidths());
+// 拖过表格列宽后，用户名 / 「登录」左边出现恢复入口（登录与否一致）
+const canResetWidths = computed(() => hasCustomColumnWidths());
 
 function resetWidths() {
   // 拖过的表格列宽只记在本机浏览器，这里一次全部恢复
@@ -91,10 +91,6 @@ async function onMenuClick({ key: id }: { key: string | number }) {
     openPassword();
     return;
   }
-  if (id === 'column-widths') {
-    resetWidths();
-    return;
-  }
   if (id !== 'logout') return;
   auth.logout();
   await router.replace('/selection/customer');
@@ -102,46 +98,42 @@ async function onMenuClick({ key: id }: { key: string | number }) {
 </script>
 
 <template>
-  <a-dropdown
-    v-if="auth.isAuthenticated"
-    placement="bottomRight"
-    :trigger="['click']"
-  >
-    <a-button class="user-menu__trigger" type="text" :title="description">
-      <a-avatar class="user-menu__avatar" size="small">
-        {{ avatarText }}
-      </a-avatar>
-      <span class="user-menu__name">{{ auth.displayName }}</span>
-      <ChevronDown :size="14" />
-    </a-button>
-    <template #overlay>
-      <a-menu @click="onMenuClick">
-        <a-menu-item key="profile" disabled class="user-menu__profile">
-          {{ description }}
-        </a-menu-item>
-        <a-menu-divider />
-        <a-menu-item key="password">
-          <template #icon><KeyRound :size="14" /></template>
-          修改密码
-        </a-menu-item>
-        <a-menu-item key="column-widths">
-          <template #icon><Columns3 :size="14" /></template>
-          恢复默认列宽
-        </a-menu-item>
-        <a-menu-item key="logout" danger>
-          <template #icon><LogOut :size="14" /></template>
-          退出登录
-        </a-menu-item>
-      </a-menu>
-    </template>
-  </a-dropdown>
-  <a-space v-else :size="4">
-    <a-tooltip v-if="guestCanResetWidths" title="恢复默认列宽">
+  <a-space :size="4">
+    <a-tooltip v-if="canResetWidths" title="恢复默认列宽">
       <a-button type="text" aria-label="恢复默认列宽" @click="resetWidths">
         <template #icon><Columns3 :size="16" /></template>
       </a-button>
     </a-tooltip>
-    <a-button type="primary" @click="goLogin">登录</a-button>
+    <a-dropdown
+      v-if="auth.isAuthenticated"
+      placement="bottomRight"
+      :trigger="['click']"
+    >
+      <a-button class="user-menu__trigger" type="text" :title="description">
+        <a-avatar class="user-menu__avatar" size="small">
+          {{ avatarText }}
+        </a-avatar>
+        <span class="user-menu__name">{{ auth.displayName }}</span>
+        <ChevronDown :size="14" />
+      </a-button>
+      <template #overlay>
+        <a-menu @click="onMenuClick">
+          <a-menu-item key="profile" disabled class="user-menu__profile">
+            {{ description }}
+          </a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="password">
+            <template #icon><KeyRound :size="14" /></template>
+            修改密码
+          </a-menu-item>
+          <a-menu-item key="logout" danger>
+            <template #icon><LogOut :size="14" /></template>
+            退出登录
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
+    <a-button v-else type="primary" @click="goLogin">登录</a-button>
   </a-space>
   <a-modal
     :open="passwordOpen"

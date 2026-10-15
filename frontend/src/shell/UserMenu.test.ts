@@ -119,22 +119,25 @@ describe('UserMenu', () => {
     wrapper.unmount();
   });
 
-  it('gives guests a reset-column-widths button once they have resized a column', async () => {
+  it('shows the same reset-column-widths button outside the menu, signed in or not, once a column was resized', async () => {
     vi.spyOn(api, 'getStore').mockResolvedValue({});
     const wrapper = await mountMenu();
-    useAuthStore().logout();
-    await nextTick();
     const resetButton = () => wrapper.find('button[aria-label="恢复默认列宽"]');
-    expect(resetButton().exists()).toBe(false);
+    const resize = () =>
+      useResizableColumns('some-table', () => [
+        { key: 'name', title: '名称', width: 120 },
+      ]).onResizeColumn(200, { key: 'name' });
 
-    useResizableColumns('guest-table', () => [
-      { key: 'name', title: '名称', width: 120 },
-    ]).onResizeColumn(200, { key: 'name' });
-    await nextTick();
-    expect(resetButton().exists()).toBe(true);
-
-    await resetButton().trigger('click');
-    expect(resetButton().exists()).toBe(false);
+    for (const signedIn of [true, false]) {
+      if (!signedIn) useAuthStore().logout();
+      await nextTick();
+      expect(resetButton().exists()).toBe(false);
+      resize();
+      await nextTick();
+      expect(resetButton().exists()).toBe(true);
+      await resetButton().trigger('click');
+      expect(resetButton().exists()).toBe(false);
+    }
     resetColumnWidths();
     wrapper.unmount();
   });

@@ -4,6 +4,7 @@ import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { CustomerReqItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   columnFilter,
@@ -72,7 +73,7 @@ const hasActiveFilters = computed(
     typeFilters.value.length > 0 ||
     sourceFilters.value.length > 0,
 );
-const columns = computed(() => {
+const baseColumns = computed(() => {
   const cols: TableColumnType<CustomerReqItem>[] = [
     // 136/108：最长字典值「02 两片检测标准」实测 113px、「04 产品迭代」84px，
     // 加上单元格左右内边距和表头漏斗才不会折成两行把行高撑乱。
@@ -113,6 +114,10 @@ const columns = computed(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'customer-req',
+  () => baseColumns.value,
+);
 const customRow = computed(() =>
   rowClick<CustomerReqItem>((row) => {
     if (writable.value) editItem(row);
@@ -209,6 +214,7 @@ function onTableChange(
       :locale="{
         emptyText: hasActiveFilters ? '没有匹配的要求记录' : '暂无要求记录',
       }"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <template #bodyCell="{ column, record, text }">

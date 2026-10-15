@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 
 import type { TimelineItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 
 /** 一条客户反馈的改善对策历史（只读）；置空即关闭 */
 const item = defineModel<TimelineItem | undefined>({ required: true });
@@ -21,6 +22,10 @@ const HISTORY_COLUMNS = [
   { key: 'date', title: '反馈时间', width: 112, align: 'center' as const },
   { key: 'status', title: '状态', width: 88, align: 'center' as const },
 ];
+const { columns, onResizeColumn } = useResizableColumns(
+  'feedback-history',
+  () => HISTORY_COLUMNS,
+);
 // 新的在前；同一天可能有内容相同的多条记录，用序号作 row-key
 const rows = computed(() =>
   [...(shown.value?.measureHistory ?? [])]
@@ -46,12 +51,13 @@ const rows = computed(() =>
       </a-descriptions>
       <a-table
         class="feedback-history__table"
-        :columns="HISTORY_COLUMNS"
+        :columns="columns"
         :data-source="rows"
         row-key="rowKey"
         :pagination="false"
         size="small"
         :locale="{ emptyText: '暂无改善对策历史' }"
+        @resize-column="onResizeColumn"
       >
         <template #bodyCell="{ column, record: entry }">
           <a-typography-text

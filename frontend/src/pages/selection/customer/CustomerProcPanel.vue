@@ -4,6 +4,7 @@ import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { CustomerProcItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -55,7 +56,7 @@ const filtered = computed(() => {
 const hasActiveFilters = computed(
   () => Boolean(query.value.trim()) || typeFilters.value.length > 0,
 );
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     // 128：标题、漏斗和最长字典值（约 80px）放在一行里。
     {
@@ -90,6 +91,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'customer-proc',
+  () => baseColumns.value,
+);
 
 watch(
   () => props.entityName,
@@ -174,6 +179,7 @@ function onTableChange(
             : '暂无注意事项',
       }"
       :custom-row="writable ? rowClick(editItem) : undefined"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

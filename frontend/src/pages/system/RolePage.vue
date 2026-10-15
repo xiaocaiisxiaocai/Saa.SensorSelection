@@ -5,6 +5,7 @@ import { Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 import { api, ApiError, type PermissionInfo, type RbacRole } from '@/api';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -24,7 +25,7 @@ const roles = ref<RbacRole[]>([]);
 const permissions = ref<PermissionInfo[]>([]);
 const formDialog = ref<InstanceType<typeof RoleFormDialog>>();
 
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
       key: 'code',
@@ -55,6 +56,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'roles',
+  () => baseColumns.value,
+);
 
 onMounted(loadData);
 
@@ -142,6 +147,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无角色' }"
       :custom-row="rowClick(activateRole)"
+      @resize-column="onResizeColumn"
       @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

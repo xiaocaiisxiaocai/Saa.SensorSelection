@@ -21,6 +21,7 @@ import {
   type SensorFileItem,
   type SensorItem,
 } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { readWorkbook } from '@/pages/shared/excel';
 import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
@@ -227,7 +228,7 @@ const rowClassName = computed(() => {
     return classes.join(' ');
   };
 });
-const columns = computed(() =>
+const baseColumns = computed(() =>
   sensorColumns({
     showDisabledDetails: showDisabledDetails.value,
     hidden: hiddenColumns.value,
@@ -258,6 +259,10 @@ const columns = computed(() =>
     }
     return column;
   }),
+);
+const { columns, onResizeColumn } = useResizableColumns(
+  'sensor-models',
+  () => baseColumns.value,
 );
 
 watch([query, sensorTypes, statuses, pageSize], () => {
@@ -476,6 +481,7 @@ function openReplace(row: SensorTableRow) {
       :locale="{ emptyText: '没有符合当前条件的型号' }"
       :custom-row="customRow"
       :row-class-name="rowClassName"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

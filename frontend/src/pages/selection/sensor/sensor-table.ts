@@ -49,13 +49,13 @@ export function sensorColumns(options: {
       key: 'partNumber',
       dataIndex: field('partNumber'),
       title: '料号',
-      width: 120,
+      width: 112,
     },
     {
       key: 'sensorType',
       dataIndex: field('sensorType'),
       title: '感应器类型',
-      width: 128,
+      width: 120,
     },
     {
       key: 'brand',
@@ -67,7 +67,7 @@ export function sensorColumns(options: {
       key: 'model',
       dataIndex: field('model'),
       title: '型号',
-      width: 128,
+      width: 120,
     },
     ...(options.showDisabledDetails
       ? [
@@ -85,20 +85,21 @@ export function sensorColumns(options: {
           },
         ]
       : []),
-    // 全部列加起来要在 1920 宽屏里放得下，不出横向滚动（操作列固定在右侧会盖住最后一列）。
+    // 全部列加起来要在 1920 宽屏里放得下，不出横向滚动（操作列固定在右侧会盖住最后一列）：
+    // 1920 下表格可用宽度约 1650px（扣掉侧栏、内边距和纵向滚动条），列宽合计留出余量。
     // 替换关系/关联型录/关联 3D 内容都很短（多数是「—」或一个文件名），给窄宽度；
     // 宽度留给规格参数/特性与注意/适用场景：这三列完整显示不截断，
     // 列越宽折行越少，紧凑主题下行高才压得下来。
     // 替换关系 / 关联型录 / 关联 3D 由面板按 item 自行渲染，没有对应的 item 字段。
     { key: 'relation', dataIndex: 'relation', title: '替换关系', width: 96 },
-    { key: 'spec', dataIndex: field('spec'), title: '规格参数', width: 220 },
+    { key: 'spec', dataIndex: field('spec'), title: '规格参数', width: 200 },
     {
       key: 'feature',
       dataIndex: field('feature'),
       title: '特性与注意',
-      width: 260,
+      width: 240,
     },
-    { key: 'scene', dataIndex: field('scene'), title: '适用场景', width: 200 },
+    { key: 'scene', dataIndex: field('scene'), title: '适用场景', width: 180 },
     { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 96, ...shared },
     {
       key: 'model3d',

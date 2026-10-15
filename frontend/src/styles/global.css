@@ -75,3 +75,12 @@ body.is-resizing-pane {
   cursor: col-resize;
   user-select: none;
 }
+
+/*
+ * 表格列宽拖拽手柄：antd 把 16px 的手柄一半伸进下一列（right: -8px），
+ * 但表头单元格是 sticky + z-index（各自成层），后一列会盖住这一半。
+ * 收回到本列右边缘以内，整个手柄都能抓到。
+ */
+.ant-table-wrapper .ant-table-resize-handle {
+  right: 0;
+}

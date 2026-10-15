@@ -2,6 +2,7 @@
 import type { TableColumnType } from 'ant-design-vue';
 import { ref } from 'vue';
 
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { useTablePagination } from '@/pages/shared/table';
 
 export interface ImportResultCategory {
@@ -40,10 +41,14 @@ const { pagination, onChange } = useTablePagination(
   [revision],
 );
 
-const columns: TableColumnType<ImportResultSkip & { key: number }>[] = [
+const baseColumns: TableColumnType<ImportResultSkip & { key: number }>[] = [
   { dataIndex: 'location', key: 'location', title: '位置', width: 220 },
   { dataIndex: 'reason', key: 'reason', title: '原因' },
 ];
+const { columns, onResizeColumn } = useResizableColumns(
+  'import-result',
+  () => baseColumns,
+);
 
 function categoryLine(item: ImportResultCategory) {
   const kept =
@@ -100,6 +105,7 @@ defineExpose({ open });
         row-key="key"
         :pagination="pagination"
         :scroll="{ x: 'max-content' }"
+        @resize-column="onResizeColumn"
         @change="onChange"
       />
     </div>

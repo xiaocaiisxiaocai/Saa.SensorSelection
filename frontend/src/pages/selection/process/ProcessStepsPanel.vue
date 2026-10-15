@@ -4,6 +4,7 @@ import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { ProcessStepItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -61,7 +62,7 @@ const tableData = computed(() => {
   return filteredItems.value.slice(start, start + pageSize.value);
 });
 
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
       key: 'layer',
@@ -97,6 +98,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'process-steps',
+  () => baseColumns.value,
+);
 
 watch([query, layerFilters, pageSize], () => {
   page.value = 1;
@@ -181,6 +186,7 @@ async function deleteItem(item: ProcessStepItem) {
             : '暂无工艺制程',
       }"
       :custom-row="writable ? rowClick(editItem) : undefined"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

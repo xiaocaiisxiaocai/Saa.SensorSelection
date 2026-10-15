@@ -5,6 +5,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 import { api, ApiError, type OrgUnitNode } from '@/api';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -42,7 +43,7 @@ const tableRows = computed(() =>
     }),
   ),
 );
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
       key: 'name',
@@ -74,6 +75,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'org-units',
+  () => baseColumns.value,
+);
 
 onMounted(loadData);
 
@@ -144,6 +149,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无组织' }"
       :custom-row="rowClick(activateOrg)"
+      @resize-column="onResizeColumn"
       @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

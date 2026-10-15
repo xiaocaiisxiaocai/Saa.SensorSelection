@@ -4,6 +4,7 @@ import { History, Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { TimelineItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -76,7 +77,7 @@ const hasActiveFilters = computed(
     typeFilters.value.length > 0 ||
     statusFilters.value.length > 0,
 );
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     // 168：最长字典值「02 两片检测品质异常」实测 143px + 左右内边距 16px。
     {
@@ -117,6 +118,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'customer-feedback',
+  () => baseColumns.value,
+);
 
 watch(
   () => props.entityName,
@@ -223,6 +228,7 @@ function onTableChange(
             : '暂无反馈记录',
       }"
       :custom-row="rowClick(activateRow)"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

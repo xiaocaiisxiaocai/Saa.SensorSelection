@@ -6,6 +6,10 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/api';
+import {
+  resetColumnWidths,
+  useResizableColumns,
+} from '@/pages/shared/column-widths';
 import { useAuthStore } from '@/stores/auth';
 import UserMenu from './UserMenu.vue';
 
@@ -112,6 +116,26 @@ describe('UserMenu', () => {
       expect(wrapper.text()).toContain('登录');
     });
     expect(getStore).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('gives guests a reset-column-widths button once they have resized a column', async () => {
+    vi.spyOn(api, 'getStore').mockResolvedValue({});
+    const wrapper = await mountMenu();
+    useAuthStore().logout();
+    await nextTick();
+    const resetButton = () => wrapper.find('button[aria-label="恢复默认列宽"]');
+    expect(resetButton().exists()).toBe(false);
+
+    useResizableColumns('guest-table', () => [
+      { key: 'name', title: '名称', width: 120 },
+    ]).onResizeColumn(200, { key: 'name' });
+    await nextTick();
+    expect(resetButton().exists()).toBe(true);
+
+    await resetButton().trigger('click');
+    expect(resetButton().exists()).toBe(false);
+    resetColumnWidths();
     wrapper.unmount();
   });
 });

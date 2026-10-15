@@ -218,14 +218,15 @@ describe('SensorPage', () => {
 
     const width = (key: string) =>
       columns.find((column) => column.key === key)?.width ?? 0;
-    expect(width('spec')).toBe(220);
-    expect(width('feature')).toBe(260);
-    expect(width('scene')).toBe(200);
+    expect(width('spec')).toBe(200);
+    expect(width('feature')).toBe(240);
+    expect(width('scene')).toBe(180);
     expect(width('actions')).toBe(120);
-    // 1920 宽屏（减去 200 侧栏与页面内边距后约 1664px）放得下全部列，不出横向滚动
+    // 1920 宽屏下表格可用约 1650px（扣掉侧栏、内边距和纵向滚动条），
+    // 列宽合计要留出余量，否则会出横向滚动
     expect(
       columns.reduce((sum, column) => sum + (column.width ?? 0), 0),
-    ).toBeLessThanOrEqual(1664);
+    ).toBeLessThanOrEqual(1600);
     // 长描述列完整显示不截断，宽度要从内容很短的列里匀过来
     for (const short of ['relation', 'sop', 'model3d']) {
       expect(width(short)).toBeLessThan(width('scene'));

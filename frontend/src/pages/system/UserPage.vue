@@ -12,6 +12,7 @@ import {
   type RbacUser,
 } from '@/api';
 import { formatLocalDateTime } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -36,7 +37,7 @@ const query = ref('');
 const formDialog = ref<InstanceType<typeof UserFormDialog>>();
 const passwordDialog = ref<InstanceType<typeof UserPasswordDialog>>();
 
-const columns = computed<TableColumnType[]>(() => {
+const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
       key: 'username',
@@ -66,6 +67,10 @@ const columns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'users',
+  () => baseColumns.value,
+);
 
 onMounted(loadData);
 
@@ -199,6 +204,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: query.trim() ? '没有匹配的用户' : '暂无用户' }"
       :custom-row="writable ? rowClick(openEdit) : undefined"
+      @resize-column="onResizeColumn"
       @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">

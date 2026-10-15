@@ -8,6 +8,7 @@ import { Download, Pencil, Trash2, Upload } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import {
   buildExcelWorkbook,
@@ -70,7 +71,7 @@ const visibleItems = computed(() =>
     ? items.value
     : items.value.filter((item) => nameFilters.value.includes(item.name)),
 );
-const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
+const baseColumns = computed<TableColumnType<DictionaryItem>[]>(() => {
   const cols: TableColumnType<DictionaryItem>[] = [
     {
       key: 'sort',
@@ -99,6 +100,10 @@ const columns = computed<TableColumnType<DictionaryItem>[]>(() => {
   }
   return cols;
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  'dictionary',
+  () => baseColumns.value,
+);
 const customRow = computed(() =>
   rowClick<DictionaryItem>((row) => {
     if (writable.value) editItem(row);
@@ -312,6 +317,7 @@ function onTableChange(
         :locale="{
           emptyText: nameFilters.length ? '没有匹配的字典项' : '暂无字典项',
         }"
+        @resize-column="onResizeColumn"
         @change="onTableChange"
       >
         <template #bodyCell="{ column, record }">

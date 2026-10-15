@@ -15,6 +15,7 @@ import {
 
 import { api, ApiError, type AuditOperationItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import {
   columnFilter,
   columnFilterValues,
@@ -104,7 +105,7 @@ const hasActiveFilters = computed(
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
-const columns = computed<TableColumnType[]>(() => [
+const baseColumns = computed<TableColumnType[]>(() => [
   // 完整时间戳实测要 140px 文字宽 + 内边距；精确到秒在审计里是有意义的
   {
     key: 'timestamp',
@@ -151,6 +152,10 @@ const columns = computed<TableColumnType[]>(() => [
     }),
   },
 ]);
+const { columns, onResizeColumn } = useResizableColumns(
+  'audit-log',
+  () => baseColumns.value,
+);
 
 function onTableChange(
   _pagination: unknown,
@@ -353,6 +358,7 @@ async function resetFilters() {
       :locale="{ emptyText: '暂无日志' }"
       :custom-row="rowClick(openDetail)"
       :row-expandable="rowExpandable"
+      @resize-column="onResizeColumn"
       @change="onTableChange"
     >
       <!-- 「时间」列的表头筛选：日期范围；选完即筛并收起 -->

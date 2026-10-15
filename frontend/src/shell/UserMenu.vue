@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { message } from 'ant-design-vue';
-import { ChevronDown, KeyRound, LogOut } from 'lucide-vue-next';
+import { ChevronDown, Columns3, KeyRound, LogOut } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { api } from '@/api';
+import {
+  hasCustomColumnWidths,
+  resetColumnWidths,
+} from '@/pages/shared/column-widths';
 import { fieldError } from '@/pages/shared/form';
 import { useAuthStore } from '@/stores/auth';
 
@@ -19,6 +23,15 @@ const form = reactive({
   currentPassword: '',
   newPassword: '',
 });
+
+// 访客没有用户菜单：拖过列宽后在「登录」旁边给一个恢复入口
+const guestCanResetWidths = computed(() => hasCustomColumnWidths());
+
+function resetWidths() {
+  // 拖过的表格列宽只记在本机浏览器，这里一次全部恢复
+  resetColumnWidths();
+  message.success('已恢复所有表格的默认列宽');
+}
 
 const avatarText = computed(() => auth.displayName.trim().slice(0, 1) || '?');
 
@@ -78,6 +91,10 @@ async function onMenuClick({ key: id }: { key: string | number }) {
     openPassword();
     return;
   }
+  if (id === 'column-widths') {
+    resetWidths();
+    return;
+  }
   if (id !== 'logout') return;
   auth.logout();
   await router.replace('/selection/customer');
@@ -107,6 +124,10 @@ async function onMenuClick({ key: id }: { key: string | number }) {
           <template #icon><KeyRound :size="14" /></template>
           修改密码
         </a-menu-item>
+        <a-menu-item key="column-widths">
+          <template #icon><Columns3 :size="14" /></template>
+          恢复默认列宽
+        </a-menu-item>
         <a-menu-item key="logout" danger>
           <template #icon><LogOut :size="14" /></template>
           退出登录
@@ -114,7 +135,14 @@ async function onMenuClick({ key: id }: { key: string | number }) {
       </a-menu>
     </template>
   </a-dropdown>
-  <a-button v-else type="primary" @click="goLogin">登录</a-button>
+  <a-space v-else :size="4">
+    <a-tooltip v-if="guestCanResetWidths" title="恢复默认列宽">
+      <a-button type="text" aria-label="恢复默认列宽" @click="resetWidths">
+        <template #icon><Columns3 :size="16" /></template>
+      </a-button>
+    </a-tooltip>
+    <a-button type="primary" @click="goLogin">登录</a-button>
+  </a-space>
   <a-modal
     :open="passwordOpen"
     title="修改密码"

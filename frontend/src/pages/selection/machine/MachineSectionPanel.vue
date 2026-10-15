@@ -8,6 +8,7 @@ import type {
   MachineSectionRow,
   SaveResult,
 } from '@/domain';
+import { useResizableColumns } from '@/pages/shared/column-widths';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   PAGINATION_PROPS,
@@ -134,7 +135,7 @@ const tableData = computed(() => {
     boardCharacteristicItems.value,
   );
 });
-const columns = computed(() => {
+const baseColumns = computed(() => {
   const base = sectionColumns({
     structure: isStructure.value,
     writable: writable.value,
@@ -184,6 +185,11 @@ const columns = computed(() => {
     return column;
   });
 });
+const { columns, onResizeColumn } = useResizableColumns(
+  () =>
+    isStructure.value ? 'machine-section:structure' : 'machine-section:notes',
+  () => baseColumns.value,
+);
 
 watch(
   () => [props.section.id, props.machineName] as const,
@@ -376,6 +382,7 @@ const customRow = computed(() =>
           (row: MachineTableRow) =>
             row.displayId === selectedTableRow ? 'ant-table-row-selected' : ''
         "
+        @resize-column="onResizeColumn"
         @change="onTableChange"
       >
         <template #emptyText>

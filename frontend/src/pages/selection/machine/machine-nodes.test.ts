@@ -7,6 +7,7 @@ import {
   nodeFromQuery,
   nodeHasChildren,
   nodeLabel,
+  nodePathLabel,
   nodeTreeKey,
   machineTreeSelection,
   pagesOf,
@@ -103,6 +104,9 @@ describe('machine-nodes', () => {
     expect([...lockedBranchKeys([tab])]).toEqual([nodeTreeKey(empty)]);
     expect(nodeLabel(machine)).toBe('01 单段输送段（搭配）');
     expect(nodeLabel(empty)).toBe('空配置');
+    expect(nodePathLabel(machine)).toBe(
+      '输送机构 / SFC输送段配置 / 01 单段输送段（搭配）',
+    );
   });
 
   it('lets every tree node be checked, empty machines included', () => {

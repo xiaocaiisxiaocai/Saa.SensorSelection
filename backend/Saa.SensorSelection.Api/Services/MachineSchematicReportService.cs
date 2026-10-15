@@ -16,6 +16,8 @@ public sealed class MachineSchematicReportService
     private const int MaxBlocksPerSection = 50;
     private const int MaxRowsPerBlock = 500;
     private const int MaxTextLength = 2000;
+    // 机型名是完整的选单路径（分类 / 配置 / 机型 / 二级 Tab，每级最多 40 字）
+    private const int MaxMachineNameLength = 200;
     private const int MaxImageDataLength = 3_000_000;
 
     public ReportBuildResult Build(MachineSchematicReportRequest? request)
@@ -35,9 +37,9 @@ public sealed class MachineSchematicReportService
         foreach (var machineName in machineNames)
         {
             var normalized = Normalize(machineName, MaxTextLength);
-            if (normalized.Length == 0 || normalized.Length > 80)
+            if (normalized.Length == 0 || normalized.Length > MaxMachineNameLength)
             {
-                return ReportBuildResult.Validation("机型名称不能为空且不能超过 80 个字符");
+                return ReportBuildResult.Validation($"机型名称不能为空且不能超过 {MaxMachineNameLength} 个字符");
             }
 
             if (!machineSet.Add(normalized))
@@ -75,7 +77,7 @@ public sealed class MachineSchematicReportService
             var normalizedBlocks = new List<NormalizedBlock>(blocks.Count);
             foreach (var block in blocks)
             {
-                var machineName = Normalize(block.MachineName, 80);
+                var machineName = Normalize(block.MachineName, MaxMachineNameLength);
                 if (machineName.Length == 0 || !machineSet.Contains(machineName))
                 {
                     return ReportBuildResult.Validation($"结构模块「{displayName}」包含未选择的机型");

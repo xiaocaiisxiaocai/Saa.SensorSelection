@@ -23,6 +23,12 @@ export const sameNode = (left: MachineNodeRef, right: MachineNodeRef) =>
 export const nodeLabel = (node: MachineNodeRef) =>
   node.item ?? node.configuration ?? node.category;
 
+/** 节点完整路径：分类 / 配置 / 机型（和页面顶部的路径一致），报告里用它区分不同配置下的机型 */
+export const nodePathLabel = (node: MachineNodeRef) =>
+  [node.category, node.configuration, node.item]
+    .filter((part): part is string => Boolean(part))
+    .join(' / ');
+
 /** 节点在目录树里的 key（和 EntityTree 的节点 key 一致） */
 export function nodeTreeKey(node: MachineNodeRef): string {
   if (node.item) {

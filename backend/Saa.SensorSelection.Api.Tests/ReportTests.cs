@@ -191,6 +191,42 @@ public class ReportTests
     }
 
     [Fact]
+    public async Task MachineSchematicReport_AcceptsFullMenuPathsAsMachineNames()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+
+        // 机型名是完整选单路径：分类 / 配置 / 机型 / 二级 Tab，每级最多 40 字
+        var level = new string('长', 40);
+        var fullPath = $"{level} / {level} / {level} / {level}";
+        object Request(string name) => new
+        {
+            machineNames = new[] { name },
+            sections = new[]
+            {
+                new
+                {
+                    id = 1,
+                    name = "输送机构",
+                    displayName = "输送机构",
+                    sort = 1,
+                    kind = "structure",
+                    blocks = new[] { new { machineName = name, rows = Array.Empty<object>() } },
+                },
+            },
+        };
+
+        var ok = await client.PostAsJsonAsync("/api/reports/machine-schematic", Request(fullPath));
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        Assert.Contains(fullPath, await ok.Content.ReadAsStringAsync());
+
+        var tooLong = await client.PostAsJsonAsync(
+            "/api/reports/machine-schematic",
+            Request(new string('长', 201)));
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+    }
+
+    [Fact]
     public async Task MachineSchematicReport_RejectsUnselectedMachineAndEscapesMarkup()
     {
         await using var factory = new ApiFactory();

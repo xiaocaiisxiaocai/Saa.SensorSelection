@@ -1,7 +1,7 @@
 import { MACHINE_TAB_PAGE_OWNER, type MachineReportSection } from '@/domain';
 import type { useSelectionStore } from '@/stores/selection';
 
-import { nodeLabel } from './machine-nodes';
+import { nodePathLabel } from './machine-nodes';
 
 type SelectionStore = ReturnType<typeof useSelectionStore>;
 
@@ -21,11 +21,11 @@ export function buildReportSections(
       .map((page) => {
         const rows = store.machineSectionRows(page.id, MACHINE_TAB_PAGE_OWNER);
         return {
-          // 报告里写明是哪个选单节点下的二级 Tab
-          // 机型的直属表格没有二级 Tab 名，标题只写机型名
+          // 报告里写明完整的选单路径（分类 / 配置 / 机型），再加二级 Tab 名；
+          // 机型的直属表格没有二级 Tab 名，标题只写路径
           machineName: page.direct
-            ? nodeLabel(page.node)
-            : `${nodeLabel(page.node)} / ${page.name}`,
+            ? nodePathLabel(page.node)
+            : `${nodePathLabel(page.node)} / ${page.name}`,
           rows: rows.map((row) => {
             const processStep = store.processSteps.find(
               (item) => item.id === row.processStepId,

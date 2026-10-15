@@ -84,6 +84,10 @@ function mountPage(
   kinds: string[] = ['auth.login', 'file.upload', '上传文件', '删除机型'],
 ) {
   vi.spyOn(api, 'listAuditOperationKinds').mockResolvedValue(kinds);
+  vi.spyOn(api, 'listAuditOperationUsers').mockResolvedValue([
+    { displayName: '管理员', username: 'admin' },
+    { displayName: null, username: 'ghost' },
+  ]);
   return mount(AuditLogPage, {
     attachTo: document.body,
     global: { plugins: [createPinia()] },
@@ -253,15 +257,18 @@ describe('AuditLogPage', () => {
       expect(findColumn(wrapper, '操作').column.filters).toHaveLength(3),
     );
     await chooseColumnFilter(wrapper, '操作', ['上传文件', '删除机型']);
-    await wrapper.get('.audit-toolbar input[type="checkbox"]').setValue(true);
+    await vi.waitFor(() =>
+      expect(findColumn(wrapper, '用户').column.filters).toHaveLength(2),
+    );
+    await chooseColumnFilter(wrapper, '用户', ['admin']);
     await vi.waitFor(() =>
       expect(list).toHaveBeenLastCalledWith(
         expect.objectContaining({
           // 「上传文件」既是 file.upload 的中文名，也是带名称的操作类型：两者都查
           kinds: ['删除机型', 'file.upload', '上传文件'],
-          hideLogin: true,
           keyword: '鹏鼎',
           page: 1,
+          users: ['admin'],
         }),
       ),
     );
@@ -273,17 +280,18 @@ describe('AuditLogPage', () => {
     await vi.waitFor(() =>
       expect(list).toHaveBeenLastCalledWith({
         from: undefined,
-        hideLogin: false,
         keyword: undefined,
         kinds: [],
         page: 1,
         pageSize: 20,
         result: undefined,
         to: undefined,
+        users: [],
       }),
     );
     expect(findColumn(wrapper, '操作').column.filteredValue).toBeNull();
     expect(findColumn(wrapper, '结果').column.filteredValue).toBeNull();
+    expect(findColumn(wrapper, '用户').column.filteredValue).toBeNull();
     wrapper.unmount();
   });
 
@@ -318,13 +326,21 @@ describe('AuditLogPage', () => {
     wrapper.unmount();
   });
 
-  it('keeps the date range at a fixed width on desktop and lets it fill narrow screens', () => {
-    expect(auditCss).toMatch(
-      /^\.audit-toolbar__date\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*16rem;/m,
+  it('filters users in the header, puts the date range in the time header, and has no hide-login toggle', () => {
+    vi.spyOn(api, 'listAuditOperations').mockResolvedValue(page([]));
+    const wrapper = mountPage();
+    const user = findColumn(wrapper, '用户').column;
+    expect(user.filterMultiple).toBe(true);
+    expect(user.filterSearch).toBe(true);
+    const time = findColumn(wrapper, '时间').column;
+    expect(time.customFilterDropdown).toBe(true);
+    expect(time.filteredValue).toBeNull();
+    expect(wrapper.find('.audit-toolbar .ant-picker').exists()).toBe(false);
+    expect(wrapper.find('.audit-toolbar input[type="checkbox"]').exists()).toBe(
+      false,
     );
-    expect(auditCss).toMatch(
-      /@media \(width <= 60rem\)[\s\S]*\.audit-toolbar__date\s*\{[^}]*flex:\s*1 1 16rem;/s,
-    );
+    expect(auditCss).toMatch(/\.audit-date-filter\s*\{/);
+    wrapper.unmount();
   });
 
   it('has a Chinese label for every audit action the backend can write', () => {

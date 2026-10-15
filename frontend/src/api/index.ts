@@ -183,17 +183,24 @@ export interface AuditOperationPage {
   total: number;
 }
 
+/** 日志里出现过的操作用户；显示名取当前用户资料，用户已删除时为 null */
+export interface AuditLogUser {
+  displayName: null | string;
+  username: string;
+}
+
 export interface AuditOperationQuery {
   actions?: string[];
   /** 操作类型（如「删除机型」）；没有操作名称的日志按操作码匹配 */
   kinds?: string[];
   from?: string;
-  hideLogin?: boolean;
   keyword?: string;
   page?: number;
   pageSize?: number;
   result?: boolean;
   to?: string;
+  /** 操作用户的用户名，多选 */
+  users?: string[];
 }
 
 export function getStoredToken(): null | string {
@@ -543,6 +550,10 @@ export const api = {
     return request<string[]>('/audit-logs/operations/kinds');
   },
 
+  listAuditOperationUsers(): Promise<AuditLogUser[]> {
+    return request<AuditLogUser[]>('/audit-logs/operations/users');
+  },
+
   /** 按操作分页查询日志：同一次界面操作的多条日志归成一组 */
   listAuditOperations(
     params: AuditOperationQuery = {},
@@ -558,7 +569,7 @@ export const api = {
     if (params.result !== undefined) query.set('result', String(params.result));
     if (params.from) query.set('from', params.from);
     if (params.to) query.set('to', params.to);
-    if (params.hideLogin) query.set('hideLogin', 'true');
+    for (const user of params.users ?? []) query.append('user', user);
     const qs = query.toString();
     return request<AuditOperationPage>(
       `/audit-logs/operations${qs ? `?${qs}` : ''}`,

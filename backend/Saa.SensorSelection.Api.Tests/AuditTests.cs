@@ -379,6 +379,28 @@ public class AuditTests
     }
 
     [Fact]
+    public async Task Operations_FilterByUser_ListsLoggedUsersAndKeepsOnlyTheirOperations()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        (await admin.SendAsync(StoreWrite("customer-req:用户客户", """[{"id":1}]""", "op-user-0001", "保存用户客户"))).EnsureSuccessStatusCode();
+
+        var users = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations/users");
+        var adminUser = Assert.Single(
+            users.EnumerateArray(),
+            user => user.GetProperty("username").GetString() == "admin");
+        Assert.Equal("管理员", adminUser.GetProperty("displayName").GetString());
+
+        var mine = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?user=admin");
+        Assert.True(mine.GetProperty("total").GetInt32() > 0);
+        Assert.All(mine.GetProperty("items").EnumerateArray(), item =>
+            Assert.Equal("admin", item.GetProperty("username").GetString()));
+
+        var nobody = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs/operations?user=no-such-user");
+        Assert.Equal(0, nobody.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
     public async Task Operations_FilterByResult_TreatsAnOperationAsSuccessfulOnlyWhenEveryWriteSucceeded()
     {
         await using var factory = new ApiFactory();

@@ -49,7 +49,7 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
     /// 按操作分页查询：同一次界面操作产生的多条日志归成一组（最新的在前）。
     /// 筛选：keyword（用户名 / 显示名 / 操作名称 / 目标 / 详情 / 变更明细，包含匹配）、
     /// action（可重复，多选操作码）、kind（可重复，多选操作类型；没有操作名称的日志按操作码匹配）、
-    /// result（true/false）、from/to（UTC，ISO 8601）、hideLogin（隐藏登录）。
+    /// user（可重复，多选操作用户的用户名）、result（true/false）、from/to（UTC，ISO 8601）、hideLogin（隐藏登录）。
     /// </summary>
     [HttpGet("operations")]
     [ProducesResponseType(typeof(AuditOperationPage), StatusCodes.Status200OK)]
@@ -63,6 +63,7 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
         [FromQuery] DateTimeOffset? to = null,
         [FromQuery] bool hideLogin = false,
         [FromQuery(Name = "kind")] string[]? kinds = null,
+        [FromQuery(Name = "user")] string[]? users = null,
         CancellationToken ct = default)
     {
         return Ok(await auditLogs.QueryOperationsAsync(
@@ -75,7 +76,16 @@ public class AuditLogsController(AuditLogService auditLogs) : ControllerBase
             to,
             hideLogin,
             kinds,
+            users,
             ct));
+    }
+
+    /// <summary>日志里出现过的操作用户（用户名 + 当前显示名），供「用户」筛选。</summary>
+    [HttpGet("operations/users")]
+    [ProducesResponseType(typeof(IReadOnlyList<AuditLogUser>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> OperationUsers(CancellationToken ct)
+    {
+        return Ok(await auditLogs.ListOperationUsersAsync(ct));
     }
 
     /// <summary>日志里出现过的操作类型（如「删除机型」；没有操作名称的是操作码），供「操作」筛选。</summary>

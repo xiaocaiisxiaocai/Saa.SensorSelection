@@ -1,16 +1,13 @@
-/* 沿用 .selection-toolbar 的 flex 布局；操作类型和结果在表头漏斗里。 */
+/* 沿用 .selection-toolbar 的 flex 布局；用户、操作、结果在表头漏斗里，日期在「时间」表头里。 */
 
-/* 日期范围只放两个 YYYY-MM-DD，定宽即可，不随工具栏拉长 */
-.audit-toolbar__date {
-  flex: 0 0 auto;
-  width: 16rem;
+/* 「时间」表头的日期范围筛选面板 */
+.audit-date-filter {
+  position: relative;
+  padding: var(--space-3);
 }
 
-@media (width <= 60rem) {
-  .audit-toolbar__date {
-    flex: 1 1 16rem;
-    width: auto;
-  }
+.audit-date-filter :deep(.ant-picker) {
+  width: 16rem;
 }
 
 .audit-text,

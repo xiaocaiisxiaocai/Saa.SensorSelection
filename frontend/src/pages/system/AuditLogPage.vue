@@ -60,6 +60,23 @@ function selectedKinds(): string[] {
     .filter((option) => filters.actions.includes(option.value))
     .flatMap((option) => option.kinds);
 }
+// 「用户」筛选：日志里出现过的用户，显示名和账号都列出来，按账号筛
+const userOptions = ref<{ label: string; value: string }[]>([]);
+
+async function loadUsers() {
+  try {
+    userOptions.value = (await api.listAuditOperationUsers()).map((user) => ({
+      label:
+        user.displayName && user.displayName !== user.username
+          ? `${user.displayName}（${user.username}）`
+          : user.username,
+      value: user.username,
+    }));
+  } catch {
+    // 选项加载失败不影响列表
+  }
+}
+
 const resultOptions = [
   { label: '成功', value: 'true' },
   { label: '失败', value: 'false' },
@@ -74,16 +91,16 @@ const selected = ref<AuditOperationItem | null>(null);
 const filters = reactive({
   actions: [] as string[],
   dateRange: null as [string, string] | null,
-  hideLogin: false,
   keyword: '',
   result: '' as string | null,
+  users: [] as string[],
 });
 const hasActiveFilters = computed(
   () =>
     Boolean(filters.keyword.trim()) ||
     filters.actions.length > 0 ||
     Boolean(filters.result) ||
-    filters.hideLogin ||
+    filters.users.length > 0 ||
     Boolean(filters.dateRange?.some(Boolean)),
 );
 
@@ -95,8 +112,20 @@ const columns = computed<TableColumnType[]>(() => [
     title: '时间',
     width: 168,
     fixed: 'left',
+    // 日期范围在表头里选（自定义筛选面板），选了日期漏斗高亮
+    customFilterDropdown: true,
+    filteredValue: filters.dateRange?.some(Boolean) ? ['range'] : null,
   },
-  { key: 'user', title: '用户', width: 112 },
+  {
+    key: 'user',
+    title: '用户',
+    width: 112,
+    ...columnFilter({
+      options: userOptions.value,
+      value: filters.users,
+      search: true,
+    }),
+  },
   {
     key: 'action',
     title: '操作',
@@ -131,6 +160,7 @@ function onTableChange(
 ) {
   if (!isColumnFilterChange(extra)) return;
   filters.actions = columnFilterValues(nextFilters, 'action').map(String);
+  filters.users = columnFilterValues(nextFilters, 'user').map(String);
   const result = columnFilterValues(nextFilters, 'result').map(String)[0] ?? '';
   filters.result = result === 'true' || result === 'false' ? result : '';
 }
@@ -139,6 +169,7 @@ watch([page, pageSize], loadData);
 
 onMounted(() => {
   void loadKinds();
+  void loadUsers();
   void loadData();
 });
 
@@ -150,7 +181,7 @@ watch(
     filters.keyword.trim(),
     filters.actions.join(','),
     filters.result,
-    filters.hideLogin,
+    filters.users.join(','),
     filters.dateRange?.[0] ?? null,
     filters.dateRange?.[1] ?? null,
   ],
@@ -198,6 +229,23 @@ function buildDatePicker() {
 }
 const datePicker = ref(buildDatePicker());
 
+// 日历弹层挂在筛选面板里面，点日历时表头筛选面板不会当成「点到外面」而收起
+const dateFilterPanel = ref<HTMLElement>();
+function dateFilterContainer(): HTMLElement {
+  return dateFilterPanel.value ?? document.body;
+}
+
+function onDateRangeChange(
+  value: unknown,
+  confirm: (options?: { closeDropdown?: boolean }) => void,
+) {
+  filters.dateRange =
+    Array.isArray(value) && value.length === 2
+      ? [String(value[0]), String(value[1])]
+      : null;
+  confirm({ closeDropdown: true });
+}
+
 function onDatePickerOpenChange(open: boolean) {
   if (open) datePicker.value = buildDatePicker();
 }
@@ -230,15 +278,18 @@ async function loadData() {
     const pageData = await api.listAuditOperations({
       kinds: selectedKinds(),
       from: toIsoStart(from),
-      hideLogin: filters.hideLogin,
       keyword: filters.keyword.trim() || undefined,
       page: page.value,
       pageSize: pageSize.value,
       result: resultFilter(),
       to: toIsoEnd(to),
+      users: filters.users,
     });
     if (seq !== loadSeq) return;
     items.value = pageData.items;
+    // 表头筛选选项之前没取到（如后端刚重启）时，借这次成功加载补取
+    if (kindOptions.value.length === 0) void loadKinds();
+    if (userOptions.value.length === 0) void loadUsers();
     total.value = pageData.total;
   } catch (error) {
     if (seq !== loadSeq) return;
@@ -260,7 +311,7 @@ async function resetFilters() {
   filters.keyword = '';
   filters.actions = [];
   filters.result = '';
-  filters.hideLogin = false;
+  filters.users = [];
   filters.dateRange = null;
   // 重置是明确的一次性操作，不必等防抖
   await nextTick();
@@ -282,17 +333,6 @@ async function resetFilters() {
       >
         <template #prefix><Search :size="14" /></template>
       </a-input>
-      <a-range-picker
-        v-model:value="filters.dateRange"
-        class="audit-toolbar__date"
-        value-format="YYYY-MM-DD"
-        :placeholder="['开始日期', '结束日期']"
-        :presets="datePicker.presets"
-        :default-picker-value="datePicker.defaultPickerValue"
-        :disabled-date="isFutureDate"
-        @open-change="onDatePickerOpenChange"
-      />
-      <a-checkbox v-model:checked="filters.hideLogin">隐藏登录</a-checkbox>
       <a-button
         type="text"
         :disabled="!hasActiveFilters"
@@ -315,6 +355,27 @@ async function resetFilters() {
       :row-expandable="rowExpandable"
       @change="onTableChange"
     >
+      <!-- 「时间」列的表头筛选：日期范围；选完即筛并收起 -->
+      <template #customFilterDropdown="{ column, confirm }">
+        <div
+          v-if="column.key === 'timestamp'"
+          ref="dateFilterPanel"
+          class="audit-date-filter"
+        >
+          <a-range-picker
+            :value="filters.dateRange"
+            value-format="YYYY-MM-DD"
+            :placeholder="['开始日期', '结束日期']"
+            :presets="datePicker.presets"
+            :default-picker-value="datePicker.defaultPickerValue"
+            :disabled-date="isFutureDate"
+            :get-popup-container="dateFilterContainer"
+            aria-label="按日期筛选"
+            @open-change="onDatePickerOpenChange"
+            @change="(value: unknown) => onDateRangeChange(value, confirm)"
+          />
+        </div>
+      </template>
       <template #bodyCell="{ column, record: row }">
         <template v-if="column.key === 'timestamp'">
           {{ formatLocalDateTime(new Date(row.timestamp)) }}

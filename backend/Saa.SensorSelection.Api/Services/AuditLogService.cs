@@ -53,6 +53,9 @@ public record AuditOperationItem(
 
 public record AuditOperationPage(IReadOnlyList<AuditOperationItem> Items, int Total);
 
+/// <summary>日志里出现过的操作用户；显示名取当前用户资料，用户已删除时为空。</summary>
+public record AuditLogUser(string Username, string? DisplayName);
+
 /// <summary>
 /// 操作日志写入与查询。
 /// 写入从当前请求自动取用户名/IP（匿名场景可显式传入），
@@ -395,6 +398,23 @@ public class AuditLogService(
             .ToListAsync(ct);
     }
 
+    /// <summary>日志里出现过的用户（匿名登录失败等没有用户名的不列），供日志页的「用户」筛选。</summary>
+    public async Task<IReadOnlyList<AuditLogUser>> ListOperationUsersAsync(CancellationToken ct = default)
+    {
+        var usernames = await db.AuditLogs.AsNoTracking()
+            .Where(log => log.Username != null && log.Username != "")
+            .Select(log => log.Username!)
+            .Distinct()
+            .ToListAsync(ct);
+        var displayNames = await db.Users.AsNoTracking()
+            .Where(user => usernames.Contains(user.Username))
+            .ToDictionaryAsync(user => user.Username, user => user.DisplayName, ct);
+        return usernames
+            .Order(StringComparer.Ordinal)
+            .Select(username => new AuditLogUser(username, displayNames.GetValueOrDefault(username)))
+            .ToArray();
+    }
+
     /// <summary>
     /// 按操作分页查询：先按条件筛出日志，再按操作编号归组（任一条命中，整组都显示），
     /// 按组里最新一条倒序。keyword 同时搜用户名、显示名、操作名称、目标、详情、失败原因和变更明细。
@@ -409,6 +429,7 @@ public class AuditLogService(
         DateTimeOffset? to = null,
         bool hideLogin = false,
         IReadOnlyCollection<string>? kinds = null,
+        IReadOnlyCollection<string>? users = null,
         CancellationToken ct = default)
     {
         page = Math.Max(1, page);
@@ -438,6 +459,10 @@ public class AuditLogService(
         {
             // 有操作名称的按操作类型，没有的（登录、直接调接口的写入）按操作码
             query = query.Where(log => kinds.Contains(log.OperationKind ?? log.Action));
+        }
+        if (users is { Count: > 0 })
+        {
+            query = query.Where(log => log.Username != null && users.Contains(log.Username));
         }
         if (hideLogin)
         {

@@ -52,6 +52,7 @@ export function findColumn(wrapper: AnyWrapper, title: string) {
       filters?: unknown;
       filterSearch?: unknown;
       filterMultiple?: unknown;
+      customFilterDropdown?: unknown;
       width?: unknown;
     }>;
     const column = columns.find((item) => String(item.title) === title);

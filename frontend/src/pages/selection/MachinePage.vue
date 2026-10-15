@@ -71,7 +71,6 @@ const checkedPageIds = ref<number[]>([]);
 /** 勾选的、还没有二级 Tab 的末级节点 key（有二级 Tab 的节点勾的是它的二级 Tab） */
 const checkedLeafKeys = ref<string[]>([]);
 /** 挑选报告内容时才显示勾选框（平时浏览不需要），在「报告」下拉里切换 */
-const selectingReport = ref(false);
 
 const groups = computed(() => store.entityGroups('machine'));
 const activeMachineType = computed<MachineCatalogKind>(() =>
@@ -133,7 +132,7 @@ const selectedCount = computed(() =>
   ),
 );
 const treeChecks = computed(() =>
-  auth.isAuthenticated && selectingReport.value
+  auth.isAuthenticated
     ? {
         ...treeCheckState(
           treeSelection.value,
@@ -338,7 +337,6 @@ watch(
   (isAuthenticated) => {
     if (!isAuthenticated) {
       clearChecks();
-      selectingReport.value = false;
     }
   },
 );
@@ -639,10 +637,8 @@ async function removeTab(tabId: number): Promise<boolean> {
                 :page-ids="checkedPageIds"
                 :selected-count="selectedCount"
                 :available-count="treeSelection.leafPages.size"
-                :selecting="selectingReport"
                 @select-all="selectAll"
                 @clear="clearChecks"
-                @toggle-selecting="selectingReport = !selectingReport"
               />
             </template>
           </a-tabs>
@@ -681,7 +677,7 @@ async function removeTab(tabId: number): Promise<boolean> {
               :node-name="nodeName"
               :active-page-id="activePage?.id ?? null"
               :writable="writable"
-              :checkable="auth.isAuthenticated && selectingReport"
+              :checkable="auth.isAuthenticated"
               :checked="checkedPages"
               @select="showTab(activeTab.id, $event)"
               @check="setChecked"

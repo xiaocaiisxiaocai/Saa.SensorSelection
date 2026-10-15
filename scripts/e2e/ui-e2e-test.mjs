@@ -1013,19 +1013,16 @@ async function runMachineCrud() {
     await cancelSheet()
   })
 
-  await check('Machine: the report menu shows tree checkboxes only while choosing machines', async () => {
+  await check('Machine: signed-in users always see tree checkboxes for the report', async () => {
+    await page.locator('.entity-tree .ant-tree-checkbox').first().waitFor({ state: 'visible', timeout: 8000 })
     const reportMenu = page.getByRole('button', { name: '报告操作', exact: true })
-    assertEqual(await page.locator('.entity-tree .ant-tree-checkbox').count(), 0, 'checkboxes shown before choosing')
     await reportMenu.click()
-    for (const label of ['选择机型', '全选', '清空']) {
+    for (const label of ['全选', '清空']) {
       await page.getByRole('menuitem', { name: label, exact: true }).waitFor({ state: 'visible', timeout: 8000 })
     }
-    await page.getByRole('menuitem', { name: '选择机型', exact: true }).click()
-    await page.locator('.entity-tree .ant-tree-checkbox').first().waitFor({ state: 'visible', timeout: 8000 })
-    await reportMenu.click()
-    await page.getByRole('menuitem', { name: '完成选择', exact: true }).click()
-    await page.waitForFunction(() => document.querySelectorAll('.entity-tree .ant-tree-checkbox').length === 0, null, { timeout: 8000 })
+    assertEqual(await page.getByRole('menuitem', { name: '选择机型', exact: true }).count(), 0, 'no separate choosing mode')
     // 下拉菜单有收起动画，等它完全消失再进下一项
+    await page.keyboard.press('Escape')
     await page.mouse.move(0, 0)
     await page.locator('.ant-dropdown:visible').first().waitFor({ state: 'hidden', timeout: 8000 })
   })

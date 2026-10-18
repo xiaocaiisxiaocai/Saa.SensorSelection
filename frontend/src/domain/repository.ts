@@ -609,11 +609,27 @@ export function createSelectionRepository({
       if (!Object.hasOwn(payload, 'problemNote')) {
         normalized.problemNote = previous.problemNote || '';
       }
+      normalized.usedAt =
+        isSensorStatus(status, 'current') &&
+        !isSensorStatus(previous.status, 'current')
+          ? formatLocalDate(new Date())
+          : previous.usedAt || '';
+      if (!Object.hasOwn(payload, 'disabledAt')) {
+        normalized.disabledAt = previous.disabledAt || '';
+      }
+      if (!Object.hasOwn(payload, 'actualCondition')) {
+        normalized.actualCondition = previous.actualCondition || '';
+      }
+      normalized.enteredAt = previous.enteredAt || '';
       if (!Object.hasOwn(payload, 'replacedAt')) {
         normalized.replacedAt = previous.replacedAt || '';
       }
       items.splice(index, 1, normalized);
     } else {
+      normalized.enteredAt = formatLocalDate(new Date());
+      normalized.usedAt = isSensorStatus(status, 'current')
+        ? normalized.enteredAt
+        : '';
       items.push(normalized);
     }
     syncMachineSensorSnapshots();
@@ -681,6 +697,7 @@ export function createSelectionRepository({
           status: currentStatus,
           replacesId: curId,
           problemNote: note,
+          usedAt: replacedAt,
           replacedAt,
           sopId: current.sopId != null ? current.sopId : alternate.sopId,
           model3dId:
@@ -700,6 +717,7 @@ export function createSelectionRepository({
           status: disabledStatus,
           replacedById: altId,
           problemNote: note,
+          disabledAt: replacedAt,
           replacedAt,
         },
       ],
@@ -2583,7 +2601,85 @@ export function createSelectionRepository({
     if (demoData && store[key].length === 0) {
       store[key] = createEntityGroupDefaults(kind);
     }
+    if (kind === 'machine') migrateMachinePagesToItems();
     return store[key] as EntityGroup[];
+  }
+
+  /** Promote legacy configuration pages to directory items while retaining their content IDs. */
+  function migrateMachinePagesToItems() {
+    const groups = store[entityGroupsKey('machine')] as EntityGroup[];
+    const key = machineTabsKey();
+    if (!Array.isArray(store[key])) return;
+    const tabs = normalizeMachineTabs(migrateLegacyTabMembers(store[key]));
+    const locations = new Map<
+      string,
+      { group: EntityGroup; items: string[] }
+    >();
+    for (const group of groups) {
+      for (const item of group.items) {
+        locations.set(item.toLocaleLowerCase('zh-CN'), {
+          group,
+          items: group.items,
+        });
+      }
+      for (const configuration of group.configurations ?? []) {
+        for (const item of configuration.items) {
+          locations.set(item.toLocaleLowerCase('zh-CN'), {
+            group,
+            items: configuration.items,
+          });
+        }
+      }
+    }
+
+    let changed = false;
+    for (const tab of tabs) {
+      for (const page of tab.pages) {
+        if (page.direct || page.node.item) continue;
+        const group = groups.find((item) => item.name === page.node.category);
+        if (!group || machineCatalogKind(group) !== tab.catalog) continue;
+        const configuration = page.node.configuration
+          ? group.configurations?.find(
+              (item) => item.name === page.node.configuration,
+            )
+          : undefined;
+        if (page.node.configuration && !configuration) continue;
+        const items = configuration?.items ?? group.items;
+        const targetNode = { ...page.node, item: page.name };
+        if (
+          tab.pages.some(
+            (candidate) =>
+              candidate !== page &&
+              candidate.direct &&
+              sameNode(candidate.node, targetNode),
+          )
+        ) {
+          continue;
+        }
+        const existing = locations.get(page.name.toLocaleLowerCase('zh-CN'));
+        if (
+          existing &&
+          (existing.group !== group || existing.items !== items)
+        ) {
+          continue;
+        }
+        if (!existing) {
+          items.push(page.name);
+          locations.set(page.name.toLocaleLowerCase('zh-CN'), { group, items });
+        }
+        page.node = targetNode;
+        page.direct = true;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      store[entityGroupsKey('machine')] = normalizeEntityGroups(
+        groups,
+        'machine',
+      );
+      store[key] = normalizeMachineTabs(tabs);
+    }
   }
 
   function entityDataKeys(kind: EntityKind, entityName: string): string[] {
@@ -3313,6 +3409,12 @@ export function createSelectionRepository({
     return {
       payload: {
         brand: read('brand', existing?.brand ?? ''),
+        actualCondition: read(
+          'actualCondition',
+          existing?.actualCondition ?? '',
+        ),
+        disabledAt: read('disabledAt', existing?.disabledAt ?? ''),
+        enteredAt: read('enteredAt', existing?.enteredAt ?? ''),
         feature: read('feature', existing?.feature ?? ''),
         model,
         partNumber: read('partNumber', existing?.partNumber ?? ''),
@@ -3320,6 +3422,7 @@ export function createSelectionRepository({
         sensorType,
         spec: read('spec', existing?.spec ?? ''),
         status,
+        usedAt: read('usedAt', existing?.usedAt ?? ''),
       },
     };
   }
@@ -3500,11 +3603,7 @@ export function createSelectionRepository({
         if (!key.startsWith('machine-section-rows:') || !Array.isArray(value)) {
           continue;
         }
-        if (
-          value.some(
-            (row) => isRecord(row) && row[rowField] === item.id,
-          )
-        ) {
+        if (value.some((row) => isRecord(row) && row[rowField] === item.id)) {
           return true;
         }
       }

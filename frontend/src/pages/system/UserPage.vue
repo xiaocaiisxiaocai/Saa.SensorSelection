@@ -12,7 +12,8 @@ import {
   type RbacUser,
 } from '@/api';
 import { formatLocalDateTime } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -23,6 +24,7 @@ import {
 import UserFormDialog from '@/pages/system/user/UserFormDialog.vue';
 import UserPasswordDialog from '@/pages/system/user/UserPasswordDialog.vue';
 import { useAccess, useAuthStore } from '@/stores/auth';
+import { AHighlightText } from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -67,10 +69,15 @@ const baseColumns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
-const { columns, onResizeColumn } = useResizableColumns(
-  'users',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('users', () => baseColumns.value);
 
 onMounted(loadData);
 
@@ -194,6 +201,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       >
         新增用户
       </a-button>
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
+        :hidden="hiddenColumns"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
+      />
     </div>
     <a-table
       :columns="columns"
@@ -211,11 +225,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-if="column.key === 'roles'">
           <a-space :size="[4, 4]" wrap>
             <a-tag v-for="role in row.roles" :key="role.id">
-              {{ role.name }}
+              <AHighlightText :text="role.name" :query="query" />
             </a-tag>
           </a-space>
         </template>
-        <template v-else-if="column.key === 'org'">{{ orgPath(row) }}</template>
+        <template v-else-if="column.key === 'org'">
+          <AHighlightText :text="orgPath(row)" :query="query" />
+        </template>
         <template v-else-if="column.key === 'status'">
           <a-tag :color="row.isActive ? 'green' : 'default'">
             {{ row.isActive ? '启用' : '停用' }}
@@ -262,7 +278,9 @@ const { pagination, onChange: onPageChange } = useTablePagination(
             </a-tooltip>
           </a-space>
         </template>
-        <template v-else>{{ cellText(value) }}</template>
+        <template v-else>
+          <AHighlightText :text="cellText(value)" :query="query" />
+        </template>
       </template>
     </a-table>
     <UserFormDialog

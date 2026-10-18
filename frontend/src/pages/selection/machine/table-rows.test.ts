@@ -33,6 +33,7 @@ const sensors: SensorItem[] = [
     brand: 'OMRON',
     model: 'E3Z-D61',
     spec: '检测距离 0~300mm',
+    actualCondition: '',
     feature: '',
     scene: '',
     sopId: null,
@@ -40,6 +41,9 @@ const sensors: SensorItem[] = [
     replacesId: null,
     replacedById: null,
     problemNote: '',
+    usedAt: '',
+    disabledAt: '',
+    enteredAt: '',
     replacedAt: '',
   },
   {
@@ -50,6 +54,7 @@ const sensors: SensorItem[] = [
     brand: 'OMRON',
     model: 'E3Z-T61',
     spec: '检测距离 0~10m',
+    actualCondition: '',
     feature: '',
     scene: '',
     sopId: null,
@@ -57,6 +62,9 @@ const sensors: SensorItem[] = [
     replacesId: null,
     replacedById: null,
     problemNote: '',
+    usedAt: '',
+    disabledAt: '',
+    enteredAt: '',
     replacedAt: '',
   },
   {
@@ -67,6 +75,7 @@ const sensors: SensorItem[] = [
     brand: 'OMRON',
     model: 'E2K-C25',
     spec: '检测距离 10mm',
+    actualCondition: '',
     feature: '',
     scene: '',
     sopId: null,
@@ -74,6 +83,9 @@ const sensors: SensorItem[] = [
     replacesId: null,
     replacedById: null,
     problemNote: '',
+    usedAt: '',
+    disabledAt: '',
+    enteredAt: '',
     replacedAt: '',
   },
 ];
@@ -128,7 +140,7 @@ describe('buildMachineTableRows', () => {
     expect(legacyRows[0]?.spec).toBe('旧规格');
   });
 
-  it('shows the optional process-step binding only for structure rows', () => {
+  it('resolves board characteristics and leaves removed process and machine bindings hidden', () => {
     const linkedRow = {
       ...row,
       machineModelId: 3,
@@ -153,14 +165,24 @@ describe('buildMachineTableRows', () => {
     expect(
       (structureRows[0] as unknown as { processStepName: string })
         .processStepName,
-    ).toBe('内层 · DES 显影');
-    expect(structureRows[0]?.machineModelName).toBe('中间输送机');
+    ).toBe('');
+    expect(structureRows[0]?.machineModelName).toBe('');
     expect(structureRows[0]?.boardCharacteristicName).toBe(
       '平板无孔，金属材质',
     );
     expect(
       (noteRows[0] as unknown as { processStepName: string }).processStepName,
-    ).toBe('—');
+    ).toBe('');
+    expect(
+      sectionColumns({ structure: true, writable: false }).map(
+        (column) => column.key,
+      ),
+    ).not.toContain('processStepName');
+    expect(
+      sectionColumns({ structure: true, writable: false }).map(
+        (column) => column.key,
+      ),
+    ).not.toContain('machineModelName');
   });
 });
 
@@ -181,30 +203,50 @@ describe('filterSectionRows', () => {
   const other = { ...row, id: 8, sensorIds: [], processStepId: null };
 
   it('filters structure rows by linked sensor type and dictionary ids', () => {
-    const rows = [row, other];
+    const linked = { ...row, boardCharacteristicId: 4 };
+    const rows = [linked, other];
     expect(
       filterSectionRows(rows, true, { ...none, sensorTypes: ['对射'] }, lookup),
-    ).toEqual([row]);
+    ).toEqual([linked]);
     expect(
-      filterSectionRows(rows, true, { ...none, processStepIds: [21, 99] }, lookup),
-    ).toEqual([row]);
+      filterSectionRows(
+        rows,
+        true,
+        { ...none, boardCharacteristicIds: [4, 99] },
+        lookup,
+      ),
+    ).toEqual([linked]);
     expect(
-      filterSectionRows(rows, true, { ...none, processStepIds: [99] }, lookup),
+      filterSectionRows(
+        rows,
+        true,
+        { ...none, boardCharacteristicIds: [99] },
+        lookup,
+      ),
     ).toEqual([]);
     // 表头筛选只对结构分区生效
     expect(
-      filterSectionRows(rows, false, { ...none, processStepIds: [21] }, lookup),
+      filterSectionRows(
+        rows,
+        false,
+        { ...none, boardCharacteristicIds: [4] },
+        lookup,
+      ),
     ).toEqual(rows);
   });
 
-  it('matches keywords against step names and linked sensor models', () => {
-    const rows = [row, other];
+  it('matches visible board names and sensor models without indexing removed process fields', () => {
+    const linked = { ...row, boardCharacteristicId: 4 };
+    const rows = [linked, other];
     expect(
-      filterSectionRows(rows, true, { ...none, query: 'des 显影' }, lookup),
-    ).toEqual([row]);
+      filterSectionRows(rows, true, { ...none, query: '平板无孔' }, lookup),
+    ).toEqual([linked]);
     expect(
       filterSectionRows(rows, true, { ...none, query: 'e2k-c25' }, lookup),
-    ).toEqual([row]);
+    ).toEqual([linked]);
+    expect(
+      filterSectionRows(rows, true, { ...none, query: 'des 显影' }, lookup),
+    ).toEqual([]);
   });
 });
 
@@ -247,20 +289,26 @@ describe('sectionColumns', () => {
       { ...row, id: 3, sensorIds: [11] },
       { ...row, id: 4, sensorIds: [11], image: image('X') },
     ];
-    expect(imageGroups(items).map((group) => group.map((item) => item.id))).toEqual([
-      [1, 2],
-      [3],
-      [4],
-    ]);
+    expect(
+      imageGroups(items).map((group) => group.map((item) => item.id)),
+    ).toEqual([[1, 2], [3], [4]]);
     const rows = buildMachineTableRows(items, sensors, true);
     expect(rows.map((item) => item.imageSpan)).toEqual([4, 0, 0, 0, 1, 1]);
     expect(rows[0]!.imageRows.map((item) => item.id)).toEqual([1, 2]);
     // 没图的 c 紧挨在有图的 b 下面：可以沿用 b 的图；d 自己有图，不提供
     expect(rows.map((item) => item.previousRow?.id ?? null)).toEqual([
-      null, null, null, null, 2, null,
+      null,
+      null,
+      null,
+      null,
+      2,
+      null,
     ]);
     const columns = sectionColumns({ structure: true, writable: true });
-    expect(columns.slice(-2).map((column) => column.key)).toEqual(['image', 'actions']);
+    expect(columns.slice(-2).map((column) => column.key)).toEqual([
+      'image',
+      'actions',
+    ]);
     // 展开列：a 的 3 个传感器是 rows[0..2]，b 是 rows[3]，没图的 c 是 rows[4]，
     // 不相邻、自己一张 X 的 d 是 rows[5]
     const imageColumn = columns.find((column) => column.key === 'image');

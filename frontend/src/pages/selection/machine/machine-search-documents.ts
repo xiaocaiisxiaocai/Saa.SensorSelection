@@ -15,12 +15,6 @@ export function buildMachineSearchDocuments(
   store: SelectionStore,
 ): MachineStructureSearchDocument[] {
   const documents: MachineStructureSearchDocument[] = [];
-  const machineModelById = new Map(
-    store.dictionaryItems('machine-model').map((item) => [item.id, item]),
-  );
-  const processStepById = new Map(
-    store.processSteps.map((item) => [item.id, item]),
-  );
   const boardCharacteristicById = new Map(
     store
       .dictionaryItems('board-characteristic')
@@ -38,14 +32,6 @@ export function buildMachineSearchDocuments(
         page.id,
         MACHINE_TAB_PAGE_OWNER,
       )) {
-        const machineModel =
-          row.machineModelId == null
-            ? undefined
-            : machineModelById.get(row.machineModelId);
-        const processStep =
-          row.processStepId == null
-            ? undefined
-            : processStepById.get(row.processStepId);
         const boardCharacteristic =
           row.boardCharacteristicId == null
             ? undefined
@@ -58,13 +44,13 @@ export function buildMachineSearchDocuments(
           boardCharacteristicName: boardCharacteristic?.name ?? '',
           category: page.node.category,
           configuration: page.node.configuration ?? '',
-          machineModelId: row.machineModelId,
-          machineModelName: machineModel?.name ?? '',
-          machineName: [page.node.item, page.name].filter(Boolean).join(' / '),
-          processStepId: row.processStepId,
-          processStepName: processStep
-            ? `${processStep.layer} · ${processStep.name}`
-            : '',
+          machineModelId: null,
+          machineModelName: '',
+          machineName: page.direct
+            ? (page.node.item ?? page.name)
+            : [page.node.item, page.name].filter(Boolean).join(' / '),
+          processStepId: null,
+          processStepName: '',
           rowId: row.id,
           searchableText: [
             row.role,

@@ -2179,8 +2179,9 @@ async function run() {
     const LEAF_GROUP = '契约空分类'
     assert.equal(tabsRepo.saveEntityGroup('machine', { name: LEAF_GROUP, machineType: 'mechanism' }).ok, true)
     const leafGroupNode = { category: LEAF_GROUP, configuration: null, item: null }
+    // 全局已有同名机型时，旧页不能自动提升为目录项，仍须保留节点保护。
     assert.equal(
-      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '分类页', node: leafGroupNode }).ok,
+      tabsRepo.saveMachineTabPage(conveyor.item.id, { name: '01 单段输送段（搭配）', node: leafGroupNode }).ok,
       true,
     )
     assert.deepEqual(tabsRepo.saveMachineConfiguration(LEAF_GROUP, { name: '配置' }), {
@@ -2324,9 +2325,12 @@ async function run() {
     // 旧的分区示意图（右侧示意图栏，最多 2 张）读出时挂到记录上：第一张给全部记录（合并成一格），
     // 有第二张且不止一条记录时给最后一条
     {
+      // 前面的改名页可能已提升成机型，旧图兼容夹具使用独立的叶子分类。
+      const legacyCategory = '契约旧图分类'
+      assert.equal(tabsRepo.saveEntityGroup('machine', { name: legacyCategory, machineType: 'mechanism' }).ok, true)
       const legacyPage = tabsRepo.saveMachineTabPage(conveyor.item.id, {
         name: '旧示意图页',
-        node: tabsRepo.getMachineTabs('mechanism').flatMap((tab) => tab.pages).find((item) => item.id === page.item.id).node,
+        node: { category: legacyCategory, configuration: null, item: null },
       })
       assert.equal(legacyPage.ok, true)
       for (const role of ['甲', '乙', '丙']) {
@@ -2385,6 +2389,47 @@ async function run() {
     for (const removed of ['placeMachineInTab', 'removeMachineFromTab', 'moveMachineToCatalog', 'machineTabOf']) {
       assert.equal(removed in tabsRepo, false, removed)
     }
+  }
+
+  // 无命名冲突的旧分类页提升为机型目录项，页 id 和内容引用必须完整保留。
+  {
+    const migrationStore = new Map()
+    const repo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: {
+        getItem: (key) => migrationStore.get(key) ?? null,
+        setItem: (key, value) => migrationStore.set(key, value),
+      },
+    })
+    const category = '契约目录提升分类'
+    const name = '契约目录提升机型'
+    assert.equal(repo.saveEntityGroup('machine', { name: category, machineType: 'mechanism' }).ok, true)
+    const tab = repo.saveMachineTab('mechanism', { name: '契约目录提升机构', kind: 'structure' })
+    assert.equal(tab.ok, true)
+    const page = repo.saveMachineTabPage(tab.item.id, { name, node: { category, configuration: null, item: null } })
+    assert.equal(page.ok, true)
+    const row = repo.saveMachineSectionRow(page.item.id, domain.MACHINE_TAB_PAGE_OWNER, {
+      role: '提升前记录', sensorIds: [repo.getSensors()[0].id],
+    })
+    assert.equal(row.ok, true)
+    const groups = repo.getEntityGroups('machine')
+    assert.deepEqual(groups.find((group) => group.name === category).items, [name])
+    const promoted = repo.getMachineTabs('mechanism').find((item) => item.id === tab.item.id).pages[0]
+    assert.equal(promoted.id, page.item.id)
+    assert.equal(promoted.direct, true)
+    assert.deepEqual(promoted.node, { category, configuration: null, item: name })
+    assert.deepEqual(repo.getMachineSectionRows(promoted.id, domain.MACHINE_TAB_PAGE_OWNER).map((item) => item.id), [row.item.id])
+    assert.deepEqual(repo.deleteEntityItem('machine', name, category), { ok: false, reason: 'not-empty' })
+    // 后续合法写入也须保存提升后的节点，重新打开仓库不能丢内容。
+    assert.equal(repo.saveMachineConfiguration(category, { name: '提升后配置' }).ok, true)
+    const reloaded = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      storage: { getItem: (key) => migrationStore.get(key) ?? null, setItem: () => true },
+    })
+    assert.ok(reloaded.getEntityGroups('machine').find((group) => group.name === category).items.includes(name))
+    assert.equal(reloaded.getMachineSectionRows(promoted.id, domain.MACHINE_TAB_PAGE_OWNER)[0].role, '提升前记录')
   }
 
   // 旧格式（Tab 里记的是机型名，内容在机型的 1000 分区）读出时转成同名二级 Tab，

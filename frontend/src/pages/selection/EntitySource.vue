@@ -13,7 +13,10 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
-import type { TreeCheckState } from '@/pages/selection/entity/entity-tree-data';
+import type {
+  ItemPayload,
+  TreeCheckState,
+} from '@/pages/selection/entity/entity-tree-data';
 
 import EntityTree from './EntityTree.vue';
 
@@ -25,6 +28,8 @@ const props = defineProps<{
   selectedKey?: string;
   checkState?: TreeCheckState;
   machineType?: MachineCatalogKind;
+  /** 机型结构目录是否开启「与当前条目对比」右键菜单 */
+  compareEnabled?: boolean;
   /** 机型：已有二级 Tab 的分组 / 配置 key，不能再加子节点 */
   lockedBranches?: ReadonlySet<string>;
 }>();
@@ -34,6 +39,7 @@ const emit = defineEmits<{
     payload: { category: string; configuration?: string | null; item: string },
   ];
   checkNode: [payload: { key: string; checked: boolean }];
+  compare: [payload: ItemPayload];
 }>();
 
 const store = useSelectionStore();
@@ -77,6 +83,11 @@ function onSelect(payload: {
       ? payload
       : { category: payload.category, item: payload.item },
   );
+}
+
+function onCompare(payload: ItemPayload) {
+  if (props.kind !== 'machine' || props.machineType !== 'mechanism') return;
+  emit('compare', payload);
 }
 
 // 改名的正好是当前选中叶子所在的分组：跟着新名字继续选中，别跳回第一个
@@ -228,12 +239,16 @@ function onReorderItems(payload: {
       :editable="writable"
       :sortable="writable"
       :allow-configurations="kind === 'machine' && machineType !== 'project'"
+      :compare-enabled="
+        compareEnabled && kind === 'machine' && machineType === 'mechanism'
+      "
       :group-label="groupLabel"
       :item-label="itemLabel"
       :selectable-branches="kind === 'machine'"
       :locked-branches="lockedBranches"
       @select="onSelect"
       @check-node="emit('checkNode', $event)"
+      @compare="onCompare"
       @create-group="groupDialog?.openCreate()"
       @edit-group="groupDialog?.openEdit($event)"
       @delete-group="removeGroup"

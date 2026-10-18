@@ -27,14 +27,8 @@ export function buildReportSections(
             ? nodePathLabel(page.node)
             : `${nodePathLabel(page.node)} / ${page.name}`,
           rows: rows.map((row) => {
-            const processStep = store.processSteps.find(
-              (item) => item.id === row.processStepId,
-            );
             return {
               ...row,
-              processStepName: processStep
-                ? `${processStep.layer} · ${processStep.name}`
-                : '',
             };
           }),
           // 示意图挂在记录上；共用同一张图的记录只放一次

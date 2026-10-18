@@ -23,6 +23,8 @@ const editing = ref<SensorItem>();
 const validationAttempted = ref(false);
 const form = reactive({
   brand: '',
+  actualCondition: '',
+  disabledAt: null as string | null,
   feature: '',
   model: '',
   partNumber: '',
@@ -82,6 +84,8 @@ function open(item?: SensorItem) {
     item
       ? {
           brand: item.brand,
+          actualCondition: item.actualCondition,
+          disabledAt: item.disabledAt || null,
           feature: item.feature,
           model: item.model,
           partNumber: item.partNumber,
@@ -94,6 +98,8 @@ function open(item?: SensorItem) {
         }
       : {
           brand: '',
+          actualCondition: '',
+          disabledAt: null,
           feature: '',
           model: '',
           partNumber: '',
@@ -121,6 +127,8 @@ function save() {
     {
       ...form,
       brand: form.brand.trim(),
+      actualCondition: form.actualCondition.trim(),
+      disabledAt: form.disabledAt ?? '',
       feature: form.feature.trim(),
       model: form.model.trim(),
       partNumber: form.partNumber.trim(),
@@ -276,6 +284,21 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
+    <a-form v-if="keepsDisabled" layout="vertical">
+      <a-row :gutter="16">
+        <a-col v-if="keepsDisabled" :span="8">
+          <a-form-item html-for="sensor-disabled-at" label="停用日期">
+            <a-date-picker
+              id="sensor-disabled-at"
+              v-model:value="form.disabledAt"
+              value-format="YYYY-MM-DD"
+              class="full-width"
+              placeholder="选择日期"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-form>
     <a-form layout="vertical">
       <a-row :gutter="16">
         <a-col :span="24">
@@ -283,6 +306,17 @@ defineExpose({ open });
             <a-textarea
               id="sensor-spec"
               v-model:value="form.spec"
+              :rows="2"
+              :maxlength="500"
+              show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="sensor-actual-condition" label="实际工况">
+            <a-textarea
+              id="sensor-actual-condition"
+              v-model:value="form.actualCondition"
               :rows="2"
               :maxlength="500"
               show-count

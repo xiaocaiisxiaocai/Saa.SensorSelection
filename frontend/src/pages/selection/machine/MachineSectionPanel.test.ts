@@ -8,6 +8,14 @@ import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import MachineSectionPanel from './MachineSectionPanel.vue';
 
+vi.mock('@/api', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/api')>();
+  return {
+    ...original,
+    api: { ...original.api, getKey: vi.fn().mockResolvedValue([]) },
+  };
+});
+
 const uploadFileMock = vi.hoisted(() => vi.fn());
 vi.mock('@/pages/shared/files', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/pages/shared/files')>()),
@@ -61,6 +69,25 @@ function visibleRowIds(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('MachineSectionPanel', () => {
+  it('highlights keyword matches in record cells and removes marks after clearing search', async () => {
+    const { pinia, section, store } = setup('notes');
+    addNoteRows(store, section.id, 2);
+    const wrapper = mount(MachineSectionPanel, {
+      props: { machineName: MACHINE, section },
+      global: { plugins: [pinia] },
+    });
+    await flushPromises();
+    const search = wrapper.get('input[aria-label="搜索机型注意事项"]');
+    await search.setValue('事项');
+    await flushPromises();
+    expect(
+      wrapper.findAll('.ant-table-tbody mark').map((mark) => mark.text()),
+    ).toEqual(['事项', '事项']);
+    await search.setValue('');
+    await flushPromises();
+    expect(wrapper.find('mark').exists()).toBe(false);
+    wrapper.unmount();
+  });
   beforeEach(() => {
     uploadFileMock.mockReset();
   });
@@ -249,9 +276,9 @@ describe('MachineSectionPanel', () => {
     expect(sharedCell.attributes('rowspan')).toBe('2');
     expect(sharedCell.classes()).toContain('machine-image-cell--shared');
     expect(sharedCell.get('img').attributes('alt')).toBe('共用.png');
-    expect(sharedCell.get('.machine-row-image__frame').attributes('title')).toBe(
-      '共用.png',
-    );
+    expect(
+      sharedCell.get('.machine-row-image__frame').attributes('title'),
+    ).toBe('共用.png');
     expect(sharedCell.find('.ant-tag').exists()).toBe(false);
     expect(sharedCell.text()).not.toContain('共用.png');
     expect(sharedCell.text()).not.toContain('笔共用');

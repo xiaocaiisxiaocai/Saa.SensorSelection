@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORAGE_KEY, keyFor } from './keys';
+import { STORAGE_KEY, keyFor, machineSectionRowsKey } from './keys';
 import { createSelectionRepository } from './repository';
-import { CRUD_DEFAULTS, FEEDBACK_STATUS_OPTIONS, SENSOR_DATA } from './seed';
-import type { StorageLike } from './types';
+import {
+  CRUD_DEFAULTS,
+  FEEDBACK_STATUS_OPTIONS,
+  MACHINE_TAB_PAGE_OWNER,
+  SENSOR_DATA,
+} from './seed';
+import type { EntityGroup, StorageLike } from './types';
 
 function createMemory(): { storage: StorageLike; reads: string[] } {
   let value: null | string = null;
@@ -32,6 +37,42 @@ function createRepo(storage?: StorageLike) {
 }
 
 describe('createSelectionRepository persist', () => {
+  it('records lifecycle dates automatically and preserves them on ordinary edits', () => {
+    const repo = createRepo();
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const created = repo.saveSensor({
+      model: 'AUTO-DATES',
+      sensorType: '漫反射',
+      status: '备选',
+      enteredAt: '2000-01-01',
+      usedAt: '2000-01-01',
+    });
+    expect(created.ok).toBe(true);
+    const item = repo.getSensors().find((row) => row.model === 'AUTO-DATES')!;
+    expect(item.enteredAt).toBe(date);
+    expect(item.usedAt).toBe('');
+    expect(repo.saveSensor({ ...item, status: '现用' }, item.id).ok).toBe(true);
+    const current = repo.getSensors().find((row) => row.id === item.id)!;
+    expect(current.usedAt).toBe(date);
+    repo.saveSensor(
+      { ...current, enteredAt: '2000-01-01', usedAt: '2000-01-01' },
+      item.id,
+    );
+    const edited = repo.getSensors().find((row) => row.id === item.id)!;
+    expect(edited.enteredAt).toBe(date);
+    expect(edited.usedAt).toBe(date);
+    const active = repo.saveSensor({
+      model: 'AUTO-CURRENT',
+      sensorType: '漫反射',
+      status: '现用',
+    });
+    expect(active.ok).toBe(true);
+    expect(
+      repo.getSensors().find((row) => row.model === 'AUTO-CURRENT')?.usedAt,
+    ).toBe(date);
+  });
+
   it('does not create demo data when production mode disables frontend seeds', () => {
     const repo = createSelectionRepository({
       crudDefaults: CRUD_DEFAULTS,
@@ -676,9 +717,7 @@ describe('sensors', () => {
         .getMachineSectionRows(1, '中间翻板机')
         .some((row) => row.sensorIds.includes(guarded.id)),
     ).toBe(true);
-    expect(repo.getSensors().some((item) => item.id === guarded.id)).toBe(
-      true,
-    );
+    expect(repo.getSensors().some((item) => item.id === guarded.id)).toBe(true);
   });
 
   it('requires a current model before an alternate, and rejects a manual disabled status', () => {
@@ -780,14 +819,17 @@ describe('sensors', () => {
 
     expect(
       repo.saveSensor({ ...current, brand: 'OMRON-EDIT' }, current.id),
-    ).toMatchObject({ ok: true, item: { brand: 'OMRON-EDIT', status: '现用' } });
-    expect(
-      repo.saveSensor({ ...current, status: '备选' }, current.id),
-    ).toEqual({
-      ok: false,
-      reason: 'validation',
-      message: '该现用型号下还有备选，请先用「替换」处理',
+    ).toMatchObject({
+      ok: true,
+      item: { brand: 'OMRON-EDIT', status: '现用' },
     });
+    expect(repo.saveSensor({ ...current, status: '备选' }, current.id)).toEqual(
+      {
+        ok: false,
+        reason: 'validation',
+        message: '该现用型号下还有备选，请先用「替换」处理',
+      },
+    );
     expect(
       repo.saveSensor({ ...current, sensorType: '对照式' }, current.id),
     ).toEqual({
@@ -809,9 +851,9 @@ describe('sensors', () => {
     ).toMatchObject({ ok: true });
     const demoted = repo.getSensors().find((item) => item.id === current.id);
     if (!demoted) throw new Error('demoted sensor missing');
-    expect(repo.saveSensor({ ...demoted, status: '现用' }, current.id)).toMatchObject(
-      { ok: true },
-    );
+    expect(
+      repo.saveSensor({ ...demoted, status: '现用' }, current.id),
+    ).toMatchObject({ ok: true });
     expect(repo.deleteSensor(current.id)).toEqual({ ok: true });
     expect(repo.deleteSensor(second.item.id)).toEqual({
       ok: false,
@@ -828,7 +870,9 @@ describe('sensors', () => {
       '改停用后仍可编辑',
     );
     if (!replaced.ok) throw new Error(replaced.reason);
-    const retired = repo.getSensors().find((item) => item.id === second.item.id);
+    const retired = repo
+      .getSensors()
+      .find((item) => item.id === second.item.id);
     if (!retired) throw new Error('retired sensor missing');
     expect(
       repo.saveSensor(
@@ -906,6 +950,99 @@ describe('entity tree and dictionary', () => {
       machineType: 'mechanism',
       configurations: [{ name: '标准配置', items: ['01 单段', '02 多段'] }],
     });
+  });
+
+  it('keeps conflicting legacy and direct machine pages reachable across writes', () => {
+    const seed = createRepo().snapshotStore();
+    const groups = seed[keyFor('entity-groups', 'machine')] as EntityGroup[];
+    const group = groups.find((item) => item.configurations?.[0]?.items[0]);
+    const configuration = group?.configurations?.[0];
+    const machineName = configuration?.items[0];
+    if (!group || !configuration || !machineName) {
+      throw new Error('missing configured machine seed');
+    }
+    seed[keyFor('machine-tabs', 'all')] = [
+      {
+        id: 90,
+        catalog: 'mechanism',
+        name: '冲突迁移测试',
+        sort: 1,
+        kind: 'structure',
+        pages: [
+          {
+            id: 910,
+            name: machineName,
+            node: {
+              category: group.name,
+              configuration: configuration.name,
+              item: null,
+            },
+          },
+          {
+            id: 911,
+            name: '冲突迁移测试',
+            node: {
+              category: group.name,
+              configuration: configuration.name,
+              item: machineName,
+            },
+            direct: true,
+          },
+        ],
+      },
+    ];
+    seed[machineSectionRowsKey(910, MACHINE_TAB_PAGE_OWNER)] = [
+      { id: 1, role: '旧页内容', sensorIds: [] },
+    ];
+    seed[machineSectionRowsKey(911, MACHINE_TAB_PAGE_OWNER)] = [
+      { id: 2, role: '直属页内容', sensorIds: [] },
+    ];
+
+    let persisted = JSON.stringify(seed);
+    const storage: StorageLike = {
+      getItem: () => persisted,
+      setItem: (_key, value) => {
+        persisted = value;
+      },
+    };
+    const open = () =>
+      createSelectionRepository({
+        crudDefaults: CRUD_DEFAULTS,
+        sensorData: SENSOR_DATA,
+        storage,
+      });
+    const repository = open();
+
+    repository.getEntityGroups('machine');
+    expect(repository.getMachineTabs()[0]?.pages).toMatchObject([
+      { id: 910, node: { item: null } },
+      { id: 911, direct: true, node: { item: machineName } },
+    ]);
+    expect(
+      repository.getMachineSectionRows(910, MACHINE_TAB_PAGE_OWNER)[0]?.role,
+    ).toBe('旧页内容');
+    expect(
+      repository.getMachineSectionRows(911, MACHINE_TAB_PAGE_OWNER)[0]?.role,
+    ).toBe('直属页内容');
+
+    expect(
+      repository.saveMachineTab(
+        'mechanism',
+        { kind: 'structure', name: '冲突迁移测试', sort: 2 },
+        90,
+      ).ok,
+    ).toBe(true);
+    const reloaded = open();
+    reloaded.getEntityGroups('machine');
+    expect(reloaded.getMachineTabs()[0]?.pages.map((page) => page.id)).toEqual([
+      910, 911,
+    ]);
+    expect(
+      reloaded.getMachineSectionRows(910, MACHINE_TAB_PAGE_OWNER)[0]?.role,
+    ).toBe('旧页内容');
+    expect(
+      reloaded.getMachineSectionRows(911, MACHINE_TAB_PAGE_OWNER)[0]?.role,
+    ).toBe('直属页内容');
   });
 
   it('persists a project catalog classification when its category is renamed', () => {

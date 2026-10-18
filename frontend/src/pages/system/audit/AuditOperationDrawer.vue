@@ -9,6 +9,7 @@ import type {
 import { formatLocalDateTime } from '@/domain';
 import { formatAuditTarget } from '@/pages/system/audit-target';
 import { useSelectionStore } from '@/stores/selection';
+import { AHighlightText } from '@/ui';
 
 import { parseAuditDetail } from './audit-actions';
 import {
@@ -25,6 +26,7 @@ import {
 
 /** 一次操作的完整详情（只读）：每条日志改了哪些记录、哪些字段从什么改成什么；置空即关闭 */
 const operation = defineModel<AuditOperationItem | null>({ required: true });
+const props = defineProps<{ query?: string | null }>();
 
 // 关闭动画期间仍显示刚才那次操作，不要先变成空白再淡出
 const shown = ref<AuditOperationItem | null>(null);
@@ -109,11 +111,18 @@ const userText = computed(() => {
 <template>
   <a-drawer
     :open="Boolean(operation)"
-    :title="shown ? operationTitle(shown) : '操作详情'"
     width="min(760px, 100vw)"
     destroy-on-close
     @close="operation = null"
   >
+    <template #title>
+      <AHighlightText
+        v-if="shown"
+        :text="operationTitle(shown)"
+        :query="props.query"
+      />
+      <template v-else>操作详情</template>
+    </template>
     <template v-if="shown">
       <a-descriptions
         bordered
@@ -124,7 +133,9 @@ const userText = computed(() => {
         <a-descriptions-item label="时间">
           {{ formatLocalDateTime(new Date(shown.timestamp)) }}
         </a-descriptions-item>
-        <a-descriptions-item label="用户">{{ userText }}</a-descriptions-item>
+        <a-descriptions-item label="用户">
+          <AHighlightText :text="userText" :query="props.query" />
+        </a-descriptions-item>
         <a-descriptions-item label="结果">
           <a-tag :color="shown.result ? 'green' : 'red'">
             {{ shown.result ? '成功' : '失败' }}
@@ -148,15 +159,20 @@ const userText = computed(() => {
         :aria-label="view.title"
       >
         <header class="audit-entry__head">
-          <span class="audit-entry__title">{{ view.title }}</span>
+          <span class="audit-entry__title">
+            <AHighlightText :text="view.title" :query="props.query" />
+          </span>
           <a-tag v-if="!view.entry.result" color="red">失败</a-tag>
         </header>
         <a-alert
           v-if="!view.entry.result && view.entry.error"
           type="error"
           show-icon
-          :message="view.entry.error"
-        />
+        >
+          <template #message>
+            <AHighlightText :text="view.entry.error" :query="props.query" />
+          </template>
+        </a-alert>
 
         <template v-if="view.changes">
           <div
@@ -165,19 +181,31 @@ const userText = computed(() => {
             class="audit-change"
           >
             <div class="audit-change__label">
-              <a-tag color="blue">修改</a-tag>{{ row.label }}
+              <a-tag color="blue">修改</a-tag>
+              <AHighlightText :text="row.label" :query="props.query" />
             </div>
             <dl class="audit-diff">
               <template v-for="field in row.fields" :key="field.name">
-                <dt>{{ fieldLabel(view.namespace, field.name) }}</dt>
+                <dt>
+                  <AHighlightText
+                    :text="fieldLabel(view.namespace, field.name)"
+                    :query="props.query"
+                  />
+                </dt>
                 <dd>
-                  <del class="audit-diff__before">{{
-                    value(field.name, field.before)
-                  }}</del>
+                  <del class="audit-diff__before">
+                    <AHighlightText
+                      :text="value(field.name, field.before)"
+                      :query="props.query"
+                    />
+                  </del>
                   <span class="audit-diff__arrow" aria-label="改为">→</span>
-                  <ins class="audit-diff__after">{{
-                    value(field.name, field.after)
-                  }}</ins>
+                  <ins class="audit-diff__after">
+                    <AHighlightText
+                      :text="value(field.name, field.after)"
+                      :query="props.query"
+                    />
+                  </ins>
                 </dd>
               </template>
             </dl>
@@ -188,12 +216,23 @@ const userText = computed(() => {
             class="audit-change"
           >
             <div class="audit-change__label">
-              <a-tag color="green">新增</a-tag>{{ row.label }}
+              <a-tag color="green">新增</a-tag>
+              <AHighlightText :text="row.label" :query="props.query" />
             </div>
             <dl v-if="row.fields.length" class="audit-diff">
               <template v-for="field in row.fields" :key="field.name">
-                <dt>{{ fieldLabel(view.namespace, field.name) }}</dt>
-                <dd>{{ value(field.name, field.after) }}</dd>
+                <dt>
+                  <AHighlightText
+                    :text="fieldLabel(view.namespace, field.name)"
+                    :query="props.query"
+                  />
+                </dt>
+                <dd>
+                  <AHighlightText
+                    :text="value(field.name, field.after)"
+                    :query="props.query"
+                  />
+                </dd>
               </template>
             </dl>
           </div>
@@ -203,12 +242,23 @@ const userText = computed(() => {
             class="audit-change"
           >
             <div class="audit-change__label">
-              <a-tag color="red">删除</a-tag>{{ row.label }}
+              <a-tag color="red">删除</a-tag>
+              <AHighlightText :text="row.label" :query="props.query" />
             </div>
             <dl v-if="row.fields.length" class="audit-diff">
               <template v-for="field in row.fields" :key="field.name">
-                <dt>{{ fieldLabel(view.namespace, field.name) }}</dt>
-                <dd>{{ value(field.name, field.before) }}</dd>
+                <dt>
+                  <AHighlightText
+                    :text="fieldLabel(view.namespace, field.name)"
+                    :query="props.query"
+                  />
+                </dt>
+                <dd>
+                  <AHighlightText
+                    :text="value(field.name, field.before)"
+                    :query="props.query"
+                  />
+                </dd>
               </template>
             </dl>
           </div>
@@ -222,18 +272,24 @@ const userText = computed(() => {
 
         <template v-else-if="view.detail">
           <p v-if="view.detail.summary" class="audit-entry__note">
-            {{ view.detail.summary }}
+            <AHighlightText :text="view.detail.summary" :query="props.query" />
           </p>
           <dl class="audit-diff">
             <template v-for="pair in view.detail.pairs" :key="pair.label">
-              <dt>{{ pair.label }}</dt>
+              <dt>
+                <AHighlightText :text="pair.label" :query="props.query" />
+              </dt>
               <dd>
                 <a-space v-if="pair.items" :size="[4, 4]" wrap>
                   <a-tag v-for="item in pair.items" :key="item">
-                    {{ item }}
+                    <AHighlightText :text="item" :query="props.query" />
                   </a-tag>
                 </a-space>
-                <template v-else>{{ pair.value }}</template>
+                <AHighlightText
+                  v-else
+                  :text="pair.value"
+                  :query="props.query"
+                />
               </dd>
             </template>
           </dl>
@@ -242,10 +298,13 @@ const userText = computed(() => {
           v-else-if="unchangedStoreWrite(view.entry)"
           class="audit-entry__note"
         >
-          {{ entrySummary(view.entry) }}
+          <AHighlightText
+            :text="entrySummary(view.entry)"
+            :query="props.query"
+          />
         </p>
         <p v-else-if="view.entry.detail" class="audit-entry__note">
-          {{ view.entry.detail }}
+          <AHighlightText :text="view.entry.detail" :query="props.query" />
         </p>
         <p v-else-if="view.entry.result" class="audit-entry__note">
           这条是早期日志，没有记录具体改动。
@@ -253,7 +312,7 @@ const userText = computed(() => {
 
         <p v-if="view.rawKey" class="audit-entry__key">
           数据键：<a-typography-text code>
-            {{ view.entry.target }}
+            <AHighlightText :text="view.entry.target" :query="props.query" />
           </a-typography-text>
         </p>
       </section>

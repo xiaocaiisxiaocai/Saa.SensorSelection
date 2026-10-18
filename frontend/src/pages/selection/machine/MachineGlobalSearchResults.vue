@@ -4,13 +4,19 @@ import { ArrowRight } from 'lucide-vue-next';
 import { computed, h } from 'vue';
 
 import { useTablePagination } from '@/pages/shared/table';
+import { AHighlightText } from '@/ui';
 
-import type { MachineStructureSearchResult } from './machine-structure-search';
+import type {
+  MachineStructureSearchDocument,
+  MachineStructureSearchResult,
+} from './machine-structure-search';
 
 const props = defineProps<{
   results: MachineStructureSearchResult[];
   /** 设了任一条件；没设条件时结果就是全部结构，空了是还没有记录，不是没匹配上 */
   filtered: boolean;
+  query?: string;
+  documents?: readonly MachineStructureSearchDocument[];
 }>();
 
 const emit = defineEmits<{
@@ -40,11 +46,31 @@ function path(result: MachineStructureSearchResult): string {
 }
 
 function resultTags(result: MachineStructureSearchResult): string[] {
-  return [
-    ...result.machineModelNames,
-    ...result.processStepNames,
-    ...result.boardCharacteristicNames,
-  ];
+  return [...result.boardCharacteristicNames];
+}
+
+// Include the matched record text when the keyword is found inside a sensor
+// or note rather than in the structure path shown by the result heading.
+function matchingContent(result: MachineStructureSearchResult): string {
+  const keyword = props.query
+    ?.trim()
+    .normalize('NFKC')
+    .toLocaleLowerCase('zh-CN');
+  if (!keyword) return '';
+  return (
+    props.documents?.find(
+      (document) =>
+        document.sectionId === result.sectionId &&
+        document.category === result.category &&
+        document.configuration === result.configuration &&
+        document.machineName === result.machineName &&
+        result.rowIds.includes(document.rowId) &&
+        document.searchableText
+          .normalize('NFKC')
+          .toLocaleLowerCase('zh-CN')
+          .includes(keyword),
+    )?.searchableText ?? ''
+  );
 }
 </script>
 
@@ -68,16 +94,28 @@ function resultTags(result: MachineStructureSearchResult): string[] {
       <template #renderItem="{ item: result }">
         <a-list-item>
           <a-list-item-meta>
-            <template #title>{{ path(result) }}</template>
+            <template #title>
+              <AHighlightText :text="path(result)" :query="query" />
+            </template>
             <template #description>
-              {{ result.sectionName }} · 匹配 {{ result.matchCount }} 条记录
+              <AHighlightText :text="result.sectionName" :query="query" /> ·
+              匹配 {{ result.matchCount }} 条记录
+              <div
+                v-if="matchingContent(result)"
+                class="machine-global-search-results__match"
+              >
+                匹配内容：<AHighlightText
+                  :text="matchingContent(result)"
+                  :query="query"
+                />
+              </div>
               <div class="machine-global-search-results__tags">
                 <a-tag
                   v-for="tag in resultTags(result)"
                   :key="tag"
                   color="blue"
                 >
-                  {{ tag }}
+                  <AHighlightText :text="tag" :query="query" />
                 </a-tag>
               </div>
             </template>

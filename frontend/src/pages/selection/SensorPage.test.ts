@@ -5,7 +5,7 @@ import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { UserProfile } from '@/api';
+import { api, type UserProfile } from '@/api';
 import { isSensorStatus } from '@/domain';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -23,10 +23,12 @@ import SensorPage from './SensorPage.vue';
 const writer: UserProfile = {
   username: 'admin',
   displayName: '管理员',
-  roles: [],
+  roles: [{ id: 1, code: 'admin', name: '系统管理员' }],
   permissions: ['selection:write', 'data:transfer'],
   orgUnit: null,
 };
+
+let columnSettings: unknown[] = [];
 
 async function mountPage(
   query: Record<string, string> = {},
@@ -92,6 +94,14 @@ describe('SensorPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     message.destroy();
+    columnSettings = [];
+    vi.spyOn(api, 'getKey').mockImplementation(() =>
+      Promise.resolve(columnSettings),
+    );
+    vi.spyOn(api, 'putKey').mockImplementation(async (_key, value) => {
+      columnSettings = structuredClone(value);
+      return value;
+    });
   });
 
   afterEach(() => {
@@ -163,20 +173,21 @@ describe('SensorPage', () => {
 
     const disabled = await mountPage({ tab: '停用' });
     const disabledColumns = columnsOf(disabled);
-    expect(disabledColumns.some((column) => column.key === 'replacedAt')).toBe(
+    expect(disabledColumns.some((column) => column.key === 'disabledAt')).toBe(
       true,
     );
     expect(disabledColumns.every(keepsStoreOrder)).toBe(true);
     disabled.unmount();
   });
 
-  it('hides and restores optional columns via the column menu, persisting the choice', async () => {
+  it('applies administrator column settings and shares them across mounts', async () => {
     const wrapper = await mountPage({ tab: '全部' }, writer);
+    await flushPromises();
     const headerLabels = () => wrapper.findAll('th').map((item) => item.text());
 
     expect(headerLabels()).toContain('规格参数');
 
-    await wrapper.get('[aria-label="显示的列"]').trigger('click');
+    await wrapper.get('[aria-label="管理员设置显示列"]').trigger('click');
     await vi.waitFor(() =>
       expect(
         document.body.querySelector('.ant-popover .ant-checkbox-wrapper'),
@@ -189,19 +200,17 @@ describe('SensorPage', () => {
       ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(specCheckbox).toBeDefined();
     specCheckbox!.click();
-    await nextTick();
+    await flushPromises();
 
     expect(headerLabels()).not.toContain('规格参数');
-    expect(
-      JSON.parse(
-        localStorage.getItem('selection:sensor-table:hidden-columns:v1') ??
-          '[]',
-      ),
-    ).toEqual(['spec']);
+    expect(columnSettings).toEqual([
+      { tableId: 'sensor-models', hidden: ['spec'] },
+    ]);
 
     wrapper.unmount();
 
     const reopened = await mountPage({ tab: '全部' }, writer);
+    await flushPromises();
     expect(reopened.findAll('th').map((item) => item.text())).not.toContain(
       '规格参数',
     );
@@ -219,14 +228,17 @@ describe('SensorPage', () => {
     const width = (key: string) =>
       columns.find((column) => column.key === key)?.width ?? 0;
     expect(width('spec')).toBe(200);
+    expect(width('actualCondition')).toBe(200);
+    expect(width('usedAt')).toBe(112);
+    expect(width('disabledAt')).toBe(112);
+    expect(width('enteredAt')).toBe(160);
     expect(width('feature')).toBe(240);
     expect(width('scene')).toBe(180);
     expect(width('actions')).toBe(120);
-    // 1920 宽屏下表格可用约 1650px（扣掉侧栏、内边距和纵向滚动条），
-    // 列宽合计要留出余量，否则会出横向滚动
+    // 日期与工况列保留可读宽度，超出可视区时由表格横向滚动。
     expect(
       columns.reduce((sum, column) => sum + (column.width ?? 0), 0),
-    ).toBeLessThanOrEqual(1600);
+    ).toBeLessThanOrEqual(2300);
     // 长描述列完整显示不截断，宽度要从内容很短的列里匀过来
     for (const short of ['relation', 'sop', 'model3d']) {
       expect(width(short)).toBeLessThan(width('scene'));
@@ -317,7 +329,14 @@ describe('SensorPage', () => {
     const wrapper = await mountPage({ tab: '全部' }, writer);
     const headers = wrapper.findAll('th').map((item) => item.text());
 
-    expect(headers.slice(-3)).toEqual(['关联型录', '关联 3D', '操作']);
+    expect(headers.slice(-6)).toEqual([
+      '关联型录',
+      '关联 3D',
+      '使用日期',
+      '停用日期',
+      '录入日期',
+      '操作',
+    ]);
 
     wrapper.unmount();
   });
@@ -667,6 +686,7 @@ describe('SensorPage', () => {
         {
           ...retired,
           model: '停用信息测试型号',
+          disabledAt: '2026-08-31',
           problemNote: '现场检测距离不稳定',
           replacedAt: '2026-08-31',
         },
@@ -680,9 +700,15 @@ describe('SensorPage', () => {
       .findAll('tbody tr')
       .find((item) => item.text().includes('停用信息测试型号'));
 
-    expect(headers).toContain('停用时间');
+    expect(headers).toContain('停用日期');
     expect(headers).toContain('停用原因');
-    expect(headers.slice(-2)).toEqual(['关联型录', '关联 3D']);
+    expect(headers.slice(-5)).toEqual([
+      '关联型录',
+      '关联 3D',
+      '使用日期',
+      '停用日期',
+      '录入日期',
+    ]);
     expect(row?.text()).toContain('2026-08-31');
     expect(row?.text()).toContain('现场检测距离不稳定');
 
@@ -1020,6 +1046,41 @@ describe('SensorPage', () => {
     await flushPromises();
     expect(statusFilter(wrapper).filteredValue).toBeNull();
     expect(searchInput(wrapper).props('value')).toBe('WL12');
+
+    wrapper.unmount();
+  });
+
+  it('highlights matching brand and model cells and clears marks without leaving grouped view', async () => {
+    const wrapper = await mountPage({ tab: '全部' });
+    const initialRows = tableRows(wrapper).map((row) => row.rowKey);
+
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
+    expect(wrapper.get('.selection-panel').classes()).toContain(
+      'sensor-models--grouped',
+    );
+
+    searchInput(wrapper).vm.$emit('update:value', 'OMRON E3Z');
+    await flushPromises();
+
+    const highlighted = wrapper
+      .findAll('tbody mark')
+      .map((item) => item.text());
+    expect(highlighted).toContain('OMRON');
+    expect(highlighted).toContain('E3Z');
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
+    expect(wrapper.get('.selection-panel').classes()).toContain(
+      'sensor-models--grouped',
+    );
+
+    searchInput(wrapper).vm.$emit('update:value', '');
+    await flushPromises();
+
+    expect(wrapper.find('tbody mark').exists()).toBe(false);
+    expect(tableRows(wrapper).map((row) => row.rowKey)).toEqual(initialRows);
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
+    expect(wrapper.get('.selection-panel').classes()).toContain(
+      'sensor-models--grouped',
+    );
 
     wrapper.unmount();
   });
@@ -1425,7 +1486,7 @@ describe('SensorPage', () => {
       'sensor-models--grouped',
     );
     const headers = wrapper.findAll('th').map((item) => item.text());
-    expect(headers).toContain('停用时间');
+    expect(headers).toContain('停用日期');
     expect(headers).toContain('停用原因');
 
     await chooseColumnFilter(wrapper, '状态', []);

@@ -16,18 +16,21 @@ const parts = computed<TextPart[]>(() => {
   const needle = String(props.query ?? '').trim();
   if (!source || !needle) return [{ highlighted: false, text: source }];
 
-  const normalizedSource = source.toLocaleLowerCase('zh-CN');
-  const normalizedNeedle = needle.toLocaleLowerCase('zh-CN');
+  // Include individual words for values rendered across separate fields, such
+  // as a sensor's brand and model. Escape all input: search text is never regex.
+  const terms = [...new Set([needle, ...needle.split(/\s+/u)])]
+    .sort((left, right) => right.length - left.length)
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(terms.join('|'), 'giu');
   const result: TextPart[] = [];
   let cursor = 0;
 
-  while (cursor < source.length) {
-    const index = normalizedSource.indexOf(normalizedNeedle, cursor);
-    if (index < 0) break;
+  for (const match of source.matchAll(pattern)) {
+    const index = match.index;
     if (index > cursor) {
       result.push({ highlighted: false, text: source.slice(cursor, index) });
     }
-    const end = index + needle.length;
+    const end = index + match[0].length;
     result.push({ highlighted: true, text: source.slice(index, end) });
     cursor = end;
   }

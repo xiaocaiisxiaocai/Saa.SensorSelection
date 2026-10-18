@@ -4,7 +4,8 @@ import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { ProcessStepItem } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -19,6 +20,7 @@ import {
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import { AHighlightText } from '@/ui';
 
 import ProcessStepDialog from './ProcessStepDialog.vue';
 
@@ -98,10 +100,15 @@ const baseColumns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
-const { columns, onResizeColumn } = useResizableColumns(
-  'process-steps',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('process-steps', () => baseColumns.value);
 
 watch([query, layerFilters, pageSize], () => {
   page.value = 1;
@@ -169,6 +176,13 @@ async function deleteItem(item: ProcessStepItem) {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
+        :hidden="hiddenColumns"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
+      />
       <a-button v-if="writable" type="primary" @click="stepDialog?.open()">
         新增
       </a-button>
@@ -215,7 +229,9 @@ async function deleteItem(item: ProcessStepItem) {
             </a-tooltip>
           </a-space>
         </template>
-        <template v-else>{{ cellText(value) }}</template>
+        <template v-else>
+          <AHighlightText :text="cellText(value)" :query="query" />
+        </template>
       </template>
     </a-table>
     <a-pagination

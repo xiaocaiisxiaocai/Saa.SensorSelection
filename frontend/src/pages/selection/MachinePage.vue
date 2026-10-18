@@ -1,39 +1,41 @@
 <script setup lang="ts">
-import { Pencil } from 'lucide-vue-next';
+import { Columns2, Pencil } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
   filterMachineGroups,
+  listEntityTreeItems,
   MACHINE_TAB_PAGE_OWNER,
   type MachineCatalogKind,
   type MachineNodeRef,
   type MachineSectionItem,
   type MachineSectionRow,
-  type MachineTabPage,
   type SaveResult,
 } from '@/domain';
 import EntitySource from '@/pages/selection/EntitySource.vue';
 import SourcePane from '@/pages/selection/SourcePane.vue';
 import MachineCatalogSwitch from '@/pages/selection/machine/MachineCatalogSwitch.vue';
+import MachineComparisonPanel from '@/pages/selection/machine/MachineComparisonPanel.vue';
 import MachineGlobalSearchFilters from '@/pages/selection/machine/MachineGlobalSearchFilters.vue';
 import MachineGlobalSearchResults from '@/pages/selection/machine/MachineGlobalSearchResults.vue';
 import MachineReportBar from '@/pages/selection/machine/MachineReportBar.vue';
 import MachineSectionPanel from '@/pages/selection/machine/MachineSectionPanel.vue';
 import MachineTabDialog from '@/pages/selection/machine/MachineTabDialog.vue';
-import MachineTabPageDialog from '@/pages/selection/machine/MachineTabPageDialog.vue';
-import MachineTabPages from '@/pages/selection/machine/MachineTabPages.vue';
 import {
   lockedBranchKeys,
   nodeFromQuery,
   nodeHasChildren,
   nodeLabel,
   nodeTreeKey,
+  nodePathLabel,
+  sameNode,
   machineTreeSelection,
   pagesOf,
   selectedLeafCount,
   treeCheckState,
 } from '@/pages/selection/machine/machine-nodes';
+import { commonMachineTabs } from '@/pages/selection/machine/machine-compare';
 import {
   machineCatalogFromQuery,
   resolveMachineSelection,
@@ -53,9 +55,9 @@ import '../shared/selection-page.css';
 
 /*
  * 机型结构页。左侧选单（分类 → 配置 → 机型）选中一个末级节点，右侧显示
- * 当前目录（结构 / 专案机型）共用的一级 Tab，以及这个节点在该 Tab 下的二级 Tab。
+ * 当前目录（结构 / 专案机型）共用的一级 Tab，以及配置下的机型目录项。
  * 条件查找时，左侧换成筛选表单，右侧列出结构（不设条件就是全部，改条件立即过滤）。
- * 选单节点的下一层只能二选一：有子选单就没有二级 Tab，有二级 Tab 就不能再加子选单。
+ * 目录项在当前一级 Tab 下直接对应一张选型表。
  * 地址栏：?catalog=&view=&category=&configuration=&item=&tab=&page=&focusRow=。
  */
 const route = useRoute();
@@ -66,9 +68,8 @@ const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
 const tabDialog = ref<InstanceType<typeof MachineTabDialog>>();
-const pageDialog = ref<InstanceType<typeof MachineTabPageDialog>>();
 const checkedPageIds = ref<number[]>([]);
-/** 勾选的、还没有二级 Tab 的末级节点 key（有二级 Tab 的节点勾的是它的二级 Tab） */
+/** 没有内容页的末级节点 key（有内容页的节点勾选其内容页） */
 const checkedLeafKeys = ref<string[]>([]);
 /** 挑选报告内容时才显示勾选框（平时浏览不需要），在「报告」下拉里切换 */
 
@@ -84,19 +85,39 @@ const activeMachineView = computed<'browse' | 'find'>(() =>
 const catalogGroups = computed(() =>
   filterMachineGroups(groups.value, activeMachineType.value),
 );
+const tabs = computed(() =>
+  store.machineTabs.filter((tab) => tab.catalog === activeMachineType.value),
+);
 
 /** 选中的选单节点：地址栏指定的，没有就退回第一个机型；目录为空时为 null */
 const node = computed<MachineNodeRef | null>(() => {
   const requested = nodeFromQuery(catalogGroups.value, route.query);
-  if (requested) return requested;
-  const fallback = resolveMachineSelection(catalogGroups.value, {});
-  return fallback.item
-    ? {
-        category: fallback.category,
-        configuration: fallback.configuration || null,
-        item: fallback.item,
-      }
-    : null;
+  if (!requested) {
+    const fallback = resolveMachineSelection(catalogGroups.value, {});
+    return fallback.item
+      ? {
+          category: fallback.category,
+          configuration: fallback.configuration || null,
+          item: fallback.item,
+        }
+      : null;
+  }
+  if (requested.item || !requested.configuration) return requested;
+  const pageId = Number(route.query.page);
+  const legacyPage = tabs.value
+    .filter(
+      (tab) => !route.query.tab || String(tab.id) === String(route.query.tab),
+    )
+    .flatMap((tab) => tab.pages)
+    .find(
+      (page) =>
+        page.id === pageId &&
+        page.direct &&
+        page.node.category === requested.category &&
+        page.node.configuration === requested.configuration,
+    );
+  if (legacyPage) return legacyPage.node;
+  return requested;
 });
 const nodeIsBranch = computed(() =>
   node.value
@@ -105,16 +126,13 @@ const nodeIsBranch = computed(() =>
 );
 const nodeName = computed(() => (node.value ? nodeLabel(node.value) : ''));
 
-const tabs = computed(() =>
-  store.machineTabs.filter((tab) => tab.catalog === activeMachineType.value),
-);
 const lockedBranches = computed(() => lockedBranchKeys(tabs.value));
 const availablePageIds = computed(() =>
   tabs.value.flatMap((tab) => tab.pages.map((page) => page.id)),
 );
 const checkedPages = computed(() => new Set(checkedPageIds.value));
 // 目录树勾选：每个节点都能勾。勾一个节点 = 勾它下面的全部末级节点（机型）：
-// 有二级 Tab 的勾它的二级 Tab，没有的单独记一个勾（报告里是空的）；部分勾选时显示半选
+// 有内容页的节点按内容页勾选；没有内容页时单独记一个勾，部分勾选显示半选
 const treeSelection = computed(() =>
   machineTreeSelection(catalogGroups.value, tabs.value),
 );
@@ -148,15 +166,122 @@ const current = computed(() =>
 );
 const activeTab = computed(() => current.value.tab);
 const activePage = computed(() => current.value.page);
-const nodePages = computed(() =>
-  activeTab.value && node.value ? pagesOf(activeTab.value, node.value) : [],
-);
 /**
- * 机型（最末一层）没有二级 Tab：一级 Tab 下直接是它的直属表格。
- * 分类 / 配置只有在没有子选单时才能建二级 Tab（nodeIsBranch 时整块不显示）。
+ * 机型（最末一层）在一级 Tab 下直接显示对应表格。
  */
 const nodeIsMachine = computed(() => Boolean(node.value?.item));
-/** 一级 Tab 的徽标：机型显示直属表格的记录数，其它节点显示二级 Tab 数 */
+
+// 对比是临时只读视图，不改当前单条浏览的地址、Tab 或报告勾选。
+const comparison = ref<{ left: MachineNodeRef; right: MachineNodeRef } | null>(
+  null,
+);
+const comparePickerOpen = ref(false);
+const compareTargetKey = ref<string>();
+const compareTabKey = ref('');
+const canCompare = computed(
+  () =>
+    activeMachineType.value === 'mechanism' &&
+    activeMachineView.value === 'browse' &&
+    nodeIsMachine.value &&
+    !nodeIsBranch.value,
+);
+const compareCandidates = computed(() =>
+  listEntityTreeItems(catalogGroups.value)
+    .map((item) => ({
+      category: item.category,
+      configuration: item.configuration ?? null,
+      item: item.name,
+    }))
+    .filter((item) => !node.value || !sameNode(item, node.value)),
+);
+const compareOptions = computed(() =>
+  compareCandidates.value.map((item) => ({
+    value: nodeTreeKey(item),
+    label: nodePathLabel(item),
+  })),
+);
+const comparisonTabs = computed(() =>
+  comparison.value
+    ? commonMachineTabs(
+        tabs.value,
+        comparison.value.left,
+        comparison.value.right,
+      )
+    : [],
+);
+const comparisonTab = computed(
+  () =>
+    comparisonTabs.value.find((tab) => tab.key === compareTabKey.value) ??
+    comparisonTabs.value[0] ??
+    null,
+);
+const comparisonPanels = computed(() => {
+  const pair = comparison.value;
+  const tab = comparisonTab.value;
+  if (!pair || !tab) return null;
+  const panel = (side: 'left' | 'right') => ({
+    name: pair[side].item ?? '',
+    path: nodePathLabel(pair[side]),
+    section: {
+      id: tab[side].page.id,
+      name: tab[side].page.name,
+      sort: tab[side].tab.sort,
+      kind: tab[side].tab.kind,
+      scope: 'machine' as const,
+    },
+  });
+  return { left: panel('left'), right: panel('right') };
+});
+
+function startComparison(target: MachineNodeRef) {
+  if (
+    !canCompare.value ||
+    !node.value ||
+    !target.item ||
+    sameNode(node.value, target) ||
+    nodeHasChildren(catalogGroups.value, target) !== false
+  )
+    return;
+  comparison.value = { left: { ...node.value }, right: { ...target } };
+  compareTabKey.value = activeTab.value?.name.trim() ?? '';
+  comparePickerOpen.value = false;
+}
+
+function openComparePicker() {
+  compareTargetKey.value = comparison.value
+    ? nodeTreeKey(comparison.value.right)
+    : undefined;
+  comparePickerOpen.value = true;
+}
+
+function confirmComparison() {
+  const target = compareCandidates.value.find(
+    (item) => nodeTreeKey(item) === compareTargetKey.value,
+  );
+  if (target) startComparison(target);
+}
+
+watch(
+  [
+    canCompare,
+    () => (node.value ? nodeTreeKey(node.value) : ''),
+    catalogGroups,
+  ],
+  () => {
+    if (
+      !canCompare.value ||
+      (comparison.value &&
+        (!node.value ||
+          !sameNode(node.value, comparison.value.left) ||
+          nodeHasChildren(catalogGroups.value, comparison.value.right) !==
+            false))
+    ) {
+      comparison.value = null;
+      comparePickerOpen.value = false;
+    }
+  },
+);
+/** 一级 Tab 的徽标：机型显示选型记录数，目录分支显示所属目录项数 */
 const pageCount = (tabId: number) => {
   const tab = tabs.value.find((item) => item.id === tabId);
   if (!tab || !node.value) return 0;
@@ -166,7 +291,7 @@ const pageCount = (tabId: number) => {
     ? store.machineSectionRows(pages[0].id, MACHINE_TAB_PAGE_OWNER).length
     : 0;
 };
-/** 二级 Tab 的内容按页 id 存放，格式跟着所在 Tab 的类型 */
+/** 表格内容按页 id 存放，格式跟着所在 Tab 的类型 */
 const pageSection = computed<MachineSectionItem | null>(() =>
   activeTab.value && activePage.value
     ? {
@@ -216,45 +341,30 @@ function saveDirectRow(
   return store.saveMachineDirectRow(activeTab.value.id, node.value, payload);
 }
 
-const machineModelOptions = computed(() =>
-  store
-    .dictionaryItems('machine-model')
-    .map((item) => ({ label: item.name, value: item.id })),
-);
-const processStepOptions = computed(() =>
-  store.processSteps.map((item) => ({
-    label: `${item.layer} · ${item.name}`,
-    value: item.id,
-  })),
-);
 const boardCharacteristicOptions = computed(() =>
   store
     .dictionaryItems('board-characteristic')
     .map((item) => ({ label: item.name, value: item.id })),
 );
 const globalSearchDocuments = computed(() =>
-  // 遍历「Tab × 二级 Tab」时，每次取行都会重新归一化 Sensor/工序/字典；
+  // 遍历「Tab × 目录项」时，每次取行都会重新归一化 Sensor/工序/字典；
   // batchRead 让这些归一化结果在本次构建里只算一次。
   store.batchRead(() => buildMachineSearchDocuments(store)),
 );
-const searchMachineModelIds = ref<Array<string | number>>([]);
-const searchProcessStepIds = ref<Array<string | number>>([]);
 const searchBoardCharacteristicIds = ref<Array<string | number>>([]);
 const searchQuery = ref('');
 /** 不设条件时就是全部结构；任一条件变化都会重算并让结果列表回到第一页 */
 const globalSearchResults = computed(() =>
   searchMachineStructures(globalSearchDocuments.value, {
     boardCharacteristicIds: searchBoardCharacteristicIds.value.map(Number),
-    machineModelIds: searchMachineModelIds.value.map(Number),
-    processStepIds: searchProcessStepIds.value.map(Number),
+    machineModelIds: [],
+    processStepIds: [],
     query: searchQuery.value,
   }),
 );
 
 const globalSearchFiltered = computed(
   () =>
-    searchMachineModelIds.value.length > 0 ||
-    searchProcessStepIds.value.length > 0 ||
     searchBoardCharacteristicIds.value.length > 0 ||
     searchQuery.value.trim() !== '',
 );
@@ -320,7 +430,7 @@ watch(
   { immediate: true },
 );
 
-// 节点被删 / 改名、换目录，或节点有了二级 Tab 之后，单独的勾不再有效
+// 节点被删 / 改名、换目录，或节点有了内容页之后，单独的勾不再有效
 watch(
   () => emptyLeafKeys.value.join('\n'),
   () => {
@@ -341,12 +451,11 @@ watch(
   },
 );
 
-function showTab(tabId: number | string, pageId?: number) {
+function showTab(tabId: number | string) {
   go({
     ...contextQuery(),
     ...nodeQuery(node.value),
     tab: String(tabId),
-    ...(pageId === undefined ? {} : { page: String(pageId) }),
   });
 }
 
@@ -356,6 +465,8 @@ function selectEntity(payload: {
   configuration?: string | null;
   item: string;
 }) {
+  comparison.value = null;
+  comparePickerOpen.value = false;
   go({
     ...contextQuery(),
     ...nodeQuery({
@@ -436,51 +547,6 @@ function clearChecks() {
   checkedLeafKeys.value = [];
 }
 
-function setChecked(pageId: number, checked: boolean) {
-  if (!auth.isAuthenticated) return;
-  const next = new Set(checkedPageIds.value);
-  if (checked) next.add(pageId);
-  else next.delete(pageId);
-  checkedPageIds.value = [...next];
-}
-
-// ── 二级 Tab ────────────────────────────────────────────────────
-
-function onPageSaved(pageId: number) {
-  if (activeTab.value) showTab(activeTab.value.id, pageId);
-}
-
-async function onPageAction(
-  key: 'delete' | 'left' | 'rename' | 'right',
-  page: MachineTabPage,
-) {
-  const tab = activeTab.value;
-  if (!tab) return;
-  if (key === 'rename') {
-    pageDialog.value?.openEdit(tab, page);
-    return;
-  }
-  if (key === 'left' || key === 'right') {
-    notifyResult(
-      store.moveMachineTabPage(tab.id, page.id, key === 'left' ? -1 : 1),
-      '',
-      { stale: '该二级 Tab 已被删除，请刷新后重试' },
-    );
-    return;
-  }
-  const ok = await confirmDelete(
-    '删除二级 Tab',
-    `确认删除“${page.name}”吗？它的选型记录和示意图会一起删除。`,
-  );
-  if (!ok) return;
-  const deleted = notifyResult(
-    store.deleteMachineTabPage(tab.id, page.id),
-    '已删除',
-    { stale: '该二级 Tab 已被删除，请刷新后重试' },
-  );
-  if (deleted && activePage.value?.id === page.id) showTab(tab.id);
-}
-
 // ── Tab 增删改 ──────────────────────────────────────────────────
 
 // Tab 上不放「×」：删除 Tab 会连同所有节点在它下面的内容一起删掉，
@@ -494,7 +560,7 @@ async function onTabDelete(tabId: number) {
 }
 
 function onTabSaved(tabId: number) {
-  // 新建的 Tab 还是空的，切过去好接着新建二级 Tab；编辑已有 Tab 不跳
+  // 新建的 Tab 还是空的，切过去好接着维护左侧目录项。
   if (tabs.value.some((tab) => tab.id === tabId && tab.pages.length === 0)) {
     showTab(tabId);
   }
@@ -503,13 +569,7 @@ function onTabSaved(tabId: number) {
 async function removeTab(tabId: number): Promise<boolean> {
   const tab = tabs.value.find((item) => item.id === tabId);
   if (!tab) return false;
-  // 机型的直属表格和分类 / 配置的二级 Tab 分开说
-  const tables = tab.pages.filter((page) => page.direct).length;
-  const subTabs = tab.pages.length - tables;
-  const parts = [
-    subTabs ? `${subTabs} 个二级 Tab` : '',
-    tables ? `${tables} 个机型的选型表` : '',
-  ].filter(Boolean);
+  const parts = tab.pages.length ? [`${tab.pages.length} 个机型目录项`] : [];
   const ok = await confirmDelete(
     '删除 Tab',
     parts.length
@@ -551,17 +611,15 @@ async function removeTab(tabId: number): Promise<boolean> {
             :selected-key="node ? nodeTreeKey(node) : undefined"
             :locked-branches="lockedBranches"
             :check-state="treeChecks"
+            :compare-enabled="canCompare"
             @select="selectEntity"
+            @compare="startComparison"
             @check-node="onTreeCheck"
           />
           <MachineGlobalSearchFilters
             v-else
-            v-model:machine-model-ids="searchMachineModelIds"
-            v-model:process-step-ids="searchProcessStepIds"
             v-model:board-characteristic-ids="searchBoardCharacteristicIds"
             v-model:query="searchQuery"
-            :machine-model-options="machineModelOptions"
-            :process-step-options="processStepOptions"
             :board-characteristic-options="boardCharacteristicOptions"
           />
         </div>
@@ -570,21 +628,66 @@ async function removeTab(tabId: number): Promise<boolean> {
         v-if="activeMachineView === 'find'"
         :results="globalSearchResults"
         :filtered="globalSearchFiltered"
+        :query="searchQuery"
+        :documents="globalSearchDocuments"
         @select="openGlobalSearchResult"
       />
       <div v-else class="selection-panel machine-workspace">
         <!-- 最上方：选中节点的路径（树里的选中项可能不在视野内） -->
-        <a-breadcrumb
-          v-if="nodePath.length"
-          class="machine-node-path"
-          aria-label="当前选单节点"
-        >
-          <a-breadcrumb-item v-for="part in nodePath" :key="part">
-            {{ part }}
-          </a-breadcrumb-item>
-        </a-breadcrumb>
-        <a-empty v-if="!node" description="暂无机型，请在左侧新建分类和机型" />
-        <!-- 有子选单的节点没有二级 Tab -->
+        <div class="machine-workspace-heading">
+          <a-breadcrumb
+            v-if="nodePath.length"
+            class="machine-node-path"
+            aria-label="当前选单节点"
+          >
+            <a-breadcrumb-item v-for="part in nodePath" :key="part">
+              {{ part }}
+            </a-breadcrumb-item>
+          </a-breadcrumb>
+          <a-space v-if="canCompare" :size="8" class="machine-compare-actions">
+            <a-button
+              :disabled="compareCandidates.length === 0"
+              @click="openComparePicker"
+            >
+              <template #icon><Columns2 :size="14" /></template>
+              选择对比项
+            </a-button>
+            <a-button v-if="comparison" @click="comparison = null">
+              退出对比
+            </a-button>
+          </a-space>
+        </div>
+        <template v-if="comparison">
+          <div class="machine-compare-summary" role="status">
+            <span>{{ comparison.left.item }} / {{ comparison.right.item }}</span>
+            <span>共 {{ comparisonTabs.length }} 个共同 Tab</span>
+          </div>
+          <a-tabs
+            v-if="comparisonTabs.length"
+            class="machine-section-tabs machine-compare-tabs"
+            aria-label="机型对比共同机构"
+            :active-key="comparisonTab?.key"
+            @change="compareTabKey = String($event)"
+          >
+            <a-tab-pane
+              v-for="tab in comparisonTabs"
+              :key="tab.key"
+              :tab="tab.name"
+            />
+          </a-tabs>
+          <MachineComparisonPanel
+            v-if="comparisonPanels"
+            :key="`${comparisonPanels.left.section.id}:${comparisonPanels.right.section.id}`"
+            :left="comparisonPanels.left"
+            :right="comparisonPanels.right"
+          />
+          <a-empty v-else description="这两个条目暂无可对比的机构" />
+        </template>
+        <a-empty
+          v-else-if="!node"
+          description="暂无机型，请在左侧新建分类和机型"
+        />
+        <!-- 有子选单的节点提示用户从左侧选择下一级 -->
         <a-empty v-else-if="nodeIsBranch">
           <template #description>
             <div>「{{ nodeName }}」下有子选单</div>
@@ -650,7 +753,7 @@ async function removeTab(tabId: number): Promise<boolean> {
                 {{
                   nodeIsMachine
                     ? '新建 Tab（如「输送机构」）后，就能在 Tab 下维护这个机型的选型表'
-                    : '新建 Tab（如「输送机构」），再在 Tab 下新建二级 Tab'
+                    : '新建 Tab（如「输送机构」），再从左侧配置中选择机型目录项'
                 }}
               </div>
             </template>
@@ -660,7 +763,7 @@ async function removeTab(tabId: number): Promise<boolean> {
               </a-button>
             </template>
           </a-empty>
-          <!-- 机型：一级 Tab 下直接是表格，没有二级 Tab -->
+          <!-- 机型目录项：一级 Tab 下直接是对应的选型表 -->
           <MachineSectionPanel
             v-else-if="activeTab && nodeIsMachine && placeholderSection"
             :key="`${activeTab.id}:${nodeName}`"
@@ -670,37 +773,38 @@ async function removeTab(tabId: number): Promise<boolean> {
             :empty-hint="directEmptyHint"
             :focus-row-id="Number(route.query.focusRow) || undefined"
           />
-          <template v-else-if="activeTab">
-            <MachineTabPages
-              :tab="activeTab"
-              :pages="nodePages"
-              :node-name="nodeName"
-              :active-page-id="activePage?.id ?? null"
-              :writable="writable"
-              :checkable="auth.isAuthenticated"
-              :checked="checkedPages"
-              @select="showTab(activeTab.id, $event)"
-              @check="setChecked"
-              @add="pageDialog?.openAdd(activeTab, node)"
-              @action="onPageAction"
-            />
-            <MachineSectionPanel
-              v-if="pageSection"
-              :machine-name="MACHINE_TAB_PAGE_OWNER"
-              :section="pageSection"
-              :focus-row-id="Number(route.query.focusRow) || undefined"
-            />
-          </template>
+          <a-empty
+            v-else-if="activeTab"
+            description="请从左侧配置中选择机型目录项"
+          />
         </template>
       </div>
     </div>
+    <a-modal
+      v-model:open="comparePickerOpen"
+      title="选择对比项"
+      ok-text="开始对比"
+      cancel-text="取消"
+      :ok-button-props="{ disabled: !compareTargetKey }"
+      @ok="confirmComparison"
+    >
+      <p>当前条目：{{ node ? nodePathLabel(node) : '' }}</p>
+      <a-select
+        v-model:value="compareTargetKey"
+        aria-label="选择另一个机型条目"
+        placeholder="搜索并选择另一个机型条目"
+        class="full-width"
+        :options="compareOptions"
+        option-filter-prop="label"
+        show-search
+      />
+    </a-modal>
     <MachineTabDialog
       ref="tabDialog"
       :catalog="activeMachineType"
       @saved="onTabSaved"
       @delete="onTabDelete"
     />
-    <MachineTabPageDialog ref="pageDialog" @saved="onPageSaved" />
   </section>
 </template>
 

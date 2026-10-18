@@ -2,7 +2,8 @@
 import { computed, ref, watch } from 'vue';
 
 import type { TimelineItem } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 
 /** 一条客户反馈的改善对策历史（只读）；置空即关闭 */
 const item = defineModel<TimelineItem | undefined>({ required: true });
@@ -22,10 +23,15 @@ const HISTORY_COLUMNS = [
   { key: 'date', title: '反馈时间', width: 112, align: 'center' as const },
   { key: 'status', title: '状态', width: 88, align: 'center' as const },
 ];
-const { columns, onResizeColumn } = useResizableColumns(
-  'feedback-history',
-  () => HISTORY_COLUMNS,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('feedback-history', () => HISTORY_COLUMNS);
 // 新的在前；同一天可能有内容相同的多条记录，用序号作 row-key
 const rows = computed(() =>
   [...(shown.value?.measureHistory ?? [])]
@@ -49,6 +55,15 @@ const rows = computed(() =>
           {{ shown.problem }}
         </a-descriptions-item>
       </a-descriptions>
+      <div class="selection-toolbar">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+      </div>
       <a-table
         class="feedback-history__table"
         :columns="columns"

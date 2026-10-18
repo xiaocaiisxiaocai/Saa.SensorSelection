@@ -328,6 +328,9 @@ export function normalizeSensorItems(
         ? rawStatus
         : defaultStatus;
       const rawType = storedText(item.sensorType).trim();
+      const replacesId = optionalPositiveId(item.replacesId);
+      const replacedById = optionalPositiveId(item.replacedById);
+      const replacedAt = storedText(item.replacedAt).trim();
       return {
         id,
         status,
@@ -336,14 +339,22 @@ export function normalizeSensorItems(
         brand: storedText(item.brand),
         model: storedText(item.model),
         spec: storedText(item.spec),
+        actualCondition: storedText(item.actualCondition),
         feature: storedText(item.feature),
         scene: storedText(item.scene),
         sopId: optionalPositiveId(item.sopId),
         model3dId: optionalPositiveId(item.model3dId),
-        replacesId: optionalPositiveId(item.replacesId),
-        replacedById: optionalPositiveId(item.replacedById),
+        replacesId,
+        replacedById,
         problemNote: storedText(item.problemNote).trim(),
-        replacedAt: storedText(item.replacedAt).trim(),
+        usedAt:
+          storedText(item.usedAt).trim() ||
+          (isSensorStatus(status, 'current') && replacesId ? replacedAt : ''),
+        disabledAt:
+          storedText(item.disabledAt).trim() ||
+          (isSensorStatus(status, 'disabled') ? replacedAt : ''),
+        enteredAt: storedText(item.enteredAt).trim().slice(0, 10),
+        replacedAt,
       };
     });
 }
@@ -361,6 +372,7 @@ export function createSensorCatalogDefaults(
       brand: model.brand,
       model: model.model,
       spec: model.spec,
+      actualCondition: '',
       feature: [definition.desc, definition.notes].filter(Boolean).join('；'),
       scene: definition.scenes.join('、'),
       sopId: null,
@@ -368,6 +380,9 @@ export function createSensorCatalogDefaults(
       replacesId: null,
       replacedById: null,
       problemNote: '',
+      usedAt: '',
+      disabledAt: '',
+      enteredAt: '',
       replacedAt: '',
     })),
   );

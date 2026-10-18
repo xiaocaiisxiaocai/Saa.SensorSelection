@@ -4,7 +4,8 @@ import { Pencil, RotateCcw, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 import type { CustomerProcItem } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -19,6 +20,7 @@ import {
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import { AHighlightText } from '@/ui';
 
 import ProcFormDialog from './ProcFormDialog.vue';
 
@@ -91,10 +93,15 @@ const baseColumns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
-const { columns, onResizeColumn } = useResizableColumns(
-  'customer-proc',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('customer-proc', () => baseColumns.value);
 
 watch(
   () => props.entityName,
@@ -162,6 +169,13 @@ function onTableChange(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
+        :hidden="hiddenColumns"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
+      />
       <a-button v-if="writable" type="primary" @click="formDialog?.open()">
         新增
       </a-button>
@@ -208,7 +222,9 @@ function onTableChange(
             </a-tooltip>
           </a-space>
         </template>
-        <template v-else>{{ cellText(value) }}</template>
+        <template v-else>
+          <AHighlightText :text="cellText(value)" :query="query" />
+        </template>
       </template>
     </a-table>
     <ProcFormDialog ref="formDialog" :entity-name="entityName" />

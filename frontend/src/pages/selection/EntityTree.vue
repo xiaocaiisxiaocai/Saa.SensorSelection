@@ -44,6 +44,8 @@ const props = withDefaults(
     itemLabel: string;
     /** 没有子节点的分组 / 配置也能选中（机型选单的末级节点） */
     selectableBranches?: boolean;
+    /** 开启机型叶子节点的右键对比菜单；父组件负责维护最多两个条目 */
+    compareEnabled?: boolean;
     /**
      * 不能再加子节点的分组 / 配置的 key（机型：已有二级 Tab），
      * 它们「更多」菜单里的新建项禁用，原因写在菜单文字里
@@ -56,6 +58,7 @@ const props = withDefaults(
     editable: false,
     sortable: false,
     allowConfigurations: false,
+    compareEnabled: false,
     selectedKey: undefined,
     checkState: undefined,
   },
@@ -64,6 +67,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   select: [payload: ItemPayload];
   checkNode: [payload: { key: string; checked: boolean }];
+  compare: [payload: ItemPayload];
   createGroup: [];
   editGroup: [name: string];
   deleteGroup: [name: string];
@@ -156,6 +160,10 @@ const selectedKeys = computed(() => {
   return key ? [key] : [];
 });
 
+function isCurrentNode(node: EntityNode) {
+  return selectedKeys.value[0] === node.key;
+}
+
 // 选中节点变化（含首次进入、从搜索 / 地址栏跳转）时：展开它所在的分支，
 // 并把它滚动到可见位置，免得选中项藏在收起的分组里或列表下方
 const body = ref<HTMLElement>();
@@ -198,6 +206,13 @@ const onSelect: TreeProps['onSelect'] = (_keys, info) => {
   const node = nodeOf(info.node);
   if (node.kind === 'item' || node.selectable) emit('select', payloadOf(node));
 };
+
+function onCompare(node: EntityNode) {
+  if (!props.compareEnabled || node.kind !== 'item' || isCurrentNode(node)) {
+    return;
+  }
+  emit('compare', payloadOf(node));
+}
 
 const onCheck: TreeProps['onCheck'] = (_keys, info) => {
   emit('checkNode', {
@@ -436,10 +451,16 @@ function runAction(node: EntityNode, key: string) {
         <template #title="{ dataRef }">
           <EntityTreeNode
             :node="dataRef as EntityNode"
+            :query="query"
             :editable="editable"
+            :compare-enabled="
+              compareEnabled && (dataRef as EntityNode).kind === 'item'
+            "
+            :compare-disabled="isCurrentNode(dataRef as EntityNode)"
             :actions="editable ? actionsFor(dataRef as EntityNode) : []"
             @toggle="toggleBranch((dataRef as EntityNode).key)"
             @action="runAction(dataRef as EntityNode, $event)"
+            @compare="onCompare(dataRef as EntityNode)"
           />
         </template>
       </a-tree>

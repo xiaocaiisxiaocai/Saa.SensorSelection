@@ -77,8 +77,6 @@ export function searchMachineStructures(
         document.configuration,
         document.machineName,
         document.sectionName,
-        document.machineModelName,
-        document.processStepName,
         document.boardCharacteristicName,
         document.searchableText,
       ].join(' '),

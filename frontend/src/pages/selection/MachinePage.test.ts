@@ -8,7 +8,19 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { filterMachineGroups, MACHINE_TAB_PAGE_OWNER } from '@/domain';
+import {
+  buildDefaultStore,
+  createSelectionRepository,
+  CRUD_DEFAULTS,
+  filterMachineGroups,
+  keyFor,
+  listEntityTreeItems,
+  MACHINE_TAB_PAGE_OWNER,
+  machineSectionRowsKey,
+  SENSOR_DATA,
+  type EntityGroup,
+  type MachineNodeRef,
+} from '@/domain';
 import { dialogs } from '@/pages/shared/confirm';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
@@ -24,11 +36,22 @@ import {
   treeNodes,
 } from '@/test-helpers';
 import EntityTree from './EntityTree.vue';
+import EntitySource from './EntitySource.vue';
+import { nodeTreeKey } from './machine/machine-nodes';
 import MachineGlobalSearchFilters from './machine/MachineGlobalSearchFilters.vue';
 import MachineGlobalSearchResults from './machine/MachineGlobalSearchResults.vue';
 import MachineSectionPanel from './machine/MachineSectionPanel.vue';
+import MachineComparisonPanel from './machine/MachineComparisonPanel.vue';
 import { resolveMachineSelection } from './machine/machine-selection';
 import MachinePage from './MachinePage.vue';
+
+vi.mock('@/api', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/api')>();
+  return {
+    ...original,
+    api: { ...original.api, getKey: vi.fn().mockResolvedValue([]) },
+  };
+});
 
 const machineDir = join(dirname(fileURLToPath(import.meta.url)), 'machine');
 const machineSectionPanelSource = readFileSync(
@@ -54,15 +77,14 @@ async function mountPage(
   const pinia = createPinia();
   setActivePinia(pinia);
   const selectionStore = useSelectionStore();
-  // 结构目录有一个「输送机构」Tab，下面有一个二级 Tab
+  // 结构目录有一个「输送机构」Tab，机型目录项在其中各自拥有直属内容
   const conveyor = selectionStore.saveMachineTab('mechanism', {
     kind: 'structure',
     name: '输送机构',
     sort: 1,
   });
   if (!conveyor.ok) throw new Error('tab fixture failed');
-  // 打开页面时默认选中结构目录的第一个机型：机型没有二级 Tab，
-  // 它在「输送机构」下有一张直属表格
+  // 打开页面时默认选中结构目录的第一个机型，并为它准备直属表格
   const first = resolveMachineSelection(
     filterMachineGroups(selectionStore.entityGroups('machine'), 'mechanism'),
     {},
@@ -247,12 +269,9 @@ describe('MachinePage', () => {
     const machineName = panel.props('machineName') as string;
     const section = panel.props('section') as { id: number; kind: string };
     const sensor = selectionStore.sensors[0];
-    const machineModel = selectionStore.dictionaryItems('machine-model')[0];
-    if (!sensor || !machineModel)
-      throw new Error('global search fixture failed');
+    if (!sensor) throw new Error('global search fixture failed');
     const row = selectionStore.saveMachineSectionRow(section.id, machineName, {
-      machineModelId: machineModel.id,
-      role: '入料确认',
+      role: '全局查找专用 Sensor',
       sensorIds: [sensor.id],
     });
     if (!row.ok) throw new Error('global search row fixture failed');
@@ -274,19 +293,22 @@ describe('MachinePage', () => {
         .findAllComponents({ name: 'ASelect' })
         .every((field) => field.props('maxTagCount') === undefined),
     ).toBe(true);
-    const machineField = filters
-      .findAllComponents({ name: 'ASelect' })
-      .find((component) => component.props('placeholder') === '选择适用机型');
-    machineField?.vm.$emit('update:value', [machineModel.id]);
+    expect(
+      filters
+        .findAllComponents({ name: 'ASelect' })
+        .map((component) => component.props('placeholder')),
+    ).toEqual(['选择板件特性']);
+    const query = inputBy(filters, '搜索结构名称、Sensor名称或传感器');
+    expect(query).toBeDefined();
+    query!.vm.$emit('update:value', '全局查找专用 Sensor');
     await flushPromises();
 
     expect(results.text()).toContain('找到 1 个结构');
-    const query = inputBy(filters, '搜索结构名称、功能作用或传感器');
-    query?.vm.$emit('update:value', '不会命中的关键词');
+    query!.vm.$emit('update:value', '不会命中的关键词');
     await flushPromises();
     expect(results.text()).toContain('找到 0 个结构');
     expect(results.text()).toContain('没有找到符合条件的结构');
-    query?.vm.$emit('update:value', '');
+    query!.vm.$emit('update:value', '全局查找专用 Sensor');
     await flushPromises();
     expect(results.text()).toContain('找到 1 个结构');
 
@@ -383,7 +405,7 @@ describe('MachinePage', () => {
 
   it('checks every machine under a tree node from the tree', async () => {
     const wrapper = await mountPage(true);
-    // 「已选 N / M 个机型」按机型（目录树末级节点）计数，没有二级 Tab 的机型也能勾
+    // 「已选 N / M 个机型」按目录树末级节点计数，没有内容页的机型也能勾
     expect(wrapper.text()).toMatch(/已选\s+0\s+\/\s+101/);
     await wrapper.get('.ant-tree-checkbox').trigger('click');
     expect(wrapper.text()).toMatch(/已选\s+29\s+\/\s+101/);
@@ -464,7 +486,7 @@ describe('MachinePage', () => {
     wrapper.unmount();
   });
 
-  it('offers an optional process-step selector for structure records only', async () => {
+  it('uses Sensor名称 and board characteristic fields for structure records only', async () => {
     window.localStorage.clear();
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -476,7 +498,6 @@ describe('MachinePage', () => {
       username: 'editor',
     });
     const selectionStore = useSelectionStore();
-    const processStep = selectionStore.processSteps[0];
     const structure = selectionStore.saveExtraMachineSection('测试机型', {
       kind: 'structure',
       name: '测试结构',
@@ -487,8 +508,8 @@ describe('MachinePage', () => {
       name: '测试注意事项',
       sort: 2,
     });
-    if (!processStep || !structure.ok || !notes.ok) {
-      throw new Error('process-step fixture failed');
+    if (!structure.ok || !notes.ok) {
+      throw new Error('section fixture failed');
     }
 
     const structurePanel = mount(MachineSectionPanel, {
@@ -503,20 +524,16 @@ describe('MachinePage', () => {
       .find((button) => button.text() === '新增选型');
     await addStructure?.trigger('click');
     await flushPromises();
-    const processSelect = structurePanel
+    const structureSelects = structurePanel
       .findAllComponents({ name: 'ASelect' })
-      .find(
-        (component) =>
-          component.props('placeholder') === '选择工艺制程（可选）',
-      );
-    expect(processSelect).toBeDefined();
-    expect(processSelect?.props('allowClear')).toBe(true);
-    expect(processSelect?.props('options')).toEqual(
-      selectionStore.processSteps.map((item) => ({
-        label: `${item.layer} · ${item.name}`,
-        value: item.id,
-      })),
-    );
+      .map((component) => component.props('placeholder'));
+    expect(document.body.textContent).toContain('Sensor名称');
+    expect(structureSelects).toContain('选择板件特性（可选）');
+    expect(structureSelects).not.toContain('选择机型（可选）');
+    expect(structureSelects).not.toContain('选择工艺制程（可选）');
+    expect(document.body.textContent).not.toContain('功能作用');
+    expect(document.body.textContent).not.toContain('工艺制程');
+    expect(document.body.textContent).not.toContain('机型（可选）');
     structurePanel.unmount();
 
     const notesPanel = mount(MachineSectionPanel, {
@@ -536,22 +553,13 @@ describe('MachinePage', () => {
         .findAllComponents({ name: 'ASelect' })
         .some(
           (component) =>
-            component.props('placeholder') === '选择工艺制程（可选）',
-        ),
-    ).toBe(false);
-    expect(
-      notesPanel
-        .findAllComponents({ name: 'ASelect' })
-        .some(
-          (component) =>
-            component.props('placeholder') === '选择机型（可选）' ||
             component.props('placeholder') === '选择板件特性（可选）',
         ),
     ).toBe(false);
     notesPanel.unmount();
   });
 
-  it('offers searchable optional machine and board dictionary bindings for structure records only', async () => {
+  it('offers a searchable optional board binding and displays the saved value', async () => {
     window.localStorage.clear();
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -583,25 +591,21 @@ describe('MachinePage', () => {
       ?.trigger('click');
     await flushPromises();
 
-    const machineSelect = wrapper
-      .findAllComponents({ name: 'ASelect' })
-      .find(
-        (component) => component.props('placeholder') === '选择机型（可选）',
-      );
     const boardSelect = wrapper
       .findAllComponents({ name: 'ASelect' })
       .find(
         (component) =>
           component.props('placeholder') === '选择板件特性（可选）',
       );
-    expect(machineSelect?.props('showSearch')).toBe(true);
-    expect(machineSelect?.props('allowClear')).toBe(true);
-    expect(machineSelect?.props('options')).toEqual(
-      selectionStore.dictionaryItems('machine-model').map((item) => ({
-        label: item.name,
-        value: item.id,
-      })),
-    );
+    expect(
+      wrapper
+        .findAllComponents({ name: 'ASelect' })
+        .some(
+          (component) =>
+            component.props('placeholder') === '选择机型（可选）' ||
+            component.props('placeholder') === '选择工艺制程（可选）',
+        ),
+    ).toBe(false);
     expect(boardSelect?.props('showSearch')).toBe(true);
     expect(boardSelect?.props('allowClear')).toBe(true);
     expect(boardSelect?.props('options')).toEqual(
@@ -611,165 +615,108 @@ describe('MachinePage', () => {
       })),
     );
     const sensor = selectionStore.sensors[0];
-    const machineModel = selectionStore.dictionaryItems('machine-model')[0];
     const boardCharacteristic = selectionStore.dictionaryItems(
       'board-characteristic',
     )[0];
-    if (!sensor || !machineModel || !boardCharacteristic) {
+    if (!sensor || !boardCharacteristic) {
       throw new Error('dictionary binding options missing');
     }
     expect(
       selectionStore.saveMachineSectionRow(structure.item.id, '测试机型', {
         role: '字典绑定显示',
         sensorIds: [sensor.id],
-        machineModelId: machineModel.id,
         boardCharacteristicId: boardCharacteristic.id,
       }).ok,
     ).toBe(true);
     await flushPromises();
-    expect(wrapper.text()).toContain(machineModel.name);
+    expect(wrapper.text()).toContain('字典绑定显示');
     expect(wrapper.text()).toContain(boardCharacteristic.name);
     wrapper.unmount();
   });
 
-  it('searches structure records by their linked process step', async () => {
+  it('searches structure records by Sensor名称', async () => {
     window.localStorage.clear();
     const wrapper = await mountPage();
     const selectionStore = useSelectionStore();
     const panel = wrapper.getComponent(MachineSectionPanel);
     const machineName = panel.props('machineName') as string;
     const section = panel.props('section') as { id: number; kind: string };
-    const [firstProcessStep, secondProcessStep] = selectionStore.processSteps;
     const sensor = selectionStore.sensors[0];
 
     expect(section.kind).toBe('structure');
-    expect(firstProcessStep).toBeDefined();
-    expect(secondProcessStep).toBeDefined();
     expect(sensor).toBeDefined();
-    if (!firstProcessStep || !secondProcessStep || !sensor) return;
+    if (!sensor) return;
 
     expect(
       selectionStore.saveMachineSectionRow(section.id, machineName, {
         note: '',
-        processStepId: firstProcessStep.id,
         purpose: '',
-        role: '制程搜索-不匹配',
+        role: 'Sensor名称-不匹配',
         sensorIds: [sensor.id],
       }).ok,
     ).toBe(true);
     expect(
       selectionStore.saveMachineSectionRow(section.id, machineName, {
         note: '',
-        processStepId: secondProcessStep.id,
         purpose: '',
-        role: '制程搜索-匹配',
+        role: 'Sensor名称-匹配',
         sensorIds: [sensor.id],
       }).ok,
     ).toBe(true);
     await flushPromises();
 
-    const search = inputBy(panel, '搜索规格、型号或功能');
+    const search = inputBy(panel, '搜索规格、型号或 Sensor名称');
     expect(search).toBeDefined();
 
-    search!.vm.$emit('update:value', secondProcessStep.name);
+    search!.vm.$emit('update:value', 'Sensor名称-匹配');
     await flushPromises();
 
-    expect(panel.text()).toContain('制程搜索-匹配');
-    expect(panel.text()).not.toContain('制程搜索-不匹配');
+    expect(panel.text()).toContain('Sensor名称-匹配');
+    expect(panel.text()).not.toContain('Sensor名称-不匹配');
     wrapper.unmount();
   });
 
-  it('filters structure records from a searchable process-step dropdown', async () => {
+  it('shows only the current structure columns after removing machine and process fields', async () => {
+    window.localStorage.clear();
+    const wrapper = await mountPage();
+    const panel = wrapper.getComponent(MachineSectionPanel);
+    const columns = panel
+      .getComponent({ name: 'ATable' })
+      .props('columns') as Array<{ title: string }>;
+    expect(columns.map((column) => column.title)).toEqual([
+      'Sensor名称',
+      '板件特性',
+      '传感器类型',
+      '规格',
+      '作用',
+      '备注',
+      '示意图',
+    ]);
+    wrapper.unmount();
+  });
+
+  it('filters structure records from the searchable board-characteristic dropdown', async () => {
     window.localStorage.clear();
     const wrapper = await mountPage();
     const selectionStore = useSelectionStore();
     const panel = wrapper.getComponent(MachineSectionPanel);
     const machineName = panel.props('machineName') as string;
     const section = panel.props('section') as { id: number; kind: string };
-    const [firstProcessStep, secondProcessStep] = selectionStore.processSteps;
-    const sensor = selectionStore.sensors[0];
-
-    expect(section.kind).toBe('structure');
-    expect(firstProcessStep).toBeDefined();
-    expect(secondProcessStep).toBeDefined();
-    expect(sensor).toBeDefined();
-    if (!firstProcessStep || !secondProcessStep || !sensor) return;
-
-    expect(
-      selectionStore.saveMachineSectionRow(section.id, machineName, {
-        note: '',
-        processStepId: firstProcessStep.id,
-        purpose: '',
-        role: '制程下拉-不匹配',
-        sensorIds: [sensor.id],
-      }).ok,
-    ).toBe(true);
-    expect(
-      selectionStore.saveMachineSectionRow(section.id, machineName, {
-        note: '',
-        processStepId: secondProcessStep.id,
-        purpose: '',
-        role: '制程下拉-匹配',
-        sensorIds: [sensor.id],
-      }).ok,
-    ).toBe(true);
-    await flushPromises();
-
-    const processFilter = findColumn(panel, '工艺制程').column;
-    expect(processFilter.filterSearch).toBe(true);
-    expect(processFilter.filterMultiple).toBe(true);
-    expect(processFilter.filters).toEqual(
-      selectionStore.processSteps.map((item) => ({
-        text: `${item.layer} · ${item.name}`,
-        value: item.id,
-      })),
-    );
-
-    await chooseColumnFilter(panel, '工艺制程', [secondProcessStep.id]);
-
-    expect(panel.text()).toContain('制程下拉-匹配');
-    expect(panel.text()).not.toContain('制程下拉-不匹配');
-
-    await panel.get('button[aria-label="重置筛选"]').trigger('click');
-    await flushPromises();
-    expect(findColumn(panel, '工艺制程').column.filteredValue).toBeNull();
-    expect(panel.text()).toContain('制程下拉-不匹配');
-    wrapper.unmount();
-  });
-
-  it('filters structure records from searchable machine-model and board-characteristic dropdowns', async () => {
-    window.localStorage.clear();
-    const wrapper = await mountPage();
-    const selectionStore = useSelectionStore();
-    const panel = wrapper.getComponent(MachineSectionPanel);
-    const machineName = panel.props('machineName') as string;
-    const section = panel.props('section') as { id: number; kind: string };
-    const [firstMachineModel, secondMachineModel] =
-      selectionStore.dictionaryItems('machine-model');
     const [firstBoardCharacteristic, secondBoardCharacteristic] =
       selectionStore.dictionaryItems('board-characteristic');
     const sensor = selectionStore.sensors[0];
 
     expect(section.kind).toBe('structure');
-    expect(firstMachineModel).toBeDefined();
-    expect(secondMachineModel).toBeDefined();
     expect(firstBoardCharacteristic).toBeDefined();
     expect(secondBoardCharacteristic).toBeDefined();
     expect(sensor).toBeDefined();
-    if (
-      !firstMachineModel ||
-      !secondMachineModel ||
-      !firstBoardCharacteristic ||
-      !secondBoardCharacteristic ||
-      !sensor
-    ) {
+    if (!firstBoardCharacteristic || !secondBoardCharacteristic || !sensor) {
       return;
     }
 
     expect(
       selectionStore.saveMachineSectionRow(section.id, machineName, {
         boardCharacteristicId: firstBoardCharacteristic.id,
-        machineModelId: firstMachineModel.id,
         note: '',
         purpose: '',
         role: '字典筛选-第一项',
@@ -779,7 +726,6 @@ describe('MachinePage', () => {
     expect(
       selectionStore.saveMachineSectionRow(section.id, machineName, {
         boardCharacteristicId: secondBoardCharacteristic.id,
-        machineModelId: secondMachineModel.id,
         note: '',
         purpose: '',
         role: '字典筛选-第二项',
@@ -788,18 +734,10 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const machineModelFilter = findColumn(panel, '机型').column;
     const boardCharacteristicFilter = findColumn(panel, '板件特性').column;
 
-    expect(machineModelFilter.filterSearch).toBe(true);
-    expect(machineModelFilter.filterMultiple).toBe(true);
-    expect(machineModelFilter.filters).toEqual(
-      selectionStore.dictionaryItems('machine-model').map((item) => ({
-        text: item.name,
-        value: item.id,
-      })),
-    );
     expect(boardCharacteristicFilter.filterSearch).toBe(true);
+    expect(boardCharacteristicFilter.filterMultiple).toBe(true);
     expect(boardCharacteristicFilter.filters).toEqual(
       selectionStore.dictionaryItems('board-characteristic').map((item) => ({
         text: item.name,
@@ -807,20 +745,13 @@ describe('MachinePage', () => {
       })),
     );
     expect(findColumn(panel, '传感器类型').column.filterSearch).toBe(true);
-    expect(findColumn(panel, '工艺制程').column.filterSearch).toBe(true);
 
-    await chooseColumnFilter(panel, '机型', [secondMachineModel.id]);
-    expect(panel.text()).toContain('字典筛选-第二项');
-    expect(panel.text()).not.toContain('字典筛选-第一项');
-
-    await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await chooseColumnFilter(panel, '板件特性', [firstBoardCharacteristic.id]);
     expect(panel.text()).toContain('字典筛选-第一项');
     expect(panel.text()).not.toContain('字典筛选-第二项');
 
     await panel.get('button[aria-label="重置筛选"]').trigger('click');
     await flushPromises();
-    expect(findColumn(panel, '机型').column.filteredValue).toBeNull();
     expect(findColumn(panel, '板件特性').column.filteredValue).toBeNull();
     expect(panel.text()).toContain('字典筛选-第一项');
     expect(panel.text()).toContain('字典筛选-第二项');
@@ -831,7 +762,7 @@ describe('MachinePage', () => {
     const wrapper = await mountPage(true, true);
     const widths = Object.values(columnWidths(wrapper));
 
-    expect(widths).toEqual([104, 100, 136, 144, 152, 220, 120, 96, 152, 72]);
+    expect(widths).toEqual([104, 144, 152, 220, 120, 96, 152, 72]);
 
     wrapper.unmount();
   });
@@ -981,6 +912,184 @@ describe('MachinePage', () => {
   });
 });
 
+describe('MachinePage comparison', () => {
+  afterEach(() => {
+    message.destroy();
+    vi.restoreAllMocks();
+  });
+
+  async function comparisonFixture(writable = false) {
+    const wrapper = await mountPage(writable, writable);
+    await flushPromises();
+    const store = useSelectionStore();
+    const leaves = listEntityTreeItems(
+      filterMachineGroups(store.entityGroups('machine'), 'mechanism'),
+    );
+    const nodes: MachineNodeRef[] = leaves.slice(0, 3).map((item) => ({
+      category: item.category,
+      configuration: item.configuration ?? null,
+      item: item.name,
+    }));
+    const [left, right, empty] = nodes;
+    if (!left || !right || !empty) throw new Error('comparison leaves missing');
+    const conveyor = store.machineTabs.find((tab) => tab.name === '输送机构')!;
+    const extra = store.saveMachineTab('mechanism', {
+      kind: 'structure',
+      name: '收板机构',
+      sort: 2,
+    });
+    const oneSide = store.saveMachineTab('mechanism', {
+      kind: 'structure',
+      name: '仅左侧机构',
+      sort: 3,
+    });
+    if (!extra.ok || !oneSide.ok) throw new Error('comparison tabs failed');
+    const sections: number[] = [];
+    for (const tab of [conveyor, extra.item]) {
+      for (const [index, node] of [left, right].entries()) {
+        const page = store.ensureMachineDirectPage(tab.id, node);
+        if (!page.ok) throw new Error('comparison page failed');
+        sections.push(page.item.id);
+        const row = store.saveMachineSectionRow(
+          page.item.id,
+          MACHINE_TAB_PAGE_OWNER,
+          {
+            role: `${index ? '右' : '左'}-${tab.name}`,
+            sensorIds: [store.sensors[0]!.id],
+          },
+        );
+        if (!row.ok) throw new Error('comparison row failed');
+      }
+    }
+    store.ensureMachineDirectPage(oneSide.item.id, left);
+    await flushPromises();
+    return { wrapper, store, left, right, empty, sections };
+  }
+
+  it('shows one aligned read-only comparison and switches both sides while retaining the single-view route', async () => {
+    const { wrapper, right, left, sections } = await comparisonFixture(true);
+    const originalQuery = { ...wrapper.vm.$route.query };
+    wrapper.getComponent(EntitySource).vm.$emit('compare', right);
+    await flushPromises();
+    expect(wrapper.findAllComponents(MachineComparisonPanel)).toHaveLength(1);
+    expect(wrapper.get('.machine-comparison-heading').text()).toContain(
+      left.item,
+    );
+    expect(wrapper.findAll('.machine-comparison-heading')[1]!.text()).toContain(
+      right.item,
+    );
+    expect(wrapper.get('.machine-compare-tabs').text()).toContain('输送机构');
+    expect(wrapper.get('.machine-compare-tabs').text()).toContain('收板机构');
+    expect(wrapper.get('.machine-compare-tabs').text()).not.toContain(
+      '仅左侧机构',
+    );
+    expect(
+      (['left', 'right'] as const).map(
+        (side) =>
+          wrapper.getComponent(MachineComparisonPanel).props(side).section.id,
+      ),
+    ).toEqual(sections.slice(0, 2));
+    expect(wrapper.find('button[aria-label="新增选型"]').exists()).toBe(false);
+    const firstRecord = wrapper.get('.machine-comparison-record');
+    expect(firstRecord.findAll('th').map((cell) => cell.text())).toEqual([
+      'Sensor名称',
+      '板件特性',
+      '传感器类型',
+      '规格',
+      '作用',
+      '备注',
+      '示意图',
+    ]);
+    expect(
+      firstRecord
+        .findAll('tr')
+        .every(
+          (row) =>
+            row.findAll('th').length === 1 && row.findAll('td').length === 2,
+        ),
+    ).toBe(true);
+    expect(wrapper.findAll('input[aria-label="搜索对比内容"]')).toHaveLength(1);
+    expect(
+      wrapper.findAll('.machine-comparison-tabs'),
+    ).toHaveLength(1);
+    const tab = wrapper
+      .get('.machine-compare-tabs')
+      .findAll('.ant-tabs-tab')
+      .find((tab) => tab.text() === '收板机构')!;
+    await tab.get('.ant-tabs-tab-btn').trigger('click');
+    await flushPromises();
+    expect(
+      (['left', 'right'] as const).map(
+        (side) =>
+          wrapper.getComponent(MachineComparisonPanel).props(side).section.id,
+      ),
+    ).toEqual(sections.slice(2, 4));
+    expect(wrapper.text()).toContain('左-收板机构');
+    expect(wrapper.text()).toContain('右-收板机构');
+    expect(wrapper.vm.$route.query).toEqual(originalQuery);
+    await findButton(wrapper, '退出对比')!.trigger('click');
+    await flushPromises();
+    expect(wrapper.findAllComponents(MachineSectionPanel)).toHaveLength(1);
+    expect(wrapper.vm.$route.query).toEqual(originalQuery);
+    wrapper.unmount();
+  });
+
+  it('offers a searchable picker to anonymous readers and returns to single view on a normal tree click', async () => {
+    const { wrapper, right } = await comparisonFixture();
+    await findButton(wrapper, '选择对比项')!.trigger('click');
+    await flushPromises();
+    const picker = wrapper
+      .findAllComponents({ name: 'ASelect' })
+      .find(
+        (component) =>
+          component.attributes('aria-label') === '选择另一个机型条目',
+      )!;
+    expect(picker.props('mode')).not.toBe('multiple');
+    picker.vm.$emit('update:value', nodeTreeKey(right));
+    await flushPromises();
+    const button = [
+      ...document.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ].find((button) => button.textContent?.replace(/\s+/g, '') === '开始对比')!;
+    button.click();
+    await flushPromises();
+    expect(wrapper.findAll('.machine-comparison-heading')).toHaveLength(2);
+    await clickTreeNode(wrapper, right.item!);
+    expect(wrapper.find('.machine-comparison-panel').exists()).toBe(false);
+    expect(wrapper.vm.$route.query.item).toBe(right.item);
+    wrapper.unmount();
+  });
+
+  it('handles no common tabs and replaces the right item without adding a third pane', async () => {
+    const { wrapper, right, empty } = await comparisonFixture();
+    wrapper.getComponent(EntitySource).vm.$emit('compare', right);
+    await flushPromises();
+    expect(wrapper.findAll('.machine-comparison-heading')).toHaveLength(2);
+    wrapper.getComponent(EntitySource).vm.$emit('compare', empty);
+    await flushPromises();
+    expect(wrapper.text()).toContain('这两个条目暂无可对比的机构');
+    expect(wrapper.findAllComponents(MachineComparisonPanel)).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('clears comparison if a compared item is removed', async () => {
+    const { wrapper, store, empty } = await comparisonFixture();
+    wrapper.getComponent(EntitySource).vm.$emit('compare', empty);
+    await flushPromises();
+    expect(wrapper.find('.machine-compare-summary').exists()).toBe(true);
+    expect(
+      store.deleteEntityItem(
+        'machine',
+        empty.item!,
+        empty.category,
+        empty.configuration,
+      ).ok,
+    ).toBe(true);
+    await flushPromises();
+    expect(wrapper.find('.machine-compare-summary').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
 describe('MachinePage machine tabs', () => {
   const OTHER_MACHINE = '02 多段输送段（搭配）';
 
@@ -989,68 +1098,9 @@ describe('MachinePage machine tabs', () => {
     vi.restoreAllMocks();
   });
 
-  const pageNames = (wrapper: VueWrapper) =>
-    wrapper.findAll('.machine-sub-tab__name').map((page) => page.text().trim());
-
-  async function openPageMenu(wrapper: VueWrapper, name: string) {
-    await wrapper
-      .get(`button[aria-label="二级 Tab ${name} 的更多操作"]`)
-      .trigger('click');
-    await flushPromises();
-  }
-
-  async function runPageAction(
-    wrapper: VueWrapper,
-    name: string,
-    action: string,
-  ) {
-    await openPageMenu(wrapper, name);
-    const item = [
-      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
-    ].find((menuItem) => menuItem.textContent?.trim() === action);
-    if (!item) throw new Error(`menu item "${action}" not found`);
-    item.click();
-    await flushPromises();
-  }
-
-  async function fillPageDialog(name: string) {
-    const input = document.querySelector<HTMLInputElement>(
-      '#machine-tab-page-name',
-    );
-    if (!input) throw new Error('page dialog not open');
-    input.value = name;
-    input.dispatchEvent(new Event('input'));
-    await flushPromises();
-    [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
-      .find((button) => button.textContent?.trim() === '保存')
-      ?.click();
-    await flushPromises();
-  }
-
-  async function createPage(wrapper: VueWrapper, name: string) {
-    // 已有二级 Tab 时在栏右侧，还没有时是空态里的按钮
-    const button = wrapper.find('button[aria-label="新建二级 Tab"]').exists()
-      ? wrapper.get('button[aria-label="新建二级 Tab"]')
-      : findButton(wrapper, '新建二级Tab')!;
-    await button.trigger('click');
-    await flushPromises();
-    await fillPageDialog(name);
-  }
-
   async function goTo(wrapper: VueWrapper, query: Record<string, string>) {
     await wrapper.vm.$router.replace({ path: '/selection/machine', query });
     await flushPromises();
-  }
-
-  /** 在第一个有配置的分类下新建一个空配置并选中它：没有子选单的配置才能建二级 Tab */
-  async function openEmptyConfiguration(wrapper: VueWrapper, name = '空配置') {
-    const store = useSelectionStore();
-    const category = store
-      .entityGroups('machine')
-      .find((group) => group.configurations?.length)!.name;
-    expect(store.saveMachineConfiguration(category, { name }).ok).toBe(true);
-    await goTo(wrapper, { category, configuration: name });
-    return { category, configuration: name, item: null };
   }
 
   it('shows a machine’s own table directly under the first-level tab, without second-level tabs', async () => {
@@ -1076,7 +1126,7 @@ describe('MachinePage machine tabs', () => {
     );
     expect(
       wrapper.get('.machine-workspace').element.firstElementChild?.classList,
-    ).toContain('machine-node-path');
+    ).toContain('machine-workspace-heading');
     expect(wrapper.getComponent(MachineSectionPanel).props('emptyHint')).toBe(
       `「${direct.node.item}」在「输送机构」下还没有选型记录`,
     );
@@ -1137,50 +1187,47 @@ describe('MachinePage machine tabs', () => {
     wrapper.unmount();
   });
 
-  it('lets an empty configuration own second-level tabs and then locks adding machines under it', async () => {
+  it('projects configuration directory items into their own first-level-tab content', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const store = useSelectionStore();
-    const category = store
+    const group = store
       .entityGroups('machine')
-      .find((group) => group.configurations?.length)!.name;
+      .find((item) => item.configurations?.length)!;
+    const configuration = group.configurations![0]!.name;
     expect(
-      store.saveMachineConfiguration(category, { name: '空配置' }).ok,
+      store.saveEntityItem('machine', {
+        category: group.name,
+        configuration,
+        name: '配置目录项',
+      }).ok,
+    ).toBe(true);
+    const node: MachineNodeRef = {
+      category: group.name,
+      configuration,
+      item: '配置目录项',
+    };
+    const page = store.ensureMachineDirectPage(store.machineTabs[0]!.id, node);
+    if (!page.ok) throw new Error('direct page fixture failed');
+    expect(
+      store.saveMachineSectionRow(page.item.id, MACHINE_TAB_PAGE_OWNER, {
+        role: '目录项自己的内容',
+        sensorIds: [store.sensors[0]!.id],
+      }).ok,
     ).toBe(true);
     await flushPromises();
 
-    // 没有子节点的配置是末级节点，可以选中
-    await wrapper
-      .get('input[placeholder="搜索分类或机型…"]')
-      .setValue('空配置');
-    await flushPromises();
-    await clickTreeNode(wrapper, '空配置');
+    await clickTreeNode(wrapper, '配置目录项');
     expect(wrapper.vm.$route.query).toMatchObject({
-      category,
-      configuration: '空配置',
+      category: group.name,
+      configuration,
+      item: '配置目录项',
     });
-    await createPage(wrapper, '配置页');
-    expect(pageNames(wrapper)).toEqual(['配置页']);
-
-    // 有二级 Tab 了：「新建机型」禁用，原因写在菜单文字里
-    await wrapper
-      .get('button[aria-label="空配置 的更多操作"]')
-      .trigger('click');
-    await flushPromises();
-    const create = [
-      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
-    ].find((item) => item.textContent?.includes('新建机型'));
-    expect(create?.textContent?.trim()).toBe('新建机型（已有二级 Tab）');
-    expect(create?.getAttribute('aria-disabled')).toBe('true');
-    // 删除也一样：先禁用并写明原因，不用点了确认才被拒
-    const menuItem = (label: string) =>
-      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-        (item) => item.textContent?.includes(label),
-      );
-    expect(menuItem('删除配置')?.textContent?.trim()).toBe(
-      '删除配置（已有二级 Tab）',
+    expect(wrapper.find('.machine-sub-tabs').exists()).toBe(false);
+    expect(wrapper.getComponent(MachineSectionPanel).props('section').id).toBe(
+      page.item.id,
     );
-    expect(menuItem('删除配置')?.getAttribute('aria-disabled')).toBe('true');
+    expect(wrapper.text()).toContain('目录项自己的内容');
     wrapper.unmount();
   });
 
@@ -1221,66 +1268,152 @@ describe('MachinePage machine tabs', () => {
     wrapper.unmount();
   });
 
-  it('creates, reorders, renames and deletes second-level tabs on an empty configuration', async () => {
-    const wrapper = await mountPage(true, true);
-    await flushPromises();
-    const store = useSelectionStore();
-    await openEmptyConfiguration(wrapper);
-
-    await createPage(wrapper, '入料段');
-    await createPage(wrapper, '出料确认');
-    expect(pageNames(wrapper)).toEqual(['入料段', '出料确认']);
-    const created = store.machineTabs[0]!.pages.find(
-      (page) => page.name === '出料确认',
-    )!;
-    expect(wrapper.vm.$route.query.page).toBe(String(created.id));
-
-    await runPageAction(wrapper, '出料确认', '左移');
-    expect(pageNames(wrapper)).toEqual(['出料确认', '入料段']);
-
-    await runPageAction(wrapper, '出料确认', '改名');
-    expect(
-      document.querySelector<HTMLInputElement>('#machine-tab-page-name')!.value,
-    ).toBe('出料确认');
-    await fillPageDialog('出料确认（改）');
-    expect(pageNames(wrapper)).toEqual(['出料确认（改）', '入料段']);
-
-    vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
-    await runPageAction(wrapper, '出料确认（改）', '删除');
-    expect(pageNames(wrapper)).toEqual(['入料段']);
-    wrapper.unmount();
-  });
-
-  it('allows the same page name under different tabs and nodes, never on a machine', async () => {
-    const wrapper = await mountPage(true, true);
-    await flushPromises();
-    const store = useSelectionStore();
-    const node = await openEmptyConfiguration(wrapper);
-    const conveyor = store.machineTabs[0]!;
-    const lifter = store.saveMachineTab('mechanism', {
-      kind: 'structure',
-      name: '收板机构',
+  it('migrates legacy configuration pages into directory items without changing content ids', () => {
+    const seed = buildDefaultStore({
+      crudDefaults: CRUD_DEFAULTS,
+      sensorData: SENSOR_DATA,
     });
-    if (!lifter.ok) throw new Error('tab fixture failed');
-    for (const tabId of [conveyor.id, lifter.item.id]) {
-      expect(store.saveMachineTabPage(tabId, { name: '入料段', node }).ok).toBe(
-        true,
-      );
-    }
+    const groups = seed[keyFor('entity-groups', 'machine')] as EntityGroup[];
+    const group = groups.find((item) => item.configurations?.length)!;
+    const configuration = group.configurations![0]!;
+    seed[keyFor('machine-tabs', 'all')] = [
+      {
+        id: 90,
+        catalog: 'mechanism',
+        name: '输送机构',
+        sort: 1,
+        kind: 'structure',
+        pages: [
+          {
+            id: 910,
+            name: '迁移目录项',
+            node: {
+              category: group.name,
+              configuration: configuration.name,
+              item: null,
+            },
+          },
+        ],
+      },
+    ];
+    seed[machineSectionRowsKey(910, MACHINE_TAB_PAGE_OWNER)] = [
+      { id: 1, role: '旧页内容', sensorIds: [] },
+    ];
+    let persisted = JSON.stringify(seed);
+    const repository = createSelectionRepository({
+      crudDefaults: CRUD_DEFAULTS,
+      demoData: true,
+      sensorData: SENSOR_DATA,
+      storage: {
+        getItem: () => persisted,
+        setItem: (_key, value) => {
+          persisted = value;
+        },
+      },
+    });
+
+    const migratedGroups = repository.getEntityGroups('machine');
     expect(
-      store.saveMachineTabPage(lifter.item.id, { name: '入料段', node }),
-    ).toEqual({ ok: false, reason: 'duplicate' });
-    // 机型没有二级 Tab
+      migratedGroups
+        .find((item) => item.name === group.name)
+        ?.configurations?.find((item) => item.name === configuration.name)
+        ?.items,
+    ).toContain('迁移目录项');
+    expect(repository.getMachineTabs()[0]!.pages[0]).toMatchObject({
+      id: 910,
+      direct: true,
+      node: { item: '迁移目录项' },
+    });
     expect(
-      store.saveMachineTabPage(lifter.item.id, {
-        name: '入料段',
-        node: conveyor.pages[0]!.node,
+      repository.getMachineSectionRows(910, MACHINE_TAB_PAGE_OWNER)[0]?.role,
+    ).toBe('旧页内容');
+  });
+
+  it('keeps directory order and first-level-tab content linked through rename and delete', async () => {
+    const wrapper = await mountPage(true, true);
+    await flushPromises();
+    const store = useSelectionStore();
+    const group = store
+      .entityGroups('machine')
+      .find((item) => item.configurations?.length)!;
+    const configuration = group.configurations![0]!;
+    expect(
+      store.saveEntityItem('machine', {
+        category: group.name,
+        configuration: configuration.name,
+        name: '目录项甲',
+      }).ok,
+    ).toBe(true);
+    expect(
+      store.saveEntityItem('machine', {
+        category: group.name,
+        configuration: configuration.name,
+        name: '目录项乙',
+      }).ok,
+    ).toBe(true);
+    const items = store
+      .entityGroups('machine')
+      .find((item) => item.name === group.name)!
+      .configurations!.find((item) => item.name === configuration.name)!.items;
+    const from = items.indexOf('目录项乙');
+    const to = items.indexOf('目录项甲');
+    expect(
+      store.reorderEntityItems(
+        'machine',
+        group.name,
+        from,
+        to,
+        configuration.name,
+      ).ok,
+    ).toBe(true);
+    const reorderedItems = store
+      .entityGroups('machine')
+      .find((item) => item.name === group.name)!
+      .configurations!.find((item) => item.name === configuration.name)!.items;
+    expect(reorderedItems.indexOf('目录项乙')).toBeLessThan(
+      reorderedItems.indexOf('目录项甲'),
+    );
+    const node: MachineNodeRef = {
+      category: group.name,
+      configuration: configuration.name,
+      item: '目录项甲',
+    };
+    const page = store.ensureMachineDirectPage(store.machineTabs[0]!.id, node);
+    if (!page.ok) throw new Error('direct page fixture failed');
+    expect(
+      store.saveEntityItem(
+        'machine',
+        {
+          category: group.name,
+          configuration: configuration.name,
+          name: '目录项甲（改）',
+          previousCategory: group.name,
+          previousConfiguration: configuration.name,
+        },
+        '目录项甲',
+      ).ok,
+    ).toBe(true);
+    expect(store.machineTabs[0]!.pages).toContainEqual(
+      expect.objectContaining({
+        id: page.item.id,
+        node: expect.objectContaining({ item: '目录项甲（改）' }),
       }),
-    ).toEqual({ ok: false, reason: 'validation' });
+    );
+    expect(
+      store.deleteEntityItem(
+        'machine',
+        '目录项甲（改）',
+        group.name,
+        configuration.name,
+      ).ok,
+    ).toBe(true);
+    expect(
+      store.machineTabs[0]!.pages.some((item) => item.id === page.item.id),
+    ).toBe(false);
     wrapper.unmount();
   });
 
-  it('deletes a tab together with its tables and second-level tabs', async () => {
+  it('deletes a tab together with all machine directory-item content', async () => {
     const wrapper = await mountPage(true, true);
     await flushPromises();
     const confirm = vi.spyOn(dialogs, 'confirm').mockResolvedValueOnce(true);
@@ -1294,33 +1427,23 @@ describe('MachinePage machine tabs', () => {
       ?.click();
     await flushPromises();
 
-    expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个机型的选型表');
+    expect(JSON.stringify(confirm.mock.calls[0])).toContain('1 个机型目录项');
     expect(useSelectionStore().machineTabs).toEqual([]);
     expect(wrapper.text()).toContain('还没有 Tab');
     expect(findButton(wrapper, '新建Tab')).toBeDefined();
     wrapper.unmount();
   });
 
-  it('offers no page menus or 新建 to read-only users', async () => {
+  it('shows directory-item content without maintenance actions to read-only users', async () => {
     const wrapper = await mountPage(true, false);
     await flushPromises();
-    const store = useSelectionStore();
-    const node = await openEmptyConfiguration(wrapper);
-    expect(
-      store.saveMachineTabPage(store.machineTabs[0]!.id, {
-        name: '入料段',
-        node,
-      }).ok,
-    ).toBe(true);
-    await flushPromises();
-
-    expect(pageNames(wrapper)).toEqual(['入料段']);
-    expect(
-      wrapper.find('button[aria-label="二级 Tab 入料段 的更多操作"]').exists(),
-    ).toBe(false);
-    expect(wrapper.find('button[aria-label="新建二级 Tab"]').exists()).toBe(
-      false,
-    );
+    expect(wrapper.getComponent(EntityTree).props('editable')).toBe(false);
+    expect(wrapper.getComponent(EntityTree).props('sortable')).toBe(false);
+    expect(wrapper.find('.entity-tree__more').exists()).toBe(false);
+    expect(wrapper.find('.ant-tabs-nav-add').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="编辑 Tab"]').exists()).toBe(false);
+    expect(wrapper.findComponent(MachineSectionPanel).exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="新增选型"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

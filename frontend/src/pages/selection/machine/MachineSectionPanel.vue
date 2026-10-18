@@ -8,7 +8,8 @@ import type {
   MachineSectionRow,
   SaveResult,
 } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   PAGINATION_PROPS,
@@ -23,6 +24,7 @@ import {
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import { AHighlightText } from '@/ui';
 
 import MachineRowDialog from './MachineRowDialog.vue';
 import MachineRowImageCell from './MachineRowImageCell.vue';
@@ -53,8 +55,6 @@ const writable = computed(() => canWrite('selection:write'));
 const rowDialog = ref<InstanceType<typeof MachineRowDialog>>();
 const query = ref('');
 const sensorTypeFilters = ref<Array<string | number>>([]);
-const machineModelFilters = ref<Array<string | number>>([]);
-const processStepFilters = ref<Array<string | number>>([]);
 const boardCharacteristicFilters = ref<Array<string | number>>([]);
 const page = ref(1);
 const pageSize = ref(20);
@@ -66,18 +66,6 @@ const typeOptions = computed(() =>
   store
     .dictionaryNames('sensor-type')
     .map((name) => ({ label: name, value: name })),
-);
-const processStepOptions = computed(() =>
-  store.processSteps.map((item) => ({
-    label: `${item.layer} · ${item.name}`,
-    value: item.id,
-  })),
-);
-const machineModelItems = computed(() =>
-  store.dictionaryItems('machine-model'),
-);
-const machineModelOptions = computed(() =>
-  machineModelItems.value.map((item) => ({ label: item.name, value: item.id })),
 );
 const boardCharacteristicItems = computed(() =>
   store.dictionaryItems('board-characteristic'),
@@ -101,8 +89,6 @@ const hasActiveFilters = computed(
   () =>
     Boolean(query.value.trim()) ||
     sensorTypeFilters.value.length > 0 ||
-    machineModelFilters.value.length > 0 ||
-    processStepFilters.value.length > 0 ||
     boardCharacteristicFilters.value.length > 0,
 );
 const filtered = computed(() =>
@@ -112,14 +98,14 @@ const filtered = computed(() =>
     {
       query: query.value,
       sensorTypes: sensorTypeFilters.value,
-      machineModelIds: machineModelFilters.value,
-      processStepIds: processStepFilters.value,
+      machineModelIds: [],
+      processStepIds: [],
       boardCharacteristicIds: boardCharacteristicFilters.value,
     },
     {
       sensorById: sensorById.value,
       processSteps: store.processSteps,
-      machineModels: machineModelItems.value,
+      machineModels: [],
       boardCharacteristics: boardCharacteristicItems.value,
     },
   ),
@@ -130,8 +116,8 @@ const tableData = computed(() => {
     filtered.value.slice(start, start + pageSize.value),
     store.sensors,
     isStructure.value,
-    store.processSteps,
-    machineModelItems.value,
+    [],
+    [],
     boardCharacteristicItems.value,
   );
 });
@@ -152,26 +138,6 @@ const baseColumns = computed(() => {
         }),
       };
     }
-    if (column.key === 'machineModelName') {
-      return {
-        ...column,
-        ...columnFilter({
-          options: machineModelOptions.value,
-          value: machineModelFilters.value,
-          search: true,
-        }),
-      };
-    }
-    if (column.key === 'processStepName') {
-      return {
-        ...column,
-        ...columnFilter({
-          options: processStepOptions.value,
-          value: processStepFilters.value,
-          search: true,
-        }),
-      };
-    }
     if (column.key === 'boardCharacteristicName') {
       return {
         ...column,
@@ -185,7 +151,15 @@ const baseColumns = computed(() => {
     return column;
   });
 });
-const { columns, onResizeColumn } = useResizableColumns(
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns(
   () =>
     isStructure.value ? 'machine-section:structure' : 'machine-section:notes',
   () => baseColumns.value,
@@ -196,25 +170,13 @@ watch(
   () => {
     query.value = '';
     sensorTypeFilters.value = [];
-    machineModelFilters.value = [];
-    processStepFilters.value = [];
     boardCharacteristicFilters.value = [];
     page.value = 1;
   },
 );
-watch(
-  [
-    query,
-    sensorTypeFilters,
-    machineModelFilters,
-    processStepFilters,
-    boardCharacteristicFilters,
-    pageSize,
-  ],
-  () => {
-    page.value = 1;
-  },
-);
+watch([query, sensorTypeFilters, boardCharacteristicFilters, pageSize], () => {
+  page.value = 1;
+});
 // 删掉最后一页唯一一行后总页数变少，APagination 会因只剩一页而隐藏，
 // 当前页却还停在越界页上，表格就成了空白；这里把页码收回到最大页。
 watch(
@@ -231,8 +193,6 @@ watch(
 function resetFilters() {
   query.value = '';
   sensorTypeFilters.value = [];
-  machineModelFilters.value = [];
-  processStepFilters.value = [];
   boardCharacteristicFilters.value = [];
   page.value = 1;
 }
@@ -246,20 +206,12 @@ function onTableChange(
   if (!isColumnFilterChange(extra)) return;
   setColumnFilter(sensorTypeFilters, columnFilterValues(filters, 'sensorType'));
   setColumnFilter(
-    machineModelFilters,
-    columnFilterValues(filters, 'machineModelName'),
-  );
-  setColumnFilter(
-    processStepFilters,
-    columnFilterValues(filters, 'processStepName'),
-  );
-  setColumnFilter(
     boardCharacteristicFilters,
     columnFilterValues(filters, 'boardCharacteristicName'),
   );
 }
 
-// 已经定位过的目标（分区 + 机型 + 制程 + 行 id）。依赖 items.length 是为了
+// 已经定位过的目标（分区 + 机型 + 行 id）。依赖 items.length 是为了
 // 数据晚到时还能补定位；但同一个目标只定位一次，否则用户在分区里增删行
 // 会反复清空筛选、把页码拉回目标行。
 let handledFocusKey: null | string = null;
@@ -345,7 +297,7 @@ const customRow = computed(() =>
           :aria-label="isStructure ? '搜索结构内容' : '搜索机型注意事项'"
           :placeholder="
             isStructure
-              ? '搜索规格、型号或功能'
+              ? '搜索规格、型号或 Sensor名称'
               : '搜索注意分类、事项名称、说明或备注'
           "
           allow-clear
@@ -361,6 +313,13 @@ const customRow = computed(() =>
           <template #icon><RotateCcw :size="14" /></template>
           重置
         </a-button>
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
         <a-button
           v-if="writable"
           type="primary"
@@ -417,7 +376,7 @@ const customRow = computed(() =>
                 :key="type"
                 color="blue"
               >
-                {{ type }}
+                <AHighlightText :text="type" :query="query" />
               </a-tag>
             </a-space>
             <span
@@ -439,19 +398,17 @@ const customRow = computed(() =>
             >
               <template v-if="row.sensor">
                 <div class="machine-spec-cell__header">
-                  <span class="machine-spec-cell__brand">{{
-                    row.sensor.brand
-                  }}</span>
-                  <span class="machine-spec-cell__model">{{
-                    row.sensor.model
-                  }}</span>
+                  <span class="machine-spec-cell__brand"><AHighlightText :text="row.sensor.brand" :query="query" /></span>
+                  <span class="machine-spec-cell__model"><AHighlightText :text="row.sensor.model" :query="query" /></span>
                 </div>
                 <div v-if="row.sensor.spec" class="machine-spec-cell__spec">
-                  {{ row.sensor.spec }}
+                  <AHighlightText :text="row.sensor.spec" :query="query" />
                 </div>
               </template>
               <template v-else>
-                <div class="spec-lines">{{ row.spec || '—' }}</div>
+                <div class="spec-lines">
+                  <AHighlightText :text="row.spec || '—'" :query="query" />
+                </div>
               </template>
             </div>
           </template>
@@ -488,7 +445,7 @@ const customRow = computed(() =>
               </a-tooltip>
             </a-space>
           </template>
-          <template v-else>{{ cellText(text) }}</template>
+          <AHighlightText v-else :text="cellText(text)" :query="query" />
         </template>
       </a-table>
       <a-pagination

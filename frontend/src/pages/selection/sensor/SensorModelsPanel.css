@@ -84,6 +84,23 @@
   text-align: start;
 }
 
+.sensor-file-link--compact.ant-btn {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.sensor-file-link__label {
+  flex: 1 1 auto;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 分组成员行的格子已是小号字。关系链接跟着格子的字号，颜色仍用链接色。 */
 .sensor-models--grouped :deep(tr.sensor-row--alternate .sensor-relation-link.ant-btn) {
   font-size: inherit;

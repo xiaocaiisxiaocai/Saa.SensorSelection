@@ -15,6 +15,34 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
     private static readonly HashSet<string> EntityKinds =
         new(StringComparer.OrdinalIgnoreCase) { "customer", "machine" };
 
+    // 录入、启用日期由服务端控制，普通编辑及批量导入不能改写既有日期。
+    private static string ApplySensorDates(string key, string json, string? previousJson)
+    {
+        if (key != "sensor-catalog:all") return json;
+        var rows = JsonNode.Parse(json) as JsonArray;
+        if (rows == null) return json;
+        var previous = (JsonNode.Parse(previousJson ?? "[]") as JsonArray)?
+            .OfType<JsonObject>()
+            .Where(row => row["id"] != null)
+            .GroupBy(row => row["id"]!.ToJsonString())
+            .ToDictionary(group => group.Key, group => group.Last());
+        var today = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        static string Text(JsonObject? row, string field) => row?[field] is JsonValue value &&
+            value.TryGetValue<string>(out var text) ? text : "";
+        static bool Current(JsonObject row) => System.Text.RegularExpressions.Regex.IsMatch(
+            Text(row, "status").Trim(), @"^(?:\d+\s*)?现用$");
+        foreach (var row in rows.OfType<JsonObject>())
+        {
+            JsonObject? old = null;
+            if (row["id"] != null) previous?.TryGetValue(row["id"]!.ToJsonString(), out old);
+            var entered = Text(old, "enteredAt");
+            row["enteredAt"] = old == null ? today : entered[..Math.Min(10, entered.Length)];
+            row["usedAt"] = Current(row) && (old == null || !Current(old))
+                ? today : Text(old, "usedAt");
+        }
+        return rows.ToJsonString();
+    }
+
     /// <summary>读取全部 key → JSON 数组。</summary>
     public async Task<JsonObject> GetAllAsync(CancellationToken ct = default)
     {
@@ -83,7 +111,8 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         foreach (var property in store.EnumerateObject())
         {
             var result = detached[property.Name];
-            var json = result.Json!;
+            existing.TryGetValue(property.Name, out var previous);
+            var json = ApplySensorDates(property.Name, result.Json!, previous?.Json);
             db.StoredFiles.AddRange(result.Files);
             if (existing.TryGetValue(property.Name, out var entry))
             {
@@ -135,6 +164,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
         var droppedFileIds = StoredFileService.ReferencedFileIds(entry?.Json);
         var previousJson = entry?.Json;
+        json = ApplySensorDates(key, json, previousJson);
         if (entry == null)
         {
             var added = db.StoreEntries.Add(new StoreEntry
@@ -159,6 +189,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
                 droppedFileIds = StoredFileService.ReferencedFileIds(existing.Json);
                 previousJson = existing.Json;
+                json = ApplySensorDates(key, json, existing.Json);
                 existing.Json = json;
                 existing.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);

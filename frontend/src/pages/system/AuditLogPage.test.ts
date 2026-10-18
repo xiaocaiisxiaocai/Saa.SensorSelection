@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia } from 'pinia';
+import { nextTick } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -162,6 +163,39 @@ describe('AuditLogPage', () => {
     // 目标被翻成中文时仍给出原始数据键
     expect(drawer.textContent).toContain('customer-req:鹏鼎集团/华东');
     expect(drawer.textContent).toContain('127.0.0.1');
+    wrapper.unmount();
+  });
+
+  it('highlights keyword matches in the row and operation drawer', async () => {
+    vi.spyOn(api, 'listAuditOperations').mockResolvedValue(
+      page([
+        operation([editEntry], { label: '编辑客户通用要求 · 鹏鼎集团/华东' }),
+      ]),
+    );
+    const wrapper = mountPage();
+    await vi.waitFor(() =>
+      expect(wrapper.find('.ant-table-tbody tr.ant-table-row').exists()).toBe(
+        true,
+      ),
+    );
+
+    await wrapper.get('input[aria-label="搜索操作日志"]').setValue('鹏鼎');
+    await nextTick();
+    expect(
+      wrapper.findAll('.ant-table-tbody mark').map((mark) => mark.text()),
+    ).toContain('鹏鼎');
+
+    await wrapper.get('.ant-table-tbody tr.ant-table-row').trigger('click');
+    await flushPromises();
+    expect(
+      [...document.querySelectorAll('.ant-drawer mark')].map((mark) =>
+        mark.textContent?.trim(),
+      ),
+    ).toContain('鹏鼎');
+
+    await wrapper.get('button[aria-label="重置筛选"]').trigger('click');
+    await nextTick();
+    expect(document.querySelector('.ant-drawer mark')).toBeNull();
     wrapper.unmount();
   });
 

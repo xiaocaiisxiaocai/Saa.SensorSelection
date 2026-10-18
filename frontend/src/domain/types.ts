@@ -28,14 +28,18 @@ export interface ImportSkip {
 }
 
 export type SensorImportField =
+  | 'actualCondition'
   | 'brand'
+  | 'disabledAt'
+  | 'enteredAt'
   | 'feature'
   | 'model'
   | 'partNumber'
   | 'scene'
   | 'sensorType'
   | 'spec'
-  | 'status';
+  | 'status'
+  | 'usedAt';
 
 export interface SensorImportRow {
   rowNumber: number;
@@ -177,6 +181,7 @@ export interface SensorItem {
   brand: string;
   model: string;
   spec: string;
+  actualCondition: string;
   feature: string;
   scene: string;
   sopId: null | number;
@@ -184,6 +189,10 @@ export interface SensorItem {
   replacesId: null | number;
   replacedById: null | number;
   problemNote: string;
+  usedAt: string;
+  disabledAt: string;
+  enteredAt: string;
+  /** 旧替换链排序与迁移兼容字段；新界面使用 usedAt / disabledAt。 */
   replacedAt: string;
 }
 

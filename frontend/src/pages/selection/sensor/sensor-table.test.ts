@@ -23,6 +23,7 @@ function sensor(patch: Partial<SensorItem>): SensorItem {
     brand: 'OMRON',
     model: 'E3Z',
     spec: '',
+    actualCondition: '',
     feature: '',
     scene: '',
     sopId: null,
@@ -30,6 +31,9 @@ function sensor(patch: Partial<SensorItem>): SensorItem {
     replacesId: null,
     replacedById: null,
     problemNote: '',
+    usedAt: '',
+    disabledAt: '',
+    enteredAt: '',
     replacedAt: '',
     ...patch,
   } as SensorItem;
@@ -77,7 +81,7 @@ describe('sensor-table', () => {
   });
 
   it('describes and exports the replacement relation', () => {
-    expect(relationText(current, old)).toBe('替换了 KEYENCE PZ-G · 误检');
+    expect(relationText(current, old)).toBe('替换了 KEYENCE PZ-G（误检）');
     expect(relationText(sensor({ replacedById: 7 }), null)).toBe(
       '被 型号#7 替换',
     );
@@ -90,8 +94,10 @@ describe('sensor-table', () => {
     const keys = (options: Parameters<typeof sensorColumns>[0]) =>
       sensorColumns(options).map((column) => column.key);
     const base = { hidden: new Set<string>(), writable: false };
+    expect(keys({ ...base, showDisabledDetails: false })).toContain('usedAt');
+    expect(keys({ ...base, showDisabledDetails: false })).toContain('disabledAt');
     expect(keys({ ...base, showDisabledDetails: false })).not.toContain(
-      'replacedAt',
+      'problemNote',
     );
     expect(keys({ ...base, showDisabledDetails: true })).toContain(
       'problemNote',
@@ -108,6 +114,17 @@ describe('sensor-table', () => {
     expect(visible.at(-1)).toBe('actions');
     // dataIndex 指到行上的 item；key 仍是字段名，两者不能混成一个路径。
     const columns = sensorColumns({ ...base, showDisabledDetails: true });
+    const keysInOrder = columns.map((column) => column.key);
+    expect(keysInOrder.indexOf('actualCondition')).toBe(
+      keysInOrder.indexOf('spec') + 1,
+    );
+    expect(keysInOrder.slice(-5)).toEqual([
+      'sop',
+      'model3d',
+      'usedAt',
+      'disabledAt',
+      'enteredAt',
+    ]);
     expect(columns.find((column) => column.key === 'brand')?.dataIndex).toEqual(
       ['item', 'brand'],
     );

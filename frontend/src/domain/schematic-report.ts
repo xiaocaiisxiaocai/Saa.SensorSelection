@@ -68,7 +68,7 @@ function structureRowsMarkup(block: MachineReportMachineBlock): string {
           '-';
         const leadingCells =
           sensorIndex === 0
-            ? `<td class="report-structure-table__serial" rowspan="${rowSpan}">${index + 1}</td><td class="report-structure-table__role" rowspan="${rowSpan}">${escapeHtml(row.role || sensorType || `记录 ${index + 1}`)}</td><td class="report-structure-table__process" rowspan="${rowSpan}">${escapeHtml(row.processStepName || '-')}</td>`
+            ? `<td class="report-structure-table__serial" rowspan="${rowSpan}">${index + 1}</td><td class="report-structure-table__role" rowspan="${rowSpan}">${escapeHtml(row.role || sensorType || `记录 ${index + 1}`)}</td>`
             : '';
         const trailingCells =
           sensorIndex === 0
@@ -80,7 +80,7 @@ function structureRowsMarkup(block: MachineReportMachineBlock): string {
     .join('');
 
   if (!rows) return '<p class="report-empty">此机型在该模块暂无记录。</p>';
-  return `<table class="report-structure-table"><colgroup><col class="report-structure-table__serial-col" /><col class="report-structure-table__role-col" /><col class="report-structure-table__process-col" /><col class="report-structure-table__sensor-col" /><col class="report-structure-table__spec-col" /><col class="report-structure-table__purpose-col" /><col class="report-structure-table__note-col" /></colgroup><thead><tr><th class="report-structure-table__serial">序号</th><th>功能作用</th><th>工艺制程</th><th>传感器类型</th><th>规格</th><th>作用</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="report-structure-table"><colgroup><col class="report-structure-table__serial-col" /><col class="report-structure-table__role-col" /><col class="report-structure-table__sensor-col" /><col class="report-structure-table__spec-col" /><col class="report-structure-table__purpose-col" /><col class="report-structure-table__note-col" /></colgroup><thead><tr><th class="report-structure-table__serial">序号</th><th>Sensor名称</th><th>传感器类型</th><th>规格</th><th>作用</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function notesRowsMarkup(block: MachineReportMachineBlock): string {
@@ -184,12 +184,11 @@ export function buildMachineSchematicReportHtml(
       .report-structure-table th, .report-structure-table td { padding: 7px 8px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: middle; line-height: 1.5; word-break: break-word; }
       .report-structure-table th { color: #667085; background: #f8fafc; font-weight: 600; }
       .report-structure-table__serial-col { width: 42px; }
-      .report-structure-table__role-col { width: 13%; }
-      .report-structure-table__process-col { width: 14%; }
-      .report-structure-table__sensor-col { width: 12%; }
-      .report-structure-table__spec-col { width: 22%; }
-      .report-structure-table__purpose-col { width: 15%; }
-      .report-structure-table__note-col { width: 17%; }
+      .report-structure-table__role-col { width: 15%; }
+      .report-structure-table__sensor-col { width: 14%; }
+      .report-structure-table__spec-col { width: 26%; }
+      .report-structure-table__purpose-col { width: 18%; }
+      .report-structure-table__note-col { width: 20%; }
       .report-structure-table__serial { text-align: center !important; color: #98a2b3; }
       .report-structure-table tbody tr:last-child td { border-bottom-color: #d8dee8; }
       .report-row { display: grid; grid-template-columns: 30px 1fr; gap: 14px; border-bottom: 1px solid #edf0f4; padding: 12px 0; break-inside: avoid; }

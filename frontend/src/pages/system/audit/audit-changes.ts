@@ -17,11 +17,14 @@ import { ACTION_LABELS, actionLabel, parseAuditDetail } from './audit-actions';
 const FIELD_LABELS: Record<string, string> = {
   boardCharacteristicId: '板件特性',
   brand: '品牌',
+  actualCondition: '实际工况',
   catalog: '目录',
   configurations: '配置',
   content: '要求内容',
   dataUrl: '文件',
   date: '反馈时间',
+  disabledAt: '停用日期',
+  enteredAt: '录入日期',
   desc: '说明',
   feature: '特性',
   fileName: '文件名',
@@ -65,6 +68,7 @@ const FIELD_LABELS: Record<string, string> = {
   title: '标题',
   type: '分类',
   uploadedAt: '上传时间',
+  usedAt: '使用日期',
   version: '版本',
 };
 
@@ -75,7 +79,7 @@ const NAMESPACE_FIELD_LABELS: Record<string, Record<string, string>> = {
   'customer-req': { type: '要求分类' },
   'entity-groups:customer': { items: '区域', name: '客户' },
   'entity-groups:machine': { items: '机型', name: '分类' },
-  'machine-section-rows': { name: '事项名称', role: '功能作用' },
+  'machine-section-rows': { name: '事项名称', role: 'Sensor名称' },
   'process-steps': { feature: '制程特性', name: '工艺制程', role: '作用' },
   'sensor-catalog': { feature: '特性与注意' },
 };

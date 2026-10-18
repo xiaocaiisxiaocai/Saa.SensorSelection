@@ -2,6 +2,7 @@ node_modules
 .next
 .playwright-cli
 .codex-purest-admin-reference
+/.codex-runtime/
 scripts/scripts
 *.destroyed
 .DS_Store

@@ -113,12 +113,10 @@ describe('buildMachineSchematicReportHtml', () => {
     expect(html).toContain('ok.png');
     expect(html.indexOf('输送机构')).toBeGreaterThan(0);
     expect(html).toContain('class="report-structure-table"');
-    expect(html).toContain('<th>工艺制程</th>');
-    expect(html).toContain('内层 · DES 显影');
+    expect(html).not.toContain('<th>工艺制程</th>');
+    expect(html).not.toContain('内层 · DES 显影');
     expect(html).toContain('rowspan="3"');
-    expect(html).toContain(
-      '<th>功能作用</th><th>工艺制程</th><th>传感器类型</th>',
-    );
+    expect(html).toContain('<th>Sensor名称</th><th>传感器类型</th>');
     expect(html).toContain('检测距离 0~10m');
     expect(html).toContain(
       '<tr><td class="report-structure-table__sensor">对射</td><td class="report-structure-table__spec">检测距离 0~10m</td></tr>',

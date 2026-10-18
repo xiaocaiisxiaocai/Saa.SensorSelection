@@ -21,7 +21,7 @@ import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useSelectionStore } from '@/stores/selection';
 
 /**
- * 机型分区里一条记录的新增 / 编辑对话框。结构分区填选型（功能作用、关联传感器…）
+ * 机型分区里一条记录的新增 / 编辑对话框。结构分区填选型（Sensor名称、关联传感器…）
  * 和示意图（不放 / 沿用上一笔的图 / 上传新图；沿用的图和上一笔在表格里合并成一格），
  * 注意事项分区填事项。父组件调用 open() 打开；切换分区/机型时自动关闭。
  */
@@ -45,10 +45,8 @@ const validationAttempted = ref(false);
 const form = reactive({
   boardCharacteristicId: null as number | null,
   desc: '',
-  machineModelId: null as number | null,
   name: '',
   note: '',
-  processStepId: null as number | null,
   purpose: '',
   role: '',
   sensorIds: [] as Array<string | number>,
@@ -136,17 +134,6 @@ function imagePayload(): MachineRowImage | null | undefined {
   return null;
 }
 
-const processStepOptions = computed(() =>
-  store.processSteps.map((item) => ({
-    label: `${item.layer} · ${item.name}`,
-    value: item.id,
-  })),
-);
-const machineModelOptions = computed(() =>
-  store
-    .dictionaryItems('machine-model')
-    .map((item) => ({ label: item.name, value: item.id })),
-);
 const boardCharacteristicOptions = computed(() =>
   store
     .dictionaryItems('board-characteristic')
@@ -187,10 +174,8 @@ function open(row?: MachineSectionRow) {
       ? {
           boardCharacteristicId: row.boardCharacteristicId,
           desc: row.desc,
-          machineModelId: row.machineModelId,
           name: row.name,
           note: row.note,
-          processStepId: row.processStepId,
           purpose: row.purpose,
           role: row.role,
           sensorIds: [...row.sensorIds],
@@ -200,10 +185,8 @@ function open(row?: MachineSectionRow) {
       : {
           boardCharacteristicId: null,
           desc: '',
-          machineModelId: null,
           name: '',
           note: '',
-          processStepId: null,
           purpose: '',
           role: '',
           sensorIds: [],
@@ -228,10 +211,10 @@ function save() {
   const image = structure ? imagePayload() : undefined;
   const payload = {
     desc: form.desc.trim(),
-    machineModelId: structure ? form.machineModelId : null,
+    machineModelId: null,
     name: form.name.trim(),
     note: form.note.trim(),
-    processStepId: structure ? form.processStepId : null,
+    processStepId: null,
     boardCharacteristicId: structure ? form.boardCharacteristicId : null,
     purpose: form.purpose.trim(),
     role: form.role.trim(),
@@ -267,12 +250,12 @@ defineExpose({ open });
         <a-col :span="24">
           <a-form-item
             html-for="machine-section-role"
-            label="功能作用"
+            label="Sensor名称"
             required
             v-bind="
               fieldError(
                 validationAttempted && !form.role.trim()
-                  ? '请输入功能作用'
+                  ? '请输入 Sensor名称'
                   : undefined,
               )
             "
@@ -283,40 +266,6 @@ defineExpose({ open });
               :maxlength="80"
               allow-clear
               show-count
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="24">
-          <a-form-item
-            html-for="machine-section-machine-model-id"
-            label="机型"
-            extra="可选；来自“数据字典 → 机型”。"
-          >
-            <a-select
-              id="machine-section-machine-model-id"
-              v-model:value="form.machineModelId"
-              :options="machineModelOptions"
-              placeholder="选择机型（可选）"
-              show-search
-              option-filter-prop="label"
-              allow-clear
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="24">
-          <a-form-item
-            html-for="machine-section-process-step-id"
-            label="工艺制程"
-            extra="可选；来自“客户/制程 → 制程 → 工艺制程”。"
-          >
-            <a-select
-              id="machine-section-process-step-id"
-              v-model:value="form.processStepId"
-              :options="processStepOptions"
-              placeholder="选择工艺制程（可选）"
-              show-search
-              option-filter-prop="label"
-              allow-clear
             />
           </a-form-item>
         </a-col>

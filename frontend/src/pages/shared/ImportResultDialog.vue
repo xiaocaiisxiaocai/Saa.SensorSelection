@@ -2,7 +2,8 @@
 import type { TableColumnType } from 'ant-design-vue';
 import { ref } from 'vue';
 
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { useTablePagination } from '@/pages/shared/table';
 
 export interface ImportResultCategory {
@@ -45,10 +46,15 @@ const baseColumns: TableColumnType<ImportResultSkip & { key: number }>[] = [
   { dataIndex: 'location', key: 'location', title: '位置', width: 220 },
   { dataIndex: 'reason', key: 'reason', title: '原因' },
 ];
-const { columns, onResizeColumn } = useResizableColumns(
-  'import-result',
-  () => baseColumns,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('import-result', () => baseColumns);
 
 function categoryLine(item: ImportResultCategory) {
   const kept =
@@ -86,6 +92,15 @@ defineExpose({ open });
       <p v-if="payload.summary" class="import-result__summary">
         {{ payload.summary }}
       </p>
+      <div v-if="payload.skips.length" class="selection-toolbar">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+      </div>
       <ul v-if="payload.categories.length" class="import-result__categories">
         <li v-for="item in payload.categories" :key="item.title">
           {{ item.title }}：{{ categoryLine(item) }}

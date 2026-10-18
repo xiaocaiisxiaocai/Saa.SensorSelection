@@ -5,7 +5,8 @@ import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 import { api, ApiError, type OrgUnitNode } from '@/api';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
@@ -75,10 +76,15 @@ const baseColumns = computed<TableColumnType[]>(() => {
   }
   return cols;
 });
-const { columns, onResizeColumn } = useResizableColumns(
-  'org-units',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('org-units', () => baseColumns.value);
 
 onMounted(loadData);
 
@@ -135,6 +141,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       >
         新建组织
       </a-button>
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
+        :hidden="hiddenColumns"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
+      />
     </div>
     <a-table
       :columns="columns"

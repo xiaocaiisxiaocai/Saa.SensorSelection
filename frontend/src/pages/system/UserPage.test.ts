@@ -267,6 +267,42 @@ describe('UserPage', () => {
     wrapper.unmount();
   });
 
+  it('highlights the fields that matched the user search', async () => {
+    const lisi: RbacUser = {
+      ...user,
+      displayName: '李四',
+      id: 3,
+      orgUnit: {
+        id: 9,
+        level: '课别',
+        name: '选型课',
+        path: '制造事业部 / 选型课',
+      },
+      roles: [{ code: 'editor', id: 2, name: '业务维护员' }],
+      username: 'lisi',
+    };
+    const wrapper = await mountPage([user, lisi]);
+    const search = () =>
+      wrapper.get<HTMLInputElement>('input[aria-label="搜索用户"]');
+
+    await search().setValue('业务维护');
+    await nextTick();
+    expect(wrapper.findAll('mark').map((mark) => mark.text())).toContain(
+      '业务维护',
+    );
+
+    await search().setValue('选型课');
+    await nextTick();
+    expect(wrapper.findAll('mark').map((mark) => mark.text())).toContain(
+      '选型课',
+    );
+
+    await search().setValue('');
+    await nextTick();
+    expect(wrapper.find('mark').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('keeps the creation time on one line like the audit log', async () => {
     const wrapper = await mountPage();
     await vi.waitFor(() =>

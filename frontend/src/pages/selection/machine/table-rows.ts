@@ -61,8 +61,8 @@ export function buildMachineTableRows(
   items: MachineSectionRow[],
   sensors: SensorItem[],
   isStructure: boolean,
-  processSteps: ProcessStepItem[] = [],
-  machineModels: DictionaryItem[] = [],
+  _processSteps: ProcessStepItem[] = [],
+  _machineModels: DictionaryItem[] = [],
   boardCharacteristics: DictionaryItem[] = [],
 ): MachineTableRow[] {
   const sensorCount = (item: MachineSectionRow) =>
@@ -109,15 +109,6 @@ export function buildMachineTableRows(
     const displaySensors: Array<SensorItem | null> =
       records.length > 0 ? records : [null];
 
-    const processStep = isStructure
-      ? processSteps.find((candidate) => candidate.id === item.processStepId)
-      : undefined;
-    const processStepName = processStep
-      ? `${processStep.layer} · ${processStep.name}`
-      : '—';
-    const machineModelName =
-      machineModels.find((candidate) => candidate.id === item.machineModelId)
-        ?.name ?? '—';
     const boardCharacteristicName =
       boardCharacteristics.find(
         (candidate) => candidate.id === item.boardCharacteristicId,
@@ -129,8 +120,8 @@ export function buildMachineTableRows(
       groupSize: displaySensors.length,
       groupStart: index === 0,
       groupEnd: index === displaySensors.length - 1,
-      machineModelName,
-      processStepName,
+      machineModelName: '',
+      processStepName: '',
       boardCharacteristicName,
       sensor,
       source: item,
@@ -168,23 +159,9 @@ export function sectionColumns(options: {
         {
           key: 'role',
           dataIndex: 'role',
-          title: '功能作用',
+          title: 'Sensor名称',
           width: 104,
           fixed: 'left',
-          ...merged,
-        },
-        {
-          key: 'machineModelName',
-          dataIndex: 'machineModelName',
-          title: '机型',
-          width: 100,
-          ...merged,
-        },
-        {
-          key: 'processStepName',
-          dataIndex: 'processStepName',
-          title: '工艺制程',
-          width: 136,
           ...merged,
         },
         {
@@ -276,8 +253,8 @@ export interface SectionRowFilters {
 
 /**
  * 按筛选条件过滤分区记录。表头筛选只对结构分区生效；关键字在结构分区里
- * 也匹配机型 / 工艺制程 / 板件特性名称和关联传感器的类型、品牌型号、规格。
- * 机型、工艺制程、板件特性是多选，命中任一即可；空数组表示不限。
+ * 也匹配板件特性名称和关联传感器的类型、品牌型号、规格。
+ * 板件特性是多选，命中任一即可；空数组表示不限。
  */
 export function filterSectionRows(
   rows: readonly MachineSectionRow[],
@@ -299,18 +276,6 @@ export function filterSectionRows(
     items: readonly { id: number; name: string }[],
     id: number | null,
   ) => (id === null ? '' : (items.find((item) => item.id === id)?.name ?? ''));
-  const processStepLabel = (id: number | null) => {
-    if (id === null) return '';
-    const step = lookup.processSteps.find((candidate) => candidate.id === id);
-    return step ? `${step.layer} · ${step.name}` : '';
-  };
-  const matchesAny = (
-    selected: readonly (string | number)[],
-    id: number | null,
-  ) =>
-    selected.length === 0 ||
-    (id !== null && selected.some((item) => Number(item) === id));
-
   return rows.filter((row) => {
     if (structure) {
       if (
@@ -322,9 +287,10 @@ export function filterSectionRows(
         return false;
       }
       if (
-        !matchesAny(filters.machineModelIds, row.machineModelId) ||
-        !matchesAny(filters.processStepIds, row.processStepId) ||
-        !matchesAny(filters.boardCharacteristicIds, row.boardCharacteristicId)
+        filters.boardCharacteristicIds.length > 0 &&
+        !filters.boardCharacteristicIds.some(
+          (item) => Number(item) === row.boardCharacteristicId,
+        )
       ) {
         return false;
       }
@@ -336,8 +302,6 @@ export function filterSectionRows(
       const types = [...new Set(records.map((sensor) => sensor.sensorType))];
       haystack = [
         row.role,
-        nameOf(lookup.machineModels, row.machineModelId),
-        processStepLabel(row.processStepId),
         nameOf(lookup.boardCharacteristics, row.boardCharacteristicId),
         types.length > 0 ? types.join('、') : row.sensorType || '—',
         records.length > 0

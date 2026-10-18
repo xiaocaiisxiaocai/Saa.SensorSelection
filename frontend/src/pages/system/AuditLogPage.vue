@@ -15,7 +15,8 @@ import {
 
 import { api, ApiError, type AuditOperationItem } from '@/api';
 import { formatLocalDateTime } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import {
   columnFilter,
   columnFilterValues,
@@ -34,6 +35,7 @@ import {
   operationSummary,
   operationTitle,
 } from '@/pages/system/audit/audit-changes';
+import { AHighlightText } from '@/ui';
 
 import '../shared/selection-page.css';
 
@@ -152,10 +154,15 @@ const baseColumns = computed<TableColumnType[]>(() => [
     }),
   },
 ]);
-const { columns, onResizeColumn } = useResizableColumns(
-  'audit-log',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('audit-log', () => baseColumns.value);
 
 function onTableChange(
   _pagination: unknown,
@@ -347,6 +354,13 @@ async function resetFilters() {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
+        :hidden="hiddenColumns"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
+      />
     </div>
     <a-table
       :columns="columns"
@@ -387,24 +401,37 @@ async function resetFilters() {
           {{ formatLocalDateTime(new Date(row.timestamp)) }}
         </template>
         <template v-else-if="column.key === 'user'">
-          <span class="audit-user">{{
-            row.displayName || row.username || '—'
-          }}</span>
+          <span class="audit-user">
+            <AHighlightText
+              :text="row.displayName || row.username || '—'"
+              :query="filters.keyword"
+            />
+          </span>
           <span
             v-if="row.displayName && row.username !== row.displayName"
             class="audit-user__account"
           >
-            {{ row.username }}
+            <AHighlightText :text="row.username" :query="filters.keyword" />
           </span>
         </template>
         <template v-else-if="column.key === 'action'">
-          <span class="audit-text">{{ operationTitle(row) }}</span>
+          <span class="audit-text">
+            <AHighlightText
+              :text="operationTitle(row)"
+              :query="filters.keyword"
+            />
+          </span>
           <span v-if="row.entryCount > 1" class="audit-count">
             {{ row.entryCount }} 条记录
           </span>
         </template>
         <template v-else-if="column.key === 'object'">
-          <span class="audit-text">{{ operationObject(row) }}</span>
+          <span class="audit-text">
+            <AHighlightText
+              :text="operationObject(row)"
+              :query="filters.keyword"
+            />
+          </span>
         </template>
         <template v-else-if="column.key === 'summary'">
           <span
@@ -412,7 +439,10 @@ async function resetFilters() {
             class="audit-text"
             :class="{ 'audit-text--error': !row.result }"
           >
-            {{ operationSummary(row) }}
+            <AHighlightText
+              :text="operationSummary(row)"
+              :query="filters.keyword"
+            />
           </span>
           <span v-else class="audit-text audit-text--muted">—</span>
         </template>
@@ -426,12 +456,20 @@ async function resetFilters() {
       <template #expandedRowRender="{ record: row }">
         <ol class="audit-entries">
           <li v-for="entry in row.entries" :key="entry.id">
-            <span class="audit-entries__name">{{ entryName(entry) }}</span>
+            <span class="audit-entries__name">
+              <AHighlightText
+                :text="entryName(entry)"
+                :query="filters.keyword"
+              />
+            </span>
             <span
               v-if="entrySummary(entry)"
               :class="{ 'audit-text--error': !entry.result }"
             >
-              {{ entrySummary(entry) }}
+              <AHighlightText
+                :text="entrySummary(entry)"
+                :query="filters.keyword"
+              />
             </span>
           </li>
         </ol>
@@ -444,7 +482,7 @@ async function resetFilters() {
       :total="total"
       v-bind="PAGINATION_PROPS"
     />
-    <AuditOperationDrawer v-model="selected" />
+    <AuditOperationDrawer v-model="selected" :query="filters.keyword" />
   </section>
 </template>
 

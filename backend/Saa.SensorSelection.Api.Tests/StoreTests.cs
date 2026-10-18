@@ -35,6 +35,31 @@ public class StoreTests
     }
 
     [Fact]
+    public async Task Sensor_Dates_AreAutomatic_AndPreservedOnEdit()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var route = StoreRoute("sensor-catalog:all");
+        async Task<JsonElement> Save(string status, string enteredAt, string usedAt)
+        {
+            var response = await client.PutAsJsonAsync(route,
+                new[] { new { id = 900001, model = "AUTO-DATE", status, enteredAt, usedAt } });
+            response.EnsureSuccessStatusCode();
+            var rows = await client.GetFromJsonAsync<JsonElement>(route);
+            return rows[0];
+        }
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var alternate = await Save("02 备选", "2000-01-01", "2000-01-01");
+        Assert.Equal(today, alternate.GetProperty("enteredAt").GetString());
+        Assert.Equal("", alternate.GetProperty("usedAt").GetString());
+        var current = await Save("01 现用", "2000-01-01", "2000-01-01");
+        Assert.Equal(today, current.GetProperty("usedAt").GetString());
+        var edited = await Save("01 现用", "2000-01-01", "2000-01-01");
+        Assert.Equal(today, edited.GetProperty("enteredAt").GetString());
+        Assert.Equal(today, edited.GetProperty("usedAt").GetString());
+    }
+
+    [Fact]
     public async Task Store_Read_WithoutToken_ReturnsStore()
     {
         // 匿名只读预览：未登录也能读取业务数据（客户/制程/机型/Sensor 型号）

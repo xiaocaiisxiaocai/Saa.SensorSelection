@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using Saa.SensorSelection.Api.Models;
 using Saa.SensorSelection.Api.Services;
 
 namespace Saa.SensorSelection.Api.Controllers;
@@ -19,6 +20,8 @@ namespace Saa.SensorSelection.Api.Controllers;
 [Route("api/store")]
 public class StoreController(StoreService store, AuditLogService audit) : ControllerBase
 {
+    private const string TableColumnSettingsKey = "table-columns:global";
+
     /// <summary>返回全部 key → JSON 数组（匿名可读）。</summary>
     [HttpGet]
     [AllowAnonymous]
@@ -75,6 +78,14 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     [Authorize(Policy = "selection:write")]
     public async Task<IActionResult> ReplaceAll([FromBody] JsonElement payload, CancellationToken ct)
     {
+        var currentSettings = await store.GetByKeyAsync(TableColumnSettingsKey, ct);
+        var replacesSettings = payload.ValueKind == JsonValueKind.Object &&
+            payload.EnumerateObject().Any(property => IsTableColumnSettingsKey(property.Name));
+        if (!IsSystemAdmin && (currentSettings.Found || replacesSettings))
+        {
+            return Forbid();
+        }
+
         var result = await store.ReplaceAllAsync(payload, ct);
         var keyCount = payload.ValueKind == JsonValueKind.Object
             ? payload.EnumerateObject().Count()
@@ -101,6 +112,11 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
         [FromBody] JsonElement value,
         CancellationToken ct)
     {
+        if (IsTableColumnSettingsKey(key) && !IsSystemAdmin)
+        {
+            return Forbid();
+        }
+
         var result = await store.UpsertAsync(key, value, ct);
         var itemCount = value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : 0;
         await audit.WriteAsync(
@@ -128,6 +144,11 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
     [Authorize(Policy = "selection:write")]
     public async Task<IActionResult> DeleteByQueryKey([FromQuery] string key, CancellationToken ct)
     {
+        if (IsTableColumnSettingsKey(key) && !IsSystemAdmin)
+        {
+            return Forbid();
+        }
+
         var result = await store.DeleteAsync(key, ct);
         await audit.WriteAsync(
             "store.delete",
@@ -144,6 +165,12 @@ public class StoreController(StoreService store, AuditLogService audit) : Contro
 
         return Ok(new { ok = true });
     }
+
+    private bool IsSystemAdmin =>
+        User.IsInRole(RbacDefaults.SystemAdminRoleCode);
+
+    private static bool IsTableColumnSettingsKey(string key) =>
+        string.Equals(key, TableColumnSettingsKey, StringComparison.OrdinalIgnoreCase);
 
     private static string JsonKind(JsonValueKind kind)
     {

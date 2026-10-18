@@ -21,7 +21,8 @@ import {
   type SensorFileItem,
   type SensorItem,
 } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { readWorkbook } from '@/pages/shared/excel';
 import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
@@ -38,8 +39,8 @@ import {
 } from '@/pages/shared/table';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
+import { AHighlightText } from '@/ui';
 
-import SensorColumnMenu from './SensorColumnMenu.vue';
 import SensorFormDialog from './SensorFormDialog.vue';
 import SensorLinkedPreview from './SensorLinkedPreview.vue';
 import SensorReplaceDialog from './SensorReplaceDialog.vue';
@@ -51,7 +52,6 @@ import {
   mapSensorImportSheet,
   filterSensors,
   groupSensorCatalog,
-  HIDEABLE_COLUMNS,
   relationText,
   sensorColumns,
   statusColor,
@@ -59,7 +59,6 @@ import {
   type SensorLookup,
   type SensorTableRow,
 } from './sensor-table';
-import { useHiddenColumns } from './use-hidden-columns';
 
 /**
  * 「型号」页签：筛选工具栏 + 型号表格 + 分页，以及新增/编辑、替换、预览对话框。
@@ -87,14 +86,6 @@ const linkedPreview = ref<{
 } | null>(null);
 const page = ref(1);
 const pageSize = ref(20);
-
-// 型号表格列数多、内容长，1440px 下仍要横向滚动才能看到「关联型录/3D」，
-// 描述性列允许按需隐藏，选择记忆在本地。
-const columnVisibility = useHiddenColumns(
-  'selection:sensor-table:hidden-columns:v1',
-  HIDEABLE_COLUMNS,
-);
-const hiddenColumns = columnVisibility.hidden;
 
 const statusNames = computed(() =>
   [...store.dictionaryNames('sensor-status')].sort(
@@ -231,7 +222,7 @@ const rowClassName = computed(() => {
 const baseColumns = computed(() =>
   sensorColumns({
     showDisabledDetails: showDisabledDetails.value,
-    hidden: hiddenColumns.value,
+    hidden: new Set<string>(),
     writable: writable.value,
     grouped: groupedView.value,
   }).map((column) => {
@@ -260,10 +251,15 @@ const baseColumns = computed(() =>
     return column;
   }),
 );
-const { columns, onResizeColumn } = useResizableColumns(
-  'sensor-models',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('sensor-models', () => baseColumns.value);
 
 watch([query, sensorTypes, statuses, pageSize], () => {
   page.value = 1;
@@ -442,10 +438,12 @@ function openReplace(row: SensorTableRow) {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <SensorColumnMenu
-        :columns="HIDEABLE_COLUMNS"
+      <AdminColumnSettingsMenu
+        :can-manage="canManageColumns"
+        :columns="columnOptions"
         :hidden="hiddenColumns"
-        @change="columnVisibility.setVisible"
+        :on-set-visible="setColumnVisible"
+        :on-show-all="showAllColumns"
       />
       <a-tooltip v-if="canExport" title="导出 Excel">
         <a-button aria-label="导出 Excel" @click="exportExcel">
@@ -487,7 +485,7 @@ function openReplace(row: SensorTableRow) {
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'status'">
           <a-tag :color="statusColor(row.item.status)">
-            {{ row.item.status }}
+            <AHighlightText :text="row.item.status" :query="query" />
           </a-tag>
         </template>
         <template v-else-if="column.key === 'sensorType'">
@@ -496,8 +494,11 @@ function openReplace(row: SensorTableRow) {
             class="sensor-type"
             :title="row.item.sensorType"
             :color="typeAccent(row.item.sensorType)"
-            :text="row.item.sensorType"
-          />
+          >
+            <template #text>
+              <AHighlightText :text="row.item.sensorType" :query="query" />
+            </template>
+          </a-badge>
           <span v-else-if="row.struck" class="sensor-struck">—</span>
           <template v-else>—</template>
         </template>
@@ -509,24 +510,34 @@ function openReplace(row: SensorTableRow) {
               tooltips: ['复制料号', '已复制'],
             }"
           >
-            <span v-if="row.struck" class="sensor-struck">{{ value }}</span>
-            <template v-else>{{ value }}</template>
+            <span v-if="row.struck" class="sensor-struck">
+              <AHighlightText :text="String(value)" :query="query" />
+            </span>
+            <template v-else>
+              <AHighlightText :text="String(value)" :query="query" />
+            </template>
           </a-typography-text>
           <span v-else-if="row.struck" class="sensor-struck">—</span>
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'sop'">
-          <a-button
-            v-if="row.parent.sopId"
-            class="sensor-file-link"
-            type="link"
-            size="small"
-            :title="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
-            @click="openLinked('型录', row.parent.sopId)"
-          >
-            <template #icon><Eye :size="14" /></template>
-            {{ lookup.sopTitle(row.parent.sopId) }}
-          </a-button>
+          <a-tooltip v-if="row.parent.sopId" :title="lookup.sopTitle(row.parent.sopId)">
+            <a-button
+              class="sensor-file-link sensor-file-link--compact"
+              type="link"
+              size="small"
+              :aria-label="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
+              @click="openLinked('型录', row.parent.sopId)"
+            >
+              <template #icon><Eye :size="14" /></template>
+              <span class="sensor-file-link__label">
+                <AHighlightText
+                  :text="lookup.sopTitle(row.parent.sopId)"
+                  :query="query"
+                />
+              </span>
+            </a-button>
+          </a-tooltip>
           <span v-else>未关联</span>
         </template>
         <template v-else-if="column.key === 'model3d'">
@@ -539,21 +550,28 @@ function openReplace(row: SensorTableRow) {
             @click="openLinked('3D', row.parent.model3dId)"
           >
             <template #icon><Eye :size="14" /></template>
-            {{ lookup.model3dTitle(row.parent.model3dId) }}
+            <AHighlightText
+              :text="lookup.model3dTitle(row.parent.model3dId)"
+              :query="query"
+            />
           </a-button>
           <span v-else>未关联</span>
         </template>
-        <template v-else-if="column.key === 'replacedAt'">
-          <span v-if="row.struck" class="sensor-struck">{{
-            value || '—'
-          }}</span>
-          <template v-else>{{ value || '—' }}</template>
+        <template v-else-if="column.key === 'disabledAt'">
+          <span v-if="row.struck" class="sensor-struck">
+            <AHighlightText :text="String(value || '—')" :query="query" />
+          </span>
+          <template v-else>
+            <AHighlightText :text="String(value || '—')" :query="query" />
+          </template>
         </template>
         <template v-else-if="column.key === 'problemNote'">
-          <span v-if="row.struck" class="sensor-struck">{{
-            value || '—'
-          }}</span>
-          <template v-else>{{ value || '—' }}</template>
+          <span v-if="row.struck" class="sensor-struck">
+            <AHighlightText :text="String(value || '—')" :query="query" />
+          </span>
+          <template v-else>
+            <AHighlightText :text="String(value || '—')" :query="query" />
+          </template>
         </template>
         <template v-else-if="column.key === 'relation'">
           <a-button
@@ -563,7 +581,7 @@ function openReplace(row: SensorTableRow) {
             size="small"
             @click="openRelatedSensor(row.item)"
           >
-            {{ relation(row.item) }}
+            <AHighlightText :text="relation(row.item)" :query="query" />
           </a-button>
           <template v-else>—</template>
         </template>
@@ -608,10 +626,12 @@ function openReplace(row: SensorTableRow) {
           </div>
         </template>
         <template v-else>
-          <span v-if="row.struck" class="sensor-struck">{{
-            cellText(value)
-          }}</span>
-          <template v-else>{{ cellText(value) }}</template>
+          <span v-if="row.struck" class="sensor-struck">
+            <AHighlightText :text="cellText(value)" :query="query" />
+          </span>
+          <template v-else>
+            <AHighlightText :text="cellText(value)" :query="query" />
+          </template>
         </template>
       </template>
     </a-table>

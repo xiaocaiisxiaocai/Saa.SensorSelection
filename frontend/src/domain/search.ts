@@ -137,8 +137,12 @@ export function buildSearchIndex({
       item.partNumber,
       item.sensorType,
       item.spec,
+      item.actualCondition,
       item.feature,
       item.scene,
+      item.usedAt,
+      item.disabledAt,
+      item.enteredAt,
       item.problemNote,
     ]
       .filter(Boolean)

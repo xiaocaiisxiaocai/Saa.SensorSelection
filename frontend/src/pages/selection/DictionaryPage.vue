@@ -8,7 +8,8 @@ import { Download, Pencil, Trash2, Upload } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
-import { useResizableColumns } from '@/pages/shared/column-widths';
+import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
+import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import {
   buildExcelWorkbook,
@@ -100,10 +101,15 @@ const baseColumns = computed<TableColumnType<DictionaryItem>[]>(() => {
   }
   return cols;
 });
-const { columns, onResizeColumn } = useResizableColumns(
-  'dictionary',
-  () => baseColumns.value,
-);
+const {
+  canManage: canManageColumns,
+  columns,
+  hidden: hiddenColumns,
+  onResizeColumn,
+  options: columnOptions,
+  setVisible: setColumnVisible,
+  showAll: showAllColumns,
+} = useManagedTableColumns('dictionary', () => baseColumns.value);
 const customRow = computed(() =>
   rowClick<DictionaryItem>((row) => {
     if (writable.value) editItem(row);
@@ -280,6 +286,13 @@ function onTableChange(
     <div class="dictionary-header">
       <a-segmented v-model:value="activeCode" :options="tabs" />
       <div class="dictionary-header__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
         <a-tooltip v-if="canExport" title="导出 Excel">
           <a-button aria-label="导出 Excel" @click="exportExcel">
             <template #icon><Download :size="14" /></template>

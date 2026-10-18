@@ -133,7 +133,10 @@ const { listPagination } = useTablePagination(
             <a-list-item class="search-list__item">
               <template #extra>
                 <a-tag :color="typeColor[(item as SearchItem).type]">
-                  {{ typeLabel[(item as SearchItem).type] }}
+                  <AHighlightText
+                    :text="typeLabel[(item as SearchItem).type]"
+                    :query="query"
+                  />
                 </a-tag>
               </template>
               <a-list-item-meta>

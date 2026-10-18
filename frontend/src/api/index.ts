@@ -360,6 +360,10 @@ export const api = {
     return request<Record<string, unknown[]>>('/store');
   },
 
+  getKey(key: string): Promise<unknown[]> {
+    return request<unknown[]>(`/store/by-key?key=${encodeURIComponent(key)}`);
+  },
+
   async putKey(
     key: string,
     value: unknown[],

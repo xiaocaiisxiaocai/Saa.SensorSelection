@@ -1,0 +1,123 @@
+.machine-comparison-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.machine-comparison-records {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.machine-comparison-table {
+  width: 100%;
+  min-width: 44rem;
+  table-layout: fixed;
+  border-spacing: 0;
+  border-collapse: separate;
+}
+
+.machine-comparison-label-column {
+  width: 7rem;
+}
+
+.machine-comparison-table th,
+.machine-comparison-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-right: 1px solid var(--color-split);
+  border-bottom: 1px solid var(--color-split);
+}
+
+.machine-comparison-table tr > :first-child {
+  border-left: 1px solid var(--color-split);
+}
+
+.machine-comparison-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg-container);
+  border-top: 1px solid var(--color-split);
+}
+
+.machine-comparison-table th[scope='row'] {
+  font-weight: 400;
+  white-space: nowrap;
+  background: var(--color-fill-alter);
+}
+
+.machine-comparison-heading h2 {
+  margin: 0;
+  font: var(--font-body-strong);
+}
+
+.machine-comparison-heading > div {
+  font: var(--font-sm);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.machine-comparison-value {
+  white-space: pre-line;
+}
+
+.machine-comparison-spec + .machine-comparison-spec {
+  padding-top: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-split);
+}
+
+.machine-comparison-model {
+  font-family: var(--font-family-code);
+  color: var(--color-primary);
+}
+
+.machine-comparison-spec__identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.machine-comparison-record-navigation {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.machine-comparison-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.machine-comparison-tabs :deep(.ant-tabs-nav) {
+  margin: 0;
+}
+
+.machine-comparison-tabs :deep(.ant-tabs-content-holder) {
+  display: none;
+}
+
+.machine-comparison-tabs :deep(.ant-tabs-tab) {
+  white-space: nowrap;
+}
+
+.machine-comparison-count {
+  flex-shrink: 0;
+  font: var(--font-sm);
+  color: var(--color-text-secondary);
+}
+
+.machine-comparison-heading > .machine-comparison-missing {
+  color: var(--color-text-secondary);
+}

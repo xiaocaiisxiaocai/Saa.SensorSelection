@@ -18,8 +18,12 @@ export interface SensorLookup {
 // 料号经常整列为空，和其余描述性列一样允许按需隐藏。
 export const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: 'partNumber', label: '料号' },
+  { key: 'usedAt', label: '使用日期' },
+  { key: 'disabledAt', label: '停用日期' },
+  { key: 'enteredAt', label: '录入日期' },
   { key: 'relation', label: '替换关系' },
   { key: 'spec', label: '规格参数' },
+  { key: 'actualCondition', label: '实际工况' },
   { key: 'feature', label: '特性与注意' },
   { key: 'scene', label: '适用场景' },
   { key: 'sop', label: '关联型录' },
@@ -27,7 +31,7 @@ export const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
 ];
 
 export function sensorColumns(options: {
-  /** 停用页签多显示「停用时间 / 停用原因」 */
+  /** 停用页签多显示「停用原因」 */
   showDisabledDetails: boolean;
   hidden: ReadonlySet<string>;
   writable: boolean;
@@ -72,12 +76,6 @@ export function sensorColumns(options: {
     ...(options.showDisabledDetails
       ? [
           {
-            key: 'replacedAt',
-            dataIndex: field('replacedAt'),
-            title: '停用时间',
-            width: 112,
-          },
-          {
             key: 'problemNote',
             dataIndex: field('problemNote'),
             title: '停用原因',
@@ -88,11 +86,17 @@ export function sensorColumns(options: {
     // 全部列加起来要在 1920 宽屏里放得下，不出横向滚动（操作列固定在右侧会盖住最后一列）：
     // 1920 下表格可用宽度约 1650px（扣掉侧栏、内边距和纵向滚动条），列宽合计留出余量。
     // 替换关系/关联型录/关联 3D 内容都很短（多数是「—」或一个文件名），给窄宽度；
-    // 宽度留给规格参数/特性与注意/适用场景：这三列完整显示不截断，
+    // 宽度留给规格参数/实际工况/特性与注意/适用场景：描述列完整显示不截断，
     // 列越宽折行越少，紧凑主题下行高才压得下来。
     // 替换关系 / 关联型录 / 关联 3D 由面板按 item 自行渲染，没有对应的 item 字段。
     { key: 'relation', dataIndex: 'relation', title: '替换关系', width: 96 },
     { key: 'spec', dataIndex: field('spec'), title: '规格参数', width: 200 },
+    {
+      key: 'actualCondition',
+      dataIndex: field('actualCondition'),
+      title: '实际工况',
+      width: 200,
+    },
     {
       key: 'feature',
       dataIndex: field('feature'),
@@ -100,13 +104,31 @@ export function sensorColumns(options: {
       width: 240,
     },
     { key: 'scene', dataIndex: field('scene'), title: '适用场景', width: 180 },
-    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 96, ...shared },
+    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 176, ...shared },
     {
       key: 'model3d',
       dataIndex: 'model3d',
       title: '关联 3D',
       width: 96,
       ...shared,
+    },
+    {
+      key: 'usedAt',
+      dataIndex: field('usedAt'),
+      title: '使用日期',
+      width: 112,
+    },
+    {
+      key: 'disabledAt',
+      dataIndex: field('disabledAt'),
+      title: '停用日期',
+      width: 112,
+    },
+    {
+      key: 'enteredAt',
+      dataIndex: field('enteredAt'),
+      title: '录入日期',
+      width: 160,
     },
   ];
   const cols = baseColumns.filter(
@@ -139,8 +161,12 @@ function matchesTypeAndQuery(
     item.brand,
     item.model,
     item.spec,
+    item.actualCondition,
     item.feature,
     item.scene,
+    item.usedAt,
+    item.disabledAt,
+    item.enteredAt,
     item.problemNote,
     related?.model,
     related?.brand,
@@ -189,22 +215,26 @@ export function relationText(item: SensorItem, related: SensorItem | null) {
   if (item.replacesId) {
     const target = label || `型号#${item.replacesId}`;
     return item.problemNote
-      ? `替换了 ${target} · ${item.problemNote}`
+      ? `替换了 ${target}（${item.problemNote}）`
       : `替换了 ${target}`;
   }
   if (item.replacedById) {
     const target = label || `型号#${item.replacedById}`;
     return item.problemNote
-      ? `被 ${target} 替换 · ${item.problemNote}`
+      ? `被 ${target} 替换（${item.problemNote}）`
       : `被 ${target} 替换`;
   }
   return '';
 }
 
 const SENSOR_IMPORT_HEADERS: Record<string, SensorImportField> = {
+  实际工况: 'actualCondition',
   品牌: 'brand',
+  停用日期: 'disabledAt',
+  录入日期: 'enteredAt',
   料号: 'partNumber',
   型号: 'model',
+  使用日期: 'usedAt',
   感应器类型: 'sensorType',
   规格参数: 'spec',
   特性与注意: 'feature',
@@ -214,7 +244,7 @@ const SENSOR_IMPORT_HEADERS: Record<string, SensorImportField> = {
 
 /**
  * 按表头文字对应可导入栏位。同一表头出现多次时用第一列。
- * 替换关系、关联文件和停用信息没有对应栏位，导入时不读。
+ * 替换关系、停用原因和关联文件没有对应栏位，导入时不读。
  */
 export function mapSensorImportSheet(
   rows: readonly string[][],
@@ -258,6 +288,12 @@ export function exportCell(
       return item.brand || empty;
     case 'model':
       return item.model || empty;
+    case 'usedAt':
+      return item.usedAt || empty;
+    case 'disabledAt':
+      return item.disabledAt || empty;
+    case 'enteredAt':
+      return item.enteredAt || empty;
     case 'replacedAt':
       return item.replacedAt || empty;
     case 'problemNote':
@@ -266,6 +302,8 @@ export function exportCell(
       return relationText(item, lookup.related(item)) || empty;
     case 'spec':
       return item.spec || empty;
+    case 'actualCondition':
+      return item.actualCondition || empty;
     case 'feature':
       return item.feature || empty;
     case 'scene':

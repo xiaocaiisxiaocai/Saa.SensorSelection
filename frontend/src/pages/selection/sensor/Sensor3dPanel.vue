@@ -18,7 +18,7 @@ import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
-import { APdfViewer } from '@/ui';
+import { AHighlightText, APdfViewer } from '@/ui';
 import { useTablePagination } from '@/pages/shared/table';
 
 const props = defineProps<{ focusModel3dId?: null | number }>();
@@ -154,8 +154,11 @@ async function remove(item: Sensor3dFileItem) {
         >
           <!-- 一行显示：名称在前，大小和上传时间用次要文字跟在后面 -->
           <div class="file-list__line">
-            <span class="file-list__name">{{ item.title }}</span>
+            <span class="file-list__name">
+              <AHighlightText :text="item.title" :query="query" />
+            </span>
             <span class="file-list__meta">
+              <AHighlightText :text="item.fileName" :query="query" /> ·
               {{ formatFileSize(item.size) }} ·
               {{ formatLocalDateTime(new Date(item.uploadedAt)) }}
             </span>

@@ -19,7 +19,7 @@ import {
  * 勾选状态由父页面持有。
  */
 const props = defineProps<{
-  /** 勾选的二级 Tab id（报告内容来自这些二级 Tab） */
+  /** 勾选的内容页 id */
   pageIds: readonly number[];
   /** 勾选的机型（目录树末级节点）数 */
   selectedCount: number;
@@ -34,7 +34,7 @@ const emit = defineEmits<{
 const store = useSelectionStore();
 const generating = ref(false);
 const noneSelected = computed(() => props.selectedCount === 0);
-const NONE_SELECTED_HINT = '请先勾选至少一个机型或二级 Tab';
+const NONE_SELECTED_HINT = '请先勾选至少一个机型目录项';
 // 菜单项禁用时原因直接写在菜单文字里
 const NONE_SELECTED_SUFFIX = '（请先勾选）';
 
@@ -50,7 +50,7 @@ function ready() {
     return false;
   }
   if (!hasReportContent(reportSections.value)) {
-    // 勾的机型可能还没有二级 Tab，或二级 Tab 里没有内容
+    // 勾选的目录项可能还没有内容
     message.warning('所选机型暂无可生成的内容');
     return false;
   }

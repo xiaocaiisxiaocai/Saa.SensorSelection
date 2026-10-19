@@ -68,6 +68,7 @@ const emit = defineEmits<{
   select: [payload: ItemPayload];
   checkNode: [payload: { key: string; checked: boolean }];
   compare: [payload: ItemPayload];
+  chooseCompare: [];
   createGroup: [];
   editGroup: [name: string];
   deleteGroup: [name: string];
@@ -456,11 +457,12 @@ function runAction(node: EntityNode, key: string) {
             :compare-enabled="
               compareEnabled && (dataRef as EntityNode).kind === 'item'
             "
-            :compare-disabled="isCurrentNode(dataRef as EntityNode)"
+            :compare-current="isCurrentNode(dataRef as EntityNode)"
             :actions="editable ? actionsFor(dataRef as EntityNode) : []"
             @toggle="toggleBranch((dataRef as EntityNode).key)"
             @action="runAction(dataRef as EntityNode, $event)"
             @compare="onCompare(dataRef as EntityNode)"
+            @choose-compare="emit('chooseCompare')"
           />
         </template>
       </a-tree>

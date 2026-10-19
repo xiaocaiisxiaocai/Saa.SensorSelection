@@ -40,6 +40,7 @@ const emit = defineEmits<{
   ];
   checkNode: [payload: { key: string; checked: boolean }];
   compare: [payload: ItemPayload];
+  chooseCompare: [];
 }>();
 
 const store = useSelectionStore();
@@ -249,6 +250,7 @@ function onReorderItems(payload: {
       @select="onSelect"
       @check-node="emit('checkNode', $event)"
       @compare="onCompare"
+      @choose-compare="emit('chooseCompare')"
       @create-group="groupDialog?.openCreate()"
       @edit-group="groupDialog?.openEdit($event)"
       @delete-group="removeGroup"

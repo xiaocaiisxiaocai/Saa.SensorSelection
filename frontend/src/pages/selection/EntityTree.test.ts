@@ -100,7 +100,7 @@ describe('EntityTree comparison context menu', () => {
     wrapper.unmount();
   });
 
-  it('disables comparison for the current leaf and preserves the admin menu', async () => {
+  it('offers a picker for the current leaf without selecting or comparing it and preserves the admin menu', async () => {
     const wrapper = mountTree({
       compareEnabled: true,
       editable: true,
@@ -112,11 +112,14 @@ describe('EntityTree comparison context menu', () => {
       clientY: 20,
     });
     await flushPromises();
-    const compareItem = contextMenuItem('与当前条目对比');
-    expect(compareItem?.getAttribute('aria-disabled')).toBe('true');
+    const compareItem = contextMenuItem('选择其他机型对比…');
+    expect(compareItem).toBeDefined();
+    expect(compareItem?.getAttribute('aria-disabled')).not.toBe('true');
     compareItem?.click();
     await flushPromises();
     expect(wrapper.emitted('compare')).toBeUndefined();
+    expect(wrapper.emitted('select')).toBeUndefined();
+    expect(wrapper.emitted('chooseCompare')).toEqual([[]]);
 
     await treeNode(wrapper, '机型A')
       .get('button[aria-label="机型A 的更多操作"]')

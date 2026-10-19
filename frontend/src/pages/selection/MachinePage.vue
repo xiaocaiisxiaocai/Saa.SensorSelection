@@ -614,6 +614,7 @@ async function removeTab(tabId: number): Promise<boolean> {
             :compare-enabled="canCompare"
             @select="selectEntity"
             @compare="startComparison"
+            @choose-compare="openComparePicker"
             @check-node="onTreeCheck"
           />
           <MachineGlobalSearchFilters

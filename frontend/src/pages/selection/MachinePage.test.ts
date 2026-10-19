@@ -1009,9 +1009,7 @@ describe('MachinePage comparison', () => {
         ),
     ).toBe(true);
     expect(wrapper.findAll('input[aria-label="搜索对比内容"]')).toHaveLength(1);
-    expect(
-      wrapper.findAll('.machine-comparison-tabs'),
-    ).toHaveLength(1);
+    expect(wrapper.findAll('.machine-comparison-tabs')).toHaveLength(1);
     const tab = wrapper
       .get('.machine-compare-tabs')
       .findAll('.ant-tabs-tab')
@@ -1056,6 +1054,46 @@ describe('MachinePage comparison', () => {
     await clickTreeNode(wrapper, right.item!);
     expect(wrapper.find('.machine-comparison-panel').exists()).toBe(false);
     expect(wrapper.vm.$route.query.item).toBe(right.item);
+    wrapper.unmount();
+  });
+
+  it('opens the picker from the current machine context menu and compares with another machine', async () => {
+    const { wrapper, left, right } = await comparisonFixture();
+    const originalQuery = { ...wrapper.vm.$route.query };
+    const currentNode = wrapper
+      .findAll('.entity-tree__node')
+      .find((node) => node.attributes('data-item') === left.item)!;
+    await currentNode.trigger('contextmenu', { clientX: 40, clientY: 20 });
+    await flushPromises();
+    const menuItem = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ].find((item) => item.textContent?.trim() === '选择其他机型对比…')!;
+    expect(menuItem).toBeDefined();
+    menuItem.click();
+    await flushPromises();
+    const picker = wrapper
+      .findAllComponents({ name: 'ASelect' })
+      .find(
+        (component) =>
+          component.attributes('aria-label') === '选择另一个机型条目',
+      )!;
+    expect(
+      picker.props('options').map((option: { value: string }) => option.value),
+    ).not.toContain(nodeTreeKey(left));
+    expect(wrapper.vm.$route.query).toEqual(originalQuery);
+    expect(wrapper.find('.machine-comparison-panel').exists()).toBe(false);
+    picker.vm.$emit('update:value', nodeTreeKey(right));
+    await flushPromises();
+    const start = [
+      ...document.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ].find((button) => button.textContent?.replace(/\s+/g, '') === '开始对比')!;
+    start.click();
+    await flushPromises();
+    expect(wrapper.findAll('.machine-comparison-heading')).toHaveLength(2);
+    expect(wrapper.findAll('.machine-comparison-heading')[1]!.text()).toContain(
+      right.item,
+    );
+    expect(wrapper.vm.$route.query).toEqual(originalQuery);
     wrapper.unmount();
   });
 

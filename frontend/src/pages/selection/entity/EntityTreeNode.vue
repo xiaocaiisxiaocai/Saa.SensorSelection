@@ -13,7 +13,7 @@ const props = defineProps<{
   query?: string;
   editable: boolean;
   compareEnabled?: boolean;
-  compareDisabled?: boolean;
+  compareCurrent?: boolean;
   actions: readonly {
     key: string;
     label: string;
@@ -25,10 +25,16 @@ const emit = defineEmits<{
   toggle: [];
   action: [key: string];
   compare: [];
+  chooseCompare: [];
 }>();
 
 function onContextMenuClick({ key }: { key: string | number }) {
-  if (String(key) === 'compare' && !props.compareDisabled) emit('compare');
+  if (!props.compareEnabled) return;
+  if (String(key) === 'choose-compare' && props.compareCurrent) {
+    emit('chooseCompare');
+  } else if (String(key) === 'compare' && !props.compareCurrent) {
+    emit('compare');
+  }
 }
 </script>
 
@@ -86,9 +92,10 @@ function onContextMenuClick({ key }: { key: string | number }) {
     </div>
     <template #overlay>
       <a-menu @click="onContextMenuClick">
-        <a-menu-item key="compare" :disabled="compareDisabled">
-          与当前条目对比
+        <a-menu-item v-if="compareCurrent" key="choose-compare">
+          选择其他机型对比…
         </a-menu-item>
+        <a-menu-item v-else key="compare"> 与当前条目对比 </a-menu-item>
       </a-menu>
     </template>
   </a-dropdown>

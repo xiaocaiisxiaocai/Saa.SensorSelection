@@ -221,6 +221,23 @@
       "sort": 5
     }
   ],
+  "dict:customer-region": [
+    {
+      "id": 1,
+      "name": "华东",
+      "sort": 1
+    },
+    {
+      "id": 2,
+      "name": "华南",
+      "sort": 2
+    },
+    {
+      "id": 3,
+      "name": "SAT",
+      "sort": 3
+    }
+  ],
   "dict:customer-req": [
     {
       "id": 1,
@@ -493,67 +510,100 @@
       "name": "鹏鼎集团",
       "items": [
         "华东"
-      ]
+      ],
+      "regions": {
+        "华东": "华东"
+      }
     },
     {
       "name": "健鼎集团",
       "items": [
         "华东"
-      ]
+      ],
+      "regions": {
+        "华东": "华东"
+      }
     },
     {
       "name": "通用客户",
       "items": [
         "华东"
-      ]
+      ],
+      "regions": {
+        "华东": "华东"
+      }
     },
     {
       "name": "广合集团",
       "items": [
         "华南"
-      ]
+      ],
+      "regions": {
+        "华南": "华南"
+      }
     },
     {
       "name": "崇达集团",
       "items": [
         "华南"
-      ]
+      ],
+      "regions": {
+        "华南": "华南"
+      }
     },
     {
       "name": "深联集团",
       "items": [
         "华南"
-      ]
+      ],
+      "regions": {
+        "华南": "华南"
+      }
     },
     {
       "name": "深南集团",
       "items": [
         "华南"
-      ]
+      ],
+      "regions": {
+        "华南": "华南"
+      }
     },
     {
       "name": "泰国鹏鼎",
       "items": [
         "SAT"
-      ]
+      ],
+      "regions": {
+        "SAT": "SAT"
+      }
     },
     {
       "name": "泰国超颖",
       "items": [
         "SAT"
-      ]
+      ],
+      "regions": {
+        "SAT": "SAT"
+      }
     },
     {
       "name": "泰国耀华",
       "items": [
         "SAT"
-      ]
+      ],
+      "regions": {
+        "SAT": "SAT"
+      }
     },
     {
       "name": "泰国泰兴",
       "items": [
         "SAT"
-      ]
+      ],
+      "regions": {
+        "SAT": "SAT"
+      }
     }
   ],
   "entity-groups:machine": [
@@ -1144,7 +1194,7 @@
   "machine-section-rows:4:06 特殊客户配置": [],
   "meta:seed-version": [
     {
-      "version": 12
+      "version": 13
     }
   ],
   "process-intro:all": [],

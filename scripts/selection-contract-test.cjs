@@ -1097,105 +1097,247 @@ async function run() {
     true,
   )
 
-  // ── 客户目录：客户（分组）→ 区域（叶子）────────────────────────────
+  // ── 客户目录：客户（分组）→ 厂区（叶子），厂区的区域取自「客户区域」字典 ──
   const customerGroups = repository.getEntityGroups('customer')
   assert.equal(customerGroups.some((group) => group.name === '庆鼎'), true)
   assert.equal(
     customerGroups.find((group) => group.name === '庆鼎').items.includes('华东'),
     true,
   )
+  assert.deepEqual(
+    customerGroups.find((group) => group.name === '庆鼎').regions,
+    { 华东: '华东', 华南: '华南' },
+  )
+  assert.deepEqual(
+    repository.getDictionaryItems('customer-region').map((item) => item.name),
+    ['华东', '华南', 'SAT'],
+  )
 
   const createdCustomerGroup = repository.saveEntityGroup('customer', {
     name: '测试客户',
   })
   assert.equal(createdCustomerGroup.ok, true)
-
-  // 同名区域可以出现在不同客户下；同一客户下不能重复
-  const firstRegion = repository.saveEntityItem('customer', {
-    category: '测试客户',
-    name: '华东',
-  })
-  assert.equal(firstRegion.ok, true)
-  assert.deepEqual(repository.getCrud('customer-req', '测试客户/华东'), [])
   assert.deepEqual(
-    repository.saveEntityItem('customer', { category: '测试客户', name: '华东' }),
+    repository.getEntityGroups('customer').find((group) => group.name === '测试客户')
+      .regions,
+    {},
+  )
+
+  // 区域必填，且必须是字典里的区域
+  assert.deepEqual(
+    repository.saveEntityItem('customer', { category: '测试客户', name: '淮安一厂' }),
+    { ok: false, reason: 'validation' },
+  )
+  assert.deepEqual(
+    repository.saveEntityItem('customer', {
+      category: '测试客户',
+      name: '淮安一厂',
+      region: '火星',
+    }),
+    { ok: false, reason: 'validation' },
+  )
+
+  // 同名厂区可以出现在不同客户下；同一客户下不能重复；同一区域可以有多个厂区
+  const firstSite = repository.saveEntityItem('customer', {
+    category: '测试客户',
+    name: '淮安一厂',
+    region: '华东',
+  })
+  assert.equal(firstSite.ok, true)
+  assert.deepEqual(repository.getCrud('customer-req', '测试客户/淮安一厂'), [])
+  assert.deepEqual(
+    repository.saveEntityItem('customer', {
+      category: '测试客户',
+      name: '淮安一厂',
+      region: '华南',
+    }),
     { ok: false, reason: 'duplicate' },
   )
   assert.equal(
-    repository.saveEntityItem('customer', { category: '测试客户', name: '华南' })
-      .ok,
+    repository.saveEntityItem('customer', {
+      category: '测试客户',
+      name: '淮安二厂',
+      region: '华东',
+    }).ok,
     true,
   )
+  const testCustomer = repository
+    .getEntityGroups('customer')
+    .find((group) => group.name === '测试客户')
+  assert.deepEqual(testCustomer.items, ['淮安一厂', '淮安二厂'])
+  assert.deepEqual(testCustomer.regions, { 淮安一厂: '华东', 淮安二厂: '华东' })
   assert.deepEqual(
     repository
-      .getEntityGroups('customer')
-      .find((group) => group.name === '测试客户').items,
-    ['华东', '华南'],
+      .snapshotStore()
+      ['entity-groups:customer'].find((group) => group.name === '测试客户').regions,
+    { 淮安一厂: '华东', 淮安二厂: '华东' },
+    'site regions are persisted with the customer directory',
   )
+
+  // 编辑时可以只改区域
+  assert.equal(
+    repository.saveEntityItem(
+      'customer',
+      { category: '测试客户', name: '淮安二厂', region: 'SAT', previousCategory: '测试客户' },
+      '淮安二厂',
+    ).ok,
+    true,
+  )
+  assert.equal(
+    repository.getEntityGroups('customer').find((group) => group.name === '测试客户')
+      .regions['淮安二厂'],
+    'SAT',
+  )
+
   const normalizedShared = domain.normalizeEntityGroups(
     [
       { name: 'A', items: ['华东'] },
       { name: 'B', items: ['华东', '华东'] },
+      { name: 'C', items: ['一厂', '二厂'], regions: { 一厂: '华南', 旧厂: '华东' } },
     ],
     'customer',
   )
   assert.deepEqual(
     normalizedShared.map((group) => group.items),
-    [['华东'], ['华东']],
-    'region names are unique per customer, not across customers',
+    [['华东'], ['华东'], ['一厂', '二厂']],
+    'site names are unique per customer, not across customers',
+  )
+  // 旧数据（没有 regions）的叶子名就是区域；有 regions 时只保留现有厂区的区域
+  assert.deepEqual(
+    normalizedShared.map((group) => group.regions),
+    [{ 华东: '华东' }, { 华东: '华东' }, { 一厂: '华南' }],
+  )
+  assert.equal(
+    Object.hasOwn(
+      domain.normalizeEntityGroups([{ name: '输送机构', items: ['01'] }], 'machine')[0],
+      'regions',
+    ),
+    false,
+    'machine groups have no regions',
   )
 
-  // 同一区域名在两个客户下的资料互不影响
+  // 同一厂区名在两个客户下的资料互不影响
   assert.equal(
-    repository.saveCrud('customer-req', '测试客户/华东', {
+    repository.saveCrud('customer-req', '测试客户/淮安一厂', {
       type: '输送段-改',
       machine: 'ALL',
       process: 'DES',
-      content: '测试客户华东要求',
+      content: '测试客户淮安一厂要求',
       source: '验收规范-改',
     }).ok,
     true,
   )
-  assert.equal(repository.getCrud('customer-req', '测试客户/华东').length, 1)
+  assert.equal(repository.getCrud('customer-req', '测试客户/淮安一厂').length, 1)
   assert.equal(
     repository
       .getCrud('customer-req', customer)
-      .some((item) => item.content === '测试客户华东要求'),
+      .some((item) => item.content === '测试客户淮安一厂要求'),
     false,
   )
 
-  // 重命名客户：其下所有区域的资料跟着改键
+  // 重命名客户：其下所有厂区的资料跟着改键，区域保留
   const renamedCustomer = repository.saveEntityGroup(
     'customer',
     { name: '测试客户-改' },
     '测试客户',
   )
   assert.equal(renamedCustomer.ok, true)
-  assert.equal(repository.getCrud('customer-req', '测试客户-改/华东').length, 1)
+  assert.equal(repository.getCrud('customer-req', '测试客户-改/淮安一厂').length, 1)
   assert.equal(
-    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户/华东'),
+    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户/淮安一厂'),
     false,
   )
+  assert.deepEqual(
+    repository.getEntityGroups('customer').find((group) => group.name === '测试客户-改')
+      .regions,
+    { 淮安一厂: '华东', 淮安二厂: 'SAT' },
+  )
 
-  // 把区域移到另一个客户并改名：资料跟着移动
-  const movedRegion = repository.saveEntityItem(
+  // 把厂区移到另一个客户、改名并换区域：资料和区域跟着移动
+  const movedSite = repository.saveEntityItem(
     'customer',
-    { category: '健鼎', name: '华中', previousCategory: '测试客户-改' },
-    '华东',
+    {
+      category: '健鼎',
+      name: '昆山厂',
+      region: '华南',
+      previousCategory: '测试客户-改',
+    },
+    '淮安一厂',
   )
-  assert.equal(movedRegion.ok, true)
-  assert.equal(repository.getCrud('customer-req', '健鼎/华中').length, 1)
+  assert.equal(movedSite.ok, true)
+  assert.equal(repository.getCrud('customer-req', '健鼎/昆山厂').length, 1)
   assert.equal(
-    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户-改/华东'),
+    Object.hasOwn(repository.snapshotStore(), 'customer-req:测试客户-改/淮安一厂'),
     false,
   )
+  assert.equal(
+    repository.getEntityGroups('customer').find((group) => group.name === '健鼎')
+      .regions['昆山厂'],
+    '华南',
+  )
+  assert.deepEqual(
+    repository.getEntityGroups('customer').find((group) => group.name === '测试客户-改')
+      .regions,
+    { 淮安二厂: 'SAT' },
+  )
 
-  // 区域名在客户之间不唯一，删除/编辑叶子必须指明客户
+  // 字典里改区域名，所有厂区跟着改；有厂区在用的区域不能删
+  const southRegion = repository
+    .getDictionaryItems('customer-region')
+    .find((item) => item.name === '华南')
+  assert.equal(
+    repository.saveDictionaryItem(
+      'customer-region',
+      { name: '华南区', sort: southRegion.sort },
+      southRegion.id,
+    ).ok,
+    true,
+  )
+  assert.equal(
+    repository.getEntityGroups('customer').find((group) => group.name === '健鼎')
+      .regions['昆山厂'],
+    '华南区',
+  )
+  assert.equal(
+    repository.getEntityGroups('customer').find((group) => group.name === '庆鼎')
+      .regions['华南'],
+    '华南区',
+  )
+  const blockedRegionDelete = repository.deleteDictionaryItem(
+    'customer-region',
+    southRegion.id,
+  )
+  assert.equal(blockedRegionDelete.ok, false)
+  assert.equal(blockedRegionDelete.reason, 'in-use')
+  assert.match(blockedRegionDelete.message, /健鼎\/昆山厂/)
+  assert.equal(
+    repository.getEntityGroups('customer').find((group) => group.name === '健鼎')
+      .regions['昆山厂'],
+    '华南区',
+  )
+  assert.equal(
+    repository.saveDictionaryItem(
+      'customer-region',
+      { name: '华南', sort: southRegion.sort },
+      southRegion.id,
+    ).ok,
+    true,
+  )
+  const northRegion = repository.saveDictionaryItem('customer-region', {
+    name: '华北',
+  })
+  assert.equal(northRegion.ok, true)
+  assert.equal(
+    repository.deleteDictionaryItem('customer-region', northRegion.item.id).ok,
+    true,
+  )
+
+  // 厂区名在客户之间不唯一，删除/编辑叶子必须指明客户
   assert.deepEqual(repository.deleteEntityItem('customer', '华东'), {
     ok: false,
     reason: 'validation',
   })
-  assert.deepEqual(repository.deleteEntityItem('customer', '华中', '健鼎'), {
+  assert.deepEqual(repository.deleteEntityItem('customer', '昆山厂', '健鼎'), {
     ok: false,
     reason: 'not-empty',
   })
@@ -1204,14 +1346,63 @@ async function run() {
     reason: 'not-empty',
   })
   assert.equal(
-    repository.entityHasData('customer', domain.entityDataName('customer', '测试客户-改', '华南')),
+    repository.entityHasData('customer', domain.entityDataName('customer', '测试客户-改', '淮安二厂')),
     false,
   )
   assert.equal(
-    repository.deleteEntityItem('customer', '华南', '测试客户-改').ok,
+    repository.deleteEntityItem('customer', '淮安二厂', '测试客户-改').ok,
     true,
   )
   assert.equal(repository.deleteEntityGroup('customer', '测试客户-改').ok, true)
+
+  // 生产模式（不灌演示数据）读到旧目录：区域字典从目录里已用的区域补齐，厂区的区域按叶子名推断
+  {
+    const legacyMemory = new Map([
+      [
+        domain.STORAGE_KEY,
+        JSON.stringify({
+          'entity-groups:customer': [
+            { name: '鹏鼎集团', items: ['华东'] },
+            { name: '泰国鹏鼎', items: ['SAT'] },
+          ],
+        }),
+      ],
+    ])
+    const legacyCustomerRepo = domain.createSelectionRepository({
+      crudDefaults: data.CRUD_DEFAULTS,
+      sensorData: data.SENSOR_DATA,
+      demoData: false,
+      storage: {
+        getItem: (key) => legacyMemory.get(key) ?? null,
+        setItem: (key, value) => legacyMemory.set(key, value),
+      },
+    })
+    assert.deepEqual(
+      legacyCustomerRepo.getDictionaryItems('customer-region').map((item) => item.name),
+      ['华东', 'SAT'],
+    )
+    assert.deepEqual(
+      legacyCustomerRepo.getEntityGroups('customer').map((group) => group.regions),
+      [{ 华东: '华东' }, { SAT: 'SAT' }],
+    )
+    assert.equal(
+      legacyCustomerRepo.saveEntityItem('customer', {
+        category: '鹏鼎集团',
+        name: '泰国厂',
+        region: 'SAT',
+      }).ok,
+      true,
+    )
+    const saved = JSON.parse(legacyMemory.get(domain.STORAGE_KEY))
+    assert.deepEqual(saved['entity-groups:customer'][0].regions, {
+      华东: '华东',
+      泰国厂: 'SAT',
+    })
+    assert.deepEqual(
+      saved['dict:customer-region'].map((item) => item.name),
+      ['华东', 'SAT'],
+    )
+  }
 
   const reorderedGroups = repository.reorderEntityGroups('customer', 0, 1)
   assert.equal(reorderedGroups.ok, true)
@@ -2489,12 +2680,15 @@ async function run() {
     Object.values(defaultStore).every((value) => Array.isArray(value)),
     true,
   )
-  // 客户目录：客户 → 区域，内置资料按「客户/区域」落键
+  // 客户目录：客户 → 厂区，内置资料按「客户/厂区」落键；演示厂区沿用区域名
   assert.equal(defaultStore['entity-groups:customer'].length, 15)
   assert.deepEqual(
-    defaultStore['entity-groups:customer'].find((group) => group.name === '庆鼎')
-      .items,
-    ['华东', '华南'],
+    defaultStore['entity-groups:customer'].find((group) => group.name === '庆鼎'),
+    { name: '庆鼎', items: ['华东', '华南'], regions: { 华东: '华东', 华南: '华南' } },
+  )
+  assert.deepEqual(
+    defaultStore['dict:customer-region'].map((item) => item.name),
+    ['华东', '华南', 'SAT'],
   )
   assert.equal(defaultStore['customer-req:庆鼎/华东'].length > 0, true)
   assert.equal(defaultStore['customer-req:庆鼎'], undefined)
@@ -2705,7 +2899,8 @@ async function run() {
     const fx = transferFixture()
     const { repo } = fx
     assert.equal(repo.saveEntityGroup('customer', { name: '导入客户' }).ok, true)
-    assert.equal(repo.saveEntityItem('customer', { category: '导入客户', name: '华东' }).ok, true)
+    assert.equal(repo.saveDictionaryItem('customer-region', { name: '华东', sort: 1 }).ok, true)
+    assert.equal(repo.saveEntityItem('customer', { category: '导入客户', name: '华东', region: '华东' }).ok, true)
     assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Alpha', sort: 1 }).ok, true)
     assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Beta', sort: 2 }).ok, true)
     assert.equal(repo.saveDictionaryItem('customer-req', { name: 'Gamma', sort: 3 }).ok, true)

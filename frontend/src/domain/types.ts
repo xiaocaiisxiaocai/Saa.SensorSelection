@@ -101,6 +101,8 @@ export interface EntityGroup {
   items: string[];
   configurations?: EntityConfiguration[];
   machineType?: MachineCatalogKind;
+  /** 只有客户目录有：厂区名 → 区域（取自「客户区域」字典） */
+  regions?: Record<string, string>;
 }
 
 export interface EntityTreeItem {
@@ -316,7 +318,7 @@ export interface DictionaryDefinition {
   listIds: string[];
   defaults: string[];
   field?: 'layer' | 'sensorType' | 'source' | 'status' | 'type';
-  catalog?: 'process-step' | 'sensor';
+  catalog?: 'customer-site' | 'process-step' | 'sensor';
   machineRowField?: 'machineModelId' | 'boardCharacteristicId';
 }
 

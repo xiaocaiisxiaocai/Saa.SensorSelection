@@ -77,7 +77,7 @@ const NAMESPACE_FIELD_LABELS: Record<string, Record<string, string>> = {
   'customer-feedback': { status: '处理状态', type: '问题分类' },
   'customer-proc': { feature: '制程特性', role: '制程作用', type: '制程分类' },
   'customer-req': { type: '要求分类' },
-  'entity-groups:customer': { items: '区域', name: '客户' },
+  'entity-groups:customer': { items: '厂区', name: '客户', regions: '区域' },
   'entity-groups:machine': { items: '机型', name: '分类' },
   'machine-section-rows': { name: '事项名称', role: 'Sensor名称' },
   'process-steps': { feature: '制程特性', name: '工艺制程', role: '作用' },

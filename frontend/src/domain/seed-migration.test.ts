@@ -402,4 +402,37 @@ describe('migrateSelectionSeedStore', () => {
     expect(rerun.changed).toBe(false);
     expect(rerun.store).toEqual(migrated.store);
   });
+
+  it('turns legacy region leaves into sites with a region and seeds the region dictionary once', () => {
+    const source: PersistedStore = {
+      'meta:seed-version': [{ version: 12 }],
+      'entity-groups:customer': [
+        { name: '鹏鼎集团', items: ['华东'] },
+        { name: '泰国鹏鼎', items: ['SAT'] },
+        { name: '通用客户', items: ['华中'] },
+      ],
+      'customer-req:鹏鼎集团/华东': [{ id: 1, content: '保留' }],
+    };
+
+    const migrated = migrateSelectionSeedStore(source, 12, 13);
+
+    expect(migrated.changed).toBe(true);
+    expect(migrated.store['entity-groups:customer']).toEqual([
+      { name: '鹏鼎集团', items: ['华东'], regions: { 华东: '华东' } },
+      { name: '泰国鹏鼎', items: ['SAT'], regions: { SAT: 'SAT' } },
+      { name: '通用客户', items: ['华中'], regions: { 华中: '华中' } },
+    ]);
+    // 资料键不变
+    expect(migrated.store['customer-req:鹏鼎集团/华东']).toEqual([
+      { id: 1, content: '保留' },
+    ]);
+    expect(
+      (migrated.store['dict:customer-region'] as { name: string }[]).map(
+        (item) => item.name,
+      ),
+    ).toEqual(['华东', '华南', 'SAT', '华中']);
+
+    const rerun = migrateSelectionSeedStore(migrated.store, 13, 13);
+    expect(rerun.changed).toBe(false);
+  });
 });

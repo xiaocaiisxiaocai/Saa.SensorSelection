@@ -975,6 +975,27 @@ export function normalizeDictionaryItems(
   return unique;
 }
 
+/**
+ * 客户下每个厂区的区域，只保留现有厂区的。
+ * 旧目录是「客户 → 区域」、没有 regions：那时的叶子名本身就是区域。
+ */
+function normalizeSiteRegions(
+  source: unknown,
+  sites: string[],
+): Record<string, string> {
+  const stored = isRecord(source) ? source : null;
+  return Object.fromEntries(
+    sites.flatMap((site) => {
+      const region = !stored
+        ? site
+        : Object.hasOwn(stored, site)
+          ? storedText(stored[site]).trim().slice(0, 40)
+          : '';
+      return region ? [[site, region]] : [];
+    }),
+  );
+}
+
 export function normalizeEntityGroups(
   sourceGroups: unknown,
   kind?: EntityKind,
@@ -990,7 +1011,7 @@ export function normalizeEntityGroups(
       if (usedGroupNames.has(nameKey)) return null;
       usedGroupNames.add(nameKey);
 
-      // 机型名全局唯一（数据按机型名存）；客户下的区域只需在本客户内唯一
+      // 机型名全局唯一（数据按机型名存）；客户下的厂区只需在本客户内唯一
       const itemNames = kind === 'customer' ? new Set<string>() : usedItemNames;
       const items: string[] = [];
       for (const rawItem of asList(group.items)) {
@@ -1043,6 +1064,9 @@ export function normalizeEntityGroups(
         items,
         ...(configurations.length > 0 ? { configurations } : {}),
         ...(machineType ? { machineType } : {}),
+        ...(kind === 'customer'
+          ? { regions: normalizeSiteRegions(group.regions, items) }
+          : {}),
       };
     })
     .filter((group): group is EntityGroup => Boolean(group));

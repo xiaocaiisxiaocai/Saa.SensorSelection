@@ -510,6 +510,7 @@ export const useSelectionStore = defineStore('selection', () => {
         name: string;
         previousCategory?: string;
         previousConfiguration?: string | null;
+        region?: string;
         sort?: number;
       },
       editName?: string,

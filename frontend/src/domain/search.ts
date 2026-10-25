@@ -10,7 +10,7 @@ import type {
 } from './types';
 import { entityDataName, listEntityTreeItems } from './entity-tree';
 
-/** 客户区域下可被全局搜索的资料列表，tab 对应客户页的标签页 */
+/** 客户厂区下可被全局搜索的资料列表，tab 对应客户页的标签页 */
 const CUSTOMER_LISTS = [
   { listId: 'customer-req', tab: 'req', label: '客户通用要求' },
   { listId: 'customer-proc', tab: 'proc', label: '制程注意事项' },
@@ -60,24 +60,29 @@ export function buildSearchIndex({
   machineSectionHits?: SearchItem[];
   processSteps: ProcessStepItem[];
   sensors: SensorItem[];
-  /** 读取客户区域下的资料列表；不传则只索引客户 / 区域名称 */
+  /** 读取客户厂区下的资料列表；不传则只索引客户 / 厂区名称 */
   customerCrud?: (listId: CustomerListId, entityName: string) => CrudRecord[];
 }): SearchItem[] {
-  // 客户目录是「客户 → 区域」：每个区域是一条结果，标题带上客户名便于按客户搜到
+  // 客户目录是「客户 → 厂区」：每个厂区是一条结果，标题带上客户名便于按客户搜到，
+  // 区域写进 sub，按区域也能搜到
+  const regionOf = (group: EntityGroup, site: string) => {
+    const region = group.regions?.[site];
+    return region ? `${region}区域` : '';
+  };
   const customers = customerGroups.flatMap((group) =>
-    group.items.map((region) => ({
+    group.items.map((site) => ({
       type: 'customer' as const,
-      title: `${group.name} / ${region}`,
+      title: `${group.name} / ${site}`,
       category: group.name,
-      sub: `${region}区域 · PCB 制造客户`,
+      sub: [regionOf(group, site), 'PCB 制造客户'].filter(Boolean).join(' · '),
       path: '/selection/customer',
-      query: { category: group.name, item: region },
+      query: { category: group.name, item: site },
     })),
   );
   const customerRecords = customerCrud
     ? customerGroups.flatMap((group) =>
-        group.items.flatMap((region) => {
-          const entityName = entityDataName('customer', group.name, region);
+        group.items.flatMap((site) => {
+          const entityName = entityDataName('customer', group.name, site);
           return CUSTOMER_LISTS.flatMap(({ listId, tab, label }) =>
             customerCrud(listId, entityName).map((record) => {
               const { title, details } = customerRecordText(listId, record);
@@ -85,11 +90,11 @@ export function buildSearchIndex({
                 type: 'customer' as const,
                 title,
                 category: group.name,
-                sub: [`${region}区域`, label, ...details]
+                sub: [site, regionOf(group, site), label, ...details]
                   .filter(Boolean)
                   .join(' · '),
                 path: '/selection/customer',
-                query: { category: group.name, item: region, tab },
+                query: { category: group.name, item: site, tab },
               };
             }),
           ).filter((item) => item.title);

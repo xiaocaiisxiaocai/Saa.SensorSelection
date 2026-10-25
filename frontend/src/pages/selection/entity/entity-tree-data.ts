@@ -12,6 +12,8 @@ export interface EntityNode {
   item?: string;
   /** 分组 / 配置下的叶子总数 */
   count?: number;
+  /** 叶子右侧的标签：客户厂区所在的区域 */
+  tag?: string;
   /** 分组 / 配置下有没有子节点（按存储算，不受搜索过滤影响） */
   hasChildren?: boolean;
   selectable: boolean;
@@ -43,6 +45,7 @@ function itemNode(
   category: string,
   configuration: string | null,
   item: string,
+  tag?: string,
 ): EntityNode {
   return {
     key: entityTreeItemKey({ category, configuration, name: item }),
@@ -51,6 +54,7 @@ function itemNode(
     category,
     configuration,
     item,
+    ...(tag ? { tag } : {}),
     selectable: true,
     checkable: true,
     isLeaf: true,
@@ -59,7 +63,7 @@ function itemNode(
 
 /**
  * 把分组列表转成 a-tree 的 treeData（分类下先列直属叶子，再列配置）。keyword（已小写）非空时只保留命中的节点：
- * 分组或配置名命中就带上它下面的全部叶子，否则只带命中的叶子。
+ * 分组或配置名命中就带上它下面的全部叶子，否则只带命中的叶子（客户厂区按名称或区域命中）。
  * selectableBranches 时，没有子节点的分组 / 配置也能选中（机型选单的末级节点）。
  */
 export function buildEntityTree(
@@ -96,7 +100,11 @@ export function buildEntityTree(
         ];
       },
     );
-    const items = group.items.filter((item) => groupHit || matches(item));
+    // 关键字非空时空串不会命中，没有区域的叶子只按名称匹配
+    const regionOf = (item: string) => group.regions?.[item] ?? '';
+    const items = group.items.filter(
+      (item) => groupHit || matches(item) || matches(regionOf(item)),
+    );
     if (!groupHit && configurations.length === 0 && items.length === 0) {
       return [];
     }
@@ -123,7 +131,9 @@ export function buildEntityTree(
         // 分类下同时有直属机型和配置时，直属机型在前：
         // 它们通常带「01、02…」编号，排在配置后面会让编号看起来乱序
         children: [
-          ...items.map((item) => itemNode(group.name, null, item)),
+          ...items.map((item) =>
+            itemNode(group.name, null, item, regionOf(item)),
+          ),
           ...configurations,
         ],
       },

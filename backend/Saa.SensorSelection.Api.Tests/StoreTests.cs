@@ -199,9 +199,9 @@ public class StoreTests
         await using var factory = new ApiFactory();
         using var client = await CreateLoggedInClientAsync(factory);
 
-        // 客户 → 区域：同一区域名可以出现在不同客户下
+        // 客户 → 厂区：同一厂区名可以出现在不同客户下，每个厂区的区域放在 regions 里
         var payload = JsonSerializer.Deserialize<JsonElement>(
-            "[{\"name\":\"健鼎\",\"items\":[\"华南\",\"华东\"]},{\"name\":\"沪士\",\"items\":[\"华东\"]}]");
+            "[{\"name\":\"健鼎\",\"items\":[\"华南\",\"华东\"],\"regions\":{\"华南\":\"华南\",\"华东\":\" 华东 \"}},{\"name\":\"沪士\",\"items\":[\"华东\"]}]");
         var response = await client.PutAsJsonAsync(
             "/api/store/entity-groups/customer",
             payload);
@@ -212,14 +212,25 @@ public class StoreTests
         Assert.Equal("健鼎", stored[0].GetProperty("name").GetString());
         Assert.Equal("华南", stored[0].GetProperty("items")[0].GetString());
         Assert.Equal("华东", stored[1].GetProperty("items")[0].GetString());
+        Assert.Equal("华南", stored[0].GetProperty("regions").GetProperty("华南").GetString());
+        Assert.Equal("华东", stored[0].GetProperty("regions").GetProperty("华东").GetString());
+        // 旧客户端不带 regions 时原样不写
+        Assert.False(stored[1].TryGetProperty("regions", out _));
     }
 
     [Theory]
-    // 同一客户下区域重复
+    // 同一客户下厂区重复
     [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"华东\",\"华东\"]}]")]
-    // 客户/区域名称含「/」（数据键用它拼接）
+    // 客户/厂区名称含「/」（数据键用它拼接）
     [InlineData("customer", "[{\"name\":\"庆/鼎\",\"items\":[\"华东\"]}]")]
     [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"华/东\"]}]")]
+    // 区域只能指向本客户现有的厂区，且必须是 1-40 字的字符串
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"一厂\"],\"regions\":{\"二厂\":\"华东\"}}]")]
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"一厂\"],\"regions\":{\"一厂\":\" \"}}]")]
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"一厂\"],\"regions\":{\"一厂\":1}}]")]
+    [InlineData("customer", "[{\"name\":\"庆鼎\",\"items\":[\"一厂\"],\"regions\":[\"华东\"]}]")]
+    // 机型分类没有区域
+    [InlineData("machine", "[{\"name\":\"输送机构\",\"items\":[\"A\"],\"regions\":{\"A\":\"华东\"}}]")]
     // 机型名仍然全局唯一
     [InlineData("machine", "[{\"name\":\"输送机构\",\"items\":[\"A\"]},{\"name\":\"收板机\",\"items\":[\"A\"]}]")]
     public async Task Store_EntityGroupsOrder_RejectsInvalidItems(string kind, string json)

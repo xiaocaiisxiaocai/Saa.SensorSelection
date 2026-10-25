@@ -77,8 +77,9 @@ describe('selection store', () => {
 
     await store.initBackend();
 
+    // 旧目录没有 regions：叶子名就是区域
     expect(store.entityGroups('customer')).toEqual([
-      { name: '演示客户', items: ['客户A'] },
+      { name: '演示客户', items: ['客户A'], regions: { 客户A: '客户A' } },
     ]);
     expect(store.entityGroups('machine')).toContainEqual(
       expect.objectContaining({
@@ -307,10 +308,13 @@ describe('selection store', () => {
     const putGroups = vi.mocked(api.putEntityGroups);
     putGroups.mockClear();
 
-    // 新建区域、新建客户都要写目录（putEntityGroups）
+    // 新建厂区、新建客户都要写目录（putEntityGroups）
     expect(
-      store.saveEntityItem('customer', { category: '演示客户', name: '华南' })
-        .ok,
+      store.saveEntityItem('customer', {
+        category: '演示客户',
+        name: '深圳厂',
+        region: '华东',
+      }).ok,
     ).toBe(true);
     expect(store.saveEntityGroup('customer', { name: '新客户' }).ok).toBe(true);
     // 新建客户会连带归一化机型目录，写入次数不止两次；按名称找各自的操作
@@ -322,9 +326,9 @@ describe('selection store', () => {
       expect(operationNamed('新建客户「新客户」')).toBeTruthy(),
     );
 
-    const itemOperation = operationNamed('新建区域「华南」');
+    const itemOperation = operationNamed('新建厂区「深圳厂」');
     const groupOperation = operationNamed('新建客户「新客户」');
-    expect(itemOperation?.label).toBe('新建区域「华南」');
+    expect(itemOperation?.label).toBe('新建厂区「深圳厂」');
     expect(groupOperation?.label).toBe('新建客户「新客户」');
     // 两次点击是两次操作
     expect(itemOperation?.id).toBeTruthy();
@@ -334,7 +338,7 @@ describe('selection store', () => {
   it('names a rename with both the old and the new name', () => {
     expect(
       OPERATION_LABELS.saveEntityItem('customer', { name: '华南' }, '华东'),
-    ).toBe('编辑区域「华东」→「华南」');
+    ).toBe('编辑厂区「华东」→「华南」');
     expect(
       OPERATION_LABELS.saveEntityGroup(
         'machine',

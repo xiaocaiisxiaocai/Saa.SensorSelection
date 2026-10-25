@@ -186,18 +186,19 @@ async function runProcessFiles() {
 
 async function runCustomerFile() {
   await openCustomerProcess('客户')
-  const region = `${TAG}区域`
+  const site = `${TAG}厂区`
   const customer = `${TAG}客户`
 
-  // 客户目录是「客户 → 区域」：先建客户，再在客户下建区域，资料挂在区域上
+  // 客户目录是「客户 → 厂区」：先建客户，再在客户下建厂区（带区域），资料挂在厂区上
   await page.getByRole('button', { name: '新建客户', exact: true }).click()
   await fillField(sheet(), '客户名称', customer)
   await saveSheet()
-  await page.getByRole('button', { name: '新建区域', exact: true }).click()
+  await page.getByRole('button', { name: '新建厂区', exact: true }).click()
   await pickSelect(sheet(), '客户', customer)
-  await fillField(sheet(), '区域名称', region)
+  await fillField(sheet(), '厂区名称', site)
+  await pickFirstOption(sheet(), '区域')
   await saveSheet()
-  await page.locator('.ant-tree-node-content-wrapper', { hasText: region }).first().click()
+  await page.locator('.ant-tree-node-content-wrapper', { hasText: site }).first().click()
   await page.getByRole('tab', { name: '感应器选用标准' }).click()
 
   await check('客户感应器选用标准: upload, preview and delete a real PDF', async () => {
@@ -207,7 +208,7 @@ async function runCustomerFile() {
     await deleteDocument(PDF_NAME, '文件已删除')
   })
 
-  await treeAction(region, '删除区域')
+  await treeAction(site, '删除厂区')
   await confirmDelete()
   await treeAction(customer, '删除客户')
   await confirmDelete()

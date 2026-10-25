@@ -56,18 +56,18 @@ watch(
   },
 );
 
-// 客户目录是「客户 → 区域」：category 是客户，item 是区域。
-// 区域名在不同客户下会重复，所以定位必须同时匹配客户和区域。
+// 客户目录是「客户 → 厂区」：category 是客户，item 是厂区。
+// 厂区名在不同客户下会重复，所以定位必须同时匹配客户和厂区。
 const selection = computed(() => {
   const { category, item } = requested.value;
   const group = groups.value.find((candidate) => candidate.name === category);
   if (group?.items.includes(item)) return { category, item };
-  // 只给了客户（或区域已删）：落到该客户的第一个区域
+  // 只给了客户（或厂区已删）：落到该客户的第一个厂区
   if (group?.items[0]) return { category, item: group.items[0] };
   const first = groups.value.find((candidate) => candidate.items.length > 0);
   return { category: first?.name || '', item: first?.items[0] || '' };
 });
-/** 业务数据名：「客户/区域」 */
+/** 业务数据名：「客户/厂区」 */
 const entityName = computed(() =>
   entityDataName('customer', selection.value.category, selection.value.item),
 );
@@ -186,7 +186,7 @@ function selectEntity(payload: { category: string; item: string }) {
           </a-tab-pane>
         </a-tabs>
       </div>
-      <a-empty v-else description="暂无客户，请在左侧新建客户和区域" />
+      <a-empty v-else description="暂无客户，请在左侧新建客户和厂区" />
     </div>
   </section>
 </template>

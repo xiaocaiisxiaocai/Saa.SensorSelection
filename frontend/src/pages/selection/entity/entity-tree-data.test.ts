@@ -91,4 +91,26 @@ describe('entity-tree-data', () => {
     const leaf = first.children![0]!;
     expect(dropMove(groups, leaf, second, '0-1', 2)).toBeNull();
   });
+
+  it('tags customer sites with their region and finds them by region', () => {
+    const customers: EntityGroup[] = [
+      {
+        name: '鹏鼎集团',
+        items: ['淮安一厂', '深圳厂'],
+        regions: { 淮安一厂: '华东', 深圳厂: '华南' },
+      },
+      { name: '广合集团', items: ['广州厂'], regions: { 广州厂: '华南' } },
+    ];
+    const tree = buildEntityTree(customers, '');
+    expect(tree[0]?.children?.map((node) => [node.title, node.tag])).toEqual([
+      ['淮安一厂', '华东'],
+      ['深圳厂', '华南'],
+    ]);
+    expect(tree[0]?.tag).toBeUndefined();
+
+    const south = buildEntityTree(customers, '华南');
+    expect(titles(south)).toEqual(['鹏鼎集团', '深圳厂', '广合集团', '广州厂']);
+    // 机型没有区域，不带标签
+    expect(buildEntityTree(groups, '')[1]?.children?.[0]?.tag).toBeUndefined();
+  });
 });

@@ -258,13 +258,20 @@ async function main() {
   })
 
   await check('PUT /store/entity-groups/{kind} validates duplicate item names', async () => {
-    // 客户 → 区域：区域只需在同一客户内唯一（跨客户同名合法，由后端单测覆盖，这里不改真实目录）
+    // 客户 → 厂区：厂区只需在同一客户内唯一（跨客户同名合法，由后端单测覆盖，这里不改真实目录）
     const customer = await request('PUT', '/store/entity-groups/customer', {
       token: adminToken,
       body: [{ name: `${E2E_PREFIX}A`, items: ['dup', 'dup'] }],
     })
     assertEqual(customer.status, 400, 'customer status')
     assertEqual(customer.data.reason, 'validation', 'customer reason')
+    // 厂区的区域只能指向本客户现有的厂区
+    const strayRegion = await request('PUT', '/store/entity-groups/customer', {
+      token: adminToken,
+      body: [{ name: `${E2E_PREFIX}A`, items: ['一厂'], regions: { 二厂: '华东' } }],
+    })
+    assertEqual(strayRegion.status, 400, 'stray region status')
+    assertEqual(strayRegion.data.reason, 'validation', 'stray region reason')
     // 机型名仍然全局唯一
     const machine = await request('PUT', '/store/entity-groups/machine', {
       token: adminToken,

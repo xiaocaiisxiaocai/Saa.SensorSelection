@@ -43,10 +43,10 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | 业务 key 模式 | 内容 |
 | --- | --- |
 | `entity-groups:customer` / `entity-groups:machine` | 分组与条目顺序；machine 可含有序 `configurations: [{ name, items }]` |
-| `customer-req:{客户}/{区域}` | 客户通用要求（客户目录是「客户 → 区域」，资料挂在区域上） |
-| `customer-proc:{客户}/{区域}` | 制程注意事项 |
-| `customer-feedback:{客户}/{区域}` | 厂外反馈问题项 |
-| `customer-sop:{客户}/{区域}` | 受控文档（PDF/Word；上传时为 data URL，保存后替换为独立文件 URL） |
+| `customer-req:{客户}/{厂区}` | 客户通用要求（客户目录是「客户 → 厂区」，资料挂在厂区上；厂区的区域在 `entity-groups:customer` 的 `regions` 里） |
+| `customer-proc:{客户}/{厂区}` | 制程注意事项 |
+| `customer-feedback:{客户}/{厂区}` | 厂外反馈问题项 |
+| `customer-sop:{客户}/{厂区}` | 受控文档（PDF/Word；上传时为 data URL，保存后替换为独立文件 URL） |
 | `dict:{字典code}` | 8 类数据字典 |
 | `process-steps:all` | 工艺制程 |
 | `sensor-catalog:all` | Sensor 型号目录 |

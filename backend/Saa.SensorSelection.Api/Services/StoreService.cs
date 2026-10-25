@@ -226,8 +226,9 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return StoreWriteResult.Validation("分类顺序必须是数组");
         }
 
-        // 客户目录是「客户 → 区域」：区域名在不同客户下会重复（多个客户都有华东），
-        // 只要求在同一客户内唯一；业务数据按「客户/区域」落键，所以两级名称都不能含「/」。
+        // 客户目录是「客户 → 厂区」：厂区名在不同客户下会重复（多个客户都有深圳厂），
+        // 只要求在同一客户内唯一；业务数据按「客户/厂区」落键，所以两级名称都不能含「/」。
+        // 每个厂区的区域放在客户的 regions（厂区名 → 区域）里；区域是否在字典里由前端领域层判断。
         // 机型名全局唯一（数据按机型名落键）。
         var isCustomer = normalizedKind == "customer";
         var groups = new List<EntityGroupPayload>();
@@ -299,7 +300,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
                 if (isCustomer && itemName.Contains('/'))
                 {
-                    return StoreWriteResult.Validation($"区域名称不能包含“/”: {itemName}");
+                    return StoreWriteResult.Validation($"厂区名称不能包含“/”: {itemName}");
                 }
 
                 if (!itemNames.Add(itemName))
@@ -308,6 +309,43 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                 }
 
                 items.Add(itemName);
+            }
+
+            Dictionary<string, string>? regions = null;
+            if (group.TryGetProperty("regions", out var regionsProperty))
+            {
+                if (!isCustomer)
+                {
+                    return StoreWriteResult.Validation("只有客户分类支持区域");
+                }
+
+                if (regionsProperty.ValueKind != JsonValueKind.Object)
+                {
+                    return StoreWriteResult.Validation($"区域必须是对象: {name}");
+                }
+
+                regions = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var region in regionsProperty.EnumerateObject())
+                {
+                    var site = region.Name.Trim();
+                    if (!items.Contains(site, StringComparer.Ordinal))
+                    {
+                        return StoreWriteResult.Validation($"区域对应的厂区不存在: {site}");
+                    }
+
+                    if (region.Value.ValueKind != JsonValueKind.String)
+                    {
+                        return StoreWriteResult.Validation($"厂区的区域必须是字符串: {site}");
+                    }
+
+                    var regionName = region.Value.GetString()?.Trim() ?? string.Empty;
+                    if (regionName.Length == 0 || regionName.Length > 40)
+                    {
+                        return StoreWriteResult.Validation("区域名称长度必须为 1-40 个字符");
+                    }
+
+                    regions[site] = regionName;
+                }
             }
 
             List<EntityConfigurationPayload>? configurations = null;
@@ -374,7 +412,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                 }
             }
 
-            groups.Add(new EntityGroupPayload(name, items, configurations, machineType));
+            groups.Add(new EntityGroupPayload(name, items, configurations, machineType, regions));
         }
 
         if (groups.Count == 0)
@@ -431,7 +469,10 @@ public sealed record EntityGroupPayload(
     IReadOnlyList<EntityConfigurationPayload>? Configurations = null,
     [property: JsonPropertyName("machineType"),
      JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? MachineType = null);
+    string? MachineType = null,
+    [property: JsonPropertyName("regions"),
+     JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, string>? Regions = null);
 
 /// <summary>机型分类下的配置层级，数组顺序即显示顺序。</summary>
 public sealed record EntityConfigurationPayload(

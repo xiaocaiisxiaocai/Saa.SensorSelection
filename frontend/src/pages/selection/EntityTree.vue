@@ -26,7 +26,7 @@ import {
 } from '@/pages/selection/entity/entity-tree-data';
 
 /**
- * 客户（客户 → 区域）与机型（分类 → 配置 → 机型）共用的左侧目录树，
+ * 客户（客户 → 厂区）与机型（分类 → 配置 → 机型）共用的左侧目录树，
  * 直接基于 a-tree：展开/选中/勾选/拖拽排序都是 antd 自带交互，
  * 节点的编辑删除放在每行的「更多」下拉菜单里（EntityTreeNode）。
  */

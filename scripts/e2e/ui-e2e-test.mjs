@@ -20,7 +20,7 @@ const SLOW = process.argv.includes('--slow')
 
 const TAG = 'E2E'
 const NAMES = {
-  region: `${TAG}区域`,
+  site: `${TAG}厂区`,
   customer: `${TAG}客户`,
   machineCategory: `${TAG}机型分类`,
   machineLeafCategory: `${TAG}空分类`,
@@ -456,7 +456,7 @@ async function runCustomerCrud() {
 
   await openCustomerProcess('客户')
 
-  // 客户目录是「客户 → 区域」：先建客户（分组），再在客户下建区域（叶子），资料挂在区域上
+  // 客户目录是「客户 → 厂区」：先建客户（分组），再在客户下建厂区（叶子，带区域），资料挂在厂区上
   await check('Creating a customer (客户) works', async () => {
     await page.getByRole('button', { name: '新建客户', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
@@ -484,31 +484,45 @@ async function runCustomerCrud() {
     await cancelSheet()
   })
 
-  await check('A region name containing "/" is rejected', async () => {
-    await sourceListAction(NAMES.customer, '新建区域')
+  await check('A site name containing "/" is rejected', async () => {
+    await sourceListAction(NAMES.customer, '新建厂区')
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '区域名称', '华/东')
+    await fillField(sheet(), '厂区名称', '华/东')
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
-    await sheet().getByText('区域名称不能包含“/”').waitFor({ state: 'visible' })
+    await sheet().getByText('厂区名称不能包含“/”').waitFor({ state: 'visible' })
     await cancelSheet()
   })
 
-  await check('Creating a region inside the customer works', async () => {
-    await sourceListAction(NAMES.customer, '新建区域')
+  await check('A site without a region is rejected', async () => {
+    await sourceListAction(NAMES.customer, '新建厂区')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建区域', 'sheet title')
-    await fillField(sheet(), '区域名称', NAMES.region)
-    await saveSheet()
-    await expectToast('区域已新增')
-    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.region }).first().waitFor({ state: 'visible' })
+    await fillField(sheet(), '厂区名称', NAMES.site)
+    await sheet().getByRole('button', { name: '保存', exact: true }).click()
+    await sheet().getByText('请选择区域').waitFor({ state: 'visible' })
+    await cancelSheet()
   })
 
-  await check('Selecting the region opens its four tabs', async () => {
-    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.region }).first().click()
+  await check('Creating a site with a region inside the customer works', async () => {
+    await sourceListAction(NAMES.customer, '新建厂区')
+    await sheet().waitFor({ state: 'visible' })
+    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新建厂区', 'sheet title')
+    await fillField(sheet(), '厂区名称', NAMES.site)
+    const region = await pickFirstOption(sheet(), '区域')
+    await saveSheet()
+    await expectToast('厂区已新增')
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.site }).first().waitFor({ state: 'visible' })
+    // 树上厂区那一行带着它的区域
+    await page
+      .locator(`.entity-tree__node[data-item="${NAMES.site}"] .entity-tree__tag`, { hasText: region })
+      .waitFor({ state: 'visible' })
+  })
+
+  await check('Selecting the site opens its four tabs', async () => {
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: NAMES.site }).first().click()
     await settle()
     const url = new URL(page.url())
     assertEqual(url.searchParams.get('category'), NAMES.customer, 'selected customer in URL')
-    assertEqual(url.searchParams.get('item'), NAMES.region, 'selected region in URL')
+    assertEqual(url.searchParams.get('item'), NAMES.site, 'selected site in URL')
     for (const tab of ['客户通用要求', '制程注意事项', '感应器选用标准', '厂外反馈问题项']) {
       await page.getByRole('tab', { name: tab }).waitFor({ state: 'visible', timeout: 8000 })
     }
@@ -660,11 +674,11 @@ async function runCustomerCrud() {
     assert(await page.locator('.selection-panel').first().isVisible(), 'panel not visible')
   })
 
-  await check('Renaming the region keeps its data', async () => {
-    // 先确认选中的确实是测试区域，否则会把测试数据写进真实客户（前面步骤失败时页面停在第一个客户）
+  await check('Renaming the site keeps its data', async () => {
+    // 先确认选中的确实是测试厂区，否则会把测试数据写进真实客户（前面步骤失败时页面停在第一个客户）
     const selected = new URL(page.url()).searchParams
     assertEqual(selected.get('category'), NAMES.customer, 'selected customer before writing')
-    assertEqual(selected.get('item'), NAMES.region, 'selected region before writing')
+    assertEqual(selected.get('item'), NAMES.site, 'selected site before writing')
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
     await page.getByRole('button', { name: '新增', exact: true }).click()
@@ -673,23 +687,23 @@ async function runCustomerCrud() {
     await saveSheet()
     await expectToast('要求已新增')
 
-    await sourceListAction(NAMES.region, '编辑区域')
+    await sourceListAction(NAMES.site, '编辑厂区')
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '区域名称', `${NAMES.region}改`)
+    await fillField(sheet(), '厂区名称', `${NAMES.site}改`)
     await saveSheet()
-    await expectToast('区域已更新')
-    await page.locator('.ant-tree-node-content-wrapper', { hasText: `${NAMES.region}改` }).first().waitFor({ state: 'visible' })
+    await expectToast('厂区已更新')
+    await page.locator('.ant-tree-node-content-wrapper', { hasText: `${NAMES.site}改` }).first().waitFor({ state: 'visible' })
     await settle()
     await tableRow(`${TAG} 跟随改名`).first().waitFor({ state: 'visible' })
     // rename back so the rest of the run uses a stable name
-    await sourceListAction(`${NAMES.region}改`, '编辑区域')
+    await sourceListAction(`${NAMES.site}改`, '编辑厂区')
     await sheet().waitFor({ state: 'visible' })
-    await fillField(sheet(), '区域名称', NAMES.region)
+    await fillField(sheet(), '厂区名称', NAMES.site)
     await saveSheet()
-    await expectToast('区域已更新')
+    await expectToast('厂区已更新')
   })
 
-  await check('Renaming the customer keeps its regions and data', async () => {
+  await check('Renaming the customer keeps its sites and data', async () => {
     await sourceListAction(NAMES.customer, '编辑客户')
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '客户名称', `${NAMES.customer}改`)
@@ -1329,7 +1343,7 @@ async function runReadOnlyGuest() {
 
   await check('A signed-out visitor can still read business data but sees no write controls', async () => {
     await page.locator('.entity-tree').waitFor({ state: 'visible', timeout: 10000 })
-    for (const label of ['新建区域', '新建客户', '新增']) {
+    for (const label of ['新建厂区', '新建客户', '新增']) {
       assertEqual(
         await page.getByRole('button', { name: label, exact: true }).count(),
         0,
@@ -1770,7 +1784,7 @@ async function teardown() {
     // Remove the customer/machine created through the UI plus their store keys.
     // 改名步骤中途失败会留下「…改」，一并清掉，免得下次运行撞名
     for (const customer of [NAMES.customer, `${NAMES.customer}改`]) {
-      await deleteEntity(token, 'customer', customer, NAMES.region)
+      await deleteEntity(token, 'customer', customer, NAMES.site)
     }
     await deleteEntity(token, 'machine', NAMES.machineCategory, NAMES.machine)
     await deleteEntity(token, 'machine', NAMES.machineLeafCategory, '')
@@ -1839,7 +1853,13 @@ async function deleteEntity(token, kind, groupName, itemName) {
   if (current.status !== 200 || !Array.isArray(current.data)) return
   const next = current.data
     .filter((group) => group.name !== groupName)
-    .map((group) => ({ ...group, items: (group.items ?? []).filter((item) => item !== itemName) }))
+    .map((group) => {
+      const items = (group.items ?? []).filter((item) => item !== itemName)
+      // 客户的 regions 只能指向现有厂区，删厂区时一起去掉
+      return group.regions
+        ? { ...group, items, regions: Object.fromEntries(Object.entries(group.regions).filter(([site]) => items.includes(site))) }
+        : { ...group, items }
+    })
   if (next.length === current.data.length && JSON.stringify(next) === JSON.stringify(current.data)) return
   if (next.length === 0) return
   const res = await api('PUT', `/store/entity-groups/${kind}`, token, next)

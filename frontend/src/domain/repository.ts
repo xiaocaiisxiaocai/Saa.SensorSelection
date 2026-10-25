@@ -2379,7 +2379,9 @@ export function createSelectionRepository({
           ? store[legacyKey]
           : demoData
             ? createDictionaryDefaults(code)
-            : [];
+            : code === 'customer-region'
+              ? usedCustomerRegions()
+              : [];
     }
 
     store[key] = normalizeDictionaryItems(store[key]);
@@ -2435,6 +2437,29 @@ export function createSelectionRepository({
     return store[key] as DictionaryItem[];
   }
 
+  /** 还没有「客户区域」字典时，从客户目录里已用的区域建一个（旧目录的叶子就是区域） */
+  function usedCustomerRegions(): DictionaryItem[] {
+    const names = new Set(
+      getEntityGroups('customer').flatMap((group) =>
+        Object.values(group.regions ?? {}),
+      ),
+    );
+    return [...names].map((name, index) => ({
+      id: index + 1,
+      name,
+      sort: index + 1,
+    }));
+  }
+
+  /** 用到某个区域的厂区，写成「客户/厂区」 */
+  function sitesInRegion(region: string): string[] {
+    return getEntityGroups('customer').flatMap((group) =>
+      group.items
+        .filter((site) => group.regions?.[site] === region)
+        .map((site) => entityDataName('customer', group.name, site)),
+    );
+  }
+
   function renameDictionaryValue(
     definition: DictionaryDefinition,
     fromName: string,
@@ -2475,6 +2500,23 @@ export function createSelectionRepository({
         ),
         typeNames,
         statusNames,
+      );
+    }
+
+    if (definition.catalog === 'customer-site') {
+      const key = entityGroupsKey('customer');
+      if (!Array.isArray(store[key])) return;
+      store[key] = normalizeEntityGroups(
+        getEntityGroups('customer').map((group) => ({
+          ...group,
+          regions: Object.fromEntries(
+            Object.entries(group.regions ?? {}).map(([site, region]) => [
+              site,
+              region === fromName ? toName : region,
+            ]),
+          ),
+        })),
+        'customer',
       );
     }
 
@@ -2551,6 +2593,22 @@ export function createSelectionRepository({
     if (items.length <= 1) return { ok: false, reason: 'validation' };
     const index = items.findIndex((item) => item.id === id);
     if (index === -1) return { ok: false, reason: 'stale' };
+    // 区域不像其他字典那样改归第一项：悄悄把厂区挪到别的区域会误导人
+    if (definition.catalog === 'customer-site') {
+      const region = items[index]?.name ?? '';
+      const sites = sitesInRegion(region);
+      if (sites.length > 0) {
+        const listed =
+          sites.length > 5
+            ? `${sites.slice(0, 5).join('、')} 等 ${sites.length} 个厂区`
+            : sites.join('、');
+        return {
+          ok: false,
+          reason: 'in-use',
+          message: `「${region}」还有厂区在用：${listed}，请先改掉这些厂区的区域`,
+        };
+      }
+    }
 
     const snapshot = cloneStore(store);
     const [removed] = items.splice(index, 1);
@@ -2860,7 +2918,7 @@ export function createSelectionRepository({
   }
 
   /**
-   * 客户数据名用「客户/区域」拼接，客户名和区域名里不能再有 `/`；
+   * 客户数据名用「客户/厂区」拼接，客户名和厂区名里不能再有 `/`；
    * 机型名不能和二级 Tab 内容的所有者位重名。
    */
   function validEntityName(kind: EntityKind, name: string) {
@@ -2984,6 +3042,7 @@ export function createSelectionRepository({
               })),
             }
           : {}),
+        ...(existing.regions ? { regions: { ...existing.regions } } : {}),
       };
       const [moved] = groups.splice(index, 1);
       if (!moved) return { ok: false, reason: 'stale' };
@@ -2998,7 +3057,7 @@ export function createSelectionRepository({
           (node) => ({ ...node, category: name }),
         );
       }
-      // 客户改名：其下每个区域的数据键（客户/区域）都要跟着改
+      // 客户改名：其下每个厂区的数据键（客户/厂区）都要跟着改
       if (editName !== name && kind === 'customer') {
         for (const item of existing.items) {
           migrateEntityDataKeys(
@@ -3156,6 +3215,8 @@ export function createSelectionRepository({
       name: string;
       previousCategory?: string;
       previousConfiguration?: string | null;
+      /** 客户厂区的区域，必填且必须在「客户区域」字典里 */
+      region?: string;
       sort?: number;
     },
     editName?: string,
@@ -3169,8 +3230,17 @@ export function createSelectionRepository({
     if (!name || !category || !validEntityName(kind, name)) {
       return { ok: false, reason: 'validation' };
     }
-    // 区域名在客户之间会重复，编辑时必须指明原来所在的客户
+    // 厂区名在客户之间会重复，编辑时必须指明原来所在的客户
     if (kind === 'customer' && editName && !payload.previousCategory) {
+      return { ok: false, reason: 'validation' };
+    }
+    const region = kind === 'customer' ? storedText(payload.region).trim() : '';
+    if (
+      kind === 'customer' &&
+      !getDictionaryItems('customer-region').some(
+        (item) => item.name === region,
+      )
+    ) {
       return { ok: false, reason: 'validation' };
     }
 
@@ -3246,6 +3316,10 @@ export function createSelectionRepository({
       insertBySort(targetItems, name, payload.sort);
       initEmptyEntityData(kind, dataName);
     }
+    // 原客户里旧厂区的区域由下面的归一化清掉（那里已经没有这个厂区）
+    if (kind === 'customer') {
+      targetGroup.regions = { ...targetGroup.regions, [name]: region };
+    }
 
     store[entityGroupsKey(kind)] = normalizeEntityGroups(groups, kind);
     if (!persist(snapshot)) return { ok: false, reason: 'storage' };
@@ -3277,7 +3351,7 @@ export function createSelectionRepository({
     configuration?: string | null,
   ): DeleteResult {
     if (!entityKindDefinition(kind)) return { ok: false, reason: 'validation' };
-    // 区域名在客户之间会重复，删除时必须指明客户
+    // 厂区名在客户之间会重复，删除时必须指明客户
     if (kind === 'customer' && !category) {
       return { ok: false, reason: 'validation' };
     }
@@ -3583,6 +3657,12 @@ export function createSelectionRepository({
       ) {
         return true;
       }
+    }
+    if (
+      definition.catalog === 'customer-site' &&
+      sitesInRegion(item.name).length > 0
+    ) {
+      return true;
     }
     if (definition.catalog === 'process-step') {
       const steps = store[keyFor('process-steps', 'all')];
@@ -3955,9 +4035,7 @@ export function buildDefaultStore({
   const customerNames = repo
     .getEntityGroups('customer')
     .flatMap((group) =>
-      group.items.map((region) =>
-        entityDataName('customer', group.name, region),
-      ),
+      group.items.map((site) => entityDataName('customer', group.name, site)),
     );
   for (const [listId, factory] of Object.entries(crudDefaults)) {
     if (!listId.startsWith('customer-')) continue;

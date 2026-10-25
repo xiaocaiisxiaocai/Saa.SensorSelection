@@ -14,7 +14,8 @@ import {
 } from './entity-labels';
 
 /**
- * 新建 / 编辑目录叶子（客户的区域或机型）；父组件调用 openCreate() / openEdit()。
+ * 新建 / 编辑目录叶子（客户的厂区或机型）；父组件调用 openCreate() / openEdit()。
+ * 客户厂区还要选一个区域（取自「客户区域」字典）。
  * 保存成功后发出 saved，父组件据此决定是否跟着选中。
  */
 const props = defineProps<{
@@ -43,7 +44,13 @@ const editing = ref<string>();
 const editingCategory = ref<string>();
 const editingConfiguration = ref<string | null>();
 const validationAttempted = ref(false);
-const form = reactive({ category: '', configuration: '', name: '', sort: 1 });
+const form = reactive({
+  category: '',
+  configuration: '',
+  name: '',
+  region: '',
+  sort: 1,
+});
 const dirtyGuard = useDirtyGuard(form);
 
 const groups = computed(() =>
@@ -52,6 +59,11 @@ const groups = computed(() =>
     props.kind,
     props.machineType,
   ),
+);
+const regionOptions = computed(() =>
+  store
+    .dictionaryItems('customer-region')
+    .map((item) => ({ label: item.name, value: item.name })),
 );
 const categoryOptions = computed(() =>
   groups.value.map((group) => ({ label: group.name, value: group.name })),
@@ -109,6 +121,7 @@ function openCreate(
   form.configuration =
     typeof payload === 'object' ? payload.configuration || '' : '';
   form.name = '';
+  form.region = '';
   form.sort = siblings(form.category, form.configuration).length + 1;
   dirtyGuard.markClean();
   visible.value = true;
@@ -127,6 +140,11 @@ function openEdit(payload: {
   editingCategory.value = form.category;
   editingConfiguration.value = payload.configuration || null;
   form.name = payload.item;
+  // 只有客户厂区有区域，机型这里取到的是空串
+  const group = store
+    .entityGroups(props.kind)
+    .find((entry) => entry.name === form.category);
+  form.region = group?.regions?.[payload.item] ?? '';
   form.sort = Math.max(
     1,
     siblings(form.category, form.configuration).indexOf(payload.item) + 1,
@@ -156,6 +174,7 @@ function save() {
       name,
       previousCategory: editingCategory.value,
       previousConfiguration: editingConfiguration.value,
+      region: props.kind === 'customer' ? form.region : undefined,
       sort: form.sort,
     },
     previous,
@@ -238,6 +257,26 @@ defineExpose({ openCreate, openEdit });
           :maxlength="40"
           allow-clear
           show-count
+        />
+      </a-form-item>
+      <a-form-item
+        v-if="kind === 'customer'"
+        html-for="entity-source-region"
+        label="区域"
+        required
+        v-bind="
+          fieldError(
+            validationAttempted && !form.region ? '请选择区域' : undefined,
+          )
+        "
+      >
+        <a-select
+          id="entity-source-region"
+          v-model:value="form.region"
+          :options="regionOptions"
+          show-search
+          option-filter-prop="label"
+          not-found-content="请先在数据字典「客户区域」中新增区域"
         />
       </a-form-item>
       <a-form-item html-for="entity-source-sort-3" label="排序" required>

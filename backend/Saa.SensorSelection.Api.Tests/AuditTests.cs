@@ -428,7 +428,7 @@ public class AuditTests
     [Theory]
     [InlineData("删除机型「04 特殊定位」", "删除机型")]
     [InlineData("新增选型记录 · 机型A", "新增选型记录")]
-    [InlineData("编辑区域「华东」→「华南」", "编辑区域")]
+    [InlineData("编辑厂区「华东」→「华南」", "编辑厂区")]
     [InlineData("新建 Tab「输送」", "新建 Tab")]
     [InlineData("删除 Sensor 型号", "删除 Sensor 型号")]
     [InlineData("  ", null)]

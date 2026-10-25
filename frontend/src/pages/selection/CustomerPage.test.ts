@@ -14,6 +14,7 @@ import {
   columnWidths,
   findButton,
   findColumn,
+  formSelects,
   tabCount,
   tagColor,
 } from '@/test-helpers';
@@ -75,7 +76,7 @@ describe('CustomerPage', () => {
     wrapper.unmount();
   });
 
-  it('tells apart the same region under different customers', async () => {
+  it('tells apart the same site name under different customers', async () => {
     const wrapper = await mountPage(true);
     // 等页面把空路由补成默认选中项，免得这次导航晚于下面的切换落地
     await flushPromises();
@@ -84,8 +85,11 @@ describe('CustomerPage', () => {
       true,
     );
     expect(
-      store.saveEntityItem('customer', { category: '测试客户', name: '华东' })
-        .ok,
+      store.saveEntityItem('customer', {
+        category: '测试客户',
+        name: '华东',
+        region: '华东',
+      }).ok,
     ).toBe(true);
     const type = store.dictionaryNames('customer-req')[0]!;
     const source = store.dictionaryNames('customer-req-source')[0]!;
@@ -126,6 +130,53 @@ describe('CustomerPage', () => {
     await flushPromises();
     expect(wrapper.get('.selection-panel > h2').text()).toBe('庆鼎，华东');
     expect(wrapper.text()).not.toContain('只属于测试客户华东');
+    wrapper.unmount();
+  });
+
+  it('requires a region from the dictionary when creating a site and tags it in the tree', async () => {
+    const wrapper = await mountPage(true);
+    await flushPromises();
+    await wrapper.get('button[aria-label="新建厂区"]').trigger('click');
+    await flushPromises();
+    const input = document.querySelector<HTMLInputElement>(
+      'input#entity-source-name-3',
+    );
+    input!.value = '淮安一厂';
+    input!.dispatchEvent(new Event('input', { bubbles: true }));
+    await flushPromises();
+    const save = () =>
+      (
+        [...document.querySelectorAll('.ant-modal button')].find(
+          (button) => button.textContent?.trim() === '保存',
+        ) as HTMLButtonElement
+      ).click();
+
+    save();
+    await flushPromises();
+    expect(document.body.textContent).toContain('请选择区域');
+    const store = useSelectionStore();
+    expect(store.entityGroups('customer')[0]?.items).not.toContain('淮安一厂');
+
+    const regionSelect = formSelects(wrapper).find(
+      (select) => select.props('id') === 'entity-source-region',
+    )!;
+    expect(
+      regionSelect
+        .props('options')
+        .map((option: { label: string }) => option.label),
+    ).toEqual(['华东', '华南', 'SAT']);
+    regionSelect.vm.$emit('update:value', '华南');
+    await flushPromises();
+    save();
+    await flushPromises();
+
+    const customer = store.entityGroups('customer')[0]!;
+    expect(customer.regions?.['淮安一厂']).toBe('华南');
+    expect(
+      wrapper
+        .get('.entity-tree__node[data-item="淮安一厂"] .entity-tree__tag')
+        .text(),
+    ).toBe('华南');
     wrapper.unmount();
   });
 

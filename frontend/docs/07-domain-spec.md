@@ -117,12 +117,12 @@ type ReorderResult = { ok: true } | { ok: false; reason: 'stale' | 'storage' | '
 
 | 业务 key | 构造 | 内容 |
 | --- | --- | --- |
-| `entity-groups:customer` / `entity-groups:machine` | `keyFor('entity-groups', kind)` | 分组与条目顺序 |
-| `customer-req:{客户}/{区域}` | `keyFor('customer-req', entityDataName('customer', 客户, 区域))` | 客户通用要求 |
-| `customer-proc:{客户}/{区域}` | | 制程注意事项 |
-| `customer-feedback:{客户}/{区域}` | | 厂外反馈 |
-| `customer-sop:{客户}/{区域}` | `keyFor('customer-sop', 数据名)` | 受控文档。**活键是 `customer-sop:`，不是 `04-data-api.md` 写的 `controlled-docs:`**（文档漂移，实现跟旧代码） |
-| `dict:{code}` | `keyFor('dict', code)` | 8 类数据字典 |
+| `entity-groups:customer` / `entity-groups:machine` | `keyFor('entity-groups', kind)` | 分组与条目顺序；客户分组另有 `regions`（厂区 → 区域） |
+| `customer-req:{客户}/{厂区}` | `keyFor('customer-req', entityDataName('customer', 客户, 厂区))` | 客户通用要求 |
+| `customer-proc:{客户}/{厂区}` | | 制程注意事项 |
+| `customer-feedback:{客户}/{厂区}` | | 厂外反馈 |
+| `customer-sop:{客户}/{厂区}` | `keyFor('customer-sop', 数据名)` | 受控文档。**活键是 `customer-sop:`，不是 `04-data-api.md` 写的 `controlled-docs:`**（文档漂移，实现跟旧代码） |
+| `dict:{code}` | `keyFor('dict', code)` | 数据字典（各 code 见 7.10） |
 | `process-steps:all` | | 工艺制程 |
 | `sensor-catalog:all` | | Sensor 型号目录 |
 | `sensor-sop-file:all` | | Sensor SOP 文件库（独立 PDF，不参与型号关联） |
@@ -374,7 +374,7 @@ Token 键 `symtek_token` 不属于领域 store。
 
 | type | title | category | sub | path | query |
 | --- | --- | --- | --- | --- | --- |
-| customer | `` `${客户} / ${区域}` `` | 客户（组名） | `` `${区域}区域 · PCB 制造客户` `` | `/selection/customer` | `{ category: 客户, item: 区域 }` |
+| customer | `` `${客户} / ${厂区}` `` | 客户（组名） | `` `${区域}区域 · PCB 制造客户` ``（厂区没有区域时只剩后半） | `/selection/customer` | `{ category: 客户, item: 厂区 }` |
 | process | `item.name` | `item.layer` | `layer · role · feature`（滤空） | `/selection/process` | `{ tab: 'steps', q: name }` |
 | machine | 条目名 | 组名 | `` `${组名} · ${machineDetails[title].desc \|\| '机型结构'}` `` | `/selection/machine` | `{ category, item }` |
 | machine（hits） | `item.title` 等原样 | | | `item.path \|\| '/selection/machine'` | 浅拷贝 `item.query` |
@@ -673,7 +673,7 @@ toName 空 → `validation`。找不到 from → `ensureGeneralStructureSection(
 
 ### 7.9 受控文档
 
-活键：`customer-sop:{客户}/{区域}`。
+活键：`customer-sop:{客户}/{厂区}`。
 
 #### `getControlledDocuments(entityName)`
 
@@ -699,7 +699,9 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 ### 7.10 数据字典
 
-八个 code：`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`process-layer`、`sensor-status`、`sensor-type`。
+code：`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`customer-region`、`process-layer`、`machine-model`、`board-characteristic`、`sensor-status`、`sensor-type`。
+
+`customer-region`（客户区域，`catalog: 'customer-site'`）供客户厂区选区域：改名同步改 `entity-groups:customer` 各客户 `regions` 里的值；**有厂区在用时不能删**（`in-use`，`message` 列出「客户/厂区」，最多 5 个），不像其他字典那样改归第一项。生产模式下缺这个 key 时，用客户目录里已用的区域建字典（只改内存，随下一次写入提交）。
 
 `dictionaryCodeForList(listId)`：定义里 `listIds` 包含该 list **且** `(field \|\| 'type') === 'type'` 的 code。因此 `customer-req-source`（field=`source`）不会当 CRUD 的 type 字典。
 
@@ -762,7 +764,9 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 机型树兼容两种形态：普通分类 `{ name, items, configurations }` 与无配置分类 `{ name, items }`。`configurations` 中每项也是 `{ name, items }`。不同配置可包含同名机型，配置内仍去重。
 
-客户树是「客户 → 区域」：组是客户、条目是区域。区域名只在本客户内去重（多个客户都可以有「华东」），机型名仍全局去重。叶子的业务数据名用 `entityDataName(kind, 组名, 条目名)`：客户为 `客户/区域`，机型为机型名；所以客户名和区域名都不能含 `/`（`validation`）。
+客户树是「客户 → 厂区」：组是客户、条目是厂区。厂区名只在本客户内去重（多个客户都可以有「深圳厂」），机型名仍全局去重。叶子的业务数据名用 `entityDataName(kind, 组名, 条目名)`：客户为 `客户/厂区`，机型为机型名；所以客户名和厂区名都不能含 `/`（`validation`）。
+
+客户组归一化后总带 `regions: Record<厂区, 区域>`，只保留现有厂区、非空的区域；存储里没有 `regions`（旧的「客户 → 区域」目录）时，每个叶子的区域就是叶子名本身，资料键不变。机型组没有 `regions`。
 
 #### `saveEntityGroup(kind, { name, sort? }, editName?)`
 
@@ -772,7 +776,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 | 其他组（`group.name !== editName`）zh-CN 同名 | `duplicate` |
 | 编辑但找不到 `editName` 精确匹配 | `stale` |
 
-新建 `items: []`。改名保留 `items` 与 `configurations`；`sort` 为 1 起算并钳制到合法范围。客户改名时，其下每个区域的数据键从 `旧客户/区域` 迁到 `新客户/区域`。
+新建 `items: []`。改名保留 `items` 与 `configurations`；`sort` 为 1 起算并钳制到合法范围。改名还保留客户的 `regions`。客户改名时，其下每个厂区的数据键从 `旧客户/厂区` 迁到 `新客户/厂区`。
 
 #### `saveMachineConfiguration(category, { name, sort? }, editName?)`
 
@@ -800,13 +804,14 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 | 条件 | reason |
 | --- | --- |
 | name 或 category 空（各 40）；客户名称含 `/` | `validation` |
-| 客户树编辑时没给 `previousCategory`（区域名跨客户不唯一） | `validation` |
+| 客户树编辑时没给 `previousCategory`（厂区名跨客户不唯一） | `validation` |
+| 客户树的 `region` 空或不在 `customer-region` 字典（精确等于 `item.name`） | `validation` |
 | 目标组（精确 `category`）不存在 | `validation` |
 | 目标直属数组/配置数组里已有 zh-CN 同名条目（编辑时只有「仍在原分组里的自己」不算） | `duplicate` |
 | 编辑但 `editName` 不在树中 | `stale` |
 
 新建：按 1 起算的 `sort` 插入目标直属数组或配置数组，并 `initEmptyEntityData`（机型：extra=`[]`，每个全局 section 的 rows=`[]`；客户：各 list + sop 置 `[]`）。
-编辑：从原分类/配置移除；若数据名（客户为 `客户/区域`，即改名或换客户都会变）变了则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再按排序插入目标位置。
+编辑：从原分类/配置移除；若数据名（客户为 `客户/厂区`，即改名或换客户都会变）变了则 `migrateEntityDataKeys`（机型：extra、所有 `machine-section-rows/images` 后缀、四条 legacy key；客户：listIds + sop）；再按排序插入目标位置。客户厂区把 `region` 写进目标客户的 `regions`（原客户里的旧条目由归一化清掉）。
 
 **persist 之后**（已落盘）：若 `kind==='machine' && category==='通用结构'`：新建调 `ensureGeneralStructureSection(name)`；改名再调 `syncGeneralStructureItemRename(editName, name)`。若同步失败，**返回该失败（树改动已 persist）**——与旧实现一致。
 
@@ -909,7 +914,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 ## 10. 种子（`seed.ts`）
 
-`SEED_VERSION = 10`。版本 7 补充「分类 → 配置 → 机型」目录；版本 8 删除历史全局机型 Tab、通用结构标签和对应字典定义键，但不删除旧行或图片内容；版本 9 将机型目录持久化分类为结构与专案机型；版本 10 将厂外反馈状态统一为 `01 待处理`、`02 处理中`、`03 测试中`、`04 已解决`，优先保留已有编号项 id，并同步迁移历史反馈状态。新安装不再内置机型 Tab，由用户逐机型新增。`专案机型` 无配置层。改默认数据必须递增。
+`SEED_VERSION = 13`。版本 7 补充「分类 → 配置 → 机型」目录；版本 8 删除历史全局机型 Tab、通用结构标签和对应字典定义键，但不删除旧行或图片内容；版本 9 将机型目录持久化分类为结构与专案机型；版本 10 将厂外反馈状态统一为 `01 待处理`、`02 处理中`、`03 测试中`、`04 已解决`，优先保留已有编号项 id，并同步迁移历史反馈状态；版本 13 把客户目录改为「客户 → 厂区」：旧叶子原样成为厂区、叶子名记作区域（资料键不变），没有「客户区域」字典时用内置区域加目录里已用的区域建一个。新安装不再内置机型 Tab，由用户逐机型新增。`专案机型` 无配置层。改默认数据必须递增。
 
 必须与旧 `data.js` **值等价**的导出：
 

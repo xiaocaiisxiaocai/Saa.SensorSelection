@@ -23,7 +23,7 @@ import EntityTree from './EntityTree.vue';
 const props = defineProps<{
   kind: EntityKind;
   selected: string;
-  /** 当前选中叶子所在的分组；客户目录里区域名会在不同客户下重复，需要它区分 */
+  /** 当前选中叶子所在的分组；客户目录里厂区名会在不同客户下重复，需要它区分 */
   selectedCategory?: string;
   selectedKey?: string;
   checkState?: TreeCheckState;
@@ -47,7 +47,7 @@ const store = useSelectionStore();
 const { canWrite } = useAccess();
 const writable = computed(() => canWrite('selection:write'));
 
-// 客户目录是「客户 → 区域」：分组是客户，叶子是区域
+// 客户目录是「客户 → 厂区」：分组是客户，叶子是厂区
 const labels = computed(() => entityLabels(props.kind));
 const groupLabel = computed(() => labels.value.group);
 const itemLabel = computed(() => labels.value.item);

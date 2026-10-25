@@ -7,6 +7,7 @@ import {
   parsePersistedStore,
 } from './normalize';
 import {
+  CUSTOMER_REGION_OPTIONS,
   FEEDBACK_STATUS_OPTIONS,
   INITIAL_CRUD_DATA,
   LEGACY_DEMO_CRUD_DEFAULTS,
@@ -27,6 +28,7 @@ const USER_DEFINED_MACHINE_TABS_VERSION = 8;
 const MACHINE_CATALOG_SPLIT_VERSION = 9;
 const NUMBERED_FEEDBACK_STATUS_VERSION = 10;
 const LEGACY_MACHINE_CONTENT_TAB_VERSION = 11;
+const CUSTOMER_SITE_REGION_VERSION = 13;
 const LEGACY_FEEDBACK_STATUS_OPTIONS = [
   '待处理',
   '处理中',
@@ -350,6 +352,35 @@ function migrateLegacyMachineContentTabs(store: PersistedStore): boolean {
   return changed;
 }
 
+/**
+ * 客户目录从「客户 → 区域」改为「客户 → 厂区」：旧叶子原样成为厂区（资料键不变），
+ * 叶子名记作它的区域；没有「客户区域」字典时用内置区域加上目录里已用的区域建一个。
+ */
+function migrateCustomerSiteRegions(store: PersistedStore): boolean {
+  const groupsKey = 'entity-groups:customer';
+  if (!Array.isArray(store[groupsKey])) return false;
+  let changed = false;
+  const groups = normalizeEntityGroups(store[groupsKey], 'customer');
+  if (!sameRecord(store[groupsKey], groups)) {
+    store[groupsKey] = groups;
+    changed = true;
+  }
+
+  const dictionaryKey = 'dict:customer-region';
+  if (!Array.isArray(store[dictionaryKey])) {
+    const used = groups.flatMap((group) => Object.values(group.regions ?? {}));
+    store[dictionaryKey] = normalizeDictionaryItems(
+      [...CUSTOMER_REGION_OPTIONS, ...used].map((name, index) => ({
+        id: index + 1,
+        name,
+        sort: index + 1,
+      })),
+    );
+    changed = true;
+  }
+  return changed;
+}
+
 export function migrateSelectionSeedStore(
   source: PersistedStore,
   currentVersion: number,
@@ -484,6 +515,14 @@ export function migrateSelectionSeedStore(
     currentVersion < LEGACY_MACHINE_CONTENT_TAB_VERSION &&
     targetVersion >= LEGACY_MACHINE_CONTENT_TAB_VERSION &&
     migrateLegacyMachineContentTabs(store)
+  ) {
+    changed = true;
+  }
+
+  if (
+    currentVersion < CUSTOMER_SITE_REGION_VERSION &&
+    targetVersion >= CUSTOMER_SITE_REGION_VERSION &&
+    migrateCustomerSiteRegions(store)
   ) {
     changed = true;
   }

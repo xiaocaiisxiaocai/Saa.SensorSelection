@@ -44,7 +44,7 @@ function groupLabel(kind: EntityKind): string {
 }
 
 function itemLabel(kind: EntityKind): string {
-  return kind === 'machine' ? '机型' : '区域';
+  return kind === 'machine' ? '机型' : '厂区';
 }
 
 type Labeler = (...args: never[]) => string;
@@ -58,7 +58,7 @@ export const OPERATION_LABELS = {
     `删除${groupLabel(kind)}${quoted(name)}`,
   deleteEntityItem: (kind: EntityKind, name: string, category?: string) =>
     kind === 'customer'
-      ? `删除区域${quoted(category ? `${category}/${name}` : name)}`
+      ? `删除厂区${quoted(category ? `${category}/${name}` : name)}`
       : `删除机型${quoted(name)}`,
   deleteExtraMachineSection: () => '删除机型页签',
   deleteGlobalMachineSection: () => '删除公共页签',

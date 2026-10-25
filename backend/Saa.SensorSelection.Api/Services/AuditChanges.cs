@@ -228,10 +228,20 @@ public static class AuditChanges
             JsonValueKind.True => "是",
             JsonValueKind.False => "否",
             JsonValueKind.Array => string.Join("、", value.EnumerateArray().Select(FormatItem)),
+            JsonValueKind.Object when IsTextMap(value) => string.Join(
+                "、",
+                value.EnumerateObject().Select(property => $"{property.Name}：{property.Value.GetString()}")),
             JsonValueKind.Object => FormatItem(value),
             _ => value.GetRawText(),
         };
         return text is null ? null : Truncate(text, MaxValue);
+    }
+
+    /// <summary>没有 name、值全是字符串的对象（如客户厂区 → 区域）按「键：值」逐项写。</summary>
+    private static bool IsTextMap(JsonElement value)
+    {
+        return !value.TryGetProperty("name", out _) &&
+            value.EnumerateObject().All(property => property.Value.ValueKind == JsonValueKind.String);
     }
 
     /// <summary>数组里的一项：有名字的对象写名字（带下级条目），其余写原文。</summary>

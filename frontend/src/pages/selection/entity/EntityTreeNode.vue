@@ -5,7 +5,7 @@ import type { EntityNode } from './entity-tree-data';
 import { AHighlightText } from '@/ui';
 
 /**
- * 目录树的一行：名称、子项数，可编辑时带「更多」下拉菜单。
+ * 目录树的一行：名称、子项数（或客户厂区的区域标签），可编辑时带「更多」下拉菜单。
  * 点分组 / 配置行切换展开；菜单项由父组件给出，选中后回传 key。
  */
 const props = defineProps<{
@@ -55,6 +55,9 @@ function onContextMenuClick({ key }: { key: string | number }) {
       >
         <AHighlightText :text="node.title" :query="query" />
       </span>
+      <a-tag v-if="node.tag" class="entity-tree__tag">
+        <AHighlightText :text="node.tag" :query="query" />
+      </a-tag>
       <a-typography-text
         v-if="node.count !== undefined"
         type="secondary"

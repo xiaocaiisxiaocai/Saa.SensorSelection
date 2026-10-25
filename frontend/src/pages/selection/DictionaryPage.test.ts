@@ -21,7 +21,7 @@ describe('DictionaryPage', () => {
     setActivePinia(createPinia());
     const wrapper = mount(DictionaryPage);
     const tabs = wrapper.findAll('.ant-segmented-item');
-    expect(tabs).toHaveLength(10);
+    expect(tabs).toHaveLength(11);
     expect(wrapper.text()).toContain('要求分类');
     expect(wrapper.text()).toContain('机型');
     expect(wrapper.text()).toContain('板件特性');
@@ -29,7 +29,7 @@ describe('DictionaryPage', () => {
     expect(wrapper.text()).not.toContain('机型结构 Tab');
     expect(wrapper.text()).not.toContain('客户通用要求中的分类，全局共用');
 
-    await tabs[9]?.get('input').trigger('change');
+    await tabs[10]?.get('input').trigger('change');
     expect(wrapper.text()).toContain('漫反射');
     expect(wrapper.text()).not.toContain('Sensor型号中的感应器类型，全局共用');
     expect(wrapper.find('button[aria-label="导出 Excel"]').exists()).toBe(

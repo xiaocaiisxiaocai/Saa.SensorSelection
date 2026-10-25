@@ -16,23 +16,34 @@ import type {
   TimelineItem,
 } from './types';
 
-// 客户目录：客户 → 区域（一个客户可在多个区域设厂，资料按「客户/区域」存）
+export const CUSTOMER_REGION_OPTIONS = ['华东', '华南', 'SAT'];
+
+// 客户目录：客户 → 厂区（资料按「客户/厂区」存，每个厂区带一个「客户区域」字典里的区域）。
+// 演示厂区沿用区域名，和旧目录（客户 → 区域）升级后的样子一致。
+function demoCustomer(name: string, sites: string[]): EntityGroup {
+  return {
+    name,
+    items: sites,
+    regions: Object.fromEntries(sites.map((site) => [site, site])),
+  };
+}
+
 export const CUSTOMER_GROUPS: EntityGroup[] = [
-  { name: '庆鼎', items: ['华东', '华南'] },
-  { name: '健鼎', items: ['华东'] },
-  { name: '沪士', items: ['华东'] },
-  { name: '胜宏', items: ['华东'] },
-  { name: '景旺', items: ['华东', '华南'] },
-  { name: '宏恒胜', items: ['华南'] },
-  { name: '崇达', items: ['华南'] },
-  { name: '深南', items: ['华南'] },
-  { name: '兴森', items: ['华南'] },
-  { name: '博敏', items: ['华南'] },
-  { name: '维信', items: ['SAT'] },
-  { name: '依顿', items: ['SAT'] },
-  { name: '奥士康', items: ['SAT'] },
-  { name: '华通', items: ['SAT'] },
-  { name: '定颖', items: ['SAT'] },
+  demoCustomer('庆鼎', ['华东', '华南']),
+  demoCustomer('健鼎', ['华东']),
+  demoCustomer('沪士', ['华东']),
+  demoCustomer('胜宏', ['华东']),
+  demoCustomer('景旺', ['华东', '华南']),
+  demoCustomer('宏恒胜', ['华南']),
+  demoCustomer('崇达', ['华南']),
+  demoCustomer('深南', ['华南']),
+  demoCustomer('兴森', ['华南']),
+  demoCustomer('博敏', ['华南']),
+  demoCustomer('维信', ['SAT']),
+  demoCustomer('依顿', ['SAT']),
+  demoCustomer('奥士康', ['SAT']),
+  demoCustomer('华通', ['SAT']),
+  demoCustomer('定颖', ['SAT']),
 ];
 
 export const PROCESS_GROUPS: EntityGroup[] = [
@@ -834,7 +845,7 @@ export function createProcessStepDefaults(): ProcessStepItem[] {
   return steps;
 }
 
-export const SEED_VERSION = 12;
+export const SEED_VERSION = 13;
 
 export const SENSOR_STATUS_OPTIONS = ['现用', '备选', '停用'];
 
@@ -972,6 +983,14 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
     defaults: FEEDBACK_STATUS_OPTIONS,
   },
   {
+    code: 'customer-region',
+    title: '客户区域',
+    description: '客户厂区所在的区域，全局共用',
+    listIds: [],
+    catalog: 'customer-site',
+    defaults: CUSTOMER_REGION_OPTIONS,
+  },
+  {
     code: 'process-layer',
     title: '制程分层',
     description: '工艺制程所属内层或外层，全局共用',
@@ -1019,7 +1038,7 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
 export const ENTITY_KIND_DEFINITIONS: EntityKindDefinition[] = [
   {
     kind: 'customer',
-    label: '区域',
+    label: '厂区',
     groupLabel: '客户',
     listIds: ['customer-req', 'customer-proc', 'customer-feedback'],
     hasControlledFiles: true,

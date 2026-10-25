@@ -37,6 +37,20 @@ public class AuditChangesTests
     }
 
     [Fact]
+    public void DiffArrays_WritesSiteRegionsAsSiteAndRegionPairs()
+    {
+        var before = """[{"name":"鹏鼎集团","items":["淮安一厂"],"regions":{"淮安一厂":"华东"}}]""";
+        var after = """[{"name":"鹏鼎集团","items":["淮安一厂"],"regions":{"淮安一厂":"华南"}}]""";
+
+        var field = Parse(AuditChanges.DiffArrays(before, after))
+            .GetProperty("modified")[0].GetProperty("fields")[0];
+
+        Assert.Equal("regions", field.GetProperty("name").GetString());
+        Assert.Equal("淮安一厂：华东", field.GetProperty("before").GetString());
+        Assert.Equal("淮安一厂：华南", field.GetProperty("after").GetString());
+    }
+
+    [Fact]
     public void DiffArrays_StoresChineseUnescaped_SoKeywordSearchFindsIt()
     {
         var json = AuditChanges.DiffArrays(null, """[{"id":1,"name":"输送机构"}]""");

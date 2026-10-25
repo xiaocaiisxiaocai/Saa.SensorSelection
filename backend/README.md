@@ -221,7 +221,7 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 
 ## 数据存储结构
 
-存储结构 `key → JSON 数组`，key 形如 `customer-req:客户/区域`、`sensor-catalog:all`、`dict:xxx`，与前端 `symtek_crud_store` 一一对应。PDF、图片等文件正文独立保存在 SQLite 的 `StoredFiles.Content` BLOB 中，Store JSON 只保留 `/api/files/{id}/content` 引用；启动时会幂等迁移历史 Base64 data URL，并清理失去引用的文件。前端首次连接后端（空库）时，桥接层会自动处理：
+存储结构 `key → JSON 数组`，key 形如 `customer-req:客户/厂区`、`sensor-catalog:all`、`dict:xxx`，与前端 `symtek_crud_store` 一一对应。PDF、图片等文件正文独立保存在 SQLite 的 `StoredFiles.Content` BLOB 中，Store JSON 只保留 `/api/files/{id}/content` 引用；启动时会幂等迁移历史 Base64 data URL，并清理失去引用的文件。前端首次连接后端（空库）时，桥接层会自动处理：
 
 1. 本地有旧数据 → 整体导入（`PUT /api/store`）；
 2. 本地也无数据（全新环境）→ 把前端内置基础数据（数据字典、客户/机型分组、制程步骤、机型结构、Sensor 型号目录）种子导入后端，保证任何客户端看到一致的基础数据；

@@ -1,6 +1,7 @@
 import {
   FEEDBACK_STATUS_OPTIONS,
   MACHINE_ROW_IMAGE_RULES,
+  SENSOR_IMAGE_LIMIT,
   createDictionaryDefaults,
 } from './seed';
 import type {
@@ -342,6 +343,7 @@ export function normalizeSensorItems(
         actualCondition: storedText(item.actualCondition),
         feature: storedText(item.feature),
         scene: storedText(item.scene),
+        images: normalizeSensorImages(item.images),
         sopId: optionalPositiveId(item.sopId),
         model3dId: optionalPositiveId(item.model3dId),
         replacesId,
@@ -375,6 +377,7 @@ export function createSensorCatalogDefaults(
       actualCondition: '',
       feature: [definition.desc, definition.notes].filter(Boolean).join('；'),
       scene: definition.scenes.join('、'),
+      images: [],
       sopId: null,
       model3dId: null,
       replacesId: null,
@@ -695,6 +698,15 @@ export function normalizeMachineRowImage(raw: unknown): MachineRowImage | null {
 export function normalizeMachineSectionImages(
   source: unknown,
 ): MachineRowImage[] {
+  return normalizeImageList(source, 2);
+}
+
+/** 型号图片：丢掉不合规和重复的，保留原来的顺序，最多 3 张 */
+export function normalizeSensorImages(source: unknown): MachineRowImage[] {
+  return normalizeImageList(source, SENSOR_IMAGE_LIMIT);
+}
+
+function normalizeImageList(source: unknown, limit: number): MachineRowImage[] {
   const seen = new Set<string>();
   return asList(source)
     .map((item) => normalizeMachineRowImage(item))
@@ -703,7 +715,7 @@ export function normalizeMachineSectionImages(
       seen.add(item.dataUrl);
       return true;
     })
-    .slice(0, 2);
+    .slice(0, limit);
 }
 
 function normalizeSensorIds(

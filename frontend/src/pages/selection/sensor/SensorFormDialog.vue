@@ -7,12 +7,15 @@ import {
   isSensorStatus,
   sensorCurrentGuardsAlternates,
   sensorStatusRank,
+  type MachineRowImage,
   type SensorItem,
 } from '@/domain';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
 import { fieldError } from '@/pages/shared/form';
 import { notifyResult } from '@/pages/shared/save-feedback';
 import { useSelectionStore } from '@/stores/selection';
+
+import SensorImageEditor from './SensorImageEditor.vue';
 
 /** 新增 / 编辑 Sensor 型号的对话框；父组件调用 open() 打开 */
 const store = useSelectionStore();
@@ -26,6 +29,7 @@ const form = reactive({
   actualCondition: '',
   disabledAt: null as string | null,
   feature: '',
+  images: [] as MachineRowImage[],
   model: '',
   partNumber: '',
   scene: '',
@@ -87,6 +91,7 @@ function open(item?: SensorItem) {
           actualCondition: item.actualCondition,
           disabledAt: item.disabledAt || null,
           feature: item.feature,
+          images: (item.images ?? []).map((image) => ({ ...image })),
           model: item.model,
           partNumber: item.partNumber,
           scene: item.scene,
@@ -101,6 +106,7 @@ function open(item?: SensorItem) {
           actualCondition: '',
           disabledAt: null,
           feature: '',
+          images: [],
           model: '',
           partNumber: '',
           scene: '',
@@ -130,6 +136,7 @@ function save() {
       actualCondition: form.actualCondition.trim(),
       disabledAt: form.disabledAt ?? '',
       feature: form.feature.trim(),
+      images: form.images.map((image) => ({ ...image })),
       model: form.model.trim(),
       partNumber: form.partNumber.trim(),
       scene: form.scene.trim(),
@@ -343,6 +350,16 @@ defineExpose({ open });
               :rows="2"
               :maxlength="300"
               show-count
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="24">
+          <a-form-item html-for="sensor-images" label="图片">
+            <SensorImageEditor
+              input-id="sensor-images"
+              :images="form.images"
+              writable
+              @update:images="(images) => (form.images = images)"
             />
           </a-form-item>
         </a-col>

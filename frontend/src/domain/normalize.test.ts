@@ -17,13 +17,19 @@ import {
   normalizeMachineSectionRows,
   normalizeMachineSections,
   normalizeProcessSteps,
+  normalizeSensorImages,
   normalizeSensorItems,
   normalizeSensor3dFiles,
   parsePersistedStore,
   validateControlledUpload,
   validateMachineRowImage,
 } from './normalize';
-import { MACHINE_ROW_IMAGE_RULES, SENSOR_DATA, createDictionaryDefaults } from './seed';
+import {
+  MACHINE_ROW_IMAGE_RULES,
+  SENSOR_DATA,
+  SENSOR_IMAGE_LIMIT,
+  createDictionaryDefaults,
+} from './seed';
 
 describe('keys', () => {
   it('keeps the live localStorage key and list-id constructors', () => {
@@ -190,7 +196,36 @@ describe('normalizeSensorItems', () => {
       model3dId: null,
       replacesId: null,
       replacedById: null,
+      images: [],
     });
+  });
+
+  it('keeps up to eight unique images in order and drops the rest', () => {
+    const photo = (name: string, token: string) => ({
+      dataUrl: `data:image/png;base64,${token}`,
+      fileName: name,
+      mimeType: 'image/png',
+      size: 12,
+    });
+    const images = [
+      ...Array.from({ length: SENSOR_IMAGE_LIMIT + 1 }, (_, index) =>
+        photo(`p${index}.png`, `img${index}`),
+      ),
+      photo('dup.png', 'img0'),
+      {
+        dataUrl: 'data:image/gif;base64,zzz',
+        fileName: 'a.gif',
+        mimeType: 'image/gif',
+        size: 12,
+      },
+      { dataUrl: 'notaurl', fileName: 'x.png', mimeType: 'image/png', size: 12 },
+    ];
+    expect(normalizeSensorImages(images).map((item) => item.fileName)).toEqual(
+      Array.from({ length: SENSOR_IMAGE_LIMIT }, (_, index) => `p${index}.png`),
+    );
+    expect(normalizeSensorItems([{ id: 1, model: 'X', images }])[0]?.images).toHaveLength(
+      SENSOR_IMAGE_LIMIT,
+    );
   });
 });
 
@@ -404,6 +439,7 @@ describe('normalizeMachineSectionRows', () => {
             actualCondition: '',
             feature: '',
             scene: '',
+            images: [],
             sopId: null,
             model3dId: null,
             replacesId: null,

@@ -624,6 +624,10 @@ export function createSelectionRepository({
       if (!Object.hasOwn(payload, 'replacedAt')) {
         normalized.replacedAt = previous.replacedAt || '';
       }
+      // 导入和局部更新不带图片；只有表单或表格显式提交 images 才替换
+      if (!Object.hasOwn(payload, 'images')) {
+        normalized.images = previous.images ?? [];
+      }
       items.splice(index, 1, normalized);
     } else {
       normalized.enteredAt = formatLocalDate(new Date());
@@ -690,6 +694,7 @@ export function createSelectionRepository({
     const snapshot = cloneStore(store);
     const replacedAt = formatLocalDate(new Date());
     // 备选沿用现用已挂上的型录 / 3D；现用没挂的保留备选自己的。停用的现用保持原链接。
+    // 图片留在各自型号上，不跟着型录一起搬。
     const nextAlt = normalizeSensorItems(
       [
         {

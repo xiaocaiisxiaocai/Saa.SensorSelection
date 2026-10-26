@@ -29,6 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   feature: '特性',
   fileName: '文件名',
   image: '示意图',
+  images: '图片',
   items: '条目',
   kind: '类型',
   layer: '制程',

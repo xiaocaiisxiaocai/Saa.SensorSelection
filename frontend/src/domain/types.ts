@@ -186,6 +186,8 @@ export interface SensorItem {
   actualCondition: string;
   feature: string;
   scene: string;
+  /** 该型号自己的图片，最多 3 张；不随替换关系搬到另一条型号 */
+  images: MachineRowImage[];
   sopId: null | number;
   model3dId: null | number;
   replacesId: null | number;

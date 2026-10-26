@@ -42,6 +42,7 @@ import { useSelectionStore } from '@/stores/selection';
 import { AHighlightText } from '@/ui';
 
 import SensorFormDialog from './SensorFormDialog.vue';
+import SensorImageCell from './SensorImageCell.vue';
 import SensorLinkedPreview from './SensorLinkedPreview.vue';
 import SensorReplaceDialog from './SensorReplaceDialog.vue';
 import { downloadSensorExcel } from './sensor-excel';
@@ -501,6 +502,9 @@ function openReplace(row: SensorTableRow) {
           </a-badge>
           <span v-else-if="row.struck" class="sensor-struck">—</span>
           <template v-else>—</template>
+        </template>
+        <template v-else-if="column.key === 'images'">
+          <SensorImageCell :item="row.item" :writable="writable" />
         </template>
         <template v-else-if="column.key === 'partNumber'">
           <a-typography-text

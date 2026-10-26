@@ -405,6 +405,102 @@ describe('sensors', () => {
     expect(duplicate).toEqual({ ok: false, reason: 'duplicate' });
   });
 
+  it('keeps each model’s images across edits, import and replacement', () => {
+    const repo = createRepo();
+    const current = repo.getSensors().find((item) => item.status === '现用');
+    const alternate = repo
+      .getSensors()
+      .find(
+        (item) =>
+          item.status === '备选' && item.sensorType === current?.sensorType,
+      );
+    if (!current || !alternate) throw new Error('seed pair missing');
+    const currentPhoto = {
+      dataUrl: 'data:image/png;base64,cur',
+      fileName: 'current.png',
+      mimeType: 'image/png',
+      size: 4,
+    };
+    const alternatePhoto = {
+      dataUrl: 'data:image/jpeg;base64,alt',
+      fileName: 'alternate.jpg',
+      mimeType: 'image/jpeg',
+      size: 4,
+    };
+    const savedCurrent = repo.saveSensor(
+      { ...current, images: [currentPhoto, { ...currentPhoto, fileName: 'dup.png' }] },
+      current.id,
+    );
+    const savedAlternate = repo.saveSensor(
+      { ...alternate, images: [alternatePhoto] },
+      alternate.id,
+    );
+    expect(savedCurrent.ok).toBe(true);
+    expect(savedAlternate.ok).toBe(true);
+    if (!savedCurrent.ok) return;
+    expect(savedCurrent.item.images.map((image) => image.fileName)).toEqual([
+      'current.png',
+    ]);
+
+    const edited = repo.saveSensor(
+      {
+        model: current.model,
+        sensorType: current.sensorType,
+        status: current.status,
+        brand: `${current.brand}-X`,
+      },
+      current.id,
+    );
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    expect(edited.item.brand).toBe(`${current.brand}-X`);
+    expect(edited.item.images.map((image) => image.fileName)).toEqual([
+      'current.png',
+    ]);
+
+    const replaced = repo.replaceSensorCurrent(
+      alternate.id,
+      current.id,
+      '换图不带走',
+    );
+    expect(replaced.ok).toBe(true);
+    const next = repo.getSensors();
+    expect(
+      next.find((item) => item.id === current.id)?.images.map((image) => image.fileName),
+    ).toEqual(['current.png']);
+    expect(
+      next
+        .find((item) => item.id === alternate.id)
+        ?.images.map((image) => image.fileName),
+    ).toEqual(['alternate.jpg']);
+
+    const imported = repo.importSensors({
+      hasModelColumn: true,
+      rows: [
+        {
+          rowNumber: 2,
+          values: {
+            model: current.model,
+            status: '停用',
+            sensorType: current.sensorType,
+            brand: 'AFTER-IMPORT',
+          },
+        },
+      ],
+    });
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) return;
+    expect(imported.updated).toBe(1);
+    const after = repo.getSensors().find((item) => item.id === current.id);
+    expect(after?.brand).toBe('AFTER-IMPORT');
+    expect(after?.images.map((image) => image.fileName)).toEqual(['current.png']);
+
+    const cleared = repo.saveSensor({ ...after!, images: [] }, current.id);
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    expect(cleared.item.images).toEqual([]);
+  });
+
   it('replaces 备选 with 现用 and rewrites machine row sensor ids', () => {
     const repo = createRepo();
     const current = repo

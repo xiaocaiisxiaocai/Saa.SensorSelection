@@ -140,6 +140,9 @@ describe('SensorPage', () => {
     expect(
       columns.find((column) => column.key === 'model')?.fixed,
     ).toBeUndefined();
+    expect(
+      columns.find((column) => column.key === 'images')?.fixed,
+    ).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -337,6 +340,7 @@ describe('SensorPage', () => {
       '录入日期',
       '操作',
     ]);
+    expect(headers.indexOf('图片')).toBe(headers.indexOf('型号') + 1);
 
     wrapper.unmount();
   });

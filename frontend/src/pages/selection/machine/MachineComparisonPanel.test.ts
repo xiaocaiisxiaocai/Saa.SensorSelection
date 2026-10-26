@@ -378,6 +378,7 @@ describe('MachineComparisonPanel', () => {
       actualCondition: '',
       feature: '',
       scene: '',
+      images: [],
       sopId: null,
       model3dId: null,
       replacesId: null,

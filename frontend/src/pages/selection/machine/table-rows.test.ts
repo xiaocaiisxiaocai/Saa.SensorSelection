@@ -36,6 +36,7 @@ const sensors: SensorItem[] = [
     actualCondition: '',
     feature: '',
     scene: '',
+    images: [],
     sopId: null,
     model3dId: null,
     replacesId: null,
@@ -57,6 +58,7 @@ const sensors: SensorItem[] = [
     actualCondition: '',
     feature: '',
     scene: '',
+    images: [],
     sopId: null,
     model3dId: null,
     replacesId: null,
@@ -78,6 +80,7 @@ const sensors: SensorItem[] = [
     actualCondition: '',
     feature: '',
     scene: '',
+    images: [],
     sopId: null,
     model3dId: null,
     replacesId: null,
@@ -272,6 +275,7 @@ describe('sectionColumns', () => {
     expect(structure.some(columnHeaderSorts)).toBe(false);
     expect(notes.some(columnHeaderSorts)).toBe(false);
     expect(structure.at(-1)?.key).toBe('actions');
+    expect(structure.at(-1)?.fixed).toBeUndefined();
     expect(notes.some((column) => column.key === 'actions')).toBe(false);
   });
 

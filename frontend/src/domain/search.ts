@@ -149,6 +149,7 @@ export function buildSearchIndex({
       item.disabledAt,
       item.enteredAt,
       item.problemNote,
+      ...(item.images ?? []).map((image) => image.fileName),
     ]
       .filter(Boolean)
       .join(' · '),

@@ -18,6 +18,7 @@ export interface SensorLookup {
 // 料号经常整列为空，和其余描述性列一样允许按需隐藏。
 export const HIDEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: 'partNumber', label: '料号' },
+  { key: 'images', label: '图片' },
   { key: 'usedAt', label: '使用日期' },
   { key: 'disabledAt', label: '停用日期' },
   { key: 'enteredAt', label: '录入日期' },
@@ -50,16 +51,17 @@ export function sensorColumns(options: {
       fixed: 'left',
     },
     {
-      key: 'partNumber',
-      dataIndex: field('partNumber'),
-      title: '料号',
-      width: 112,
-    },
-    {
       key: 'sensorType',
       dataIndex: field('sensorType'),
       title: '感应器类型',
       width: 120,
+      fixed: 'left',
+    },
+    {
+      key: 'partNumber',
+      dataIndex: field('partNumber'),
+      title: '料号',
+      width: 112,
     },
     {
       key: 'brand',
@@ -73,6 +75,12 @@ export function sensorColumns(options: {
       title: '型号',
       width: 120,
     },
+    {
+      key: 'images',
+      dataIndex: field('images'),
+      title: '图片',
+      width: 120,
+    },
     ...(options.showDisabledDetails
       ? [
           {
@@ -83,7 +91,7 @@ export function sensorColumns(options: {
           },
         ]
       : []),
-    // 全部列加起来要在 1920 宽屏里放得下，不出横向滚动（操作列固定在右侧会盖住最后一列）：
+    // 全部列加起来要在 1920 宽屏里放得下，不出横向滚动：
     // 1920 下表格可用宽度约 1650px（扣掉侧栏、内边距和纵向滚动条），列宽合计留出余量。
     // 替换关系/关联型录/关联 3D 内容都很短（多数是「—」或一个文件名），给窄宽度；
     // 宽度留给规格参数/实际工况/特性与注意/适用场景：描述列完整显示不截断，
@@ -104,7 +112,7 @@ export function sensorColumns(options: {
       width: 240,
     },
     { key: 'scene', dataIndex: field('scene'), title: '适用场景', width: 180 },
-    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 176, ...shared },
+    { key: 'sop', dataIndex: 'sop', title: '关联型录', width: 120, ...shared },
     {
       key: 'model3d',
       dataIndex: 'model3d',
@@ -136,7 +144,7 @@ export function sensorColumns(options: {
   );
   if (options.writable) {
     // 三格各 24px（编辑 / 替换 / 删除）。96 扣掉单元格内边距后装不下。
-    cols.push({ key: 'actions', title: '操作', width: 120, fixed: 'right' });
+    cols.push({ key: 'actions', title: '操作', width: 120 });
   }
   return cols;
 }
@@ -168,6 +176,7 @@ function matchesTypeAndQuery(
     item.disabledAt,
     item.enteredAt,
     item.problemNote,
+    ...(item.images ?? []).map((image) => image.fileName),
     related?.model,
     related?.brand,
     related?.partNumber,
@@ -244,7 +253,7 @@ const SENSOR_IMPORT_HEADERS: Record<string, SensorImportField> = {
 
 /**
  * 按表头文字对应可导入栏位。同一表头出现多次时用第一列。
- * 替换关系、停用原因和关联文件没有对应栏位，导入时不读。
+ * 替换关系、停用原因、图片和关联文件没有对应栏位，导入时不读。
  */
 export function mapSensorImportSheet(
   rows: readonly string[][],
@@ -288,6 +297,13 @@ export function exportCell(
       return item.brand || empty;
     case 'model':
       return item.model || empty;
+    case 'images':
+      return (
+        item.images
+          ?.map((image) => image.fileName)
+          .filter(Boolean)
+          .join('、') || empty
+      );
     case 'usedAt':
       return item.usedAt || empty;
     case 'disabledAt':

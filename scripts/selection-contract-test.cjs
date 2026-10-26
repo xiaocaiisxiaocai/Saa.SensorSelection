@@ -283,9 +283,26 @@ async function run() {
   assert.equal(alternateCatalog.ok, true)
   assert.equal(alternateModel.ok, true)
   // 现用有型录、没有 3D；备选自己两者都有。替换后型录沿用现用，3D 留备选自己的。
+  const currentPhoto = {
+    dataUrl: 'data:image/png;base64,current-photo',
+    fileName: 'current-sensor.png',
+    mimeType: 'image/png',
+    size: 12,
+  }
+  const alternatePhoto = {
+    dataUrl: 'data:image/png;base64,alternate-photo',
+    fileName: 'alternate-sensor.png',
+    mimeType: 'image/png',
+    size: 12,
+  }
   assert.equal(
     repository.saveSensor(
-      { ...currentSeed, sopId: currentCatalog.item.id, model3dId: null },
+      {
+        ...currentSeed,
+        sopId: currentCatalog.item.id,
+        model3dId: null,
+        images: [currentPhoto],
+      },
       currentSeed.id,
     ).ok,
     true,
@@ -296,6 +313,7 @@ async function run() {
         ...alternateSeed,
         sopId: alternateCatalog.item.id,
         model3dId: alternateModel.item.id,
+        images: [alternatePhoto],
       },
       alternateSeed.id,
     ).ok,
@@ -316,11 +334,13 @@ async function run() {
   assert.equal(newCurrent?.problemNote, '检测不稳定')
   assert.equal(newCurrent?.sopId, currentCatalog.item.id)
   assert.equal(newCurrent?.model3dId, alternateModel.item.id)
+  assert.equal(newCurrent?.images?.[0]?.fileName, 'alternate-sensor.png')
   assert.equal(retired?.status, '停用')
   assert.equal(retired?.replacedById, alternateSeed.id)
   assert.equal(retired?.problemNote, '检测不稳定')
   assert.equal(retired?.sopId, currentCatalog.item.id)
   assert.equal(retired?.model3dId, null)
+  assert.equal(retired?.images?.[0]?.fileName, 'current-sensor.png')
   assert.ok(retired?.replacedAt)
 
   const withPart = repository.saveSensor(
@@ -354,7 +374,8 @@ async function run() {
       (item) =>
         item.type === 'sensor' &&
         item.sub.includes('停用') &&
-        item.sub.includes('检测不稳定'),
+        item.sub.includes('检测不稳定') &&
+        item.sub.includes('current-sensor.png'),
     ),
     true,
   )
@@ -2893,6 +2914,80 @@ async function run() {
     })
     assert.deepEqual(unchanged, { created: 0, ok: true, skipped: [], updated: 0 })
     assert.equal(fx.writes, writesAfterUpdate)
+  }
+
+  {
+    // 图片跟着型号走：超限和不合规的丢掉，局部更新和 Excel 导入不擦掉已有图片
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveDictionaryItem('sensor-type', { name: '漫反射', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '现用', sort: 1 }).ok, true)
+    const photo = (name, token) => ({
+      dataUrl: `data:image/png;base64,${token}`,
+      fileName: name,
+      mimeType: 'image/png',
+      size: 12,
+    })
+    const images = Array.from({ length: domain.SENSOR_IMAGE_LIMIT + 1 }, (_, index) =>
+      photo(`p${index}.png`, `img${index}`),
+    )
+    images.push(photo('dup.png', 'img0'))
+    images.push({
+      dataUrl: 'data:image/gif;base64,zzz',
+      fileName: 'a.gif',
+      mimeType: 'image/gif',
+      size: 12,
+    })
+    const saved = repo.saveSensor({
+      model: 'M-PHOTO',
+      sensorType: '漫反射',
+      status: '现用',
+      brand: 'ACME',
+      images,
+    })
+    assert.equal(saved.ok, true)
+    assert.deepEqual(
+      saved.item.images.map((item) => item.fileName),
+      Array.from({ length: domain.SENSOR_IMAGE_LIMIT }, (_, index) => `p${index}.png`),
+    )
+    const kept = repo.saveSensor(
+      { model: 'M-PHOTO', sensorType: '漫反射', status: '现用', brand: 'ACME-2' },
+      saved.item.id,
+    )
+    assert.equal(kept.ok, true)
+    assert.equal(kept.item.brand, 'ACME-2')
+    assert.equal(kept.item.images.length, domain.SENSOR_IMAGE_LIMIT)
+    const restored = repo.saveSensor(
+      { ...kept.item, images: [photo('keep.png', 'keep')] },
+      kept.item.id,
+    )
+    assert.equal(restored.ok, true)
+    const imported = repo.importSensors({
+      hasModelColumn: true,
+      rows: [
+        {
+          rowNumber: 2,
+          values: { model: 'M-PHOTO', status: '现用', sensorType: '漫反射', brand: 'ACME-3' },
+        },
+      ],
+    })
+    assert.equal(imported.ok, true)
+    assert.equal(imported.updated, 1)
+    const after = repo.getSensors().find((item) => item.model === 'M-PHOTO')
+    assert.equal(after.brand, 'ACME-3')
+    assert.equal(after.images[0].fileName, 'keep.png')
+    const index = domain.buildSearchIndex({
+      customerGroups: repo.getEntityGroups('customer'),
+      machineDetails: data.MACHINE_DETAILS,
+      machineGroups: repo.getEntityGroups('machine'),
+      machineSectionHits: [],
+      processSteps: repo.getProcessSteps(),
+      sensors: repo.getSensors(),
+    })
+    assert.equal(
+      index.some((item) => item.type === 'sensor' && item.sub.includes('keep.png')),
+      true,
+    )
   }
 
   {

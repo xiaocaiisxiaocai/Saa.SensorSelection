@@ -26,6 +26,7 @@ function sensor(patch: Partial<SensorItem>): SensorItem {
     actualCondition: '',
     feature: '',
     scene: '',
+    images: [],
     sopId: null,
     model3dId: null,
     replacesId: null,
@@ -88,6 +89,31 @@ describe('sensor-table', () => {
     expect(exportCell(current, 'sop', lookup)).toBe('E3Z 型录');
     expect(exportCell(current, 'model3d', lookup)).toBe('未关联');
     expect(exportCell(current, 'partNumber', lookup)).toBe('—');
+    const pictured = sensor({
+      images: [
+        {
+          dataUrl: 'data:image/png;base64,a',
+          fileName: 'front.png',
+          mimeType: 'image/png',
+          size: 8,
+        },
+        {
+          dataUrl: 'data:image/png;base64,b',
+          fileName: 'side.png',
+          mimeType: 'image/png',
+          size: 8,
+        },
+      ],
+    });
+    expect(exportCell(pictured, 'images', lookup)).toBe('front.png、side.png');
+    expect(exportCell(sensor({}), 'images', lookup)).toBe('—');
+    expect(
+      filterSensors(
+        [pictured],
+        { statuses: [], sensorTypes: [], query: 'side.png' },
+        lookup,
+      ),
+    ).toEqual([pictured]);
   });
 
   it('drops hidden columns, adds disabled details and the action column', () => {
@@ -112,9 +138,38 @@ describe('sensor-table', () => {
     // 料号常整列为空，也能隐藏
     expect(visible).not.toContain('partNumber');
     expect(visible.at(-1)).toBe('actions');
+    expect(
+      sensorColumns({
+        ...base,
+        showDisabledDetails: false,
+        writable: true,
+      }).find((column) => column.key === 'actions')?.fixed,
+    ).toBeUndefined();
     // dataIndex 指到行上的 item；key 仍是字段名，两者不能混成一个路径。
     const columns = sensorColumns({ ...base, showDisabledDetails: true });
     const keysInOrder = columns.map((column) => column.key);
+    expect(keysInOrder.indexOf('sensorType')).toBe(
+      keysInOrder.indexOf('status') + 1,
+    );
+    expect(columns.find((column) => column.key === 'status')?.fixed).toBe(
+      'left',
+    );
+    expect(columns.find((column) => column.key === 'sensorType')?.fixed).toBe(
+      'left',
+    );
+    expect(keysInOrder.indexOf('partNumber')).toBe(
+      keysInOrder.indexOf('sensorType') + 1,
+    );
+    expect(keysInOrder.indexOf('images')).toBe(keysInOrder.indexOf('model') + 1);
+    expect(keysInOrder.indexOf('problemNote')).toBe(
+      keysInOrder.indexOf('images') + 1,
+    );
+    expect(columns.find((column) => column.key === 'images')?.fixed).toBe(
+      undefined,
+    );
+    const plainKeys = keys({ ...base, showDisabledDetails: false });
+    expect(plainKeys.indexOf('images')).toBe(plainKeys.indexOf('model') + 1);
+    expect(plainKeys.indexOf('relation')).toBe(plainKeys.indexOf('images') + 1);
     expect(keysInOrder.indexOf('actualCondition')).toBe(
       keysInOrder.indexOf('spec') + 1,
     );
@@ -671,6 +726,9 @@ describe('sensor-table', () => {
     expect(grouped.find((column) => column.key === 'brand')?.customCell).toBe(
       undefined,
     );
+    expect(grouped.find((column) => column.key === 'images')?.customCell).toBe(
+      undefined,
+    );
     expect(sop?.key).toBe('sop');
     expect(model3d?.key).toBe('model3d');
     expect(sop?.customCell?.(rows[0]!)).toEqual({
@@ -692,9 +750,9 @@ describe('sensor-table', () => {
 describe('mapSensorImportSheet', () => {
   it('keeps the raw first column for each known header', () => {
     const mapped = mapSensorImportSheet([
-      ['状态', '替换关系', '料号', '料号', '型号'],
-      ['现用', '—', ' PN-1 ', 'OTHER', 'M1'],
-      ['', '', '', '', ''],
+      ['状态', '替换关系', '图片', '料号', '料号', '型号'],
+      ['现用', '—', 'front.png', ' PN-1 ', 'OTHER', 'M1'],
+      ['', '', '', '', '', ''],
     ]);
     expect(mapped.hasModelColumn).toBe(true);
     expect(mapped.rows[0]).toEqual({

@@ -1,0 +1,96 @@
+.sensor-images {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+/* 弹窗里缩略图在上、拖放区占满下面一整行 */
+.sensor-images--form {
+  flex-flow: column nowrap;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.sensor-images__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.sensor-images--form .sensor-images__list {
+  gap: var(--space-3);
+}
+
+.sensor-images__item {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.sensor-images--form .sensor-images__item {
+  width: 72px;
+  height: 72px;
+}
+
+.sensor-images :deep(.ant-image) {
+  display: block;
+  width: 48px;
+  height: 48px;
+  line-height: 0;
+}
+
+.sensor-images--form :deep(.ant-image) {
+  width: 72px;
+  height: 72px;
+}
+
+/* antd 把 class 放在 <img> 上，而它不带本组件的 scoped 属性 */
+.sensor-images :deep(.sensor-images__media) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--color-fill-alter);
+  border-radius: var(--radius-sm);
+}
+
+.sensor-images__remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--color-bg-container);
+}
+
+/* 表格里的拖放格和缩略图一样大，排在缩略图后面 */
+.sensor-images__drop {
+  display: block;
+  width: 48px;
+  height: 48px;
+}
+
+.sensor-images--form .sensor-images__drop {
+  width: 100%;
+  height: auto;
+}
+
+.sensor-images__drop :deep(.ant-upload-btn) {
+  padding: 0;
+}
+
+.sensor-images--form .sensor-images__drop :deep(.ant-upload-btn) {
+  padding: var(--space-4) 0;
+}
+
+.sensor-images--form .sensor-images__drop :deep(.ant-upload-drag-icon) {
+  margin-bottom: var(--space-2);
+}
+
+.sensor-images__drop-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 46px;
+  color: var(--color-text-secondary);
+}

@@ -73,6 +73,7 @@ describe('audit changes', () => {
     expect(fieldLabel('customer-proc', 'role')).toBe('制程作用');
     expect(fieldLabel('machine-section-rows', 'role')).toBe('Sensor名称');
     expect(fieldLabel(null, 'content')).toBe('要求内容');
+    expect(fieldLabel('sensor-catalog', 'images')).toBe('图片');
     expect(fieldLabel(null, 'unknownField')).toBe('unknownField');
     expect(targetNamespace('entity-groups:machine')).toBe(
       'entity-groups:machine',

@@ -941,6 +941,9 @@ export const MACHINE_ROW_IMAGE_RULES = {
   mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
 };
 
+/** 一条 Sensor 型号最多挂这么多张图片 */
+export const SENSOR_IMAGE_LIMIT = 3;
+
 // 顺序就是数据字典页的标签顺序，第一个是打开页面时默认显示的
 export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
   {

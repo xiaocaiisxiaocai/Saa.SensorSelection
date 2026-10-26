@@ -50,34 +50,28 @@ describe('SensorImageEditor', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    ['dialog', false],
-    ['table cell', true],
-  ])(
-    'accepts dropped images in the %s and keeps at most three',
-    async (_place, compact) => {
-      const warning = vi.spyOn(message, 'warning');
-      const wrapper = mount(SensorImageEditor, {
-        props: { images: [image('front')], writable: true, compact },
-      });
-      expect(SENSOR_IMAGE_LIMIT).toBe(3);
-      expect(wrapper.find('.ant-upload-drag').exists()).toBe(true);
+  it('accepts dropped images and keeps at most three', async () => {
+    const warning = vi.spyOn(message, 'warning');
+    const wrapper = mount(SensorImageEditor, {
+      props: { images: [image('front')], writable: true },
+    });
+    expect(SENSOR_IMAGE_LIMIT).toBe(3);
+    expect(wrapper.find('.ant-upload-drag').exists()).toBe(true);
 
-      await drop(wrapper, ['side', 'top', 'back']);
+    await drop(wrapper, ['side', 'top', 'back']);
 
-      expect(uploadFileMock).toHaveBeenCalledTimes(2);
-      expect(warning).toHaveBeenCalledWith('最多 3 张图片，已忽略多出的 1 张');
-      const emitted = wrapper.emitted('update:images')?.[0]?.[0] as
-        | MachineRowImage[]
-        | undefined;
-      expect(emitted?.map((item) => item.fileName)).toEqual([
-        'front.png',
-        'side.png',
-        'top.png',
-      ]);
-      wrapper.unmount();
-    },
-  );
+    expect(uploadFileMock).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledWith('最多 3 张图片，已忽略多出的 1 张');
+    const emitted = wrapper.emitted('update:images')?.[0]?.[0] as
+      | MachineRowImage[]
+      | undefined;
+    expect(emitted?.map((item) => item.fileName)).toEqual([
+      'front.png',
+      'side.png',
+      'top.png',
+    ]);
+    wrapper.unmount();
+  });
 
   it('disables the drop zone once three images are attached', () => {
     const wrapper = mount(SensorImageEditor, {

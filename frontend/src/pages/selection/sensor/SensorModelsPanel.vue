@@ -42,7 +42,7 @@ import { useSelectionStore } from '@/stores/selection';
 import { AHighlightText } from '@/ui';
 
 import SensorFormDialog from './SensorFormDialog.vue';
-import SensorImageCell from './SensorImageCell.vue';
+import SensorImageEditor from './SensorImageEditor.vue';
 import SensorLinkedPreview from './SensorLinkedPreview.vue';
 import SensorReplaceDialog from './SensorReplaceDialog.vue';
 import { downloadSensorExcel } from './sensor-excel';
@@ -504,7 +504,12 @@ function openReplace(row: SensorTableRow) {
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'images'">
-          <SensorImageCell :item="row.item" :writable="writable" />
+          <!-- 表格里只看图；增删在新增 / 编辑弹窗里 -->
+          <SensorImageEditor
+            compact
+            :images="row.item.images ?? []"
+            :writable="false"
+          />
         </template>
         <template v-else-if="column.key === 'partNumber'">
           <a-typography-text

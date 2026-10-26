@@ -14,13 +14,13 @@ import { confirmDelete } from '@/pages/shared/save-feedback';
 import { UPLOADING_TITLE, useUploadLock } from '@/pages/shared/upload-lock';
 
 /**
- * 型号图片的缩略图和增删。表格格子和编辑弹窗共用，两处都能点选或拖入图片。
+ * 型号图片的缩略图和增删。表格格子只读看图，新增 / 编辑弹窗里可点选或拖入图片。
  * 选中的文件先上传，再把完整列表交给外面保存；这里不直接写仓库。
  */
 const props = defineProps<{
   images: readonly MachineRowImage[];
   writable: boolean;
-  /** 表格里用小图和同尺寸的拖放格；弹窗里是整行的拖放区 */
+  /** 表格里用小图 */
   compact?: boolean;
   inputId?: string;
 }>();
@@ -40,7 +40,7 @@ const thumb = computed(() => (props.compact ? 48 : 72));
 const addTitle = computed(() => {
   if (uploading.value) return UPLOADING_TITLE;
   if (atLimit.value) return LIMIT_MESSAGE;
-  return props.compact ? '新增图片' : '点击或将图片拖到此处上传';
+  return '点击或将图片拖到此处上传';
 });
 
 const picker = createFilePicker(
@@ -143,17 +143,9 @@ async function remove(index: number) {
       :show-upload-list="false"
       @reject="picker.onReject"
     >
-      <a-tooltip v-if="compact" :title="addTitle">
-        <span class="sensor-images__drop-tile">
-          <ImagePlus :size="16" />
-          <span class="visually-hidden">{{ addTitle }}</span>
-        </span>
-      </a-tooltip>
-      <template v-else>
-        <p class="ant-upload-drag-icon"><ImagePlus :size="24" /></p>
-        <p class="ant-upload-text">{{ addTitle }}</p>
-        <p class="ant-upload-hint">{{ RULE_HINT }}</p>
-      </template>
+      <p class="ant-upload-drag-icon"><ImagePlus :size="24" /></p>
+      <p class="ant-upload-text">{{ addTitle }}</p>
+      <p class="ant-upload-hint">{{ RULE_HINT }}</p>
     </a-upload-dragger>
   </div>
 </template>

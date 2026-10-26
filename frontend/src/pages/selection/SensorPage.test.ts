@@ -1283,6 +1283,47 @@ describe('SensorPage', () => {
     document.body.innerHTML = '';
   });
 
+  it('only previews model images in the table and uploads them in the dialog', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const lone = store.sensors.find((item) => item.model === 'LV-H62')!;
+    expect(
+      store.saveSensor(
+        {
+          ...lone,
+          images: [
+            {
+              dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+              fileName: '正面.png',
+              mimeType: 'image/png',
+              size: 8,
+            },
+          ],
+        },
+        lone.id,
+      ),
+    ).toMatchObject({ ok: true });
+    await nextTick();
+
+    const loneRow = wrapper
+      .findAll('tbody tr.ant-table-row')
+      .find((row) => row.text().includes('LV-H62'))!;
+    expect(loneRow.findAll('.sensor-images__item')).toHaveLength(1);
+    expect(wrapper.find('tbody .ant-upload').exists()).toBe(false);
+    expect(wrapper.find('tbody [aria-label^="删除图片"]').exists()).toBe(false);
+
+    await loneRow.get('[aria-label="编辑"]').trigger('click');
+    await nextTick();
+    const dialog = document
+      .querySelector('#sensor-model')
+      ?.closest('[role="dialog"]');
+    expect(dialog?.querySelector('.ant-upload-drag')).not.toBeNull();
+    expect(dialog?.querySelectorAll('.sensor-images__item')).toHaveLength(1);
+
+    wrapper.unmount();
+    document.body.innerHTML = '';
+  });
+
   it('merges a group into one catalog cell and one 3d cell showing the current model', async () => {
     const wrapper = await mountPage({}, writer);
     const store = useSelectionStore();

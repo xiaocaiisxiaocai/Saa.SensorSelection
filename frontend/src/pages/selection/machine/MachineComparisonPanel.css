@@ -67,12 +67,6 @@
   background: var(--color-error-bg);
 }
 
-.machine-comparison-difference {
-  margin-left: var(--space-2);
-  font-weight: 600;
-  color: var(--color-error);
-}
-
 .machine-comparison-heading h2 {
   margin: 0;
   font: var(--font-body-strong);

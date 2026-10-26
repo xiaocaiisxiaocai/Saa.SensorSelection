@@ -362,16 +362,7 @@ watch(
               'machine-comparison-row--different': field.state === 'different',
             }"
           >
-            <th scope="row">
-              {{ field.label }}
-              <span
-                v-if="field.state === 'different'"
-                class="machine-comparison-difference"
-                role="img"
-                aria-label="左右不同"
-                title="左右不同"
-              >≠</span>
-            </th>
+            <th scope="row">{{ field.label }}</th>
             <td
               v-for="(cell, index) in item.cells"
               :key="index"

@@ -85,7 +85,7 @@ afterEach(() => {
 function fieldRow(wrapper: VueWrapper, label: string) {
   const found = wrapper
     .findAll('.machine-comparison-record tr')
-    .find((item) => item.get('th').text().replace('≠', '').trim() === label);
+    .find((item) => item.get('th').text() === label);
   if (!found) throw new Error(`Missing comparison field: ${label}`);
   return found;
 }
@@ -306,7 +306,11 @@ describe('MachineComparisonPanel', () => {
     }
     const note = fieldRow(wrapper, '备注');
     expect(note.classes()).toContain('machine-comparison-row--different');
-    expect(note.get('[aria-label="左右不同"]').text()).toBe('≠');
+    expect(note.get('th').text()).toBe('备注');
+    expect(note.findAll('td').map((cell) => cell.attributes('title'))).toEqual([
+      '左右不同',
+      '左右不同',
+    ]);
     for (const label of ['板件特性', '传感器类型', '规格', '示意图']) {
       expect(fieldRow(wrapper, label).classes()).not.toContain(
         'machine-comparison-row--same',

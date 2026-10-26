@@ -177,6 +177,24 @@ describe('CustomerPage', () => {
         .get('.entity-tree__node[data-item="淮安一厂"] .entity-tree__tag')
         .text(),
     ).toBe('华南');
+    // 旧数据升级来的「华东」厂区名字就是区域，也照样显示区域
+    expect(
+      wrapper
+        .get('.entity-tree__node[data-item="华东"] .entity-tree__tag')
+        .text(),
+    ).toBe('华东');
+
+    // 目录搜索能按区域找到厂区
+    const search = wrapper.get('input[aria-label="搜索客户、厂区或区域"]');
+    expect(search.attributes('placeholder')).toBe('搜索客户、厂区或区域…');
+    await search.setValue('华南');
+    await flushPromises();
+    expect(
+      wrapper.find('.entity-tree__node[data-item="淮安一厂"]').exists(),
+    ).toBe(true);
+    expect(wrapper.find('.entity-tree__node[data-item="华东"]').exists()).toBe(
+      false,
+    );
     wrapper.unmount();
   });
 

@@ -5,11 +5,14 @@ import {
   type MachineCatalogKind,
 } from '@/domain';
 
-/** 目录两级的叫法：客户目录是「客户 → 厂区」，机型目录是「分类 → 机型」 */
+/**
+ * 目录两级的叫法：客户目录是「客户 → 厂区」，机型目录是「分类 → 机型」。
+ * search 是目录搜索框能搜的内容（客户目录还能按厂区的区域搜）。
+ */
 export function entityLabels(kind: EntityKind) {
   return kind === 'customer'
-    ? { group: '客户', item: '厂区' }
-    : { group: '分类', item: '机型' };
+    ? { group: '客户', item: '厂区', search: '客户、厂区或区域' }
+    : { group: '分类', item: '机型', search: '分类或机型' };
 }
 
 /** 客户资料按「客户/厂区」存，两级名称里都不能有「/」 */

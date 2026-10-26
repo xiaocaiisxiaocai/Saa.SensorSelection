@@ -55,9 +55,14 @@ function onContextMenuClick({ key }: { key: string | number }) {
       >
         <AHighlightText :text="node.title" :query="query" />
       </span>
-      <a-tag v-if="node.tag" class="entity-tree__tag">
+      <!-- 区域和分组的数量同一种轻量样式：灰色小字、右对齐，不加框 -->
+      <a-typography-text
+        v-if="node.tag"
+        type="secondary"
+        class="entity-tree__tag"
+      >
         <AHighlightText :text="node.tag" :query="query" />
-      </a-tag>
+      </a-typography-text>
       <a-typography-text
         v-if="node.count !== undefined"
         type="secondary"

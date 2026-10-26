@@ -16,14 +16,10 @@
   font-weight: 600;
 }
 
-.entity-tree__count {
-  flex-shrink: 0;
-  font: var(--font-sm);
-}
-
+.entity-tree__count,
 .entity-tree__tag {
   flex-shrink: 0;
-  margin-inline-end: 0;
+  font: var(--font-sm);
 }
 
 /* 「更多」按钮只在悬停/聚焦行时出现，避免每行都挂一个图标 */

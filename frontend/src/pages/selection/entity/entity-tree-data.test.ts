@@ -100,6 +100,8 @@ describe('entity-tree-data', () => {
         regions: { 淮安一厂: '华东', 深圳厂: '华南' },
       },
       { name: '广合集团', items: ['广州厂'], regions: { 广州厂: '华南' } },
+      // 旧数据升级来的厂区：名字就是区域
+      { name: '泰国鹏鼎', items: ['SAT'], regions: { SAT: 'SAT' } },
     ];
     const tree = buildEntityTree(customers, '');
     expect(tree[0]?.children?.map((node) => [node.title, node.tag])).toEqual([
@@ -107,9 +109,15 @@ describe('entity-tree-data', () => {
       ['深圳厂', '华南'],
     ]);
     expect(tree[0]?.tag).toBeUndefined();
+    // 厂区名和区域一样时也照样显示区域
+    expect(tree[2]?.children?.[0]?.tag).toBe('SAT');
 
     const south = buildEntityTree(customers, '华南');
     expect(titles(south)).toEqual(['鹏鼎集团', '深圳厂', '广合集团', '广州厂']);
+    expect(titles(buildEntityTree(customers, 'sat'))).toEqual([
+      '泰国鹏鼎',
+      'SAT',
+    ]);
     // 机型没有区域，不带标签
     expect(buildEntityTree(groups, '')[1]?.children?.[0]?.tag).toBeUndefined();
   });

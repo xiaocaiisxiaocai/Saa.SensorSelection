@@ -245,6 +245,7 @@ function onReorderItems(payload: {
       "
       :group-label="groupLabel"
       :item-label="itemLabel"
+      :search-label="labels.search"
       :selectable-branches="kind === 'machine'"
       :locked-branches="lockedBranches"
       @select="onSelect"

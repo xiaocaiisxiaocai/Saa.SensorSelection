@@ -42,6 +42,8 @@ const props = withDefaults(
     allowConfigurations?: boolean;
     groupLabel: string;
     itemLabel: string;
+    /** 搜索框能搜的内容，默认「分组或叶子」；客户目录还能按区域搜 */
+    searchLabel?: string;
     /** 没有子节点的分组 / 配置也能选中（机型选单的末级节点） */
     selectableBranches?: boolean;
     /** 开启机型叶子节点的右键对比菜单；父组件负责维护最多两个条目 */
@@ -110,6 +112,10 @@ function withCheckable(
     children: node.children && withCheckable(node.children, checkable),
   }));
 }
+
+const searchText = computed(
+  () => props.searchLabel ?? `${props.groupLabel}或${props.itemLabel}`,
+);
 
 const treeData = computed(() => {
   const nodes = buildEntityTree(
@@ -424,8 +430,8 @@ function runAction(node: EntityNode, key: string) {
     <div class="entity-tree__search">
       <a-input
         v-model:value="query"
-        :placeholder="`搜索${groupLabel}或${itemLabel}…`"
-        :aria-label="`搜索${groupLabel}或${itemLabel}`"
+        :placeholder="`搜索${searchText}…`"
+        :aria-label="`搜索${searchText}`"
         allow-clear
       >
         <template #prefix><Search :size="14" /></template>

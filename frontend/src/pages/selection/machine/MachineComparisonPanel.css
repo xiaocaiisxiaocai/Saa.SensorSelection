@@ -54,6 +54,12 @@
   background: var(--color-fill-alter);
 }
 
+/* 结构对比里每条记录的「Sensor名称」整行加底色，一眼看出每条对比的是哪个 Sensor */
+.machine-comparison-table .machine-comparison-row--key > th,
+.machine-comparison-table .machine-comparison-row--key > td {
+  background: var(--color-primary-bg-hover);
+}
+
 .machine-comparison-heading h2 {
   margin: 0;
   font: var(--font-body-strong);

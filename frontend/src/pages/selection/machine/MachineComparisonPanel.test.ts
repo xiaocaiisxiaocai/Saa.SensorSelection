@@ -237,4 +237,30 @@ describe('MachineComparisonPanel', () => {
     expect(wrapper.findAll('.machine-comparison-record')).toHaveLength(1);
     wrapper.unmount();
   });
+
+  it('highlights only the Sensor名称 row of a structure comparison', async () => {
+    const { wrapper } = fixture(
+      [row(1, '收板口板件检知')],
+      [row(2, '收板口板件检知')],
+    );
+    await flushPromises();
+    const highlighted = wrapper.findAll(
+      '.machine-comparison-record .machine-comparison-row--key',
+    );
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0]!.get('th').text()).toBe('Sensor名称');
+    expect(highlighted[0]!.findAll('td').map((cell) => cell.text())).toEqual([
+      '收板口板件检知',
+      '收板口板件检知',
+    ]);
+    wrapper.unmount();
+
+    // 机型注意事项的对比不加底色
+    const notes = fixture([row(1, '安全')], [row(2, '安全')], 'notes');
+    await flushPromises();
+    expect(notes.wrapper.find('.machine-comparison-row--key').exists()).toBe(
+      false,
+    );
+    notes.wrapper.unmount();
+  });
 });

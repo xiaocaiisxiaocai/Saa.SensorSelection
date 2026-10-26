@@ -248,7 +248,13 @@ watch(
           :key="item.key"
           class="machine-comparison-record"
         >
-          <tr v-for="field in fields" :key="field.key">
+          <tr
+            v-for="field in fields"
+            :key="field.key"
+            :class="{
+              'machine-comparison-row--key': structure && field.key === 'role',
+            }"
+          >
             <th scope="row">{{ field.label }}</th>
             <td
               v-for="(cell, index) in item.cells"

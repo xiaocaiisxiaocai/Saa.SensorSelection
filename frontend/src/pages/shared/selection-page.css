@@ -160,6 +160,23 @@
   z-index: 4;
 }
 
+/*
+ * 表身固定列要有不透明底色，横向滚动时后面的格子才会被挡住。
+ * antd 写在固定列上的白底没有赢过层叠，计算出来是透明的。
+ * 行悬停和分组合悬停要盖过这层底色，否则冻结列不会跟着变色。
+ */
+.selection-page .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.selection-page .ant-table-tbody > tr > td.ant-table-cell-fix-right {
+  background-color: var(--color-bg-container);
+}
+
+.selection-page .ant-table-tbody > tr:is(:hover, .sensor-row--group-hover) > td.ant-table-cell-fix-left,
+.selection-page .ant-table-tbody > tr:is(:hover, .sensor-row--group-hover) > td.ant-table-cell-fix-right,
+.selection-page .ant-table-tbody > tr > td.ant-table-cell-fix-left.ant-table-cell-row-hover,
+.selection-page .ant-table-tbody > tr > td.ant-table-cell-fix-right.ant-table-cell-row-hover {
+  background-color: var(--color-fill-alter);
+}
+
 .selection-page .ant-table-wrapper .ant-table-pagination,
 .table-pagination {
   flex-shrink: 0;

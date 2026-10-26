@@ -125,7 +125,7 @@ export function rowClick<T>(onActivate: (row: T) => void) {
 
 /**
  * 横向滚动基准宽度取各列声明宽度之和：容器更宽时 antd 会铺满，
- * 更窄时出现横向滚动条，固定列（操作列）始终可见。
+ * 更窄时出现横向滚动条。左侧冻结列留在可视区，操作列跟着内容一起滚。
  */
 export function scrollX(columns: ReadonlyArray<{ width?: number | string }>) {
   const total = columns.reduce(

@@ -116,7 +116,7 @@ const baseColumns = computed<TableColumnType[]>(() => {
     { key: 'history', dataIndex: 'history', title: '历史', width: 60 },
   ];
   if (writable.value) {
-    cols.push({ key: 'actions', title: '操作', width: 96, fixed: 'right' });
+    cols.push({ key: 'actions', title: '操作', width: 96 });
   }
   return cols;
 });

@@ -235,7 +235,6 @@ export function sectionColumns(options: {
       key: 'actions',
       title: '操作',
       width: 72,
-      fixed: 'right',
       ...merged,
     });
   }

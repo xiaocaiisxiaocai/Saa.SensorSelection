@@ -57,6 +57,25 @@ describe('LoginPage', () => {
     expect(wrapper.find('.login-layout__footer').text()).toContain(
       'Symtek Automation China',
     );
+    // 年份跟着当前年份走，不写死
+    expect(wrapper.find('.login-layout__footer').text()).toContain(
+      `© ${new Date().getFullYear()} `,
+    );
+    wrapper.unmount();
+  });
+
+  it('names the credential fields with their icons and placeholders only', async () => {
+    const wrapper = await mountLogin();
+    // 不再有可见标签和必填星号；读屏靠 aria-label
+    expect(wrapper.find('.ant-form-item-label').exists()).toBe(false);
+    expect(wrapper.find('.ant-form-item-required').exists()).toBe(false);
+    const username = wrapper.get('input#login-username');
+    const password = wrapper.get('input#login-password');
+    expect(username.attributes('aria-label')).toBe('用户名');
+    expect(username.attributes('placeholder')).toBe('请输入用户名');
+    expect(password.attributes('aria-label')).toBe('密码');
+    expect(password.attributes('placeholder')).toBe('请输入密码');
+    expect(wrapper.get('.login__guest').text()).toBe('游客浏览（只读）');
     wrapper.unmount();
   });
 
@@ -154,7 +173,7 @@ describe('LoginPage', () => {
     const wrapper = await mountLogin();
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes('以游客身份预览'))!
+      .find((button) => button.text().includes('游客浏览'))!
       .trigger('click');
     await vi.waitFor(() => {
       expect(window.localStorage.getItem('symtek_token')).toBeNull();
@@ -164,7 +183,7 @@ describe('LoginPage', () => {
     wrapper.unmount();
   });
 
-  it('preloads data and only announces login success once it is ready', async () => {
+  it('preloads data and enters the app once it is ready, without a success toast', async () => {
     let resolveStore!: (store: Record<string, unknown[]>) => void;
     const getStore = vi.spyOn(api, 'getStore').mockImplementation(
       () =>
@@ -186,18 +205,23 @@ describe('LoginPage', () => {
     vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
     const success = vi.spyOn(message, 'success');
     const wrapper = await mountLogin();
+    const router = wrapper.vm.$router;
 
     await vi.waitFor(() => expect(getStore).toHaveBeenCalledTimes(1));
     const inputs = wrapper.findAll('input');
     await inputs[0].setValue('admin');
     await inputs[1].setValue('admin123');
     await wrapper.get('form').trigger('submit');
-    expect(success).not.toHaveBeenCalledWith('登录成功');
+    await flushPromises();
+    // 数据还没到时留在登录页
+    expect(router.currentRoute.value.path).toBe('/login');
 
     resolveStore({ 'meta:seed-version': [{ version: SEED_VERSION }] });
     await vi.waitFor(() => {
-      expect(success).toHaveBeenCalledWith('登录成功');
+      expect(router.currentRoute.value.path).toBe('/selection/customer');
     });
+    // 进入主页本身就说明登录成功了，不再弹提示
+    expect(success).not.toHaveBeenCalled();
     expect(getStore).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });

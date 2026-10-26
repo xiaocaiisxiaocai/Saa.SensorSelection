@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { message } from 'ant-design-vue';
 import { Lock, User } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -15,6 +14,8 @@ const selection = useSelectionStore();
 const route = useRoute();
 const router = useRouter();
 
+// 页脚年份跟着当前年份走，不写死
+const year = new Date().getFullYear();
 const loading = ref(false);
 const validationAttempted = ref(false);
 const form = reactive({ username: '', password: '' });
@@ -84,9 +85,9 @@ async function submit() {
       passwordField.value?.focus();
       return;
     }
+    // 进入主页本身就说明登录成功了，不再弹提示
     await prepareBackend();
     await enter();
-    message.success('登录成功');
   } finally {
     loading.value = false;
   }
@@ -127,17 +128,14 @@ onMounted(async () => {
           :message="loginError"
         />
 
+        <!-- 图标和占位文字已经说明了是什么，不再加可见标签和必填星号；读屏用 aria-label -->
         <a-form layout="vertical" @submit="submit">
-          <a-form-item
-            html-for="login-username"
-            label="用户名"
-            required
-            v-bind="fieldError(usernameError)"
-          >
+          <a-form-item v-bind="fieldError(usernameError)">
             <a-input
               id="login-username"
               ref="usernameField"
               v-model:value="form.username"
+              aria-label="用户名"
               size="large"
               autocomplete="username"
               :maxlength="64"
@@ -147,16 +145,12 @@ onMounted(async () => {
               <template #prefix><User :size="16" /></template>
             </a-input>
           </a-form-item>
-          <a-form-item
-            html-for="login-password"
-            label="密码"
-            required
-            v-bind="fieldError(passwordError)"
-          >
+          <a-form-item v-bind="fieldError(passwordError)">
             <a-input-password
               id="login-password"
               ref="passwordField"
               v-model:value="form.password"
+              aria-label="密码"
               size="large"
               autocomplete="current-password"
               :disabled="loading"
@@ -179,16 +173,15 @@ onMounted(async () => {
         </a-form>
 
         <div class="login__guest">
-          <a-typography-text type="secondary">没有账号？</a-typography-text>
           <a-button type="link" :disabled="loading" @click="enterAsGuest">
-            以游客身份预览（只读）
+            游客浏览（只读）
           </a-button>
         </div>
       </a-card>
     </main>
 
     <footer class="login-layout__footer">
-      © 2026 Symtek Automation China. 保留所有权利。
+      © {{ year }} Symtek Automation China. 保留所有权利。
     </footer>
   </div>
 </template>

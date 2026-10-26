@@ -65,12 +65,13 @@ const { canWrite } = useAccess()      // canWrite('selection:write')
 
 - 居中 `a-card`（宽 400px），浅灰布局底色；`a-alert` 登录错误、竖排 `a-form`、游客入口用 `a-button type="link"`。
 - 卡片顶部只显示系统名称「感应器选型」（20px 加粗居中，`aria-hidden`），**不放 logo**、不加副标题；另有一个读屏可见的 `h1.visually-hidden`「登录感应器选型系统」；版权信息在页脚。
-- 表单：用户名（`a-input`，`maxlength=64`，`autocomplete="username"`）、密码（`a-input type="password"`，`autocomplete="current-password"`，回车提交）。
-- 主按钮「登 录」（`filled` `xlarge` `block`，带 loading）。
-- 底部「以游客身份预览（只读）」文字按钮：点击**清除残留 token** 后跳转。
+- 表单：用户名（`a-input`，`maxlength=64`，`autocomplete="username"`）、密码（`a-input-password`，`autocomplete="current-password"`，回车提交）。两个字段只有前缀图标和占位文字「请输入用户名 / 请输入密码」，**不加可见标签和必填星号**，读屏靠输入框的 `aria-label`。
+- 主按钮「登录」（`primary` `large` `block`，带 loading）。
+- 底部「游客浏览（只读）」文字按钮：点击**清除残留 token** 后跳转。
 - 已持有有效 token 时打开本页 → 直接跳业务首页，不显示表单。
 - 支持 `?redirect=` 回跳，默认落到 `/selection/customer`。
-- 提示：未填 → `toast.warning('请输入用户名和密码')`；失败 → `toast.error(后端消息)`；成功 → `toast.success('登录成功')`。
+- 提示：未填 → 字段下方红字「请输入用户名 / 请输入密码」，不弹 toast；失败 → 卡片内常驻的 `a-alert`（后端消息），密码清空并重新聚焦；成功 → 直接进入业务页，不弹提示。
+- 页脚版权年份取当前年份。
 
 ---
 

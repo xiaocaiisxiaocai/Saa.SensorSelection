@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
-import type { MachineSectionRow } from '@/domain';
+import type { MachineSectionRow, SensorItem } from '@/domain';
 import { useSelectionStore } from '@/stores/selection';
 import MachineComparisonPanel from './MachineComparisonPanel.vue';
 
@@ -36,11 +36,13 @@ function fixture(
   left: MachineSectionRow[],
   right: MachineSectionRow[],
   kind: 'structure' | 'notes' = 'structure',
+  sensors?: SensorItem[],
 ) {
   window.localStorage.clear();
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useSelectionStore();
+  if (sensors) vi.spyOn(store, 'sensors', 'get').mockReturnValue(sensors);
   const leftRows = ref(left);
   const rightRows = ref(right);
   vi.spyOn(store, 'machineSectionRows').mockImplementation((id) =>
@@ -77,6 +79,22 @@ const activeCells = (wrapper: VueWrapper) =>
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+function fieldRow(wrapper: VueWrapper, label: string) {
+  const found = wrapper
+    .findAll('.machine-comparison-record tr')
+    .find((item) => item.get('th').text().replace('≠', '').trim() === label);
+  if (!found) throw new Error(`Missing comparison field: ${label}`);
+  return found;
+}
+
+const image = (dataUrl: string, fileName = 'structure.png') => ({
+  dataUrl,
+  fileName,
+  mimeType: 'image/png',
+  size: 3,
 });
 
 describe('MachineComparisonPanel', () => {
@@ -238,7 +256,7 @@ describe('MachineComparisonPanel', () => {
     wrapper.unmount();
   });
 
-  it('highlights only the Sensor名称 row of a structure comparison', async () => {
+  it('keeps the Sensor名称 row separate from difference highlighting', async () => {
     const { wrapper } = fixture(
       [row(1, '收板口板件检知')],
       [row(2, '收板口板件检知')],
@@ -253,14 +271,295 @@ describe('MachineComparisonPanel', () => {
       '收板口板件检知',
       '收板口板件检知',
     ]);
+    expect(highlighted[0]!.classes()).not.toContain(
+      'machine-comparison-row--same',
+    );
+    expect(highlighted[0]!.classes()).not.toContain(
+      'machine-comparison-row--different',
+    );
+    expect(highlighted[0]!.find('[aria-label="左右不同"]').exists()).toBe(
+      false,
+    );
     wrapper.unmount();
 
-    // 机型注意事项的对比不加底色
+    // 机型注意事项不使用 Sensor 名称的蓝底样式
     const notes = fixture([row(1, '安全')], [row(2, '安全')], 'notes');
     await flushPromises();
     expect(notes.wrapper.find('.machine-comparison-row--key').exists()).toBe(
       false,
     );
     notes.wrapper.unmount();
+  });
+
+  it('compares each field independently and leaves two empty values neutral', async () => {
+    const left = { ...row(1, '入口', '左侧备注'), purpose: '板件检知' };
+    const right = { ...row(2, '入口', '右侧备注'), purpose: '板件检知' };
+    const { wrapper, rightRows } = fixture([left], [right]);
+    await flushPromises();
+    for (const label of ['作用']) {
+      const item = fieldRow(wrapper, label);
+      expect(item.classes()).toContain('machine-comparison-row--same');
+      expect(item.find('[aria-label="左右不同"]').exists()).toBe(false);
+      expect(
+        item.findAll('td').map((cell) => cell.attributes('title')),
+      ).toEqual(['左右相同', '左右相同']);
+    }
+    const note = fieldRow(wrapper, '备注');
+    expect(note.classes()).toContain('machine-comparison-row--different');
+    expect(note.get('[aria-label="左右不同"]').text()).toBe('≠');
+    for (const label of ['板件特性', '传感器类型', '规格', '示意图']) {
+      expect(fieldRow(wrapper, label).classes()).not.toContain(
+        'machine-comparison-row--same',
+      );
+      expect(fieldRow(wrapper, label).classes()).not.toContain(
+        'machine-comparison-row--different',
+      );
+    }
+    rightRows.value = [{ ...right, note: '左侧备注', purpose: '' }];
+    await flushPromises();
+    expect(fieldRow(wrapper, '备注').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    expect(fieldRow(wrapper, '作用').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    await wrapper.get('input[aria-label="搜索对比内容"]').setValue('板件检知');
+    await flushPromises();
+    expect(fieldRow(wrapper, '作用').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    wrapper.unmount();
+  });
+
+  it('marks only populated fields different when the counterpart record is missing', async () => {
+    const { wrapper } = fixture([row(1, '入口', '单侧备注')], []);
+    await flushPromises();
+    const name = fieldRow(wrapper, 'Sensor名称');
+    expect(name.classes()).not.toContain('machine-comparison-row--different');
+    expect(name.find('[aria-label="左右不同"]').exists()).toBe(false);
+    expect(fieldRow(wrapper, '备注').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    expect(fieldRow(wrapper, '规格').classes()).not.toContain(
+      'machine-comparison-row--different',
+    );
+    wrapper.unmount();
+  });
+
+  it('compares note contents as well as structure contents', async () => {
+    const { wrapper } = fixture(
+      [{ ...row(1, '安全'), name: '检查', desc: '停机检查' }],
+      [{ ...row(2, '安全'), name: '检查', desc: '运行检查' }],
+      'notes',
+    );
+    await flushPromises();
+    expect(fieldRow(wrapper, '事项名称').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    expect(fieldRow(wrapper, '说明').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    wrapper.unmount();
+  });
+
+  it('compares resolved sensor types and complete specs rather than sensor ids or order', async () => {
+    const base: SensorItem = {
+      id: 100,
+      status: '',
+      partNumber: '',
+      sensorType: '',
+      brand: '',
+      model: '',
+      spec: '',
+      actualCondition: '',
+      feature: '',
+      scene: '',
+      sopId: null,
+      model3dId: null,
+      replacesId: null,
+      replacedById: null,
+      problemNote: '',
+      usedAt: '',
+      disabledAt: '',
+      enteredAt: '',
+      replacedAt: '',
+    };
+    const sensors = [
+      {
+        ...base,
+        id: 101,
+        brand: 'OMRON',
+        model: 'E2K',
+        spec: '4mm',
+        sensorType: '光纤式',
+      },
+      {
+        ...base,
+        id: 102,
+        brand: 'KEYENCE',
+        model: 'PZ',
+        spec: '10mm',
+        sensorType: '光电式',
+      },
+      {
+        ...base,
+        id: 103,
+        brand: 'OMRON',
+        model: 'E2K',
+        spec: '4mm',
+        sensorType: '光纤式',
+      },
+      {
+        ...base,
+        id: 104,
+        brand: 'OMRON',
+        model: 'E2K',
+        spec: '8mm',
+        sensorType: '光纤式',
+      },
+    ];
+    const left = {
+      ...row(1, '入口'),
+      sensorIds: [101, 102],
+      spec: 'ignored left',
+    };
+    const right = {
+      ...row(2, '入口'),
+      sensorIds: [102, 103],
+      spec: 'ignored right',
+    };
+    const { wrapper, rightRows } = fixture(
+      [left],
+      [right],
+      'structure',
+      sensors,
+    );
+    await flushPromises();
+    expect(fieldRow(wrapper, '传感器类型').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    expect(fieldRow(wrapper, '规格').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    rightRows.value = [{ ...right, sensorIds: [102, 104] }];
+    await flushPromises();
+    expect(fieldRow(wrapper, '传感器类型').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    expect(fieldRow(wrapper, '规格').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    rightRows.value = [{ ...right, sensorIds: [103] }];
+    await flushPromises();
+    expect(fieldRow(wrapper, '传感器类型').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    expect(fieldRow(wrapper, '规格').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    wrapper.unmount();
+  });
+
+  it('handles shared images, missing images and file metadata without extra requests', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const left = {
+      ...row(1, '入口'),
+      image: image('/api/files/shared/content'),
+    };
+    const right = {
+      ...row(2, '入口'),
+      image: image('/api/files/shared/content', 'renamed.png'),
+    };
+    const { wrapper, rightRows } = fixture([left], [right]);
+    await flushPromises();
+    expect(fieldRow(wrapper, '示意图').classes()).toContain(
+      'machine-comparison-row--same',
+    );
+    rightRows.value = [{ ...right, image: null }];
+    await flushPromises();
+    expect(fieldRow(wrapper, '示意图').classes()).toContain(
+      'machine-comparison-row--different',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it.each([
+    { bytes: [1, 2, 3], state: 'same' },
+    { bytes: [1, 2, 4], state: 'different' },
+  ])(
+    'compares separately uploaded image bytes: $state',
+    async ({ bytes, state }) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(async (source: string) => ({
+          ok: true,
+          arrayBuffer: async () =>
+            new Uint8Array(source.includes('left') ? [1, 2, 3] : bytes).buffer,
+        })),
+      );
+      const { wrapper } = fixture(
+        [{ ...row(1, '入口'), image: image('/api/files/left/content') }],
+        [{ ...row(2, '入口'), image: image('/api/files/right/content') }],
+      );
+      await flushPromises();
+      expect(fieldRow(wrapper, '示意图').classes()).toContain(
+        `machine-comparison-row--${state}`,
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it('leaves failed image comparisons neutral and ignores late results after switching records', async () => {
+    const finish: Array<
+      (response: {
+        ok: boolean;
+        arrayBuffer: () => Promise<ArrayBuffer>;
+      }) => void
+    > = [];
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish.push(resolve);
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { wrapper } = fixture(
+      [
+        { ...row(1, '入口'), image: image('/api/files/left/content') },
+        row(3, '出口'),
+      ],
+      [
+        { ...row(2, '入口'), image: image('/api/files/right/content') },
+        row(4, '出口'),
+      ],
+    );
+    await flushPromises();
+    expect(fieldRow(wrapper, '示意图').get('td').attributes('title')).toBe(
+      '正在比较示意图',
+    );
+    await selectRecord(wrapper, '出口');
+    expect(fetchMock.mock.calls[0]![1].signal.aborted).toBe(true);
+    finish.forEach((resolve) =>
+      resolve({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      }),
+    );
+    await flushPromises();
+    expect(
+      fieldRow(wrapper, '示意图').get('td').attributes('title'),
+    ).toBeUndefined();
+
+    fetchMock.mockRejectedValue(new Error('offline'));
+    await selectRecord(wrapper, '入口');
+    const failed = fieldRow(wrapper, '示意图');
+    expect(failed.get('td').attributes('title')).toBe(
+      '示意图读取失败，无法比较',
+    );
+    expect(failed.classes()).not.toContain('machine-comparison-row--same');
+    expect(failed.classes()).not.toContain('machine-comparison-row--different');
+    wrapper.unmount();
   });
 });

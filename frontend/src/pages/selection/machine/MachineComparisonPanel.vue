@@ -152,6 +152,111 @@ function textValue(
     return item.rows[0]?.boardCharacteristicName || '—';
   return cellText(item.source[field as keyof MachineSectionRow]);
 }
+
+type ComparisonState =
+  'same' | 'different' | 'empty' | 'pending' | 'unavailable';
+type ComparisonRecord = ReturnType<typeof record>;
+
+function comparisonValues(item: ComparisonRecord, field: string): string[] {
+  if (!item) return [];
+  const text = (value: string) => value.trim().replace(/\r\n?/g, '\n');
+  if (structure.value && field === 'sensorType') {
+    return [...new Set(item.rows.map((row) => text(row.sensorType)))]
+      .filter(Boolean)
+      .sort();
+  }
+  if (structure.value && field === 'spec') {
+    return item.rows
+      .map((row) =>
+        row.sensor
+          ? [row.sensor.brand, row.sensor.model, row.sensor.spec].map(text)
+          : [text(row.spec)],
+      )
+      .filter((parts) => parts.some(Boolean))
+      .map((parts) => JSON.stringify(parts))
+      .sort();
+  }
+  const value =
+    field === 'boardCharacteristicName'
+      ? (item.rows[0]?.boardCharacteristicName ?? '—')
+      : String(item.source[field as keyof MachineSectionRow] ?? '');
+  if (field === 'boardCharacteristicName' && value === '—') return [];
+  return text(value) ? [text(value)] : [];
+}
+
+const imageComparison = ref<ComparisonState>('empty');
+watch(
+  () => [
+    activePair.value?.left?.image?.dataUrl ?? '',
+    activePair.value?.right?.image?.dataUrl ?? '',
+  ],
+  async ([left, right], _, onCleanup) => {
+    if (!left || !right || left === right) {
+      imageComparison.value =
+        !left && !right ? 'empty' : left === right ? 'same' : 'different';
+      return;
+    }
+
+    // File ids are immutable but each upload gets a new id, including identical files.
+    imageComparison.value = 'pending';
+    const controller = new AbortController();
+    let active = true;
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    onCleanup(() => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timeout);
+    });
+    try {
+      const bytes = await Promise.all(
+        [left, right].map(async (source) => {
+          const response = await fetch(source, { signal: controller.signal });
+          if (!response.ok) throw new Error('Image comparison failed');
+          return new Uint8Array(await response.arrayBuffer());
+        }),
+      );
+      const [a, b] = bytes;
+      if (active && !controller.signal.aborted && a && b) {
+        imageComparison.value =
+          a.length === b.length && a.every((byte, index) => byte === b[index])
+            ? 'same'
+            : 'different';
+      }
+    } catch {
+      if (active) imageComparison.value = 'unavailable';
+      controller.abort();
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  },
+  { immediate: true },
+);
+
+const comparisonFields = computed(() => {
+  const cells = records.value[0]?.cells;
+  return fields.value.map((field) => {
+    const left = comparisonValues(cells?.[0] ?? null, field.key);
+    const right = comparisonValues(cells?.[1] ?? null, field.key);
+    const state: ComparisonState =
+      structure.value && field.key === 'role'
+        ? 'empty' // Sensor 名称保留蓝底，不参与字段差异着色。
+        : field.key === 'image'
+          ? imageComparison.value
+          : left.length === 0 && right.length === 0
+            ? 'empty'
+            : JSON.stringify(left) === JSON.stringify(right)
+              ? 'same'
+              : 'different';
+    return { ...field, state };
+  });
+});
+const comparisonTitles: Record<ComparisonState, string | undefined> = {
+  same: '左右相同',
+  different: '左右不同',
+  empty: undefined,
+  pending: '正在比较示意图',
+  unavailable: '示意图读取失败，无法比较',
+};
 watch(
   () => [props.left.section.id, props.right.section.id],
   () => {
@@ -249,17 +354,29 @@ watch(
           class="machine-comparison-record"
         >
           <tr
-            v-for="field in fields"
+            v-for="field in comparisonFields"
             :key="field.key"
             :class="{
               'machine-comparison-row--key': structure && field.key === 'role',
+              'machine-comparison-row--same': field.state === 'same',
+              'machine-comparison-row--different': field.state === 'different',
             }"
           >
-            <th scope="row">{{ field.label }}</th>
+            <th scope="row">
+              {{ field.label }}
+              <span
+                v-if="field.state === 'different'"
+                class="machine-comparison-difference"
+                role="img"
+                aria-label="左右不同"
+                title="左右不同"
+              >≠</span>
+            </th>
             <td
               v-for="(cell, index) in item.cells"
               :key="index"
               class="machine-comparison-value"
+              :title="comparisonTitles[field.state]"
             >
               <template v-if="!cell">—</template>
               <template v-else-if="structure && field.key === 'sensorType'">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { message } from 'ant-design-vue';
-import { ImagePlus, X } from 'lucide-vue-next';
+import { Eye, ImagePlus, X } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import {
@@ -114,7 +114,10 @@ async function remove(index: number) {
             :alt="image.fileName"
             :width="thumb"
             :height="thumb"
-          />
+          >
+            <!-- 默认遮罩是「眼睛 + 预览」，小图放不下会挤成省略号；只留居中的眼睛 -->
+            <template #previewMask><Eye :size="16" /></template>
+          </a-image>
           <a-tooltip v-if="writable" title="删除图片">
             <a-button
               class="sensor-images__remove"

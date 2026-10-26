@@ -92,6 +92,9 @@ describe('SensorImageEditor', () => {
     });
     expect(wrapper.find('.ant-upload-drag').exists()).toBe(false);
     expect(wrapper.findAll('.sensor-images__item')).toHaveLength(1);
+    // 悬停遮罩只有居中的眼睛，没有会被挤成省略号的「预览」文字
+    expect(wrapper.find('.ant-image-mask svg').exists()).toBe(true);
+    expect(wrapper.find('.ant-image-mask').text()).toBe('');
     wrapper.unmount();
   });
 });

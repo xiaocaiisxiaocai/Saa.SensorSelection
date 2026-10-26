@@ -699,7 +699,7 @@ id = `nextAvailableId`。`uploadedAt` 来自附件，不自动填。
 
 ### 7.10 数据字典
 
-code：`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`customer-region`、`process-layer`、`machine-model`、`board-characteristic`、`sensor-status`、`sensor-type`。
+code（顺序即数据字典页的标签顺序，第一个默认显示）：`customer-region`、`customer-req`、`customer-req-source`、`customer-proc`、`customer-feedback`、`customer-feedback-status`、`process-layer`、`machine-model`、`board-characteristic`、`sensor-status`、`sensor-type`。
 
 `customer-region`（客户区域，`catalog: 'customer-site'`）供客户厂区选区域：改名同步改 `entity-groups:customer` 各客户 `regions` 里的值；**有厂区在用时不能删**（`in-use`，`message` 列出「客户/厂区」，最多 5 个），不像其他字典那样改归第一项。生产模式下缺这个 key 时，用客户目录里已用的区域建字典（只改内存，随下一次写入提交）。
 

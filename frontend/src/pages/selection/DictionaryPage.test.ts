@@ -22,11 +22,17 @@ describe('DictionaryPage', () => {
     const wrapper = mount(DictionaryPage);
     const tabs = wrapper.findAll('.ant-segmented-item');
     expect(tabs).toHaveLength(11);
+    // 客户区域排在最前，打开页面默认显示它
+    expect(tabs[0]?.text()).toBe('客户区域');
+    expect(wrapper.text()).toContain('SAT');
     expect(wrapper.text()).toContain('要求分类');
     expect(wrapper.text()).toContain('机型');
     expect(wrapper.text()).toContain('板件特性');
-    expect(wrapper.text()).toContain('输送段');
     expect(wrapper.text()).not.toContain('机型结构 Tab');
+    expect(wrapper.text()).not.toContain('客户厂区所在的区域，全局共用');
+
+    await tabs[1]?.get('input').trigger('change');
+    expect(wrapper.text()).toContain('输送段');
     expect(wrapper.text()).not.toContain('客户通用要求中的分类，全局共用');
 
     await tabs[10]?.get('input').trigger('change');

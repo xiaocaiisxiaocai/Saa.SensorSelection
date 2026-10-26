@@ -941,7 +941,16 @@ export const MACHINE_ROW_IMAGE_RULES = {
   mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
 };
 
+// 顺序就是数据字典页的标签顺序，第一个是打开页面时默认显示的
 export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
+  {
+    code: 'customer-region',
+    title: '客户区域',
+    description: '客户厂区所在的区域，全局共用',
+    listIds: [],
+    catalog: 'customer-site',
+    defaults: CUSTOMER_REGION_OPTIONS,
+  },
   {
     code: 'customer-req',
     title: '要求分类',
@@ -981,14 +990,6 @@ export const DICTIONARY_DEFINITIONS: DictionaryDefinition[] = [
     field: 'status',
     listIds: ['customer-feedback'],
     defaults: FEEDBACK_STATUS_OPTIONS,
-  },
-  {
-    code: 'customer-region',
-    title: '客户区域',
-    description: '客户厂区所在的区域，全局共用',
-    listIds: [],
-    catalog: 'customer-site',
-    defaults: CUSTOMER_REGION_OPTIONS,
   },
   {
     code: 'process-layer',

@@ -23,7 +23,7 @@
 
 /* 有成员的现用收紧底边距。成员去掉顶边线并收紧顶边距，字号用小号。
    组里还有下一条成员时，底边距也收紧；最后一条成员保留原来的底边距。
-   状态标签自带字号，不跟着变小。删除线只包在正文上：
+   状态标签自带字号，只有停用成员才缩小。删除线只包在正文上：
    格子上的 line-through 会穿透标签和按钮，子元素取消不掉。 */
 .sensor-models--grouped :deep(tr.sensor-row--group:not(.sensor-row--alternate) > td.ant-table-cell:not(.sensor-shared-cell)) {
   padding-bottom: 0;
@@ -59,6 +59,32 @@
 
 .sensor-struck {
   text-decoration: line-through;
+}
+
+/* 停用成员整行更淡。状态标签和类型同样划线、缩到小号字，标签与圆点一起变淡。 */
+.sensor-models--grouped :deep(tr.sensor-row--struck > td.ant-table-cell) {
+  color: var(--color-text-quaternary);
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--struck .ant-tag) {
+  padding-inline: var(--space-2);
+  font: var(--font-sm);
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--struck .ant-badge-status-dot) {
+  opacity: 0.45;
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--struck .ant-badge-status-text) {
+  color: inherit;
+  font: var(--font-sm);
+  text-decoration: line-through;
+}
+
+.sensor-models--grouped :deep(tr.sensor-row--struck .sensor-relation-link.ant-btn) {
+  opacity: 0.55;
 }
 
 /* 整组一起悬停，含左右固定列；底色与 antd 行悬停相同 */

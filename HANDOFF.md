@@ -21,6 +21,13 @@
 - 规避：`styles/global.css` 里手柄宽度等于表头右内边距（8px），并取消漏斗的负外边距；改手柄宽度或位置时，确认表头漏斗还能点开。
 - 日期：2026-10-25
 
+## Windows PowerShell 5.1 直接跑 deploy-iis.ps1 会解析失败
+
+- 现象：`.\scripts\deploy-iis.ps1` 报 `Unexpected token` / `The string is missing the terminator`，中文字符串变成乱码；用 `*>&1` 捕获输出时又会在检查 pnpm 版本那一步直接中止。
+- 根因：脚本是无 BOM 的 UTF-8，PS 5.1 按 ANSI 代码页读源码；本机没装 `pwsh`。另外 PS 5.1 下重定向原生命令的 stderr 会把 corepack 的 Node 弃用警告包成错误记录，脚本设了 `$ErrorActionPreference = 'Stop'`，于是直接中止。
+- 规避：用 PowerShell 7 跑；没有 PS 7 时，在 `scripts/` 下写一份带 BOM 的临时副本执行（`$PSScriptRoot` 仍指向仓库），跑完删除，并且不要加 `*>&1` / `2>&1`。
+- 日期：2026-10-26
+
 ## E2E 里收起点击触发的 a-dropdown 要再点一次触发按钮
 
 - 现象：`a-dropdown :trigger="['click']"` 打开后按 Escape 不收起，后面的检查被残留的下拉菜单挡住。

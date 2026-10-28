@@ -38,10 +38,13 @@
   justify-content: center;
 }
 
-/* 停用控件不接收指针，包一层 tooltip 才能在不可用时说明原因 */
+/* 停用控件不接收指针，包一层 tooltip 才能在不可用时说明原因。
+   和旁边没包这一层的按钮对齐：不要另起一行高。 */
 .tooltip-host {
   display: inline-flex;
+  align-items: center;
   max-width: 100%;
+  line-height: 0;
   vertical-align: middle;
 }
 

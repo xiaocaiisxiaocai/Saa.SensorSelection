@@ -214,6 +214,30 @@
   flex-shrink: 0;
 }
 
+/* 操作图标同一行垂直居中。列表项默认把操作 li 按基线排，
+   包了 tooltip 的按钮会比旁边的按钮矮一截或高一截。 */
+.file-list .ant-list-item {
+  align-items: center;
+}
+
+.file-list.ant-list .ant-list-item .ant-list-item-action {
+  display: flex;
+  align-items: center;
+  margin-inline-start: var(--space-4);
+}
+
+.file-list.ant-list .ant-list-item .ant-list-item-action > li {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.ant-table-tbody .ant-space,
+.ant-table-tbody .ant-space-item {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* 文件列表：每条一行，名称在前，大小和时间是次要文字；名称过长时折行，不截断 */
 .file-list__line {
   display: flex;

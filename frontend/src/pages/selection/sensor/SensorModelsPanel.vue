@@ -424,7 +424,7 @@ function openReplace(row: SensorTableRow) {
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
-        placeholder="搜索类型、品牌、型号、料号、停用或问题点"
+        placeholder="搜索型号"
         aria-label="搜索 Sensor 型号"
         allow-clear
       >
@@ -439,37 +439,39 @@ function openReplace(row: SensorTableRow) {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
-      <a-tooltip v-if="canExport" title="导出 Excel">
-        <a-button aria-label="导出 Excel" @click="exportExcel">
-          <template #icon><Download :size="14" /></template>
-          导出 Excel
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-tooltip v-if="canExport" title="导出 Excel">
+          <a-button aria-label="导出 Excel" @click="exportExcel">
+            <template #icon><Download :size="14" /></template>
+            导出 Excel
+          </a-button>
+        </a-tooltip>
+        <a-tooltip v-if="canImport" title="导入 Excel">
+          <a-button aria-label="导入 Excel" @click="openImport">
+            <template #icon><Upload :size="14" /></template>
+            导入 Excel
+          </a-button>
+        </a-tooltip>
+        <input
+          v-if="canImport"
+          ref="importInput"
+          class="visually-hidden"
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          aria-label="选择 Sensor 型号 Excel"
+          @change="onImportFile"
+        >
+        <a-button v-if="writable" type="primary" @click="formDialog?.open()">
+          新增型号
         </a-button>
-      </a-tooltip>
-      <a-tooltip v-if="canImport" title="导入 Excel">
-        <a-button aria-label="导入 Excel" @click="openImport">
-          <template #icon><Upload :size="14" /></template>
-          导入 Excel
-        </a-button>
-      </a-tooltip>
-      <input
-        v-if="canImport"
-        ref="importInput"
-        class="visually-hidden"
-        type="file"
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        aria-label="选择 Sensor 型号 Excel"
-        @change="onImportFile"
-      >
-      <a-button v-if="writable" type="primary" @click="formDialog?.open()">
-        新增型号
-      </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"
@@ -477,7 +479,9 @@ function openReplace(row: SensorTableRow) {
       row-key="rowKey"
       :pagination="false"
       :scroll="{ x: scrollX(columns) }"
-      :locale="{ emptyText: '没有符合当前条件的型号' }"
+      :locale="{
+        emptyText: hasActiveFilters ? '没有匹配的型号' : '暂无型号',
+      }"
       :custom-row="customRow"
       :row-class-name="rowClassName"
       @resize-column="onResizeColumn"

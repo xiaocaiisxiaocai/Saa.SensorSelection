@@ -192,7 +192,7 @@ function onTableChange(
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
-        placeholder="搜索分类、机型、制程、内容、来源或备注"
+        placeholder="搜索要求"
         aria-label="搜索客户要求"
         allow-clear
       >
@@ -207,16 +207,18 @@ function onTableChange(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
-      <a-button v-if="writable" type="primary" @click="formDialog?.open()">
-        新增
-      </a-button>
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-button v-if="writable" type="primary" @click="formDialog?.open()">
+          新增要求
+        </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"

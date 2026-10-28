@@ -315,7 +315,7 @@ function onTableChange(
           @change="onImportFile"
         >
         <a-button v-if="writable" type="primary" @click="addItem">
-          新增
+          新增字典项
         </a-button>
       </div>
     </div>

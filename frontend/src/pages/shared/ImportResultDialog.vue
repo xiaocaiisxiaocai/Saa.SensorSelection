@@ -93,13 +93,15 @@ defineExpose({ open });
         {{ payload.summary }}
       </p>
       <div v-if="payload.skips.length" class="selection-toolbar">
-        <AdminColumnSettingsMenu
-          :can-manage="canManageColumns"
-          :columns="columnOptions"
-          :hidden="hiddenColumns"
-          :on-set-visible="setColumnVisible"
-          :on-show-all="showAllColumns"
-        />
+        <div class="selection-toolbar__actions">
+          <AdminColumnSettingsMenu
+            :can-manage="canManageColumns"
+            :columns="columnOptions"
+            :hidden="hiddenColumns"
+            :on-set-visible="setColumnVisible"
+            :on-show-all="showAllColumns"
+          />
+        </div>
       </div>
       <ul v-if="payload.categories.length" class="import-result__categories">
         <li v-for="item in payload.categories" :key="item.title">

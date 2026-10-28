@@ -81,7 +81,7 @@
   align-items: center;
 }
 
-/* 筛选工具栏：筛选控件在左，主操作按钮在右 */
+/* 筛选工具栏：左搜索/重置，右显示列与业务操作，新增在最右 */
 .selection-toolbar {
   display: flex;
   flex-shrink: 0;
@@ -101,7 +101,11 @@
   max-width: 24rem;
 }
 
-.selection-toolbar > .ant-btn-primary {
+.selection-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
   margin-left: auto;
 }
 

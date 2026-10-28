@@ -154,7 +154,7 @@ function onTableChange(
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
-        placeholder="搜索分类、作用、特性、sensor注意或备注"
+        placeholder="搜索注意事项"
         aria-label="搜索制程注意事项"
         allow-clear
       >
@@ -169,16 +169,18 @@ function onTableChange(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
-      <a-button v-if="writable" type="primary" @click="formDialog?.open()">
-        新增
-      </a-button>
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-button v-if="writable" type="primary" @click="formDialog?.open()">
+          新增注意事项
+        </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"

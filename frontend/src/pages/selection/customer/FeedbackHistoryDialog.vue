@@ -56,13 +56,15 @@ const rows = computed(() =>
         </a-descriptions-item>
       </a-descriptions>
       <div class="selection-toolbar">
-        <AdminColumnSettingsMenu
-          :can-manage="canManageColumns"
-          :columns="columnOptions"
-          :hidden="hiddenColumns"
-          :on-set-visible="setColumnVisible"
-          :on-show-all="showAllColumns"
-        />
+        <div class="selection-toolbar__actions">
+          <AdminColumnSettingsMenu
+            :can-manage="canManageColumns"
+            :columns="columnOptions"
+            :hidden="hiddenColumns"
+            :on-set-visible="setColumnVisible"
+            :on-show-all="showAllColumns"
+          />
+        </div>
       </div>
       <a-table
         class="feedback-history__table"

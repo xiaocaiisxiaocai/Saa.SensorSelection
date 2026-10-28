@@ -548,7 +548,7 @@ async function runCustomerCrud() {
   await check('客户通用要求: create a requirement', async () => {
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增要求', 'sheet title')
     await fillField(sheet(), '适用机型', 'ALL')
@@ -560,7 +560,7 @@ async function runCustomerCrud() {
   })
 
   await check('客户通用要求: a requirement without content is rejected', async () => {
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
     await expectToast('请检查标红的必填项')
@@ -579,7 +579,7 @@ async function runCustomerCrud() {
   })
 
   await check('客户通用要求: the search box filters rows', async () => {
-    const search = page.getByPlaceholder('搜索分类、机型、制程、内容、来源或备注')
+    const search = page.getByPlaceholder('搜索要求')
     await search.fill('绝对不存在的关键词')
     await settle()
     assertEqual(await tableRow(`${TAG} 要求内容 B`).count(), 0, 'row should be filtered out')
@@ -603,7 +603,7 @@ async function runCustomerCrud() {
   })
 
   await check('客户通用要求: cancelling a delete keeps the row', async () => {
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '要求内容', `${TAG} 保留项`)
     await saveSheet()
@@ -623,7 +623,7 @@ async function runCustomerCrud() {
   await check('制程注意事项: create, edit and delete a note', async () => {
     await page.getByRole('tab', { name: '制程注意事项' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增注意事项', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '制程作用', `${TAG} 制程作用`)
     await fillField(sheet(), '制程特性', `${TAG} 制程特性`)
@@ -647,7 +647,7 @@ async function runCustomerCrud() {
   await check('厂外反馈问题项: create, edit and delete a feedback item', async () => {
     await page.getByRole('tab', { name: '厂外反馈问题项' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增反馈', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '适用机型', 'ALL')
     await fillField(sheet(), '问题点', `${TAG} 问题点`)
@@ -681,7 +681,7 @@ async function runCustomerCrud() {
     assertEqual(selected.get('item'), NAMES.site, 'selected site before writing')
     await page.getByRole('tab', { name: '客户通用要求' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增要求', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '要求内容', `${TAG} 跟随改名`)
     await saveSheet()
@@ -741,7 +741,7 @@ async function runProcessCrud() {
   await check('工艺制程: create a step', async () => {
     await page.getByRole('tab', { name: '工艺制程' }).click()
     await settle()
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增工艺制程', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     assertEqual(await sheet().locator('.ant-modal-title').innerText(), '新增工艺制程', 'sheet title')
     // Re-picking the option that is already selected must still close the panel.
@@ -832,7 +832,7 @@ async function runSensorCrud() {
   })
 
   await check('Sensor: the search box filters the catalogue', async () => {
-    const search = page.getByPlaceholder('搜索类型、品牌、型号、料号、停用或问题点')
+    const search = page.getByPlaceholder('搜索型号')
     await search.fill(NAMES.sensorModel)
     await settle()
     await tableRow(NAMES.sensorModel).first().waitFor({ state: 'visible' })
@@ -880,7 +880,7 @@ async function runDictionaryCrud() {
   await navTo('数据字典')
 
   await check('Dictionary: create an entry', async () => {
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增字典项', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '字典项名称', NAMES.dictItem)
     await saveSheet()
@@ -889,7 +889,7 @@ async function runDictionaryCrud() {
   })
 
   await check('Dictionary: a duplicate entry is rejected', async () => {
-    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await page.getByRole('button', { name: '新增字典项', exact: true }).click()
     await sheet().waitFor({ state: 'visible' })
     await fillField(sheet(), '字典项名称', NAMES.dictItem)
     await sheet().getByRole('button', { name: '保存', exact: true }).click()
@@ -1293,7 +1293,7 @@ async function runReadOnlyGuest() {
 
   await check('A signed-out visitor can still read business data but sees no write controls', async () => {
     await page.locator('.entity-tree').waitFor({ state: 'visible', timeout: 10000 })
-    for (const label of ['新建厂区', '新建客户', '新增']) {
+    for (const label of ['新建厂区', '新建客户', '新增要求']) {
       assertEqual(
         await page.getByRole('button', { name: label, exact: true }).count(),
         0,

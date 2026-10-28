@@ -136,20 +136,22 @@ const { pagination, onChange: onPageChange } = useTablePagination(
   <section class="selection-page">
     <div class="selection-toolbar role-toolbar">
       <h1 class="visually-hidden">角色管理</h1>
-      <a-button
-        v-if="writable"
-        type="primary"
-        @click="formDialog?.openCreate()"
-      >
-        新增角色
-      </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-button
+          v-if="writable"
+          type="primary"
+          @click="formDialog?.openCreate()"
+        >
+          新增角色
+        </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"

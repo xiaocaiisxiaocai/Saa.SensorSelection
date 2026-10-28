@@ -665,7 +665,7 @@ describe('MachinePage', () => {
     ).toBe(true);
     await flushPromises();
 
-    const search = inputBy(panel, '搜索规格、型号或 Sensor名称');
+    const search = inputBy(panel, '搜索选型');
     expect(search).toBeDefined();
 
     search!.vm.$emit('update:value', 'Sensor名称-匹配');

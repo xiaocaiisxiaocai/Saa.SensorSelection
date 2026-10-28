@@ -295,11 +295,7 @@ const customRow = computed(() =>
           v-model:value="query"
           class="selection-toolbar__filter"
           :aria-label="isStructure ? '搜索结构内容' : '搜索机型注意事项'"
-          :placeholder="
-            isStructure
-              ? '搜索规格、型号或 Sensor名称'
-              : '搜索注意分类、事项名称、说明或备注'
-          "
+          :placeholder="isStructure ? '搜索选型' : '搜索注意事项'"
           allow-clear
         >
           <template #prefix><Search :size="14" /></template>
@@ -313,22 +309,24 @@ const customRow = computed(() =>
           <template #icon><RotateCcw :size="14" /></template>
           重置
         </a-button>
-        <AdminColumnSettingsMenu
-          :can-manage="canManageColumns"
-          :columns="columnOptions"
-          :hidden="hiddenColumns"
-          :on-set-visible="setColumnVisible"
-          :on-show-all="showAllColumns"
-        />
-        <a-button
-          v-if="writable"
-          type="primary"
-          :aria-label="isStructure ? '新增选型' : '新增事项'"
-          @click="rowDialog?.open()"
-        >
-          <Plus :size="14" :stroke-width="1.5" />
-          {{ isStructure ? '新增选型' : '新增事项' }}
-        </a-button>
+        <div class="selection-toolbar__actions">
+          <AdminColumnSettingsMenu
+            :can-manage="canManageColumns"
+            :columns="columnOptions"
+            :hidden="hiddenColumns"
+            :on-set-visible="setColumnVisible"
+            :on-show-all="showAllColumns"
+          />
+          <a-button
+            v-if="writable"
+            type="primary"
+            :aria-label="isStructure ? '新增选型' : '新增事项'"
+            @click="rowDialog?.open()"
+          >
+            <Plus :size="14" :stroke-width="1.5" />
+            {{ isStructure ? '新增选型' : '新增事项' }}
+          </a-button>
+        </div>
       </div>
       <a-table
         :columns="columns"

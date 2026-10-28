@@ -56,7 +56,13 @@ function openPassword() {
   passwordOpen.value = true;
 }
 
+function closePassword() {
+  if (saving.value) return;
+  passwordOpen.value = false;
+}
+
 async function savePassword() {
+  if (saving.value) return;
   validationAttempted.value = true;
   if (!form.currentPassword || !form.newPassword) {
     message.warning('请输入当前密码和新密码');
@@ -139,8 +145,11 @@ async function onMenuClick({ key: id }: { key: string | number }) {
     :open="passwordOpen"
     title="修改密码"
     :width="420"
+    :mask-closable="!saving"
+    :keyboard="!saving"
+    :closable="!saving"
     destroy-on-close
-    @cancel="passwordOpen = false"
+    @cancel="closePassword"
   >
     <a-form layout="vertical">
       <a-form-item
@@ -212,7 +221,7 @@ async function onMenuClick({ key: id }: { key: string | number }) {
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="passwordOpen = false">取消</a-button>
+      <a-button :disabled="saving" @click="closePassword">取消</a-button>
       <a-button type="primary" :loading="saving" @click="savePassword">
         保存
       </a-button>

@@ -74,7 +74,7 @@ describe('DictionaryPage', () => {
     );
     const both = mount(DictionaryPage, { global: { plugins: [pinia] } });
     expect(both.find('button[aria-label="导入 Excel"]').exists()).toBe(true);
-    expect(both.text()).toContain('新增');
+    expect(both.text()).toContain('新增字典项');
     both.unmount();
   });
 

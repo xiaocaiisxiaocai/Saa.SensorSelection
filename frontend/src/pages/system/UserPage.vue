@@ -179,7 +179,7 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
-        placeholder="搜索用户名、显示名、角色或组织"
+        placeholder="搜索用户"
         aria-label="搜索用户"
         allow-clear
       >
@@ -194,20 +194,22 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <a-button
-        v-if="writable"
-        type="primary"
-        @click="formDialog?.openCreate()"
-      >
-        新增用户
-      </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-button
+          v-if="writable"
+          type="primary"
+          @click="formDialog?.openCreate()"
+        >
+          新增用户
+        </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"

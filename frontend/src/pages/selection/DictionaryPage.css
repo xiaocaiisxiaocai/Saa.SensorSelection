@@ -7,12 +7,13 @@
   justify-content: space-between;
 }
 
-/* 字典类型多，窄屏放不下时横向滚动，不能被卡片裁掉 */
+/* 字典类型多，窄屏放不下时横向滚动，不能被卡片裁掉。操作始终靠右。 */
 .dictionary-header__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
+  margin-left: auto;
 }
 
 .dictionary-header :deep(.ant-segmented) {

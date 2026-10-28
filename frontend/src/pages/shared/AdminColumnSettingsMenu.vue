@@ -14,27 +14,40 @@ const props = defineProps<{
 }>();
 
 const open = ref(false);
+const pending = ref(0);
+const saving = computed(() => pending.value > 0);
 const visibleCount = computed(
   () => props.columns.filter((column) => !props.hidden.has(column.key)).length,
 );
 const hiddenCount = computed(
   () => props.columns.filter((column) => props.hidden.has(column.key)).length,
 );
+const summary = computed(() =>
+  hiddenCount.value ? `已隐藏 ${hiddenCount.value} 列` : '全部列已显示',
+);
+const statusText = computed(() =>
+  saving.value
+    ? '保存中…'
+    : `已显示 ${visibleCount.value} / ${props.columns.length} 列`,
+);
 
-async function setVisible(key: string, visible: boolean) {
+async function run(task: () => Promise<void>) {
+  pending.value += 1;
   try {
-    await props.onSetVisible(key, visible);
+    await task();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '保存列设置失败');
+  } finally {
+    pending.value -= 1;
   }
 }
 
-async function showAll() {
-  try {
-    await props.onShowAll();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '保存列设置失败');
-  }
+function setVisible(key: string, visible: boolean) {
+  void run(() => props.onSetVisible(key, visible));
+}
+
+function showAll() {
+  void run(() => props.onShowAll());
 }
 </script>
 
@@ -46,31 +59,49 @@ async function showAll() {
     placement="bottomRight"
     title="显示的列"
   >
-    <a-button aria-label="管理员设置显示列">
-      <template #icon><Columns3 :size="14" /></template>
-      显示列
-      <a-badge
-        v-if="hiddenCount"
-        class="table-column-settings-count"
-        :count="hiddenCount"
-        size="small"
-      />
-    </a-button>
+    <a-tooltip :title="summary">
+      <a-button aria-label="管理员设置显示列">
+        <template #icon><Columns3 :size="14" /></template>
+        显示列
+        <a-badge
+          v-if="hiddenCount"
+          class="table-column-settings-count"
+          :count="hiddenCount"
+          size="small"
+        />
+      </a-button>
+    </a-tooltip>
     <template #content>
-      <a-space direction="vertical" role="group" aria-label="显示的列">
-        <a-checkbox
-          v-for="column in columns"
-          :key="column.key"
-          :checked="!hidden.has(column.key)"
-          :disabled="!hidden.has(column.key) && visibleCount <= 1"
-          @change="setVisible(column.key, $event.target.checked)"
+      <div class="table-column-settings">
+        <p class="table-column-settings__status" aria-live="polite">
+          {{ statusText }}
+        </p>
+        <div
+          class="table-column-settings__list"
+          role="group"
+          aria-label="显示的列"
         >
-          {{ column.label }}
-        </a-checkbox>
-        <a-button type="link" size="small" @click="showAll">
+          <a-checkbox
+            v-for="column in columns"
+            :key="column.key"
+            :checked="!hidden.has(column.key)"
+            :disabled="!hidden.has(column.key) && visibleCount <= 1"
+            @change="setVisible(column.key, $event.target.checked)"
+          >
+            {{ column.label }}
+          </a-checkbox>
+        </div>
+        <a-button
+          type="link"
+          size="small"
+          :disabled="saving || hiddenCount === 0"
+          @click="showAll"
+        >
           全部显示
         </a-button>
-      </a-space>
+      </div>
     </template>
   </a-popover>
 </template>
+
+<style scoped src="./AdminColumnSettingsMenu.css"></style>

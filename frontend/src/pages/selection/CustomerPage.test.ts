@@ -234,7 +234,7 @@ describe('CustomerPage', () => {
     const wrapper = await mountPage(true);
     const expected = [
       ['客户通用要求', '要求内容'],
-      ['制程注意事项', '新增'],
+      ['制程注意事项', '新增注意事项'],
       ['感应器选用标准', '点击或将文件拖到此处上传'],
       ['厂外反馈问题项', '问题点'],
     ] as const;
@@ -455,11 +455,11 @@ describe('CustomerPage', () => {
     const wrapper = await mountPage(true);
     const search = wrapper
       .findAll('input')
-      .find((input) => input.attributes('placeholder')?.startsWith('搜索分类'));
+      .find((input) => input.attributes('placeholder') === '搜索要求');
     expect(search).toBeDefined();
     await search!.setValue('庆鼎筛选');
 
-    const addButton = findButton(wrapper, '新增');
+    const addButton = findButton(wrapper, '新增要求');
     expect(addButton).toBeDefined();
     await addButton!.trigger('click');
     await flushPromises();
@@ -470,7 +470,7 @@ describe('CustomerPage', () => {
 
     const nextSearch = wrapper
       .findAll('input')
-      .find((input) => input.attributes('placeholder')?.startsWith('搜索分类'));
+      .find((input) => input.attributes('placeholder') === '搜索要求');
     expect(nextSearch?.element.value).toBe('');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     wrapper.unmount();

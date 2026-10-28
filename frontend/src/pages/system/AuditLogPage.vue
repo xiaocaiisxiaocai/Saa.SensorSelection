@@ -339,7 +339,7 @@ async function resetFilters() {
       <a-input
         v-model:value="filters.keyword"
         class="selection-toolbar__filter"
-        placeholder="搜索用户、对象或改动内容"
+        placeholder="搜索操作日志"
         aria-label="搜索操作日志"
         allow-clear
       >
@@ -354,13 +354,15 @@ async function resetFilters() {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+      </div>
     </div>
     <a-table
       :columns="columns"
@@ -369,7 +371,9 @@ async function resetFilters() {
       :loading="loading"
       :pagination="false"
       :scroll="{ x: scrollX(columns) }"
-      :locale="{ emptyText: '暂无日志' }"
+      :locale="{
+        emptyText: hasActiveFilters ? '没有匹配的日志' : '暂无日志',
+      }"
       :custom-row="rowClick(openDetail)"
       :row-expandable="rowExpandable"
       @resize-column="onResizeColumn"

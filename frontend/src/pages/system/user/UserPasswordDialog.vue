@@ -19,6 +19,11 @@ function open(user: RbacUser) {
   visible.value = true;
 }
 
+function cancel() {
+  if (saving.value) return;
+  visible.value = false;
+}
+
 async function save() {
   if (!userId.value || saving.value) return;
   validationAttempted.value = true;
@@ -46,8 +51,11 @@ defineExpose({ open });
     :open="visible"
     title="重置密码"
     :width="420"
+    :mask-closable="!saving"
+    :keyboard="!saving"
+    :closable="!saving"
     destroy-on-close
-    @cancel="visible = false"
+    @cancel="cancel"
   >
     <a-form layout="vertical">
       <a-form-item
@@ -72,7 +80,7 @@ defineExpose({ open });
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="visible = false">取消</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
       <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>

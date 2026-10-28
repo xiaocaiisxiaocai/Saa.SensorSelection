@@ -56,8 +56,7 @@ function searchInput(wrapper: VueWrapper) {
     .findAllComponents({ name: 'AInput' })
     .find(
       (input) =>
-        input.props('placeholder') ===
-        '搜索类型、品牌、型号、料号、停用或问题点',
+        input.props('placeholder') === '搜索型号',
     )!;
 }
 

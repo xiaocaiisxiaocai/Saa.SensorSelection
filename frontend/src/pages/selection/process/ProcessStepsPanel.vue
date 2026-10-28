@@ -161,8 +161,8 @@ async function deleteItem(item: ProcessStepItem) {
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
-        placeholder="搜索制程、工艺、作用、特性或备注"
-        aria-label="搜索制程"
+        placeholder="搜索工艺制程"
+        aria-label="搜索工艺制程"
         allow-clear
       >
         <template #prefix><Search :size="14" /></template>
@@ -176,16 +176,18 @@ async function deleteItem(item: ProcessStepItem) {
         <template #icon><RotateCcw :size="14" /></template>
         重置
       </a-button>
-      <AdminColumnSettingsMenu
-        :can-manage="canManageColumns"
-        :columns="columnOptions"
-        :hidden="hiddenColumns"
-        :on-set-visible="setColumnVisible"
-        :on-show-all="showAllColumns"
-      />
-      <a-button v-if="writable" type="primary" @click="stepDialog?.open()">
-        新增
-      </a-button>
+      <div class="selection-toolbar__actions">
+        <AdminColumnSettingsMenu
+          :can-manage="canManageColumns"
+          :columns="columnOptions"
+          :hidden="hiddenColumns"
+          :on-set-visible="setColumnVisible"
+          :on-show-all="showAllColumns"
+        />
+        <a-button v-if="writable" type="primary" @click="stepDialog?.open()">
+          新增工艺制程
+        </a-button>
+      </div>
     </div>
     <a-table
       :columns="columns"

@@ -74,6 +74,7 @@ function editedRoleIds(): number[] {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
@@ -128,6 +129,9 @@ defineExpose({ openCreate, openEdit });
     :open="visible"
     :title="editingId ? '编辑用户' : '新增用户'"
     :width="520"
+    :mask-closable="!saving"
+    :keyboard="!saving"
+    :closable="!saving"
     destroy-on-close
     @cancel="cancel"
   >
@@ -237,7 +241,7 @@ defineExpose({ openCreate, openEdit });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
       <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>

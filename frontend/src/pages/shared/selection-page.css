@@ -109,6 +109,11 @@
   margin-left: auto;
 }
 
+/* 停用按钮不接收指针，包一层重置按钮才能在不可用时显示原因 */
+.selection-toolbar__reset {
+  display: inline-flex;
+}
+
 .selection-toolbar__count {
   margin-right: auto;
   color: var(--color-text-secondary);

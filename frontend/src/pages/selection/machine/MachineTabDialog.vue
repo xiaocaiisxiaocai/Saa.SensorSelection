@@ -90,7 +90,7 @@ defineExpose({ openAdd, openEdit, close });
 <template>
   <a-modal
     :open="visible"
-    :title="editId ? '编辑 Tab' : '新增 Tab'"
+    :title="editId ? '编辑 Tab' : '新建 Tab'"
     :width="420"
     destroy-on-close
     @cancel="cancel"

@@ -5,7 +5,7 @@ import type { MachineTab, MachineTabPage } from '@/domain';
 
 /**
  * 选中选单节点在当前一级 Tab 下的二级 Tab：直接在这里新建，每页有自己的
- * 选型表和示意图（在下方渲染）。可写时右侧有「新建」，每页的「…」菜单提供
+ * 选型表和示意图（在下方渲染）。可写时右侧有「新建二级 Tab」，每页的「…」菜单提供
  * 改名、左移、右移、删除。
  */
 const props = defineProps<{
@@ -100,17 +100,15 @@ function menuFor(index: number) {
         </template>
       </a-tab-pane>
       <template v-if="writable" #rightExtra>
-        <a-tooltip title="新建二级 Tab">
-          <a-button
-            type="text"
-            size="small"
-            aria-label="新建二级 Tab"
-            @click="emit('add')"
-          >
-            <template #icon><Plus :size="14" /></template>
-            新建
-          </a-button>
-        </a-tooltip>
+        <a-button
+          type="text"
+          size="small"
+          aria-label="新建二级 Tab"
+          @click="emit('add')"
+        >
+          <template #icon><Plus :size="14" /></template>
+          新建二级 Tab
+        </a-button>
       </template>
     </a-tabs>
     <a-empty v-else class="machine-tab-pages__empty">

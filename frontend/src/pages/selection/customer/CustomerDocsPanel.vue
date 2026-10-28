@@ -105,7 +105,7 @@ const { listPagination } = useTablePagination(
 
 <template>
   <div class="selection-panel">
-    <div class="selection-toolbar">
+    <div v-if="files.length > 0" class="selection-toolbar">
       <a-input
         v-model:value="query"
         class="selection-toolbar__filter"
@@ -190,16 +190,15 @@ const { listPagination } = useTablePagination(
         </a-list-item>
       </template>
     </a-list>
+    <!--
+      可写用户看到的上传区本身就是空状态。空状态只留给：搜不到匹配，
+      或只读用户（没有上传区）。
+    -->
     <a-empty
-      v-else
-      :description="
-        query.trim()
-          ? '暂无感应器选用标准文件：没有匹配的文件'
-          : writable
-            ? '暂无感应器选用标准文件，拖入文件或点击上方区域上传'
-            : '暂无感应器选用标准文件'
-      "
+      v-else-if="query.trim()"
+      description="没有匹配的感应器选用标准文件，换个关键词或清空搜索框查看全部文件"
     />
+    <a-empty v-else-if="!writable" description="暂无感应器选用标准文件" />
     <a-modal
       :open="Boolean(preview)"
       :title="'预览 PDF'"

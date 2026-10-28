@@ -430,15 +430,23 @@ function openReplace(row: SensorTableRow) {
       >
         <template #prefix><Search :size="14" /></template>
       </a-input>
-      <a-button
-        type="text"
-        :disabled="!hasActiveFilters"
-        aria-label="重置筛选"
-        @click="resetFilters"
+      <a-tooltip
+        :title="
+          hasActiveFilters ? '清除搜索和表头筛选' : '当前没有可清除的筛选'
+        "
       >
-        <template #icon><RotateCcw :size="14" /></template>
-        重置
-      </a-button>
+        <span class="selection-toolbar__reset">
+          <a-button
+            type="text"
+            :disabled="!hasActiveFilters"
+            aria-label="重置筛选"
+            @click="resetFilters"
+          >
+            <template #icon><RotateCcw :size="14" /></template>
+            重置
+          </a-button>
+        </span>
+      </a-tooltip>
       <div class="selection-toolbar__actions">
         <AdminColumnSettingsMenu
           :can-manage="canManageColumns"
@@ -534,23 +542,21 @@ function openReplace(row: SensorTableRow) {
           <template v-else>—</template>
         </template>
         <template v-else-if="column.key === 'sop'">
-          <a-tooltip v-if="row.parent.sopId" :title="lookup.sopTitle(row.parent.sopId)">
-            <a-button
-              class="sensor-file-link sensor-file-link--compact"
-              type="link"
-              size="small"
-              :aria-label="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
-              @click="openLinked('型录', row.parent.sopId)"
-            >
-              <template #icon><Eye :size="14" /></template>
-              <span class="sensor-file-link__label">
-                <AHighlightText
-                  :text="lookup.sopTitle(row.parent.sopId)"
-                  :query="query"
-                />
-              </span>
-            </a-button>
-          </a-tooltip>
+          <a-button
+            v-if="row.parent.sopId"
+            class="sensor-file-link"
+            type="link"
+            size="small"
+            :title="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
+            :aria-label="`预览型录：${lookup.sopTitle(row.parent.sopId)}`"
+            @click="openLinked('型录', row.parent.sopId)"
+          >
+            <template #icon><Eye :size="14" /></template>
+            <AHighlightText
+              :text="lookup.sopTitle(row.parent.sopId)"
+              :query="query"
+            />
+          </a-button>
           <span v-else>未关联</span>
         </template>
         <template v-else-if="column.key === 'model3d'">

@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import type { TimelineItem } from '@/domain';
 import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
 import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
+import { useTablePagination } from '@/pages/shared/table';
 
 /** 一条客户反馈的改善对策历史（只读）；置空即关闭 */
 const item = defineModel<TimelineItem | undefined>({ required: true });
@@ -38,6 +39,10 @@ const rows = computed(() =>
     .sort((left, right) => right.date.localeCompare(left.date, 'zh-CN'))
     .map((entry, index) => ({ ...entry, rowKey: index })),
 );
+const { pagination, onChange: onPageChange } = useTablePagination(
+  () => rows.value.length,
+  [() => shown.value?.id],
+);
 </script>
 
 <template>
@@ -71,10 +76,11 @@ const rows = computed(() =>
         :columns="columns"
         :data-source="rows"
         row-key="rowKey"
-        :pagination="false"
+        :pagination="pagination"
         size="small"
         :locale="{ emptyText: '暂无改善对策历史' }"
         @resize-column="onResizeColumn"
+        @change="onPageChange"
       >
         <template #bodyCell="{ column, record: entry }">
           <a-typography-text

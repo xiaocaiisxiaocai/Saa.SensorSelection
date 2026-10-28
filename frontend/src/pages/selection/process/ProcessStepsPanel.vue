@@ -167,15 +167,23 @@ async function deleteItem(item: ProcessStepItem) {
       >
         <template #prefix><Search :size="14" /></template>
       </a-input>
-      <a-button
-        type="text"
-        :disabled="!hasActiveFilters"
-        aria-label="重置筛选"
-        @click="resetFilters"
+      <a-tooltip
+        :title="
+          hasActiveFilters ? '清除搜索和表头筛选' : '当前没有可清除的筛选'
+        "
       >
-        <template #icon><RotateCcw :size="14" /></template>
-        重置
-      </a-button>
+        <span class="selection-toolbar__reset">
+          <a-button
+            type="text"
+            :disabled="!hasActiveFilters"
+            aria-label="重置筛选"
+            @click="resetFilters"
+          >
+            <template #icon><RotateCcw :size="14" /></template>
+            重置
+          </a-button>
+        </span>
+      </a-tooltip>
       <div class="selection-toolbar__actions">
         <AdminColumnSettingsMenu
           :can-manage="canManageColumns"

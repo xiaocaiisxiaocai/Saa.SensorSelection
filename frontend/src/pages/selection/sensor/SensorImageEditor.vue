@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { message } from 'ant-design-vue';
 import { Eye, ImagePlus, X } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 import {
   MACHINE_ROW_IMAGE_RULES,
@@ -27,6 +27,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:images': [images: MachineRowImage[]];
+  uploading: [value: boolean];
 }>();
 
 const SIZE_MESSAGE = '图片大小不能超过 2 MB';
@@ -35,6 +36,7 @@ const LIMIT_MESSAGE = `最多 ${SENSOR_IMAGE_LIMIT} 张图片`;
 const RULE_HINT = `JPG、PNG 或 WebP，单张不超过 2 MB，最多 ${SENSOR_IMAGE_LIMIT} 张`;
 
 const { uploading, runUpload } = useUploadLock();
+watch(uploading, (value) => emit('uploading', value));
 const atLimit = computed(() => props.images.length >= SENSOR_IMAGE_LIMIT);
 const thumb = computed(() => (props.compact ? 48 : 72));
 const addTitle = computed(() => {

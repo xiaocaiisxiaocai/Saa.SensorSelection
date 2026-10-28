@@ -21,6 +21,7 @@ import SensorImageEditor from './SensorImageEditor.vue';
 const store = useSelectionStore();
 
 const visible = ref(false);
+const imageUploading = ref(false);
 const editId = ref<number>();
 const editing = ref<SensorItem>();
 const validationAttempted = ref(false);
@@ -81,6 +82,7 @@ const model3dOptions = computed(() =>
 /** 不传 item 为新增 */
 function open(item?: SensorItem) {
   validationAttempted.value = false;
+  imageUploading.value = false;
   editing.value = item;
   editId.value = item?.id;
   Object.assign(
@@ -122,12 +124,14 @@ function open(item?: SensorItem) {
 }
 
 async function cancel() {
+  if (imageUploading.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
 function save() {
+  if (imageUploading.value) return;
   validationAttempted.value = true;
   const result = store.saveSensor(
     {
@@ -164,6 +168,9 @@ defineExpose({ open });
     :open="visible"
     :title="editId ? '编辑 Sensor 型号' : '新增 Sensor 型号'"
     :width="680"
+    :mask-closable="!imageUploading"
+    :keyboard="!imageUploading"
+    :closable="!imageUploading"
     destroy-on-close
     @cancel="cancel"
   >
@@ -360,14 +367,17 @@ defineExpose({ open });
               :images="form.images"
               writable
               @update:images="(images) => (form.images = images)"
+              @uploading="imageUploading = $event"
             />
           </a-form-item>
         </a-col>
       </a-row>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="imageUploading" @click="cancel">取消</a-button>
+      <a-button type="primary" :disabled="imageUploading" @click="save">
+        保存
+      </a-button>
     </template>
   </a-modal>
 </template>

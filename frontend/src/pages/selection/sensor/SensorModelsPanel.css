@@ -102,29 +102,14 @@
 /* 文件名和替换关系完整折行。antd 的 link 按钮默认 nowrap、固定高度，窄列会溢到下一列。 */
 .sensor-file-link.ant-btn,
 .sensor-relation-link.ant-btn {
+  display: inline-flex;
+  align-items: flex-start;
   height: auto;
   max-width: 100%;
   padding-inline: 0;
   overflow-wrap: anywhere;
   white-space: normal;
   text-align: start;
-}
-
-.sensor-file-link--compact.ant-btn {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  justify-content: flex-start;
-  white-space: nowrap;
-}
-
-.sensor-file-link__label {
-  flex: 1 1 auto;
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 分组成员行的格子已是小号字。关系链接跟着格子的字号，颜色仍用链接色。 */

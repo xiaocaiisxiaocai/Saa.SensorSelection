@@ -199,6 +199,7 @@ function open(row?: MachineSectionRow) {
 }
 
 async function cancel() {
+  if (uploading.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
@@ -242,6 +243,9 @@ defineExpose({ open });
     :open="visible"
     :title="`${editId ? '编辑' : '新增'}${structure ? '选型' : '事项'}`"
     :width="structure ? 640 : 480"
+    :mask-closable="!uploading"
+    :keyboard="!uploading"
+    :closable="!uploading"
     destroy-on-close
     @cancel="cancel"
   >
@@ -440,7 +444,7 @@ defineExpose({ open });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
+      <a-button :disabled="uploading" @click="cancel">取消</a-button>
       <a-button type="primary" :disabled="uploading" @click="save">
         保存
       </a-button>

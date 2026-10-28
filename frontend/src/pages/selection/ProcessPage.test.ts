@@ -130,7 +130,7 @@ describe('ProcessPage', () => {
     expect(findColumn(wrapper, '制程').column.filterSearch).toBeUndefined();
     await chooseColumnFilter(wrapper, '制程', [layerOptions[0]!.value]);
     const search = () =>
-      wrapper.get<HTMLInputElement>('input[aria-label="搜索制程"]');
+      wrapper.get<HTMLInputElement>('input[aria-label="搜索工艺制程"]');
     await search().setValue('不存在的工艺');
     await nextTick();
 

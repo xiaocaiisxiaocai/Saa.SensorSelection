@@ -11,7 +11,7 @@ import {
  */
 export function entityLabels(kind: EntityKind) {
   return kind === 'customer'
-    ? { group: '客户', item: '厂区', search: '客户、厂区或区域' }
+    ? { group: '客户', item: '厂区', search: '客户或厂区' }
     : { group: '分类', item: '机型', search: '分类或机型' };
 }
 

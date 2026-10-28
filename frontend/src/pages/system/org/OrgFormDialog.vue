@@ -69,14 +69,7 @@ async function cancel() {
 async function save() {
   if (saving.value) return;
   validationAttempted.value = true;
-  if (!form.name.trim()) {
-    message.warning('请输入组织名称');
-    return;
-  }
-  if (!level.value) {
-    message.warning(ORG_PARENT_LEVEL_MISSING_MESSAGE);
-    return;
-  }
+  if (!form.name.trim() || !level.value) return;
   saving.value = true;
   try {
     if (!editingNode.value) {

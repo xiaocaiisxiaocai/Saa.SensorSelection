@@ -120,18 +120,22 @@ async function remove(index: number) {
             <!-- 默认遮罩是「眼睛 + 预览」，小图放不下会挤成省略号；只留居中的眼睛 -->
             <template #previewMask><Eye :size="16" /></template>
           </a-image>
-          <a-tooltip v-if="writable" title="删除图片">
-            <a-button
-              class="sensor-images__remove"
-              type="text"
-              size="small"
-              danger
-              :aria-label="`删除图片 ${image.fileName}`"
-              :disabled="uploading"
-              @click="remove(index)"
-            >
-              <template #icon><X :size="12" /></template>
-            </a-button>
+          <a-tooltip
+            v-if="writable"
+            :title="uploading ? UPLOADING_TITLE : '删除图片'"
+          >
+            <span class="tooltip-host sensor-images__remove">
+              <a-button
+                type="text"
+                size="small"
+                danger
+                :aria-label="`删除图片 ${image.fileName}`"
+                :disabled="uploading"
+                @click="remove(index)"
+              >
+                <template #icon><X :size="12" /></template>
+              </a-button>
+            </span>
           </a-tooltip>
         </div>
       </div>

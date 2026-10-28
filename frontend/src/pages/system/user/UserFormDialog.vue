@@ -16,6 +16,8 @@ const emit = defineEmits<{ saved: [] }>();
 
 const visible = ref(false);
 const editingId = ref<number>();
+/** 这名用户是仅存的启用系统管理员，不能停用，也不能改掉管理员角色 */
+const protectAdmin = ref(false);
 const saving = ref(false);
 // 编辑前用户已绑定的角色。表单只支持选一个角色；多角色用户不重新选择时
 // 保存要原样保留这些角色，不能提交空数组把角色全部清掉。
@@ -40,15 +42,17 @@ const roleOptions = computed(() =>
 const hasMultipleOriginalRoles = computed(
   () => editingId.value !== undefined && originalRoles.value.length > 1,
 );
-const roleHint = computed(() =>
-  hasMultipleOriginalRoles.value
+const roleHint = computed(() => {
+  if (protectAdmin.value) return '至少保留一个启用的系统管理员';
+  return hasMultipleOriginalRoles.value
     ? `当前绑定多个角色（${originalRoles.value.map((role) => role.name).join('、')}）；不选择则保存时保留原角色，选择后改为该单一角色。`
-    : undefined,
-);
+    : undefined;
+});
 const orgNodes = computed(() => toTreeSelectNodes([...props.orgUnits]));
 
-function show(user: RbacUser | undefined) {
+function show(user: RbacUser | undefined, lockAdmin = false) {
   validationAttempted.value = false;
+  protectAdmin.value = lockAdmin;
   editingId.value = user?.id;
   originalRoles.value = user ? [...user.roles] : [];
   Object.assign(form, {
@@ -64,7 +68,7 @@ function show(user: RbacUser | undefined) {
 }
 
 const openCreate = () => show(undefined);
-const openEdit = (user: RbacUser) => show(user);
+const openEdit = (user: RbacUser, lockAdmin = false) => show(user, lockAdmin);
 
 function editedRoleIds(): number[] {
   if (form.roleId !== null) return [Number(form.roleId)];
@@ -90,6 +94,13 @@ async function save() {
   }
   if (editingId.value === undefined && form.password.length < 4) {
     return;
+  }
+  if (protectAdmin.value) {
+    form.isActive = true;
+    const adminRoleId = props.roles.find((role) => role.code === 'admin')?.id;
+    if (adminRoleId !== undefined && form.roleId !== adminRoleId) {
+      form.roleId = hasMultipleOriginalRoles.value ? null : adminRoleId;
+    }
   }
   saving.value = true;
   try {
@@ -150,15 +161,19 @@ defineExpose({ openCreate, openEdit });
               )
             "
           >
-            <a-input
-              id="user-username"
-              v-model:value="form.username"
-              :maxlength="64"
-              placeholder="登录账号"
-              :disabled="Boolean(editingId)"
-              allow-clear
-              show-count
-            />
+            <a-tooltip :title="editingId ? '用户名创建后不能修改' : undefined">
+              <span class="tooltip-host">
+                <a-input
+                  id="user-username"
+                  v-model:value="form.username"
+                  :maxlength="64"
+                  placeholder="登录账号"
+                  :disabled="Boolean(editingId)"
+                  allow-clear
+                  show-count
+                />
+              </span>
+            </a-tooltip>
           </a-form-item>
         </a-col>
         <a-col v-if="!editingId" :span="12">
@@ -212,6 +227,7 @@ defineExpose({ openCreate, openEdit });
               id="user-role-id"
               v-model:value="form.roleId"
               :options="roleOptions"
+              :disabled="protectAdmin"
               :placeholder="
                 hasMultipleOriginalRoles ? '保留原有角色' : '请选择一个角色'
               "
@@ -235,7 +251,17 @@ defineExpose({ openCreate, openEdit });
         </a-col>
         <a-col :span="12">
           <a-form-item html-for="user-is-active" label="启用">
-            <a-switch id="user-is-active" v-model:checked="form.isActive" />
+            <a-tooltip
+              :title="protectAdmin ? '至少保留一个启用的系统管理员' : undefined"
+            >
+              <span class="tooltip-host">
+                <a-switch
+                  id="user-is-active"
+                  v-model:checked="form.isActive"
+                  :disabled="protectAdmin"
+                />
+              </span>
+            </a-tooltip>
           </a-form-item>
         </a-col>
       </a-row>

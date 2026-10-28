@@ -646,13 +646,23 @@ async function removeTab(tabId: number): Promise<boolean> {
             </a-breadcrumb-item>
           </a-breadcrumb>
           <a-space v-if="canCompare" :size="8" class="machine-compare-actions">
-            <a-button
-              :disabled="compareCandidates.length === 0"
-              @click="openComparePicker"
+            <a-tooltip
+              :title="
+                compareCandidates.length === 0
+                  ? '没有其他可对比的机型'
+                  : '选择另一个机型对比'
+              "
             >
-              <template #icon><Columns2 :size="14" /></template>
-              选择对比项
-            </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  :disabled="compareCandidates.length === 0"
+                  @click="openComparePicker"
+                >
+                  <template #icon><Columns2 :size="14" /></template>
+                  选择对比项
+                </a-button>
+              </span>
+            </a-tooltip>
             <a-button v-if="comparison" @click="comparison = null">
               退出对比
             </a-button>

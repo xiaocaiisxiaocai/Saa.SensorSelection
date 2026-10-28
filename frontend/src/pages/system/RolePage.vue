@@ -114,7 +114,7 @@ function activateRole(role: RbacRole) {
 async function removeRole(role: RbacRole) {
   const ok = await confirmDelete(
     '删除角色',
-    `确定删除角色“${role.name}（${role.code}）”？`,
+    `确定删除角色“${role.name}（${role.code}）”？此操作不可恢复。`,
   );
   if (!ok) return;
   try {
@@ -185,27 +185,31 @@ const { pagination, onChange: onPageChange } = useTablePagination(
         <template v-else-if="column.key === 'actions'">
           <a-space :size="4">
             <a-tooltip :title="protectedReason(row) ?? '编辑'">
-              <a-button
-                type="text"
-                size="small"
-                aria-label="编辑"
-                :disabled="isProtected(row)"
-                @click="openEdit(row)"
-              >
-                <template #icon><Pencil :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  aria-label="编辑"
+                  :disabled="isProtected(row)"
+                  @click="openEdit(row)"
+                >
+                  <template #icon><Pencil :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
             <a-tooltip :title="deleteBlockedReason(row) ?? '删除'">
-              <a-button
-                type="text"
-                size="small"
-                danger
-                aria-label="删除"
-                :disabled="Boolean(deleteBlockedReason(row))"
-                @click="removeRole(row)"
-              >
-                <template #icon><Trash2 :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除"
+                  :disabled="Boolean(deleteBlockedReason(row))"
+                  @click="removeRole(row)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
           </a-space>
         </template>

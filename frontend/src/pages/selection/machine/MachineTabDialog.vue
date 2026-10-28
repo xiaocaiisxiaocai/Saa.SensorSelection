@@ -69,7 +69,7 @@ function save() {
     editId.value,
   );
   if (
-    notifyResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新增', {
+    notifyResult(result, editId.value ? 'Tab 已更新' : 'Tab 已新建', {
       duplicate: '该 Tab 名称已存在',
       'not-empty': '该 Tab 下的二级 Tab 已有内容，不能修改类型',
       stale: '该 Tab 已被删除，请刷新后重试',

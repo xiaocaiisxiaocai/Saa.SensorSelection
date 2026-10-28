@@ -122,7 +122,7 @@ async function removeConfiguration(payload: {
 }) {
   const ok = await confirmDelete(
     '删除配置',
-    `确认删除“${payload.configuration}”吗？请先清空其下全部机型。`,
+    `确认删除“${payload.configuration}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
   notifyResult(
@@ -135,7 +135,7 @@ async function removeConfiguration(payload: {
 async function removeGroup(name: string) {
   const ok = await confirmDelete(
     `删除${groupLabel.value}`,
-    `确认删除“${name}”吗？请先清空其下全部${itemLabel.value}。`,
+    `确认删除“${name}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
   notifyResult(
@@ -158,7 +158,7 @@ async function removeItem(payload: {
 }) {
   const ok = await confirmDelete(
     `删除${itemLabel.value}`,
-    `确认删除“${payload.item}”吗？请先清空其下业务数据。`,
+    `确认删除“${payload.item}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
   notifyResult(

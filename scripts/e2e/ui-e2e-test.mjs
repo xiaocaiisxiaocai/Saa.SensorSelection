@@ -949,7 +949,7 @@ async function runMachineCrud() {
     await fillField(sheet(), 'Tab 名称', name)
     await pickSelect(sheet(), 'Tab 类型', kind)
     await saveSheet()
-    await expectToast('Tab 已新增')
+    await expectToast('Tab 已新建')
   }
 
   await check('Machine: create shared structure and notes tabs', async () => {
@@ -1125,7 +1125,8 @@ async function runSystemCrud() {
   await check('User: reset the password', async () => {
     await rowAction(NAMES.user, '重置密码')
     await sheet().waitFor({ state: 'visible' })
-    assertEqual(await sheet().locator('.ant-modal-title').innerText(), '重置密码', 'sheet title')
+    const passwordTitle = await sheet().locator('.ant-modal-title').innerText()
+    assert(passwordTitle.includes(NAMES.user) && passwordTitle.startsWith('重置 '), `sheet title ${passwordTitle}`)
     await fillField(sheet(), '新密码', 'newpass1')
     await saveSheet()
     await settle()

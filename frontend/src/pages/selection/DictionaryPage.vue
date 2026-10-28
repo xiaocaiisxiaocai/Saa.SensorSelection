@@ -4,7 +4,7 @@ import {
   type TableColumnType,
   type TablePaginationConfig,
 } from 'ant-design-vue';
-import { Download, Pencil, Trash2, Upload } from 'lucide-vue-next';
+import { Download, Pencil, RotateCcw, Trash2, Upload } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 
 import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
@@ -171,8 +171,30 @@ function saveItem() {
   }
 }
 
+function regionUsers(name: string): string[] {
+  const sites: string[] = [];
+  for (const group of store.entityGroups('customer')) {
+    for (const [site, region] of Object.entries(group.regions ?? {})) {
+      if (region === name) sites.push(`${group.name}/${site}`);
+    }
+  }
+  return sites;
+}
+
+function deleteReason(item: DictionaryItem): string | undefined {
+  if (items.value.length <= 1) return '至少保留一个字典项';
+  if (activeCode.value !== 'customer-region') return undefined;
+  const sites = regionUsers(item.name);
+  if (sites.length === 0) return undefined;
+  const listed =
+    sites.length > 5
+      ? `${sites.slice(0, 5).join('、')} 等 ${sites.length} 个厂区`
+      : sites.join('、');
+  return `「${item.name}」还有厂区在用：${listed}，请先改掉这些厂区的区域`;
+}
+
 async function deleteItem(item: DictionaryItem) {
-  if (!activeCode.value) return;
+  if (!activeCode.value || deleteReason(item)) return;
   const ok = await confirmDelete(
     '删除字典项',
     `确认删除“${item.name}”吗？已使用该字典项的数据会按业务规则清理或改归。`,
@@ -286,6 +308,23 @@ function onTableChange(
     <div class="dictionary-header">
       <a-segmented v-model:value="activeCode" :options="tabs" />
       <div class="dictionary-header__actions">
+        <a-tooltip
+          :title="
+            nameFilters.length ? '清除表头筛选' : '当前没有可清除的筛选'
+          "
+        >
+          <span class="tooltip-host">
+            <a-button
+              type="text"
+              :disabled="nameFilters.length === 0"
+              aria-label="重置筛选"
+              @click="nameFilters = []"
+            >
+              <template #icon><RotateCcw :size="14" /></template>
+              重置
+            </a-button>
+          </span>
+        </a-tooltip>
         <AdminColumnSettingsMenu
           :can-manage="canManageColumns"
           :columns="columnOptions"
@@ -328,7 +367,9 @@ function onTableChange(
         :custom-row="customRow"
         :scroll="{ x: 'max-content' }"
         :locale="{
-          emptyText: nameFilters.length ? '没有匹配的字典项' : '暂无字典项',
+          emptyText: nameFilters.length
+            ? '没有匹配的字典项，请清除表头筛选'
+            : '暂无字典项',
         }"
         @resize-column="onResizeColumn"
         @change="onTableChange"
@@ -345,16 +386,23 @@ function onTableChange(
                 <template #icon><Pencil :size="14" /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip title="删除字典项">
-              <a-button
-                type="text"
-                size="small"
-                danger
-                aria-label="删除字典项"
-                @click="deleteItem(record as DictionaryItem)"
-              >
-                <template #icon><Trash2 :size="14" /></template>
-              </a-button>
+            <a-tooltip
+              :title="
+                deleteReason(record as DictionaryItem) ?? '删除字典项'
+              "
+            >
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除字典项"
+                  :disabled="Boolean(deleteReason(record as DictionaryItem))"
+                  @click="deleteItem(record as DictionaryItem)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
           </a-space>
         </template>

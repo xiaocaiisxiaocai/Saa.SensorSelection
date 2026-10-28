@@ -116,15 +116,19 @@ defineExpose({ openCreate, openEdit });
             required
             v-bind="fieldError(codeError())"
           >
-            <a-input
-              id="role-code"
-              v-model:value="form.code"
-              :maxlength="64"
-              placeholder="如：sensor_admin"
-              :disabled="Boolean(editing)"
-              allow-clear
-              show-count
-            />
+            <a-tooltip :title="editing ? '角色标识创建后不能修改' : undefined">
+              <span class="tooltip-host">
+                <a-input
+                  id="role-code"
+                  v-model:value="form.code"
+                  :maxlength="64"
+                  placeholder="如：sensor_admin"
+                  :disabled="Boolean(editing)"
+                  allow-clear
+                  show-count
+                />
+              </span>
+            </a-tooltip>
           </a-form-item>
         </a-col>
         <a-col :span="12">

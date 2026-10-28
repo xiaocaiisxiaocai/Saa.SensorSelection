@@ -177,15 +177,17 @@ async function remove(item: SensorSopItem) {
               v-if="canDownload"
               :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
             >
-              <a-button
-                type="text"
-                size="small"
-                aria-label="下载"
-                :disabled="!fileIdFromReference(item.dataUrl)"
-                @click="downloadStoredFile(item.dataUrl, item.fileName)"
-              >
-                <template #icon><Download :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  aria-label="下载"
+                  :disabled="!fileIdFromReference(item.dataUrl)"
+                  @click="downloadStoredFile(item.dataUrl, item.fileName)"
+                >
+                  <template #icon><Download :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
             <a-tooltip v-if="writable" title="删除">
               <a-button

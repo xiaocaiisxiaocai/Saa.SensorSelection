@@ -10,6 +10,7 @@ import CustomerFeedbackPanel from '@/pages/selection/customer/CustomerFeedbackPa
 import CustomerProcPanel from '@/pages/selection/customer/CustomerProcPanel.vue';
 import CustomerReqPanel from '@/pages/selection/customer/CustomerReqPanel.vue';
 import { TAB_COUNT_STYLE } from '@/pages/shared/tabs';
+import { useAccess } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
 import '../shared/selection-page.css';
@@ -38,6 +39,8 @@ watch(customerTab, (tab) => {
 });
 
 const groups = computed(() => store.entityGroups('customer'));
+const { canWrite } = useAccess();
+const writable = computed(() => canWrite('selection:write'));
 
 // 用户想选中的叶子。点击/改名后立刻更新，不等路由导航落地：
 // 改名会先触发下面的纠正 watcher，若它读的还是旧 URL，就会以为选中项没了、
@@ -71,6 +74,16 @@ const selection = computed(() => {
 const entityName = computed(() =>
   entityDataName('customer', selection.value.category, selection.value.item),
 );
+const emptyDescription = computed(() => {
+  if (groups.value.length === 0) {
+    return writable.value
+      ? '暂无客户，请在左侧新建客户和厂区'
+      : '暂无客户';
+  }
+  return writable.value
+    ? '还没有厂区，请在左侧为客户新建厂区'
+    : '还没有厂区';
+});
 const selectedKey = computed(() =>
   selection.value.item
     ? entityTreeItemKey({
@@ -186,7 +199,7 @@ function selectEntity(payload: { category: string; item: string }) {
           </a-tab-pane>
         </a-tabs>
       </div>
-      <a-empty v-else description="暂无客户，请在左侧新建客户和厂区" />
+      <a-empty v-else :description="emptyDescription" />
     </div>
   </section>
 </template>

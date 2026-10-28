@@ -231,7 +231,7 @@
 .file-list__meta {
   color: var(--color-text-secondary);
   font: var(--font-sm);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 /* 文件列表：从别处跳转来定位的文件高亮一下 */

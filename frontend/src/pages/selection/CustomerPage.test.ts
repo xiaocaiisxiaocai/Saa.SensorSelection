@@ -185,8 +185,8 @@ describe('CustomerPage', () => {
     ).toBe('华东');
 
     // 目录搜索能按区域找到厂区
-    const search = wrapper.get('input[aria-label="搜索客户、厂区或区域"]');
-    expect(search.attributes('placeholder')).toBe('搜索客户、厂区或区域…');
+    const search = wrapper.get('input[aria-label="搜索客户或厂区"]');
+    expect(search.attributes('placeholder')).toBe('搜索客户或厂区…');
     await search.setValue('华南');
     await flushPromises();
     expect(

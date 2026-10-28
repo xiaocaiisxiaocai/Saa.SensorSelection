@@ -38,6 +38,13 @@
   justify-content: center;
 }
 
+/* 停用控件不接收指针，包一层 tooltip 才能在不可用时说明原因 */
+.tooltip-host {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
 /* 上传拖拽区的 Lucide 图标：与 antd 的 InboxOutlined 一样居中、取主色 */
 .ant-upload-drag-icon > svg {
   margin: 0 auto;

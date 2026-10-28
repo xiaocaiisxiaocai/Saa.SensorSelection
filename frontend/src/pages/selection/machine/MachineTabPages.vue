@@ -33,10 +33,15 @@ const emit = defineEmits<{
 function menuFor(index: number) {
   return [
     { key: 'rename', label: '改名' },
-    { key: 'left', label: '左移', disabled: index === 0 },
+    {
+      key: 'left',
+      label: index === 0 ? '左移（已在最左）' : '左移',
+      disabled: index === 0,
+    },
     {
       key: 'right',
-      label: '右移',
+      label:
+        index === props.pages.length - 1 ? '右移（已在最右）' : '右移',
       disabled: index === props.pages.length - 1,
     },
     { key: 'delete', label: '删除', danger: true },
@@ -69,15 +74,17 @@ function menuFor(index: number) {
             />
             <span class="machine-sub-tab__name">{{ page.name }}</span>
             <a-dropdown v-if="writable" :trigger="['click']">
-              <a-button
-                class="machine-sub-tab__more"
-                type="text"
-                size="small"
-                :aria-label="`二级 Tab ${page.name} 的更多操作`"
-                @click.stop
-              >
-                <template #icon><Ellipsis :size="14" /></template>
-              </a-button>
+              <a-tooltip title="更多操作">
+                <a-button
+                  class="machine-sub-tab__more"
+                  type="text"
+                  size="small"
+                  :aria-label="`二级 Tab ${page.name} 的更多操作`"
+                  @click.stop
+                >
+                  <template #icon><Ellipsis :size="14" /></template>
+                </a-button>
+              </a-tooltip>
               <template #overlay>
                 <a-menu
                   @click="

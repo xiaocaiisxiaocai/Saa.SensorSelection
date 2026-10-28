@@ -115,7 +115,9 @@ async function generate() {
       <template #overlay>
         <a-menu @click="onMenuClick">
           <a-menu-item key="select-all">全选</a-menu-item>
-          <a-menu-item key="clear" :disabled="noneSelected">清空</a-menu-item>
+          <a-menu-item key="clear" :disabled="noneSelected">
+            清空{{ noneSelected ? NONE_SELECTED_SUFFIX : '' }}
+          </a-menu-item>
           <a-menu-divider />
           <a-menu-item key="generate" :disabled="noneSelected || generating">
             生成并下载报告{{ noneSelected ? NONE_SELECTED_SUFFIX : '' }}

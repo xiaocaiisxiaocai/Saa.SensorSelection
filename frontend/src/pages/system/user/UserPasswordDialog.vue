@@ -8,6 +8,7 @@ import { fieldError } from '@/pages/shared/form';
 /** 管理员给用户重置密码；父组件调用 open(user) 打开 */
 const visible = ref(false);
 const userId = ref<number>();
+const accountLabel = ref('');
 const saving = ref(false);
 const validationAttempted = ref(false);
 const newPassword = ref('');
@@ -15,6 +16,10 @@ const newPassword = ref('');
 function open(user: RbacUser) {
   validationAttempted.value = false;
   userId.value = user.id;
+  accountLabel.value =
+    user.displayName && user.displayName !== user.username
+      ? `${user.displayName}（${user.username}）`
+      : user.username;
   newPassword.value = '';
   visible.value = true;
 }
@@ -27,10 +32,7 @@ function cancel() {
 async function save() {
   if (!userId.value || saving.value) return;
   validationAttempted.value = true;
-  if (newPassword.value.length < 4) {
-    message.warning('新密码至少 4 位');
-    return;
-  }
+  if (newPassword.value.length < 4) return;
   saving.value = true;
   try {
     await api.resetUserPassword(userId.value, newPassword.value);
@@ -49,7 +51,7 @@ defineExpose({ open });
 <template>
   <a-modal
     :open="visible"
-    title="重置密码"
+    :title="accountLabel ? `重置 ${accountLabel} 的密码` : '重置密码'"
     :width="420"
     :mask-closable="!saving"
     :keyboard="!saving"

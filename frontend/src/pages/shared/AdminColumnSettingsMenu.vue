@@ -81,24 +81,46 @@ function showAll() {
           role="group"
           aria-label="显示的列"
         >
-          <a-checkbox
+          <a-tooltip
             v-for="column in columns"
             :key="column.key"
-            :checked="!hidden.has(column.key)"
-            :disabled="!hidden.has(column.key) && visibleCount <= 1"
-            @change="setVisible(column.key, $event.target.checked)"
+            :title="
+              saving
+                ? '保存中…'
+                : !hidden.has(column.key) && visibleCount <= 1
+                  ? '至少保留一列'
+                  : undefined
+            "
           >
-            {{ column.label }}
-          </a-checkbox>
+            <span class="tooltip-host">
+              <a-checkbox
+                :checked="!hidden.has(column.key)"
+                :disabled="
+                  saving || (!hidden.has(column.key) && visibleCount <= 1)
+                "
+                @change="setVisible(column.key, $event.target.checked)"
+              >
+                {{ column.label }}
+              </a-checkbox>
+            </span>
+          </a-tooltip>
         </div>
-        <a-button
-          type="link"
-          size="small"
-          :disabled="saving || hiddenCount === 0"
-          @click="showAll"
+        <a-tooltip
+          :title="
+            saving ? '保存中…' : hiddenCount === 0 ? '已全部显示' : undefined
+          "
         >
-          全部显示
-        </a-button>
+          <span class="tooltip-host">
+            <a-button
+              type="link"
+              size="small"
+              :disabled="saving || hiddenCount === 0"
+              @click="showAll"
+            >
+              全部显示
+            </a-button>
+          </span>
+        </a-tooltip>
       </div>
     </template>
   </a-popover>

@@ -59,6 +59,9 @@
   position: absolute;
   top: 0;
   right: 0;
+}
+
+.sensor-images__remove :deep(.ant-btn) {
   background: var(--color-bg-container);
 }
 

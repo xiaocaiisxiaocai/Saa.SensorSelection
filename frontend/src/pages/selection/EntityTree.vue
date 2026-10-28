@@ -116,6 +116,13 @@ function withCheckable(
 const searchText = computed(
   () => props.searchLabel ?? `${props.groupLabel}或${props.itemLabel}`,
 );
+const canCreateChild = computed(() => props.groups.length > 0);
+const createChildTitle = computed(() => {
+  if (canCreateChild.value) {
+    return props.allowConfigurations ? '新建配置' : `新建${props.itemLabel}`;
+  }
+  return `请先新建${props.groupLabel}`;
+});
 
 const treeData = computed(() => {
   const nodes = buildEntityTree(
@@ -403,25 +410,31 @@ function runAction(node: EntityNode, key: string) {
             </a-button>
           </a-tooltip>
           <!-- 机型结构目录：标题栏只建分类和配置，机型从配置的「更多」菜单里建 -->
-          <a-tooltip v-if="allowConfigurations" title="新建配置">
-            <a-button
-              type="text"
-              size="small"
-              aria-label="新建配置"
-              @click="createConfigurationFromHeader"
-            >
-              <template #icon><Plus :size="14" /></template>
-            </a-button>
+          <a-tooltip v-if="allowConfigurations" :title="createChildTitle">
+            <span class="tooltip-host">
+              <a-button
+                type="text"
+                size="small"
+                aria-label="新建配置"
+                :disabled="!canCreateChild"
+                @click="createConfigurationFromHeader"
+              >
+                <template #icon><Plus :size="14" /></template>
+              </a-button>
+            </span>
           </a-tooltip>
-          <a-tooltip v-else :title="`新建${itemLabel}`">
-            <a-button
-              type="text"
-              size="small"
-              :aria-label="`新建${itemLabel}`"
-              @click="emit('createItem')"
-            >
-              <template #icon><Plus :size="14" /></template>
-            </a-button>
+          <a-tooltip v-else :title="createChildTitle">
+            <span class="tooltip-host">
+              <a-button
+                type="text"
+                size="small"
+                :aria-label="`新建${itemLabel}`"
+                :disabled="!canCreateChild"
+                @click="emit('createItem')"
+              >
+                <template #icon><Plus :size="14" /></template>
+              </a-button>
+            </span>
           </a-tooltip>
         </template>
       </a-space>
@@ -474,7 +487,11 @@ function runAction(node: EntityNode, key: string) {
       </a-tree>
       <a-empty
         v-else
-        :description="query.trim() ? '没有匹配的结果' : `暂无${groupLabel}`"
+        :description="
+          query.trim()
+            ? '没有匹配的结果，换个关键词或清空搜索框'
+            : `暂无${groupLabel}`
+        "
       />
     </div>
   </a-card>

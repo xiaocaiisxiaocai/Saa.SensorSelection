@@ -631,16 +631,18 @@ function openReplace(row: SensorTableRow) {
             </a-tooltip>
             <span v-else class="sensor-actions__slot" aria-hidden="true" />
             <a-tooltip :title="deleteBlockedReason(row.item) ?? '删除'">
-              <a-button
-                type="text"
-                size="small"
-                danger
-                aria-label="删除"
-                :disabled="Boolean(deleteBlockedReason(row.item))"
-                @click="deleteItem(row.item)"
-              >
-                <template #icon><Trash2 :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除"
+                  :disabled="Boolean(deleteBlockedReason(row.item))"
+                  @click="deleteItem(row.item)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
           </div>
         </template>

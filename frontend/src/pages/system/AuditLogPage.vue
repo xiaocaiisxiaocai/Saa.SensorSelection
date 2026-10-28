@@ -467,6 +467,13 @@ async function resetFilters() {
       <!-- 一次操作含多条记录时展开看每一条 -->
       <template #expandedRowRender="{ record: row }">
         <ol class="audit-entries">
+          <li
+            v-if="row.entryCount > row.entries.length"
+            class="audit-text--muted"
+          >
+            共 {{ row.entryCount }} 条，这里只显示前
+            {{ row.entries.length }} 条
+          </li>
           <li v-for="entry in row.entries" :key="entry.id">
             <span class="audit-entries__name">
               <AHighlightText

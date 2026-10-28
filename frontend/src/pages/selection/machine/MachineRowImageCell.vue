@@ -134,33 +134,42 @@ async function remove() {
             </a-button>
           </a-tooltip>
         </a-upload>
-        <a-tooltip title="删除示意图">
-          <a-button
-            type="text"
-            size="small"
-            danger
-            :aria-label="`删除 ${label} 的示意图`"
-            @click="remove"
-          >
-            <template #icon><Trash2 :size="14" /></template>
-          </a-button>
+        <a-tooltip :title="uploading ? UPLOADING_TITLE : '删除示意图'">
+          <span class="tooltip-host">
+            <a-button
+              type="text"
+              size="small"
+              danger
+              :disabled="uploading"
+              :aria-label="`删除 ${label} 的示意图`"
+              @click="remove"
+            >
+              <template #icon><Trash2 :size="14" /></template>
+            </a-button>
+          </span>
         </a-tooltip>
       </a-space>
     </template>
     <template v-else-if="writable">
       <a-tooltip
         v-if="previousRow?.image"
-        :title="`和上一笔「${previousRow.role}」共用「${previousRow.image.fileName}」，合并成一格`"
+        :title="
+          uploading
+            ? UPLOADING_TITLE
+            : `和上一笔「${previousRow.role}」共用「${previousRow.image.fileName}」，合并成一格`
+        "
       >
-        <a-button
-          size="small"
-          :disabled="uploading"
-          :aria-label="`${label} 沿用上一笔的图`"
-          @click="reusePrevious"
-        >
-          <template #icon><CopyPlus :size="14" /></template>
-          沿用上一笔的图
-        </a-button>
+        <span class="tooltip-host">
+          <a-button
+            size="small"
+            :disabled="uploading"
+            :aria-label="`${label} 沿用上一笔的图`"
+            @click="reusePrevious"
+          >
+            <template #icon><CopyPlus :size="14" /></template>
+            沿用上一笔的图
+          </a-button>
+        </span>
       </a-tooltip>
       <a-upload
         :accept="MACHINE_ROW_IMAGE_RULES.accept"

@@ -28,6 +28,10 @@ const connecting = computed(
 const backendUnavailable = computed(
   () => selection.backendStatus === 'offline',
 );
+const reconnecting = computed(
+  () =>
+    selection.backendStatus === 'connecting' && selection.hasConnected,
+);
 let compactMedia: MediaQueryList | null = null;
 
 function updateCompactViewport(matches: boolean) {
@@ -185,6 +189,14 @@ watch(
           </a-button>
         </template>
       </a-alert>
+      <a-alert
+        v-else-if="reconnecting"
+        class="app-shell__banner"
+        type="info"
+        show-icon
+        banner
+        message="正在重新连接…"
+      />
 
       <a-layout-content
         id="main-content"

@@ -64,20 +64,12 @@ function closePassword() {
 async function savePassword() {
   if (saving.value) return;
   validationAttempted.value = true;
-  if (!form.currentPassword || !form.newPassword) {
-    message.warning('请输入当前密码和新密码');
-    return;
-  }
-  if (form.newPassword.length < 4) {
-    message.warning('新密码至少 4 位');
-    return;
-  }
-  if (form.newPassword !== form.confirmPassword) {
-    message.warning('两次输入的新密码不一致');
-    return;
-  }
-  if (form.newPassword === form.currentPassword) {
-    message.warning('新密码不能与当前密码相同');
+  if (
+    !form.currentPassword ||
+    form.newPassword.length < 4 ||
+    form.newPassword !== form.confirmPassword ||
+    form.newPassword === form.currentPassword
+  ) {
     return;
   }
   saving.value = true;

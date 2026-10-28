@@ -71,15 +71,17 @@ function onContextMenuClick({ key }: { key: string | number }) {
         {{ node.count }}
       </a-typography-text>
       <a-dropdown v-if="editable" :trigger="['click']">
-        <a-button
-          class="entity-tree__more"
-          type="text"
-          size="small"
-          :aria-label="`${node.title} 的更多操作`"
-          @click.stop
-        >
-          <template #icon><Ellipsis :size="14" /></template>
-        </a-button>
+        <a-tooltip title="更多操作">
+          <a-button
+            class="entity-tree__more"
+            type="text"
+            size="small"
+            :aria-label="`${node.title} 的更多操作`"
+            @click.stop
+          >
+            <template #icon><Ellipsis :size="14" /></template>
+          </a-button>
+        </a-tooltip>
         <template #overlay>
           <a-menu
             @click="

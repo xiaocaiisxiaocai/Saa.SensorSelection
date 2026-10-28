@@ -2,7 +2,7 @@
 import type { TableColumnType } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { api, ApiError, type OrgUnitNode } from '@/api';
 import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
@@ -10,9 +10,9 @@ import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { confirmDelete } from '@/pages/shared/save-feedback';
 import {
   cellText,
+  PAGINATION_PROPS,
   rowClick,
   scrollX,
-  useTablePagination,
 } from '@/pages/shared/table';
 import OrgFormDialog from '@/pages/system/org/OrgFormDialog.vue';
 import {
@@ -44,6 +44,28 @@ const tableRows = computed(() =>
     }),
   ),
 );
+// 按顶级节点整棵分页，子节点不和上级拆到两页
+function packOrgPages<T extends { depth: number }>(
+  rows: readonly T[],
+  pageSize: number,
+): T[][] {
+  const groups: T[][] = [];
+  for (const row of rows) {
+    if (row.depth === 0 || groups.length === 0) groups.push([row]);
+    else groups[groups.length - 1]?.push(row);
+  }
+  const pages: T[][] = [];
+  let current: T[] = [];
+  for (const group of groups) {
+    if (current.length > 0 && current.length + group.length > pageSize) {
+      pages.push(current);
+      current = [];
+    }
+    current.push(...group);
+  }
+  if (current.length > 0) pages.push(current);
+  return pages.length > 0 ? pages : [[]];
+}
 const baseColumns = computed<TableColumnType[]>(() => {
   const cols: TableColumnType[] = [
     {
@@ -113,7 +135,10 @@ function activateOrg(node: OrgUnitNode) {
 }
 
 async function removeOrg(node: OrgUnitNode) {
-  const ok = await confirmDelete('删除组织', `确定删除组织“${node.name}”？`);
+  const ok = await confirmDelete(
+    '删除组织',
+    `确定删除组织“${node.name}”？此操作不可恢复。`,
+  );
   if (!ok) return;
   try {
     await api.deleteOrgUnit(node.id);
@@ -124,10 +149,27 @@ async function removeOrg(node: OrgUnitNode) {
   }
 }
 
-// 分页条始终显示
-const { pagination, onChange: onPageChange } = useTablePagination(
-  () => tableRows.value.length,
+// 分页条始终显示。页码按打包后的页数走，条数仍是全部节点。
+const page = ref(1);
+const pageSize = ref(20);
+const packedRows = computed(() =>
+  packOrgPages(tableRows.value, pageSize.value),
 );
+watch(packedRows, (pages) => {
+  if (page.value > pages.length) page.value = Math.max(1, pages.length);
+});
+const visibleRows = computed(
+  () => packedRows.value[page.value - 1] ?? [],
+);
+
+function onOrgPageChange(current: number, size: number) {
+  if (size !== pageSize.value) {
+    pageSize.value = size;
+    page.value = 1;
+    return;
+  }
+  page.value = current;
+}
 </script>
 
 <template>
@@ -153,19 +195,18 @@ const { pagination, onChange: onPageChange } = useTablePagination(
     </div>
     <a-table
       :columns="columns"
-      :data-source="tableRows"
+      :data-source="visibleRows"
       :row-class-name="
         (row: OrgUnitNode) =>
           row.id === selectedId ? 'ant-table-row-selected' : ''
       "
       row-key="id"
       :loading="loading"
-      :pagination="pagination"
+      :pagination="false"
       :scroll="{ x: scrollX(columns) }"
       :locale="{ emptyText: '暂无组织' }"
       :custom-row="rowClick(activateOrg)"
       @resize-column="onResizeColumn"
-      @change="onPageChange"
     >
       <template #bodyCell="{ column, record: row, text: value }">
         <template v-if="column.key === 'name'">
@@ -184,15 +225,17 @@ const { pagination, onChange: onPageChange } = useTablePagination(
                 canHaveOrgChildren(row.level) ? '新建子节点' : ORG_LEAF_MESSAGE
               "
             >
-              <a-button
-                type="text"
-                size="small"
-                aria-label="新建子节点"
-                :disabled="!canHaveOrgChildren(row.level)"
-                @click.stop="formDialog?.openCreate(row.id)"
-              >
-                <template #icon><Plus :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  aria-label="新建子节点"
+                  :disabled="!canHaveOrgChildren(row.level)"
+                  @click.stop="formDialog?.openCreate(row.id)"
+                >
+                  <template #icon><Plus :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
             <a-tooltip title="编辑">
               <a-button
@@ -205,22 +248,32 @@ const { pagination, onChange: onPageChange } = useTablePagination(
               </a-button>
             </a-tooltip>
             <a-tooltip :title="orgDeleteBlockedReason(row) ?? '删除'">
-              <a-button
-                type="text"
-                size="small"
-                danger
-                aria-label="删除"
-                :disabled="Boolean(orgDeleteBlockedReason(row))"
-                @click.stop="removeOrg(row)"
-              >
-                <template #icon><Trash2 :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除"
+                  :disabled="Boolean(orgDeleteBlockedReason(row))"
+                  @click.stop="removeOrg(row)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
           </a-space>
         </template>
         <template v-else>{{ cellText(value) }}</template>
       </template>
     </a-table>
+    <a-pagination
+      v-bind="PAGINATION_PROPS"
+      :current="page"
+      :page-size="pageSize"
+      :total="Math.max(pageSize, packedRows.length * pageSize)"
+      :show-total="() => `共 ${tableRows.length} 条`"
+      @change="onOrgPageChange"
+    />
     <OrgFormDialog ref="formDialog" :nodes="nodes" @saved="loadData" />
   </section>
 </template>

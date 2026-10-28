@@ -62,7 +62,13 @@ function reset() {
         </a-input>
       </a-form-item>
       <div class="machine-global-search-filters__actions">
-        <a-button :disabled="!hasCriteria" @click="reset">重置</a-button>
+        <a-tooltip
+          :title="hasCriteria ? '清除搜索条件' : '当前没有可清除的筛选'"
+        >
+          <span class="tooltip-host">
+            <a-button :disabled="!hasCriteria" @click="reset">重置</a-button>
+          </span>
+        </a-tooltip>
       </div>
     </a-form>
   </a-card>

@@ -52,14 +52,24 @@ const tabs = computed(() => [
   { label: 'Sensor', value: 'sensor', count: resultCounts.value.sensor },
 ]);
 
+const emptyDescription = computed(() => {
+  const type = activeType.value;
+  if (
+    type !== 'all' &&
+    allResults.value.length > 0 &&
+    results.value.length === 0
+  ) {
+    return `「${typeLabel[type as SearchItem['type']]}」里没有匹配的结果，可切换到其他类型或换个关键词`;
+  }
+  return '没有匹配的结果，换个关键词试试。可搜索客户及其要求 / 注意事项 / 反馈、制程、机型和 Sensor 型号';
+});
 // 和其它页面一样用 antd 的空状态插图
-const emptyLocale = {
+const emptyLocale = computed(() => ({
   emptyText: h(Empty, {
     image: Empty.PRESENTED_IMAGE_SIMPLE,
-    description:
-      '没有匹配的结果，换个关键词试试。可搜索客户及其要求 / 注意事项 / 反馈、制程、机型和 Sensor 型号',
+    description: emptyDescription.value,
   }),
-};
+}));
 
 /** 结果的第二行：分类 + 去掉重复分类后的细节 */
 function searchLine(item: SearchItem): string {

@@ -102,7 +102,7 @@ async function loadData() {
 }
 
 function openEdit(user: RbacUser) {
-  formDialog.value?.openEdit(user);
+  formDialog.value?.openEdit(user, isLastActiveAdmin(user));
 }
 
 function isSelf(user: RbacUser) {
@@ -185,11 +185,13 @@ const { pagination, onChange: onPageChange } = useTablePagination(
       >
         <template #prefix><Search :size="14" /></template>
       </a-input>
-      <a-tooltip :title="query ? '清除搜索' : '当前没有可清除的筛选'">
+      <a-tooltip
+        :title="query.trim() ? '清除搜索' : '当前没有可清除的筛选'"
+      >
         <span class="selection-toolbar__reset">
           <a-button
             type="text"
-            :disabled="!query"
+            :disabled="!query.trim()"
             aria-label="重置筛选"
             @click="query = ''"
           >
@@ -271,16 +273,18 @@ const { pagination, onChange: onPageChange } = useTablePagination(
               </a-button>
             </a-tooltip>
             <a-tooltip :title="deleteBlockedReason(row) ?? '删除'">
-              <a-button
-                type="text"
-                size="small"
-                danger
-                aria-label="删除"
-                :disabled="Boolean(deleteBlockedReason(row))"
-                @click="removeUser(row)"
-              >
-                <template #icon><Trash2 :size="14" /></template>
-              </a-button>
+              <span class="tooltip-host">
+                <a-button
+                  type="text"
+                  size="small"
+                  danger
+                  aria-label="删除"
+                  :disabled="Boolean(deleteBlockedReason(row))"
+                  @click="removeUser(row)"
+                >
+                  <template #icon><Trash2 :size="14" /></template>
+                </a-button>
+              </span>
             </a-tooltip>
           </a-space>
         </template>

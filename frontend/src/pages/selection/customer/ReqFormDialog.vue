@@ -12,6 +12,7 @@ const props = defineProps<{ entityName: string }>();
 const store = useSelectionStore();
 
 const visible = ref(false);
+const saving = ref(false);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const form = reactive({
@@ -66,10 +67,12 @@ function open(item?: CustomerReqItem) {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) visible.value = false;
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const result = store.saveCrud(
     'customer-req',
@@ -77,12 +80,17 @@ function save() {
     { ...form },
     editId.value,
   );
-  if (
-    notifyResult(result, editId.value ? '要求已更新' : '要求已新增', {
-      stale: '该要求已被其他页面删除',
-    })
-  ) {
-    visible.value = false;
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, editId.value ? '要求已更新' : '要求已新增', {
+        stale: '该要求已被其他页面删除',
+      })
+    ) {
+      visible.value = false;
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -97,7 +105,7 @@ defineExpose({ open });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item
@@ -181,8 +189,8 @@ defineExpose({ open });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

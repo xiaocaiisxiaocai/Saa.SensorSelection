@@ -21,6 +21,7 @@ import SensorImageEditor from './SensorImageEditor.vue';
 const store = useSelectionStore();
 
 const visible = ref(false);
+const saving = ref(false);
 const imageUploading = ref(false);
 const editId = ref<number>();
 const editing = ref<SensorItem>();
@@ -124,14 +125,14 @@ function open(item?: SensorItem) {
 }
 
 async function cancel() {
-  if (imageUploading.value) return;
+  if (imageUploading.value || saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
-  if (imageUploading.value) return;
+async function save() {
+  if (imageUploading.value || saving.value) return;
   validationAttempted.value = true;
   const result = store.saveSensor(
     {
@@ -150,13 +151,18 @@ function save() {
     },
     editId.value,
   );
-  if (
-    notifyResult(result, editId.value ? '型号已更新' : '型号已新增', {
-      duplicate: '该型号已存在，请使用不同的型号名称',
-      stale: '该型号已被其他页面删除',
-    })
-  ) {
-    visible.value = false;
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, editId.value ? '型号已更新' : '型号已新增', {
+        duplicate: '该型号已存在，请使用不同的型号名称',
+        stale: '该型号已被其他页面删除',
+      })
+    ) {
+      visible.value = false;
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -168,9 +174,9 @@ defineExpose({ open });
     :open="visible"
     :title="editId ? '编辑 Sensor 型号' : '新增 Sensor 型号'"
     :width="680"
-    :mask-closable="!imageUploading"
-    :keyboard="!imageUploading"
-    :closable="!imageUploading"
+    :mask-closable="!imageUploading && !saving"
+    :keyboard="!imageUploading && !saving"
+    :closable="!imageUploading && !saving"
     destroy-on-close
     @cancel="cancel"
   >
@@ -179,7 +185,7 @@ defineExpose({ open });
       让 7 个短字段排满、不留半行空格。列数只允许 2 和 3 两种：再多一种，
       字段左边界会落到更多位置（曾实测 468/688/798/908 四条），看不出栅格。
     -->
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item
@@ -223,7 +229,7 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="8">
           <a-form-item html-for="sensor-brand" label="品牌">
@@ -272,7 +278,7 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item html-for="sensor-sop-id" label="关联型录">
@@ -298,7 +304,7 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
-    <a-form v-if="keepsDisabled" layout="vertical">
+    <a-form v-if="keepsDisabled" layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col v-if="keepsDisabled" :span="8">
           <a-form-item html-for="sensor-disabled-at" label="停用日期">
@@ -313,7 +319,7 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item html-for="sensor-spec" label="规格参数">
@@ -374,8 +380,15 @@ defineExpose({ open });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button :disabled="imageUploading" @click="cancel">取消</a-button>
-      <a-button type="primary" :disabled="imageUploading" @click="save">
+      <a-button :disabled="imageUploading || saving" @click="cancel">
+        取消
+      </a-button>
+      <a-button
+        type="primary"
+        :disabled="imageUploading"
+        :loading="saving"
+        @click="save"
+      >
         保存
       </a-button>
     </template>

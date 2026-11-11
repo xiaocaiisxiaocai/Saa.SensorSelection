@@ -5,6 +5,10 @@ export const XLSX_MIME_TYPE =
 
 const MAX_XLSX_BYTES = 20 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
+const MAX_TOTAL_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
+const MAX_WORKBOOK_CELLS = 500_000;
+const MAX_EXCEL_ROW_INDEX = 1_048_575;
+const MAX_EXCEL_COLUMN_INDEX = 16_383;
 
 export interface ExcelSheetInput {
   name: string;
@@ -101,15 +105,39 @@ export function downloadExcelFile(fileName: string, bytes: Uint8Array) {
   return { blob, bytes, fileName };
 }
 
-export async function readWorkbook(bytes: Uint8Array): Promise<ExcelSheetData[]> {
+export async function readWorkbook(
+  bytes: Uint8Array,
+): Promise<ExcelSheetData[]> {
   if (bytes.length === 0 || bytes.length > MAX_XLSX_BYTES) {
     throw new Error('无法读取该 Excel 文件');
   }
   const entries = readCentralDirectory(bytes);
+  const declaredBytes = entries.reduce(
+    (total, entry) => total + entry.uncompressedSize,
+    0,
+  );
+  if (
+    declaredBytes > MAX_TOTAL_UNCOMPRESSED_BYTES ||
+    entries.some((entry) => entry.uncompressedSize > MAX_UNCOMPRESSED_BYTES)
+  ) {
+    throw new Error('无法读取该 Excel 文件');
+  }
+  const inflateBudget = { remaining: MAX_TOTAL_UNCOMPRESSED_BYTES };
+  const cellBudget = { remaining: MAX_WORKBOOK_CELLS };
   const files = new Map<string, ZipCentralEntry>();
   for (const entry of entries) files.set(entry.name.toLowerCase(), entry);
-  const workbook = await readXmlEntry(bytes, files, 'xl/workbook.xml');
-  const rels = await readXmlEntry(bytes, files, 'xl/_rels/workbook.xml.rels');
+  const workbook = await readXmlEntry(
+    bytes,
+    files,
+    'xl/workbook.xml',
+    inflateBudget,
+  );
+  const rels = await readXmlEntry(
+    bytes,
+    files,
+    'xl/_rels/workbook.xml.rels',
+    inflateBudget,
+  );
   const targets = new Map<string, string>();
   for (const rel of childrenNamed(rels.documentElement, 'Relationship')) {
     const id = attribute(rel, 'Id');
@@ -119,7 +147,9 @@ export async function readWorkbook(bytes: Uint8Array): Promise<ExcelSheetData[]>
     targets.set(id, resolveWorksheet(target));
   }
   const shared = files.has('xl/sharedstrings.xml')
-    ? sharedStrings(await readXmlEntry(bytes, files, 'xl/sharedStrings.xml'))
+    ? sharedStrings(
+        await readXmlEntry(bytes, files, 'xl/sharedStrings.xml', inflateBudget),
+      )
     : [];
   const sheets: ExcelSheetData[] = [];
   for (const sheet of childrenNamed(workbook.documentElement, 'sheets').flatMap(
@@ -129,8 +159,11 @@ export async function readWorkbook(bytes: Uint8Array): Promise<ExcelSheetData[]>
     const id = attribute(sheet, 'id');
     const path = targets.get(id);
     if (!path) throw new Error('无法读取该 Excel 文件');
-    const xml = await readXmlEntry(bytes, files, path);
-    sheets.push({ sheetName: name, rows: sheetRows(xml, shared) });
+    const xml = await readXmlEntry(bytes, files, path, inflateBudget);
+    sheets.push({
+      sheetName: name,
+      rows: sheetRows(xml, shared, cellBudget),
+    });
   }
   return sheets;
 }
@@ -332,18 +365,28 @@ async function readXmlEntry(
   bytes: Uint8Array,
   files: Map<string, ZipCentralEntry>,
   name: string,
+  budget: { remaining: number },
 ) {
   const entry = files.get(name.toLowerCase());
   if (!entry) throw new Error('无法读取该 Excel 文件');
-  const xml = new TextDecoder().decode(await inflateEntry(bytes, entry));
+  const xml = new TextDecoder().decode(
+    await inflateEntry(bytes, entry, budget),
+  );
   return parseXml(xml);
 }
 
-async function inflateEntry(bytes: Uint8Array, entry: ZipCentralEntry) {
+async function inflateEntry(
+  bytes: Uint8Array,
+  entry: ZipCentralEntry,
+  budget: { remaining: number },
+) {
   if (entry.method !== 0 && entry.method !== 8) {
     throw new Error('无法读取该 Excel 文件');
   }
-  if (entry.uncompressedSize > MAX_UNCOMPRESSED_BYTES) {
+  if (
+    entry.uncompressedSize > MAX_UNCOMPRESSED_BYTES ||
+    entry.uncompressedSize > budget.remaining
+  ) {
     throw new Error('无法读取该 Excel 文件');
   }
   const local = entry.localOffset;
@@ -358,17 +401,37 @@ async function inflateEntry(bytes: Uint8Array, entry: ZipCentralEntry) {
   const dataEnd = dataStart + entry.compressedSize;
   if (dataEnd > bytes.length) throw new Error('无法读取该 Excel 文件');
   const compressed = bytes.subarray(dataStart, dataEnd);
-  if (entry.method === 0) return compressed;
+  if (entry.method === 0) {
+    if (compressed.length !== entry.uncompressedSize) {
+      throw new Error('无法读取该 Excel 文件');
+    }
+    budget.remaining -= compressed.length;
+    return compressed;
+  }
   if (typeof DecompressionStream !== 'function') {
     throw new Error('无法读取该 Excel 文件');
   }
   const stream = bytesBlob(compressed)
     .stream()
     .pipeThrough(new DecompressionStream('deflate-raw'));
-  const inflated = new Uint8Array(await new Response(stream).arrayBuffer());
-  if (inflated.length > MAX_UNCOMPRESSED_BYTES) {
+  const reader = stream.getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_UNCOMPRESSED_BYTES || total > budget.remaining) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error('无法读取该 Excel 文件');
+    }
+    parts.push(value);
+  }
+  if (total !== entry.uncompressedSize) {
     throw new Error('无法读取该 Excel 文件');
   }
+  budget.remaining -= total;
+  const inflated = concatBytes(parts);
   return inflated;
 }
 
@@ -421,7 +484,11 @@ function textsUnder(element: Element) {
   return text;
 }
 
-function sheetRows(document: Document, strings: string[]) {
+function sheetRows(
+  document: Document,
+  strings: string[],
+  budget: { remaining: number },
+) {
   const sheetData = childrenNamed(document.documentElement, 'sheetData')[0];
   if (!sheetData) return [];
   const grid = new Map<number, Map<number, string>>();
@@ -432,20 +499,30 @@ function sheetRows(document: Document, strings: string[]) {
     const declared = Number(row.getAttribute('r'));
     const rowIndex =
       Number.isInteger(declared) && declared > 0 ? declared - 1 : fallbackRow;
+    if (rowIndex > MAX_EXCEL_ROW_INDEX) {
+      throw new Error('无法读取该 Excel 文件');
+    }
     fallbackRow = rowIndex + 1;
     let nextColumn = 0;
     for (const cell of childrenNamed(row, 'c')) {
       const ref = cell.getAttribute('r') ?? '';
       const column = /^[A-Z]+/i.test(ref) ? columnIndex(ref) : nextColumn;
+      if (column < 0 || column > MAX_EXCEL_COLUMN_INDEX) {
+        throw new Error('无法读取该 Excel 文件');
+      }
       nextColumn = column + 1;
       const columns = grid.get(rowIndex) ?? new Map<number, string>();
       columns.set(column, cellValue(cell, strings));
       grid.set(rowIndex, columns);
       maxRow = Math.max(maxRow, rowIndex);
       maxColumn = Math.max(maxColumn, column);
+      if ((maxRow + 1) * (maxColumn + 1) > budget.remaining) {
+        throw new Error('无法读取该 Excel 文件');
+      }
     }
   }
   if (maxRow < 0) return [];
+  budget.remaining -= (maxRow + 1) * (maxColumn + 1);
   return Array.from({ length: maxRow + 1 }, (_, rowIndex) => {
     const columns = grid.get(rowIndex);
     return Array.from({ length: maxColumn + 1 }, (__, columnIndex) => {

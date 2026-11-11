@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CopyPlus, ImagePlus, ImageUp, Trash2 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { MACHINE_ROW_IMAGE_RULES, type MachineSectionRow } from '@/domain';
 import { createFilePicker } from '@/pages/shared/file-rules';
@@ -25,6 +25,7 @@ const props = defineProps<{
 
 const store = useSelectionStore();
 const { uploading, runUpload } = useUploadLock();
+const saving = ref(false);
 const image = computed(() => props.rows[0]?.image ?? null);
 const isShared = computed(() => props.rows.length > 1);
 const label = computed(() =>
@@ -33,6 +34,7 @@ const label = computed(() =>
 
 const SIZE_MESSAGE = '图片大小不能超过 2 MB';
 const TYPE_MESSAGE = '仅支持 JPG、PNG 或 WebP 图片';
+const SAVING_TITLE = '正在保存…';
 
 const picker = createFilePicker(
   {
@@ -50,7 +52,7 @@ async function replace(file: File | undefined) {
   const rowIds = props.rows.map((row) => row.id);
   const dataUrl = await uploadFile(file);
   if (!dataUrl) return;
-  notifyResult(
+  await notifyResult(
     store.saveMachineRowsImage(sectionId, machineName, rowIds, {
       dataUrl,
       fileName: file.name,
@@ -58,45 +60,60 @@ async function replace(file: File | undefined) {
       size: file.size,
     }),
     '示意图已更新',
-    { size: SIZE_MESSAGE, type: TYPE_MESSAGE, stale: '记录已被删除，请刷新后重试' },
+    {
+      size: SIZE_MESSAGE,
+      type: TYPE_MESSAGE,
+      stale: '记录已被删除，请刷新后重试',
+    },
   );
 }
 
-function reusePrevious() {
+async function reusePrevious() {
+  if (saving.value || uploading.value) return;
   const image = props.previousRow?.image;
   if (!image) return;
-  notifyResult(
-    store.saveMachineRowsImage(
-      props.sectionId,
-      props.machineName,
-      props.rows.map((row) => row.id),
-      image,
-    ),
-    '已沿用上一笔的图',
-    { stale: '记录已被删除，请刷新后重试' },
-  );
+  saving.value = true;
+  try {
+    await notifyResult(
+      store.saveMachineRowsImage(
+        props.sectionId,
+        props.machineName,
+        props.rows.map((row) => row.id),
+        image,
+      ),
+      '已沿用上一笔的图',
+      { stale: '记录已被删除，请刷新后重试' },
+    );
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function remove() {
-  if (!image.value) return;
+  if (!image.value || saving.value || uploading.value) return;
+  saving.value = true;
   const shared = isShared.value
     ? `（${props.rows.length} 笔记录共用，会一起删除）`
     : '';
-  const ok = await confirmDelete(
-    '删除示意图',
-    `确认删除“${image.value.fileName}”吗？${shared}`,
-  );
-  if (!ok) return;
-  notifyResult(
-    store.saveMachineRowsImage(
-      props.sectionId,
-      props.machineName,
-      props.rows.map((row) => row.id),
-      null,
-    ),
-    '示意图已删除',
-    { stale: '记录已被删除，请刷新后重试' },
-  );
+  try {
+    const ok = await confirmDelete(
+      '删除示意图',
+      `确认删除“${image.value.fileName}”吗？${shared}`,
+    );
+    if (!ok) return;
+    await notifyResult(
+      store.saveMachineRowsImage(
+        props.sectionId,
+        props.machineName,
+        props.rows.map((row) => row.id),
+        null,
+      ),
+      '示意图已删除',
+      { stale: '记录已被删除，请刷新后重试' },
+    );
+  } finally {
+    saving.value = false;
+  }
 }
 </script>
 
@@ -119,7 +136,7 @@ async function remove() {
         <a-upload
           :accept="MACHINE_ROW_IMAGE_RULES.accept"
           :before-upload="picker.beforeUpload"
-          :disabled="uploading"
+          :disabled="uploading || saving"
           :show-upload-list="false"
           @reject="picker.onReject"
         >
@@ -134,13 +151,22 @@ async function remove() {
             </a-button>
           </a-tooltip>
         </a-upload>
-        <a-tooltip :title="uploading ? UPLOADING_TITLE : '删除示意图'">
+        <a-tooltip
+          :title="
+            uploading
+              ? UPLOADING_TITLE
+              : saving
+                ? SAVING_TITLE
+                : '删除示意图'
+          "
+        >
           <span class="tooltip-host">
             <a-button
               type="text"
               size="small"
               danger
-              :disabled="uploading"
+              :disabled="uploading || saving"
+              :loading="saving"
               :aria-label="`删除 ${label} 的示意图`"
               @click="remove"
             >
@@ -156,13 +182,16 @@ async function remove() {
         :title="
           uploading
             ? UPLOADING_TITLE
-            : `和上一笔「${previousRow.role}」共用「${previousRow.image.fileName}」，合并成一格`
+            : saving
+              ? SAVING_TITLE
+              : `和上一笔「${previousRow.role}」共用「${previousRow.image.fileName}」，合并成一格`
         "
       >
         <span class="tooltip-host">
           <a-button
             size="small"
-            :disabled="uploading"
+            :disabled="uploading || saving"
+            :loading="saving"
             :aria-label="`${label} 沿用上一笔的图`"
             @click="reusePrevious"
           >
@@ -174,7 +203,7 @@ async function remove() {
       <a-upload
         :accept="MACHINE_ROW_IMAGE_RULES.accept"
         :before-upload="picker.beforeUpload"
-        :disabled="uploading"
+        :disabled="uploading || saving"
         :show-upload-list="false"
         @reject="picker.onReject"
       >

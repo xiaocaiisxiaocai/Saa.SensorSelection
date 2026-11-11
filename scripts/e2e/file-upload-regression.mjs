@@ -7,15 +7,17 @@
 import { basename } from 'node:path'
 import { chromium } from 'playwright'
 
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5178'
+const BASE_URL = process.env.E2E_BASE_URL
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
 const PDF_PATH = process.env.E2E_PDF_PATH
 const PPT_PATH = process.env.E2E_PPT_PATH
 const IMAGE_PATH = process.env.E2E_IMAGE_PATH
 
-if (!PDF_PATH || !PPT_PATH || !IMAGE_PATH) {
-  throw new Error('E2E_PDF_PATH, E2E_PPT_PATH and E2E_IMAGE_PATH are required')
+if (!BASE_URL || !PDF_PATH || !PPT_PATH || !IMAGE_PATH) {
+  throw new Error(
+    'E2E_BASE_URL, E2E_PDF_PATH, E2E_PPT_PATH and E2E_IMAGE_PATH are required; use an isolated disposable application',
+  )
 }
 
 const PDF_NAME = basename(PDF_PATH)

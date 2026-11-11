@@ -26,8 +26,11 @@ export const useAuthStore = defineStore('auth', () => {
   const profile = ref<null | UserProfile>(null);
   const sessionExpired = ref(false);
   let profilePromise: null | Promise<void> = null;
+  let profilePromiseEpoch = 0;
+  let profilePromiseToken: null | string = null;
   let profileToken: null | string = null;
   let profileLoadedAt = 0;
+  let sessionEpoch = 0;
 
   const permissions = computed(() => profile.value?.permissions ?? []);
   const roleCodes = computed(
@@ -49,43 +52,73 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearSession() {
+    sessionEpoch += 1;
     storeToken(null);
     sessionExpired.value = false;
     applyProfile(null);
   }
 
+  function expireSession() {
+    sessionEpoch += 1;
+    applyProfile(null);
+    sessionExpired.value = true;
+  }
+
   async function ensureProfile(): Promise<void> {
-    if (profilePromise) {
+    const token = getStoredToken();
+    if (
+      profilePromise &&
+      profilePromiseToken === token &&
+      profilePromiseEpoch === sessionEpoch
+    ) {
       await profilePromise;
       return;
     }
     if (
       profile.value &&
       profileToken !== null &&
-      profileToken === getStoredToken() &&
+      profileToken === token &&
       Date.now() - profileLoadedAt < PROFILE_REUSE_MS
     ) {
       return;
     }
-    profilePromise = (async () => {
-      if (!getStoredToken()) {
-        sessionExpired.value = false;
-        applyProfile(null);
-        return;
-      }
+    if (!token) {
+      sessionExpired.value = false;
+      applyProfile(null);
+      return;
+    }
+    const requestEpoch = sessionEpoch;
+    const requestToken = token;
+    const pending = (async () => {
       try {
-        applyProfile(await api.me());
+        const next = await api.me();
+        if (
+          requestEpoch === sessionEpoch &&
+          requestToken === getStoredToken()
+        ) {
+          applyProfile(next);
+        }
       } catch (error) {
-        if (error instanceof ApiError && error.kind === 'unauthorized') {
-          applyProfile(null);
-          sessionExpired.value = true;
+        if (
+          requestEpoch === sessionEpoch &&
+          requestToken === getStoredToken() &&
+          error instanceof ApiError &&
+          error.kind === 'unauthorized'
+        ) {
+          expireSession();
         }
       }
     })();
+    profilePromise = pending;
+    profilePromiseEpoch = requestEpoch;
+    profilePromiseToken = requestToken;
     try {
-      await profilePromise;
+      await pending;
     } finally {
-      profilePromise = null;
+      if (profilePromise === pending) {
+        profilePromise = null;
+        profilePromiseToken = null;
+      }
     }
   }
 
@@ -96,6 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     try {
       const result = await api.login(trimmed, password);
+      sessionEpoch += 1;
       storeToken(result.token);
       applyProfile(result);
       return { ok: true as const };
@@ -115,6 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession,
     displayName,
     ensureProfile,
+    expireSession,
     isAuthenticated,
     login,
     logout,

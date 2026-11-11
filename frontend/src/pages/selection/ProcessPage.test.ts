@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { useSelectionStore } from '@/stores/selection';
 import { useAuthStore } from '@/stores/auth';
 import {
+  activeTabText,
   chooseColumnFilter,
   clickTab,
   columnWidths,
@@ -15,7 +16,7 @@ import {
 
 import ProcessPage from './ProcessPage.vue';
 
-async function mountPage(writable = false) {
+async function mountPage(writable = false, query: Record<string, string> = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/selection/process', component: ProcessPage }],
@@ -31,7 +32,7 @@ async function mountPage(writable = false) {
       username: 'admin',
     });
   }
-  await router.push('/selection/process');
+  await router.push({ path: '/selection/process', query });
   await router.isReady();
   return mount(ProcessPage, { global: { plugins: [pinia, router] } });
 }
@@ -61,6 +62,28 @@ describe('ProcessPage', () => {
   it('can switch to process steps', async () => {
     const wrapper = await mountPage();
     expect(wrapper.text()).toContain('工艺制程');
+    wrapper.unmount();
+  });
+
+  it('honours query changes while the page instance is reused', async () => {
+    const wrapper = await mountPage();
+    const router = wrapper.vm.$router;
+
+    await router.push({
+      path: '/selection/process',
+      query: { tab: 'steps', q: '回流焊' },
+    });
+    await flushPromises();
+    expect(activeTabText(wrapper)).toBe('工艺制程');
+    expect(
+      wrapper.get<HTMLInputElement>('input[aria-label="搜索工艺制程"]').element
+        .value,
+    ).toBe('回流焊');
+
+    await router.push('/selection/process');
+    await flushPromises();
+    expect(activeTabText(wrapper)).toBe('制程介绍');
+
     wrapper.unmount();
   });
 

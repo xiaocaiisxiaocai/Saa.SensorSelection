@@ -43,22 +43,30 @@ describe('buildSearchIndex', () => {
       index.some(
         (item) =>
           item.title === '01 单段输送段（搭配）' &&
-          item.category === '输送机构',
+          item.category === '输送机构' &&
+          item.query.configuration === '标准输送段配置',
       ),
     ).toBe(true);
     expect(
-      index.some((item) => item.title === 'AOI检测' && item.category === '内层'),
+      index.some(
+        (item) => item.title === 'AOI检测' && item.category === '内层',
+      ),
     ).toBe(true);
-    expect(index.some((item) => item.title === '进板检测' && item.query.section === '1')).toBe(
-      true,
-    );
+    expect(
+      index.some(
+        (item) => item.title === '进板检测' && item.query.section === '1',
+      ),
+    ).toBe(true);
   });
 });
 
 describe('searchItemDetail', () => {
   it('drops a leading segment that repeats the category line', () => {
     expect(
-      searchItemDetail({ category: '输送机构', sub: '输送机构 · 客户特殊配置 · 机型结构' }),
+      searchItemDetail({
+        category: '输送机构',
+        sub: '输送机构 · 客户特殊配置 · 机型结构',
+      }),
     ).toBe('客户特殊配置 · 机型结构');
     expect(
       searchItemDetail({ category: '华东', sub: '华东区域 · PCB 制造客户' }),
@@ -67,7 +75,10 @@ describe('searchItemDetail', () => {
 
   it('keeps details that do not start with the category', () => {
     expect(
-      searchItemDetail({ category: '01 漫反射', sub: '01 现用 · 01 漫反射 · 12~24V' }),
+      searchItemDetail({
+        category: '01 漫反射',
+        sub: '01 现用 · 01 漫反射 · 12~24V',
+      }),
     ).toBe('01 现用 · 01 漫反射 · 12~24V');
   });
 

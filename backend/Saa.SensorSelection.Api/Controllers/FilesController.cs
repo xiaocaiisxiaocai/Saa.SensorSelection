@@ -11,7 +11,10 @@ namespace Saa.SensorSelection.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/files")]
-public class FilesController(StoredFileService storedFiles, AuditLogService audit) : ControllerBase
+public class FilesController(
+    StoredFileService storedFiles,
+    AuditLogService audit,
+    IAuthorizationService authorization) : ControllerBase
 {
     // multipart 边界、表单头等额外开销留 1 MB 余量。
     private const long MaxUploadRequestBytes = StoredFileService.MaxFileBytes + 1024 * 1024;
@@ -63,25 +66,49 @@ public class FilesController(StoredFileService storedFiles, AuditLogService audi
     }
 
     [HttpGet("{id:guid}/content")]
-    [AllowAnonymous]
     public async Task<IActionResult> GetContent(Guid id, CancellationToken ct)
     {
-        // 文件 id 一经写入内容即不可变，命中 ETag 时无需打开正文。
-        var etag = $"\"{id:N}\"";
-        if (Request.Headers.IfNoneMatch.Any(value => value == etag))
-        {
-            Response.Headers.ETag = etag;
-            return StatusCode(StatusCodes.Status304NotModified);
-        }
-
         var file = await storedFiles.OpenReadAsync(id, ct);
         if (file is null) return NotFound(new { message = "文件不存在或已被删除" });
-        HttpContext.Response.RegisterForDisposeAsync(file.Connection);
-
-        Response.Headers.ETag = etag;
-        Response.Headers.CacheControl = "public,max-age=31536000,immutable";
-        Response.Headers.XContentTypeOptions = "nosniff";
         var inline = InlineMimeTypes.Contains(file.MimeType);
+        if (!inline)
+        {
+            var authorized = await authorization.AuthorizeAsync(User, "file:download");
+            if (!authorized.Succeeded)
+            {
+                await file.Content.DisposeAsync();
+                await file.Connection.DisposeAsync();
+                return User.Identity?.IsAuthenticated == true ? Forbid() : Challenge();
+            }
+
+            var size = file.Content.CanSeek ? file.Content.Length : 0L;
+            await audit.WriteAsync(
+                "file.download",
+                target: id.ToString("D"),
+                detail: $"文件名：{file.FileName}；大小：{size} B；入口：content",
+                ct: ct);
+        }
+
+        // 只有匿名预览资源允许长期公开缓存；受权限保护的附件不返回 304，避免绕过授权。
+        if (inline)
+        {
+            var etag = $"\"{id:N}\"";
+            if (Request.Headers.IfNoneMatch.Any(value => value == etag))
+            {
+                await file.Content.DisposeAsync();
+                await file.Connection.DisposeAsync();
+                Response.Headers.ETag = etag;
+                return StatusCode(StatusCodes.Status304NotModified);
+            }
+            Response.Headers.ETag = etag;
+            Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        }
+        else
+        {
+            Response.Headers.CacheControl = "no-store";
+        }
+        HttpContext.Response.RegisterForDisposeAsync(file.Connection);
+        Response.Headers.XContentTypeOptions = "nosniff";
         Response.Headers.ContentDisposition =
             $"{(inline ? "inline" : "attachment")}; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
 

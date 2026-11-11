@@ -34,13 +34,15 @@ pnpm run backup:db             # node backend/scripts/backup-db.mjs（KEEP / BAC
 
 `test:selection` 直接加载 `frontend/node_modules` 里的 Vite，并用 SSR 方式导入 `frontend/src/domain/index.ts`，所以需要先在 `frontend/` 装好依赖；被测的领域函数必须从 `domain/index.ts` 导出。它同时断言仓库结构（必须是 pnpm、不存在 `package-lock.json` / `public/index.html` / `app/page.tsx` 等旧入口）。
 
-端到端回归需要前端（5178）与后端（5080）**都已启动**，运行结束会自动清理自己创建的数据；`test:ui` 首次运行前需要 `pnpm exec playwright install chromium`：
+端到端回归必须使用独立、可丢弃的测试服务和数据库，并显式提供地址；不得依赖 localhost 默认值：
 
 ```powershell
-pnpm run test:api    # scripts/e2e/api-crud-test.mjs：后端 API 全量增删改查 + 权限矩阵
-pnpm run test:ui     # scripts/e2e/ui-e2e-test.mjs：浏览器端全量增删改查 + 字体/间距/热区/无障碍审计（--headed 可观察，失败截图在 scripts/e2e/artifacts/）
-node scripts/e2e/file-upload-regression.mjs   # 未挂到 package.json；需设置 E2E_PDF_PATH、E2E_PPT_PATH、E2E_IMAGE_PATH 指向真实文件
+$env:API_BASE='http://127.0.0.1:5081/api'; pnpm run test:api
+$env:E2E_BASE_URL='http://127.0.0.1:5179'; $env:API_BASE='http://127.0.0.1:5081/api'; pnpm run test:ui
+$env:E2E_BASE_URL='http://127.0.0.1:5179'; node scripts/e2e/file-upload-regression.mjs # 另设 E2E_PDF_PATH / E2E_PPT_PATH / E2E_IMAGE_PATH
 ```
+
+Windows 浏览器自动化遵守全局 CORE-19：本机已知 Edge／Playwright Chromium 版本曾触发 SAC 认证锁定，未经隔离验证修复或规避方案，不得以 SAC 新启动这些版本；复用获授权会话，新增 4625／4740 立即停止。
 
 EF Core 迁移（启动时 `DbInitializer → DbSeeder` 自动 `Migrate()`，只有改模型时才需手动生成）：
 
@@ -50,26 +52,28 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelection.Api
 ```
 
-开发登录默认账号 `admin` / `admin123`。IIS 合并发布用 `scripts/deploy-iis.ps1`（前后端打包进同一物理目录，默认 `deploy/iis`，不生成压缩包，pnpm 依赖强制 `--offline --frozen-lockfile`）。
+历史 `EnsureCreated` 数据库没有迁移历史时，不得删库重建或手工伪造 `__EFMigrationsHistory`。必须先做一致备份，在隔离离线副本上完成专用转换、完整性检查和恢复演练，确认后再单独审批生产部署。本轮数据完整性/权限修复没有新增数据库 schema 迁移，也没有执行真实部署。
+
+开发登录默认账号 `admin` / `admin123`。IIS 合并发布用 `scripts/deploy-iis.ps1`：先在同盘 staging 构建并校验，再替换带所有权标记且不含 `App_Data` 的旧制品；不能把已有站点目录当 `OutputDir`，不生成压缩包，pnpm 依赖强制 `--offline --frozen-lockfile`。
 
 ## 架构
 
 ### 数据流（跨前后端）
 
-- **后端是通用 `key → JSON 数组` 仓库，不做业务校验**；全部业务规则、归一化、迁移都在前端 `frontend/src/domain`。key 构造集中在 `domain/keys.ts`（如 `customer-req:客户/厂区`、`machine-section-rows:{sectionId}:{机型}`）。客户目录是「客户 → 厂区」：`entity-groups:customer` 的分组是客户、条目是厂区（一个客户可有多个厂区，厂区名只在本客户内唯一，前后端都校验，名称里不能含 `/`）；每个厂区必须有一个区域，存在客户分组的 `regions`（厂区名 → 区域）里，区域取自数据字典「客户区域」（`dict:customer-region`，有厂区在用的区域不能删、改名同步到厂区；旧目录没有 `regions` 时叶子名就是区域）。客户资料挂在厂区叶子上，数据名由 `entityDataName(kind, 分组, 条目)` 生成（客户为 `客户/厂区`，机型仍是机型名），与浏览器 `symtek_crud_store` 快照里的 key 一一对应。机型页顶部的一级 Tab 是按目录（结构 / 专案机型）共用的容器（`machine-tabs:all`），二级 Tab（`pages`）属于「左侧选单节点 × 一级 Tab」（`page.node`），有自己的内容，存在 `machine-section-rows:{二级 Tab id}:@tab-page`（`MACHINE_TAB_PAGE_OWNER`，复用机型分区的读写函数）。**选单节点的下一层只能二选一**：有子选单（配置 / 机型）的节点不能有二级 Tab，有二级 Tab 的节点不能再加子选单、不能删除（领域层返回 `not-empty`，树菜单里的新建项禁用）；**机型（最末一层）没有二级 Tab**，一级 Tab 下直接是它的直属表格（页上带 `direct: true`，第一笔记录由 `saveMachineDirectRow` 在同一个事务里建表并写入，记录不合法时整体回滚、不留空表；归一化会丢掉机型上不带 `direct` 的旧二级 Tab 及其内容）；节点改名 / 移动时二级 Tab 跟着走。选单和 Tab 之间**没有拖放**（树内同级排序仍由 antd 处理）。机型数据不分制程：每个机型只有一套 `machine-extra-sections:{机型}` / `machine-section-rows:{分区}:{机型}`，不要再引入 `machine-processes` 或 `@process:` 作用域的 key（`test:selection` 有断言）。
+- **数据形状是通用 `key → JSON 数组`，业务规则与归一化以 `frontend/src/domain` 为准；后端负责 CAS、原子批次、目录结构和文件引用等信任边界校验。** key 构造集中在 `domain/keys.ts`（如 `customer-req:客户/厂区`、`machine-section-rows:{sectionId}:{机型}`）。客户目录是「客户 → 厂区」：`entity-groups:customer` 的分组是客户、条目是厂区（一个客户可有多个厂区，厂区名只在本客户内唯一，前后端都校验，名称里不能含 `/`）；每个厂区必须有一个区域，存在客户分组的 `regions`（厂区名 → 区域）里，区域取自数据字典「客户区域」（`dict:customer-region`，有厂区在用的区域不能删、改名同步到厂区；旧目录没有 `regions` 时叶子名就是区域）。客户资料挂在厂区叶子上，数据名由 `entityDataName(kind, 分组, 条目)` 生成（客户为 `客户/厂区`，机型仍是机型名），与后端 Store key 一一对应。机型页顶部的一级 Tab 是按目录（结构 / 专案机型）共用的一组容器（`machine-tabs:all`），二级 Tab（`pages`）属于「左侧选单节点 × 一级 Tab」（`page.node`），有自己的内容，存在 `machine-section-rows:{二级 Tab id}:@tab-page`（`MACHINE_TAB_PAGE_OWNER`，复用机型分区的读写函数）。**选单节点的下一层只能二选一**：有子选单（配置 / 机型）的节点不能有二级 Tab，有二级 Tab 的节点不能再加子选单、不能删除（领域层返回 `not-empty`，树菜单里的新建项禁用）；**机型（最末一层）没有二级 Tab**，一级 Tab 下直接是它的直属表格（页上带 `direct: true`，第一笔记录由 `saveMachineDirectRow` 在同一个事务里建表并写入，记录不合法时整体回滚、不留空表；归一化会丢掉机型上不带 `direct` 的旧二级 Tab 及其内容）；节点改名 / 移动时二级 Tab 跟着走。选单和 Tab 之间**没有拖放**（树内同级排序仍由 antd 处理）。机型数据不分制程：每个机型只有一套 `machine-extra-sections:{机型}` / `machine-section-rows:{分区}:{机型}`，不要再引入 `machine-processes` 或 `@process:` 作用域的 key（`test:selection` 有断言）。
 - **操作日志**：store 的每个写方法经 `stores/operation-labels.ts` 的 `labelOperations` 包进 `runAsOperation`（`api/audit-operation.ts`），这一下产生的全部写入带同一个 `X-Operation-Id` / `X-Operation-Label` 请求头，后端据此在日志里归成一次操作；**新增 store 写方法要在 `OPERATION_LABELS` 补一条名称**（`selection.test.ts` 会检查）。后端 `AuditChanges` 比较写入前后记下改了哪些记录和字段（用户 / 角色 / 组织用 `RbacAuditSnapshots` 的字段快照），日志页按操作分页（`GET /audit-logs/operations`），字段名翻译在 `pages/system/audit/audit-changes.ts`。
-- 写入按 key 增量同步：`PUT/DELETE /api/store/by-key?key=...`。key 必须放查询参数（避免 IIS / 反代把 `%2F` 解码成路径分隔符），不要再加路径参数形式的单 key 接口。`PUT /api/store` 仅用于整体导入。
+- 常规写入由 `POST /api/store/batch` 原子提交 `{ changes: [{ key, expected, value }] }`，`expected` 来自最后确认快照；任一冲突整批回滚。兼容的 `PUT/DELETE /api/store/by-key?key=...`、目录 PUT 和全量 PUT 必须使用 GET 返回的强 ETag 作为 `If-Match`：缺失 428、陈旧 412。key 必须放查询参数，不要恢复路径参数接口。界面必须等待 `waitForPendingWrites()` 确认服务端成功后才提示完成。
 - 前端不再给后端灌数据：`stores/selection.ts` 创建 `BackendStorage` 时 `migrateOnEmpty: false`、不传 `local` / `seedDefaults`，后端为空就显示为空（种子/演示数据由后端 `DbSeeder` 负责）。`BackendStorage` 里的本地快照导入、`seedDefaults` 回填和 `seedMigration` 分支只剩合同测试在用。
 - **种子版本**：`seed.ts` 的 `SEED_VERSION` 写入 store 的 `meta:seed-version`；`seed-migration.ts` 的 `migrateSelectionSeedStore` 按 `currentVersion < XXX_VERSION` 逐步迁移，目前只在仓库 `demoData`（Vitest 夹具）模式下执行。修改内置种子数据要同时递增 `SEED_VERSION`，并在 `seed-migration.ts` 加一个按版本门控的步骤（配套 `seed-migration.test.ts`）。
-- **文件**：前端经 `api.uploadFile` 以 multipart 方式 `POST /api/files`（需 `selection:write`）。正文以 BLOB 存在 SQLite `StoredFiles.Content`，store JSON 里只保留 `/api/files/{id}/content` 引用。`StoreService` / `StoredFileService` 在写入时拆出内嵌的 data URL，并释放不再被引用的文件。
-- 鉴权错误：后端 401 表示登录失效，403 表示已登录但无权限（`{"message":"无权限执行此操作"}`）；`api/index.ts` 把它们抛成 `ApiError` 的 `unauthorized` / `forbidden` 两种 kind。`BackendStorage` 遇到任何写入失败都会回滚该 key，并把 401/403 都映射为 `unauthorized` 同步状态；`AppShell` 在持有 token 时据此跳转 `/login`。
+- **文件**：前端经 `api.uploadFile` 以 multipart 方式 `POST /api/files`（需 `selection:write`）。正文以 BLOB 存在 SQLite `StoredFiles.Content`，store JSON 里只保留 `/api/files/{id}/content` 引用。PDF/图片允许匿名内联预览；Word/PPT 等其他附件的 `/content` 和 `/download` 均要求 `file:download` 并记录审计。批次写入在事务内验证引用并保守回收失去引用的文件。
+- 鉴权错误：401 表示会话失效，清理身份并跳登录；403 表示当前身份无权限，只回滚该次写入并提示，不能当成登录失效。JWT `sub` 使用用户 ID，HMAC 指纹绑定用户 ID、密码哈希和当前角色/权限；改密、停用、删除、降权或权限变化使旧 token 失效，同名账号重建不能复活旧 token。
 
 ### 前端（`frontend/src`）
 
 - `api/index.ts`：后端薄客户端，所有 HTTP 调用的唯一出入口（`VITE_API_BASE` 默认 `/api`）。
 - `domain/`：领域层，纯 TypeScript、无 UI 依赖，是业务规则的权威来源；规格见 `frontend/docs/07-domain-spec.md`（不变量）与 `04-data-api.md`（存储键与接口契约）。
   - `repository.ts`：全部业务校验、归一化、CRUD、旧数据迁移、搜索索引（体量最大，约 2800 行，改动前先读）。
-  - `storage.ts`（`BackendStorage`）：在线时把 SQLite 数据仓库当唯一真相源，写入走串行队列；浏览器不缓存业务数据，后端不可达时页面显示离线横幅并自动退避重连（重连期间页面保持挂载，重建前先排空旧队列）。写入失败时 bridge 回滚该 key，并通过 `onWriteFailure` 让 store 按回滚后的缓存重建仓库内存态；4xx 只回滚不掉线，网络错误/5xx 进入 offline，401/403 进入 unauthorized（重新登录后 `ensureBackendInit` 会重建 bridge）。仓库的读取 getter 不能调用 `persist`（访客/只读用户也会走到）；多步写入用 `transaction` 合成一次提交。
+  - `storage.ts`（`BackendStorage`）：SQLite 是唯一在线数据源，浏览器不缓存业务数据。领域层一次修改形成相对最后确认快照的 change 集合，串行调用服务端 batch；成功后更新确认快照，失败整组回滚并使依赖该乐观状态的旧队列失效。网络/5xx/409/412 进入 offline 后重读，401 进入 unauthorized，403 保持登录态并只报告无权限。保存对话框使用 `waitForPendingWrites()`，不能在异步持久化未确认时显示成功。
   - `normalize.ts` / `seed.ts` / `seed-migration.ts`：存储内容归一化与内置种子数据、旧数据迁移语义。
   - `search.ts`：跨客户/制程/机型/Sensor 型号的全局搜索索引。
   - `schematic-report.ts`：机型示意图报告生成（后端 `POST /api/reports/machine-schematic` 对应 `MachineSchematicReportService`）。
@@ -87,7 +91,7 @@ dotnet tool run dotnet-ef migrations add YourChange --project Saa.SensorSelectio
 
 - `Controllers/`：`AuthController`（登录/JWT）、`StoreController`（选型数据仓库读写）、`UsersController` / `RolesController` / `OrgUnitsController`（RBAC）、`AuditLogsController`、`FilesController`、`ReportsController`、`HealthController`。
 - `Services/`：`JwtService`、`PasswordService`、`LoginRateLimiter`、`RoleService` / `OrgUnitService` / `UserService`（RBAC 判定见 `RbacResult.cs`，组织层级规则见 `OrgLevelRules.cs`）、`AuditLogService`、`StoreService`、`StoredFileService`、`MachineSchematicReportService`。
-- `Models/RbacDefaults.cs`：权限码与内置角色的唯一定义源，新增权限/角色在此补充，`DbSeeder` 重启后幂等补齐。当前权限码：`selection:read`、`selection:write`、`file:download`、`data:transfer`、`rbac:view`、`rbac:user:write`、`rbac:role:write`、`rbac:org:write`、`audit:view`。内置角色：`admin`（全部权限，系统角色不可改删）、`editor`（读写业务数据）、`viewer`（只读业务数据）。
+- `Models/RbacDefaults.cs`：权限码与内置角色定义源。`DbSeeder` 只在全新身份库首次创建默认角色、组织和种子管理员；后续启动可补权限目录及系统管理员角色需要的新权限，但不复活已删账号，也不恢复管理员主动撤销的普通角色权限。当前权限码：`selection:read`、`selection:write`、`file:download`、`data:transfer`、`rbac:view`、`rbac:user:write`、`rbac:role:write`、`rbac:org:write`、`audit:view`。
 - `Configuration/ProductionConfigurationGuard.cs`：`Production` 环境下，若仍用默认 `Jwt:Key` / 默认管理员密码，或未配置 `Cors:AllowedOrigins`，直接拒绝启动（用环境变量 `Jwt__Key`、`Seed__AdminPassword`、`Cors__AllowedOrigins` 注入）。完整配置项表见 `backend/README.md`。
 - `Data/`：`AppDbContext`、`DbInitializer` / `DbSeeder`（种子与迁移）、SQLite pragma 拦截器（WAL + `busy_timeout=30000`）。数据库默认 `App_Data/symtek.db`（历史文件名，不要改）。
 - 集成测试在独立项目 `backend/Saa.SensorSelection.Api.Tests`（`ApiFactory.cs` 通过 `WebApplicationFactory` 启动含迁移与种子的完整应用，每个测试使用独立的临时 SQLite 文件）。

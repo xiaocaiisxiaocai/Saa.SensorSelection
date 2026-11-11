@@ -40,6 +40,7 @@ const props = defineProps<{
 
 const store = useSelectionStore();
 const visible = ref(false);
+const saving = ref(false);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const form = reactive({
@@ -199,13 +200,14 @@ function open(row?: MachineSectionRow) {
 }
 
 async function cancel() {
-  if (uploading.value) return;
+  if (uploading.value || saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const structure = props.structure;
   if (structure && imageError.value) return;
@@ -230,8 +232,15 @@ function save() {
         payload,
         editId.value,
       );
-  if (notifyResult(result, editId.value ? '记录已更新' : '记录已新增')) {
-    visible.value = false;
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, editId.value ? '记录已更新' : '记录已新增')
+    ) {
+      visible.value = false;
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -243,13 +252,13 @@ defineExpose({ open });
     :open="visible"
     :title="`${editId ? '编辑' : '新增'}${structure ? '选型' : '事项'}`"
     :width="structure ? 640 : 480"
-    :mask-closable="!uploading"
-    :keyboard="!uploading"
-    :closable="!uploading"
+    :mask-closable="!uploading && !saving"
+    :keyboard="!uploading && !saving"
+    :closable="!uploading && !saving"
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form v-if="structure" layout="vertical">
+    <a-form v-if="structure" layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item
@@ -373,7 +382,7 @@ defineExpose({ open });
         </a-col>
       </a-row>
     </a-form>
-    <a-form v-else layout="vertical">
+    <a-form v-else layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item
@@ -444,8 +453,13 @@ defineExpose({ open });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button :disabled="uploading" @click="cancel">取消</a-button>
-      <a-button type="primary" :disabled="uploading" @click="save">
+      <a-button :disabled="uploading || saving" @click="cancel">取消</a-button>
+      <a-button
+        type="primary"
+        :disabled="uploading"
+        :loading="saving"
+        @click="save"
+      >
         保存
       </a-button>
     </template>

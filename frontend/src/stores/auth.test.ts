@@ -61,6 +61,68 @@ describe('auth store', () => {
     }
   });
 
+  it('ignores an in-flight profile after logout', async () => {
+    storeToken('token-a');
+    let resolveProfile!: (profile: typeof viewer) => void;
+    vi.spyOn(api, 'me').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = resolve;
+        }),
+    );
+    const auth = useAuthStore();
+    const loading = auth.ensureProfile();
+
+    auth.logout();
+    resolveProfile(viewer);
+    await loading;
+
+    expect(auth.profile).toBeNull();
+    expect(window.localStorage.getItem('symtek_token')).toBeNull();
+  });
+
+  it('does not let token A profile overwrite a token B login', async () => {
+    storeToken('token-a');
+    let resolveProfile!: (profile: typeof viewer) => void;
+    vi.spyOn(api, 'me').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveProfile = resolve;
+        }),
+    );
+    const tokenBProfile = {
+      ...viewer,
+      displayName: '管理员',
+      permissions: ['rbac:view'],
+      token: 'token-b',
+      expiresAt: '2099-01-01T00:00:00Z',
+      username: 'admin',
+    };
+    vi.spyOn(api, 'login').mockResolvedValue(tokenBProfile);
+    const auth = useAuthStore();
+    const loading = auth.ensureProfile();
+
+    await auth.login('admin', 'secret');
+    resolveProfile(viewer);
+    await loading;
+
+    expect(auth.profile?.username).toBe('admin');
+    expect(auth.permissions).toEqual(['rbac:view']);
+    expect(window.localStorage.getItem('symtek_token')).toBe('token-b');
+  });
+
+  it('expires the cached profile without discarding the stored token', () => {
+    storeToken('tok');
+    const auth = useAuthStore();
+    auth.applyProfile(viewer);
+
+    auth.expireSession();
+
+    expect(auth.profile).toBeNull();
+    expect(auth.sessionExpired).toBe(true);
+    expect(window.localStorage.getItem('symtek_token')).toBe('tok');
+  });
+
   it('clears the profile on 401 without treating 403 as expiry', async () => {
     storeToken('tok');
     vi.spyOn(api, 'me').mockRejectedValue(

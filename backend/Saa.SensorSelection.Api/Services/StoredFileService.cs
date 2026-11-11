@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -164,11 +165,50 @@ public class StoredFileService(AppDbContext db)
     }
 
     /// <summary>
+    /// 返回 Store JSON 中指向、但数据库里不存在的文件 id。
+    /// 当前 DbContext 尚未提交的 Added 文件也视为存在，供同一写事务验证剥离后的正文。
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> FindMissingReferencesAsync(
+        IEnumerable<string> jsonValues,
+        CancellationToken ct = default)
+    {
+        var referenced = new HashSet<Guid>();
+        foreach (var json in jsonValues)
+        {
+            referenced.UnionWith(ReferencedFileIds(json));
+        }
+        if (referenced.Count == 0) return Array.Empty<Guid>();
+
+        var pending = db.ChangeTracker.Entries<StoredFile>()
+            .Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity.Id)
+            .ToHashSet();
+        referenced.ExceptWith(pending);
+        if (referenced.Count == 0) return Array.Empty<Guid>();
+
+        var existing = new HashSet<Guid>();
+        foreach (var ids in referenced.Chunk(500))
+        {
+            existing.UnionWith(await db.StoredFiles.AsNoTracking()
+                .Where(file => ids.Contains(file.Id))
+                .Select(file => file.Id)
+                .ToListAsync(ct));
+        }
+        referenced.ExceptWith(existing);
+        return referenced.Order().ToArray();
+    }
+
+    /// <summary>
     /// 释放本次写入不再引用的文件：只要任一 Store 记录仍提到该 id 就保留。
     /// 只检查本次变动涉及的 id，避免每次写入都解析整个数据仓库。
     /// </summary>
     public async Task ReleaseAsync(IEnumerable<Guid> candidates, CancellationToken ct = default)
     {
+        var cutoff = DateTime.UtcNow - PendingUploadGrace;
+        var ownsTransaction = db.Database.CurrentTransaction is null;
+        await using var transaction = ownsTransaction
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+            : null;
         var unreferenced = new List<Guid>();
         foreach (var id in candidates.Distinct())
         {
@@ -178,8 +218,17 @@ public class StoredFileService(AppDbContext db)
             if (!stillReferenced) unreferenced.Add(id);
         }
 
-        if (unreferenced.Count == 0) return;
-        await db.StoredFiles.Where(file => unreferenced.Contains(file.Id)).ExecuteDeleteAsync(ct);
+        if (unreferenced.Count > 0)
+        {
+            // 延迟回收，避免“上传完成 → Store 引用提交”之间或并发事务间误删正文。
+            foreach (var ids in unreferenced.Chunk(500))
+            {
+                await db.StoredFiles
+                    .Where(file => ids.Contains(file.Id) && file.CreatedAt < cutoff)
+                    .ExecuteDeleteAsync(ct);
+            }
+        }
+        if (transaction is not null) await transaction.CommitAsync(ct);
     }
 
     /// <summary>
@@ -188,6 +237,10 @@ public class StoredFileService(AppDbContext db)
     /// </summary>
     public async Task SweepAsync(CancellationToken ct = default)
     {
+        var ownsTransaction = db.Database.CurrentTransaction is null;
+        await using var transaction = ownsTransaction
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+            : null;
         var referenced = new HashSet<Guid>();
         var jsonValues = await db.StoreEntries.AsNoTracking().Select(entry => entry.Json).ToListAsync(ct);
         foreach (var json in jsonValues)
@@ -199,14 +252,21 @@ public class StoredFileService(AppDbContext db)
             catch (JsonException)
             {
                 // 损坏的历史记录不应导致清理误删文件。
+                if (transaction is not null) await transaction.RollbackAsync(ct);
                 return;
             }
         }
 
         var cutoff = DateTime.UtcNow - PendingUploadGrace;
-        await db.StoredFiles
-            .Where(file => file.CreatedAt < cutoff && !referenced.Contains(file.Id))
-            .ExecuteDeleteAsync(ct);
+        var expiredIds = await db.StoredFiles.AsNoTracking()
+            .Where(file => file.CreatedAt < cutoff)
+            .Select(file => file.Id)
+            .ToListAsync(ct);
+        foreach (var ids in expiredIds.Where(id => !referenced.Contains(id)).Chunk(500))
+        {
+            await db.StoredFiles.Where(file => ids.Contains(file.Id)).ExecuteDeleteAsync(ct);
+        }
+        if (transaction is not null) await transaction.CommitAsync(ct);
     }
 
     public static string ContentUrl(Guid id) => $"{FileRoutePrefix}{id:D}{FileRouteSuffix}";
@@ -245,10 +305,22 @@ public class StoredFileService(AppDbContext db)
             var parsed = TryDecodeDataUrl(dataUrl);
             if (!parsed.Success) return preserveInvalidLegacyData ? null : parsed.Error;
 
+            var fileNameNode = obj["fileName"];
+            if (fileNameNode is not null &&
+                (fileNameNode is not JsonValue fileNameValue ||
+                 !fileNameValue.TryGetValue<string>(out _)))
+            {
+                return preserveInvalidLegacyData ? null : "文件名必须是字符串";
+            }
+            var fileName = fileNameNode is JsonValue validFileName &&
+                validFileName.TryGetValue<string>(out var rawFileName)
+                ? rawFileName
+                : null;
+
             var file = new StoredFile
             {
                 Id = Guid.NewGuid(),
-                FileName = SafeFileName(obj["fileName"]?.GetValue<string>()),
+                FileName = SafeFileName(fileName),
                 MimeType = parsed.MimeType!,
                 Size = parsed.Content!.LongLength,
                 Content = parsed.Content,

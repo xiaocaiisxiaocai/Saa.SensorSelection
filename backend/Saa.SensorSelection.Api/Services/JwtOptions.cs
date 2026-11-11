@@ -7,6 +7,8 @@ public class JwtOptions
 {
     public const string SectionName = "Jwt";
 
+    public const int MinimumKeyBytes = 32;
+
     public string Issuer { get; set; } = "Saa.SensorSelection.Api";
 
     public string Audience { get; set; } = "Saa.SensorSelection";
@@ -14,4 +16,8 @@ public class JwtOptions
     public string Key { get; set; } = string.Empty;
 
     public int ExpireHours { get; set; } = 12;
+
+    public static bool HasValidSigningKey(string? key) =>
+        !string.IsNullOrWhiteSpace(key) &&
+        System.Text.Encoding.UTF8.GetByteCount(key) >= MinimumKeyBytes;
 }

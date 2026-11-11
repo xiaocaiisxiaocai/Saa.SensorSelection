@@ -151,7 +151,7 @@ function editItem(item: ProcessStepItem) {
 async function deleteItem(item: ProcessStepItem) {
   const ok = await confirmDelete('删除工艺制程', `确认删除“${item.name}”吗？`);
   if (!ok) return;
-  notifyResult(store.deleteProcessStep(item.id), '工艺制程已删除');
+  await notifyResult(store.deleteProcessStep(item.id), '工艺制程已删除');
 }
 </script>
 

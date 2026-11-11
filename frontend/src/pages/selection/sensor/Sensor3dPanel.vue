@@ -94,7 +94,7 @@ async function uploadPicked(picked: File[]) {
       title: file.name.replace(/\.pdf$/i, ''),
       uploadedAt: new Date().toISOString(),
     });
-    notifyResult(result, '3D 文件已上传', {
+    await notifyResult(result, '3D 文件已上传', {
       size: '文件大小超出 8 MB 限制',
       type: '3D 文件暂仅支持 PDF',
       storage: '数据保存失败，文件未保存',
@@ -106,10 +106,13 @@ async function remove(item: Sensor3dFileItem) {
   const ok = await confirmDelete('删除 3D 文件', `确认删除“${item.title}”吗？`);
   if (!ok) return;
   const result = store.deleteSensor3dFile(item.id);
-  notifyResult(result, '3D 文件已删除', {
-    'in-use': '仍有型号关联该 3D 文件，请先取消关联后再删除',
-  });
-  if (preview.value?.id === item.id) preview.value = null;
+  if (
+    await notifyResult(result, '3D 文件已删除', {
+      'in-use': '仍有型号关联该 3D 文件，请先取消关联后再删除',
+    })
+  ) {
+    if (preview.value?.id === item.id) preview.value = null;
+  }
 }
 </script>
 
@@ -176,7 +179,9 @@ async function remove(item: Sensor3dFileItem) {
             </a-tooltip>
             <a-tooltip
               v-if="canDownload"
-              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+              :title="
+                fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'
+              "
             >
               <span class="tooltip-host">
                 <a-button

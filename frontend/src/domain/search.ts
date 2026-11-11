@@ -120,7 +120,11 @@ export function buildSearchIndex({
         .filter(Boolean)
         .join(' · '),
       path: '/selection/machine',
-      query: { category, item: title },
+      query: {
+        category,
+        ...(configuration ? { configuration } : {}),
+        item: title,
+      },
     }),
   );
   const machineRows = (

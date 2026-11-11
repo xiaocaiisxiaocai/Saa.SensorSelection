@@ -40,6 +40,7 @@ const allowConfigurations = computed(
   () => props.kind === 'machine' && props.machineType !== 'project',
 );
 const visible = ref(false);
+const saving = ref(false);
 const editing = ref<string>();
 const editingCategory = ref<string>();
 const editingConfiguration = ref<string | null>();
@@ -154,12 +155,14 @@ function openEdit(payload: {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const previous = editing.value;
   const category = form.category;
@@ -179,20 +182,25 @@ function save() {
     },
     previous,
   );
-  if (
-    notifyResult(result, previous ? `${item}已更新` : `${item}已新增`, {
-      duplicate: `该${item}已存在`,
-      'in-use': `请先清空该${item}下的业务数据`,
-      'not-empty': `所选位置已有二级 Tab，不能再添加${item}`,
-    })
-  ) {
-    visible.value = false;
-    emit('saved', {
-      category,
-      name,
-      previous,
-      previousCategory: editingCategory.value,
-    });
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, previous ? `${item}已更新` : `${item}已新增`, {
+        duplicate: `该${item}已存在`,
+        'in-use': `请先清空该${item}下的业务数据`,
+        'not-empty': `所选位置已有二级 Tab，不能再添加${item}`,
+      })
+    ) {
+      visible.value = false;
+      emit('saved', {
+        category,
+        name,
+        previous,
+        previousCategory: editingCategory.value,
+      });
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -207,7 +215,7 @@ defineExpose({ openCreate, openEdit });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-form-item
         html-for="entity-source-category-2"
         :label="labels.group"
@@ -289,8 +297,8 @@ defineExpose({ openCreate, openEdit });
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

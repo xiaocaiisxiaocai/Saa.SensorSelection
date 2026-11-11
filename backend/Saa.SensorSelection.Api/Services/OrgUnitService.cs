@@ -1,3 +1,5 @@
+using System.Data;
+
 using Microsoft.EntityFrameworkCore;
 
 using Saa.SensorSelection.Api.Data;
@@ -86,6 +88,10 @@ public class OrgUnitService(AppDbContext db)
         UpdateOrgUnitRequest request,
         CancellationToken ct = default)
     {
+        // 防环检查和保存必须基于同一串行化事务，避免两个节点并发互设父级。
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            ct);
         var org = await db.OrgUnits.FirstOrDefaultAsync(item => item.Id == id, ct);
         if (org is null)
         {
@@ -134,6 +140,7 @@ public class OrgUnitService(AppDbContext db)
         org.Level = level;
         org.SortOrder = request.SortOrder;
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return RbacResult<OrgUnitListItem>.Ok(await BuildListItemAsync(org.Id, ct));
     }
 

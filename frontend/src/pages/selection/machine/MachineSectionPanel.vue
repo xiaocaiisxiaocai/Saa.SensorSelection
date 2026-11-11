@@ -274,7 +274,7 @@ async function deleteItem(item: MachineSectionRow) {
   const label = item.role || item.name;
   const ok = await confirmDelete('删除记录', `确认删除“${label}”吗？`);
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteMachineSectionRow(props.section.id, props.machineName, item.id),
     '记录已删除',
   );

@@ -123,7 +123,7 @@ function editItem(item: CustomerProcItem) {
 async function deleteItem(item: CustomerProcItem) {
   const ok = await confirmDelete('删除注意事项', `确认删除“${item.role}”吗？`);
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteCrud('customer-proc', props.entityName, item.id),
     '注意事项已删除',
   );

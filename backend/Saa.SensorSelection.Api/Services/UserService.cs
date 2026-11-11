@@ -1,3 +1,5 @@
+using System.Data;
+
 using Microsoft.EntityFrameworkCore;
 
 using Saa.SensorSelection.Api.Data;
@@ -56,8 +58,15 @@ public class UserService(AppDbContext db, ProfileService profiles)
 
     public async Task<RbacResult<UserListItem>> CreateAsync(
         CreateUserRequest request,
+        int actorUserId,
         CancellationToken ct = default)
     {
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult<UserListItem>.Fail("登录已失效，请重新登录");
+        }
+
         var username = request.Username.Trim();
         if (string.IsNullOrWhiteSpace(username) ||
             string.IsNullOrWhiteSpace(request.DisplayName))
@@ -84,6 +93,10 @@ public class UserService(AppDbContext db, ProfileService profiles)
         if (roles.Count != roleIds.Length)
         {
             return RbacResult<UserListItem>.Fail("所选角色不存在");
+        }
+        if (!CanAssignRoles(actor, roles))
+        {
+            return RbacResult<UserListItem>.Fail("不能授予超出自身权限范围的角色");
         }
 
         var user = new User
@@ -113,14 +126,29 @@ public class UserService(AppDbContext db, ProfileService profiles)
     public async Task<RbacResult<UserListItem>> UpdateAsync(
         int id,
         UpdateUserRequest request,
+        int actorUserId,
         CancellationToken ct = default)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            ct);
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult<UserListItem>.Fail("登录已失效，请重新登录");
+        }
+
         var user = await db.Users
             .Include(item => item.Roles)
+            .ThenInclude(role => role.Permissions)
             .FirstOrDefaultAsync(item => item.Id == id, ct);
         if (user is null)
         {
             return RbacResult<UserListItem>.Fail("用户不存在");
+        }
+        if (!CanManageTarget(actor, user))
+        {
+            return RbacResult<UserListItem>.Fail("不能管理权限高于自身或系统管理员账号");
         }
 
         if (string.IsNullOrWhiteSpace(request.DisplayName))
@@ -144,6 +172,10 @@ public class UserService(AppDbContext db, ProfileService profiles)
         {
             return RbacResult<UserListItem>.Fail("所选角色不存在");
         }
+        if (!CanAssignRoles(actor, roles))
+        {
+            return RbacResult<UserListItem>.Fail("不能授予超出自身权限范围的角色");
+        }
 
         // 系统管理员兜底：不能把最后一个管理员移除/停用
         var hadAdmin = user.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode);
@@ -160,6 +192,7 @@ public class UserService(AppDbContext db, ProfileService profiles)
         user.Roles.Clear();
         user.Roles.AddRange(roles);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return RbacResult<UserListItem>.Ok(await BuildListItemAsync(user.Id, ct));
     }
@@ -167,12 +200,25 @@ public class UserService(AppDbContext db, ProfileService profiles)
     public async Task<RbacResult> ResetPasswordAsync(
         int id,
         string password,
+        int actorUserId,
         CancellationToken ct = default)
     {
-        var user = await db.Users.FirstOrDefaultAsync(item => item.Id == id, ct);
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult.Fail("登录已失效，请重新登录");
+        }
+        var user = await db.Users
+            .Include(item => item.Roles)
+            .ThenInclude(role => role.Permissions)
+            .FirstOrDefaultAsync(item => item.Id == id, ct);
         if (user is null)
         {
             return RbacResult.Fail("用户不存在");
+        }
+        if (!CanManageTarget(actor, user))
+        {
+            return RbacResult.Fail("不能管理权限高于自身或系统管理员账号");
         }
         user.PasswordHash = PasswordService.Hash(password);
         await db.SaveChangesAsync(ct);
@@ -180,13 +226,13 @@ public class UserService(AppDbContext db, ProfileService profiles)
     }
 
     public async Task<RbacResult> ChangeOwnPasswordAsync(
-        string username,
+        int userId,
         string currentPassword,
         string newPassword,
         CancellationToken ct = default)
     {
         var user = await db.Users.FirstOrDefaultAsync(
-            item => item.Username == username,
+            item => item.Id == userId,
             ct);
         if (user is null)
         {
@@ -209,19 +255,32 @@ public class UserService(AppDbContext db, ProfileService profiles)
 
     public async Task<RbacResult> DeleteAsync(
         int id,
-        string currentUsername,
+        int actorUserId,
         CancellationToken ct = default)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            ct);
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult.Fail("登录已失效，请重新登录");
+        }
         var user = await db.Users
             .Include(item => item.Roles)
+            .ThenInclude(role => role.Permissions)
             .FirstOrDefaultAsync(item => item.Id == id, ct);
         if (user is null)
         {
             return RbacResult.Fail("用户不存在");
         }
-        if (string.Equals(user.Username, currentUsername, StringComparison.Ordinal))
+        if (user.Id == actorUserId)
         {
             return RbacResult.Fail("不能删除当前登录账号");
+        }
+        if (!CanManageTarget(actor, user))
+        {
+            return RbacResult.Fail("不能管理权限高于自身或系统管理员账号");
         }
         if (user.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode) &&
             await CountOtherAdminsAsync(id, ct) == 0)
@@ -231,7 +290,62 @@ public class UserService(AppDbContext db, ProfileService profiles)
 
         db.Users.Remove(user);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return RbacResult.Ok();
+    }
+
+    private sealed record ActorScope(bool IsSystemAdmin, HashSet<string> Permissions);
+
+    private async Task<ActorScope?> LoadActorAsync(int actorUserId, CancellationToken ct)
+    {
+        var actor = await db.Users
+            .AsNoTracking()
+            .AsSplitQuery()
+            .Include(user => user.Roles)
+            .ThenInclude(role => role.Permissions)
+            .FirstOrDefaultAsync(user => user.Id == actorUserId && user.IsActive, ct);
+        if (actor is null)
+        {
+            return null;
+        }
+
+        return new ActorScope(
+            actor.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode),
+            actor.Roles
+                .SelectMany(role => role.Permissions)
+                .Select(permission => permission.Code)
+                .ToHashSet(StringComparer.Ordinal));
+    }
+
+    private static bool CanManageTarget(ActorScope actor, User target)
+    {
+        if (actor.IsSystemAdmin)
+        {
+            return true;
+        }
+        if (target.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode))
+        {
+            return false;
+        }
+        return target.Roles
+            .SelectMany(role => role.Permissions)
+            .Select(permission => permission.Code)
+            .All(actor.Permissions.Contains);
+    }
+
+    private static bool CanAssignRoles(ActorScope actor, IEnumerable<Role> roles)
+    {
+        if (actor.IsSystemAdmin)
+        {
+            return true;
+        }
+
+        var roleList = roles.ToList();
+        return roleList.All(role => role.Code != RbacDefaults.SystemAdminRoleCode) &&
+            roleList
+                .SelectMany(role => role.Permissions)
+                .Select(permission => permission.Code)
+                .All(actor.Permissions.Contains);
     }
 
     private async Task<List<Role>> ResolveRolesAsync(
@@ -243,6 +357,7 @@ public class UserService(AppDbContext db, ProfileService profiles)
             return [];
         }
         return await db.Roles
+            .Include(role => role.Permissions)
             .Where(role => roleIds.Contains(role.Id))
             .ToListAsync(ct);
     }

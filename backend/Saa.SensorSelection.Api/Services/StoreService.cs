@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
@@ -12,6 +14,8 @@ namespace Saa.SensorSelection.Api.Services;
 /// <summary>数据仓库业务逻辑：key → JSON 数组的读、写、整体替换与删除。</summary>
 public class StoreService(AppDbContext db, StoredFileService storedFiles)
 {
+    public const string MissingEntityTag = "\"missing\"";
+
     private static readonly HashSet<string> EntityKinds =
         new(StringComparer.OrdinalIgnoreCase) { "customer", "machine" };
 
@@ -61,12 +65,29 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
     {
         var entry = await db.StoreEntries.AsNoTracking().FirstOrDefaultAsync(e => e.Key == key, ct);
         return entry == null
-            ? new StoreReadResult(false, null)
-            : new StoreReadResult(true, entry.Json);
+            ? new StoreReadResult(false, null, MissingEntityTag)
+            : new StoreReadResult(true, entry.Json, EntityTag(entry.Json));
     }
 
+    public static string EntityTag(string json)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return $"\"sha256-{Convert.ToHexString(hash).ToLowerInvariant()}\"";
+    }
+
+    public static string EntityTag(JsonObject store) => EntityTag(store.ToJsonString());
+
+    private static bool MatchesEntityTag(string expectedEntityTag, string? json, bool found) =>
+        string.Equals(
+            expectedEntityTag,
+            found ? EntityTag(json!) : MissingEntityTag,
+            StringComparison.Ordinal);
+
     /// <summary>整体导入：以提交对象全量替换数据仓库（首次接入时迁移 localStorage 数据用）。</summary>
-    public async Task<StoreWriteResult> ReplaceAllAsync(JsonElement store, CancellationToken ct = default)
+    public async Task<StoreWriteResult> ReplaceAllAsync(
+        JsonElement store,
+        string expectedEntityTag,
+        CancellationToken ct = default)
     {
         if (store.ValueKind != JsonValueKind.Object)
         {
@@ -89,24 +110,45 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             submittedKeys.Add(property.Name);
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var currentEntries = await db.StoreEntries.OrderBy(entry => entry.Key).ToListAsync(ct);
+        var currentStore = new JsonObject();
+        foreach (var entry in currentEntries)
+        {
+            currentStore[entry.Key] = JsonNode.Parse(entry.Json);
+        }
+        if (!string.Equals(expectedEntityTag, EntityTag(currentStore), StringComparison.Ordinal))
+        {
+            return StoreWriteResult.Precondition("数据已被其他用户修改，请刷新后重试");
+        }
+        var removedEntityGroup = currentEntries.FirstOrDefault(entry =>
+            entry.Key.StartsWith("entity-groups:", StringComparison.OrdinalIgnoreCase) &&
+            !submittedKeys.Contains(entry.Key));
+        if (removedEntityGroup is not null)
+        {
+            return StoreWriteResult.Validation("整体替换不能删除实体目录");
+        }
+
+        var currentByKey = currentEntries.ToDictionary(entry => entry.Key, StringComparer.Ordinal);
         var detached = new Dictionary<string, FileDetachmentResult>();
         foreach (var property in store.EnumerateObject())
         {
-            var result = storedFiles.Detach(property.Value);
+            currentByKey.TryGetValue(property.Name, out var previous);
+            var result = PrepareValue(property.Name, property.Value, previous?.Json);
             if (!result.Success) return StoreWriteResult.Validation(result.Error!);
             detached[property.Name] = result;
         }
 
         var previousFileIds = new HashSet<Guid>();
-        foreach (var json in await db.StoreEntries.AsNoTracking().Select(e => e.Json).ToListAsync(ct))
+        foreach (var json in currentEntries.Select(entry => entry.Json))
         {
             previousFileIds.UnionWith(StoredFileService.ReferencedFileIds(json));
         }
 
         var now = DateTime.UtcNow;
-        var existing = await db.StoreEntries
+        var existing = currentEntries
             .Where(e => submittedKeys.Contains(e.Key))
-            .ToDictionaryAsync(e => e.Key, ct);
+            .ToDictionary(e => e.Key);
 
         foreach (var property in store.EnumerateObject())
         {
@@ -130,6 +172,15 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             }
         }
 
+        var missingFiles = await storedFiles.FindMissingReferencesAsync(
+            detached.Values.Select(result => result.Json!),
+            ct);
+        if (missingFiles.Count > 0)
+        {
+            db.ChangeTracker.Clear();
+            return StoreWriteResult.Validation("引用的文件不存在或已被删除");
+        }
+
         // 一次数据库调用删除所有不在本次提交中的旧 key
         await db.StoreEntries
             .Where(e => !submittedKeys.Contains(e.Key))
@@ -137,11 +188,16 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
         await db.SaveChangesAsync(ct);
         await storedFiles.ReleaseAsync(previousFileIds, ct);
+        await transaction.CommitAsync(ct);
         return StoreWriteResult.Ok();
     }
 
     /// <summary>写入单个 key 的 JSON 数组（新增或覆盖，并发首写冲突时回退为覆盖更新）。</summary>
-    public async Task<StoreWriteResult> UpsertAsync(string key, JsonElement value, CancellationToken ct = default)
+    public async Task<StoreWriteResult> UpsertAsync(
+        string key,
+        JsonElement value,
+        string expectedEntityTag,
+        CancellationToken ct = default)
     {
         if (key.Length == 0 || key.Length > 200)
         {
@@ -153,7 +209,14 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return StoreWriteResult.Validation("值必须是 JSON 数组");
         }
 
-        var detached = storedFiles.Detach(value);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
+        if (!MatchesEntityTag(expectedEntityTag, entry?.Json, entry is not null))
+        {
+            return StoreWriteResult.Precondition("数据已被其他用户修改，请刷新后重试");
+        }
+
+        var detached = PrepareValue(key, value, entry?.Json);
         if (!detached.Success)
         {
             return StoreWriteResult.Validation(detached.Error!);
@@ -161,49 +224,34 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
 
         var json = detached.Json!;
         db.StoredFiles.AddRange(detached.Files);
-        var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
         var droppedFileIds = StoredFileService.ReferencedFileIds(entry?.Json);
         var previousJson = entry?.Json;
         json = ApplySensorDates(key, json, previousJson);
+        var missingFiles = await storedFiles.FindMissingReferencesAsync([json], ct);
+        if (missingFiles.Count > 0)
+        {
+            db.ChangeTracker.Clear();
+            return StoreWriteResult.Validation("引用的文件不存在或已被删除");
+        }
         if (entry == null)
         {
-            var added = db.StoreEntries.Add(new StoreEntry
+            db.StoreEntries.Add(new StoreEntry
             {
                 Key = key,
                 Json = json,
                 UpdatedAt = DateTime.UtcNow,
             });
-            try
-            {
-                await db.SaveChangesAsync(ct);
-            }
-            catch (DbUpdateException)
-            {
-                // 并发首次写入同 key（主键冲突）：放弃本次插入，改为覆盖更新
-                db.Entry(added.Entity).State = EntityState.Detached;
-                var existing = await db.StoreEntries.FindAsync([key], ct);
-                if (existing == null)
-                {
-                    throw;
-                }
-
-                droppedFileIds = StoredFileService.ReferencedFileIds(existing.Json);
-                previousJson = existing.Json;
-                json = ApplySensorDates(key, json, existing.Json);
-                existing.Json = json;
-                existing.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
         }
         else
         {
             entry.Json = json;
             entry.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
         }
 
+        await db.SaveChangesAsync(ct);
         droppedFileIds.ExceptWith(StoredFileService.ReferencedFileIds(json));
         await storedFiles.ReleaseAsync(droppedFileIds, ct);
+        await transaction.CommitAsync(ct);
         return StoreWriteResult.Ok(json, previousJson);
     }
 
@@ -213,7 +261,40 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
     public async Task<StoreWriteResult> ReplaceEntityGroupsAsync(
         string kind,
         JsonElement value,
+        string expectedEntityTag,
         CancellationToken ct = default)
+    {
+        var normalizedKind = kind.Trim().ToLowerInvariant();
+        return await UpsertAsync(
+            $"entity-groups:{normalizedKind}",
+            value,
+            expectedEntityTag,
+            ct);
+    }
+
+    private FileDetachmentResult PrepareValue(string key, JsonElement value, string? previousJson)
+    {
+        if (!key.StartsWith("entity-groups:", StringComparison.OrdinalIgnoreCase))
+        {
+            return storedFiles.Detach(value);
+        }
+
+        var kind = key["entity-groups:".Length..];
+        if (kind is not ("customer" or "machine"))
+        {
+            return FileDetachmentResult.Validation(
+                "实体目录 key 必须是 entity-groups:customer 或 entity-groups:machine");
+        }
+        var normalized = NormalizeEntityGroups(kind, value, previousJson);
+        return normalized.Success
+            ? FileDetachmentResult.Ok(normalized.Json!, [])
+            : FileDetachmentResult.Validation(normalized.Error!);
+    }
+
+    private static StoreWriteResult NormalizeEntityGroups(
+        string kind,
+        JsonElement value,
+        string? previousJson)
     {
         var normalizedKind = kind.Trim().ToLowerInvariant();
         if (!EntityKinds.Contains(normalizedKind))
@@ -233,7 +314,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         var isCustomer = normalizedKind == "customer";
         var groups = new List<EntityGroupPayload>();
         var groupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var machineItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var machineItemCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in value.EnumerateArray())
         {
             if (group.ValueKind != JsonValueKind.Object ||
@@ -282,9 +363,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             }
 
             var items = new List<string>();
-            var itemNames = isCustomer
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : machineItemNames;
+            var customerItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in itemsProperty.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.String)
@@ -303,9 +382,13 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                     return StoreWriteResult.Validation($"厂区名称不能包含“/”: {itemName}");
                 }
 
-                if (!itemNames.Add(itemName))
+                if (isCustomer && !customerItemNames.Add(itemName))
                 {
                     return StoreWriteResult.Validation($"条目重复: {itemName}");
+                }
+                if (!isCustomer)
+                {
+                    machineItemCounts[itemName] = machineItemCounts.GetValueOrDefault(itemName) + 1;
                 }
 
                 items.Add(itemName);
@@ -386,7 +469,6 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                     }
 
                     var configurationItems = new List<string>();
-                    var configurationItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var item in configurationItemsProperty.EnumerateArray())
                     {
                         if (item.ValueKind != JsonValueKind.String)
@@ -400,11 +482,7 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
                             return StoreWriteResult.Validation("条目名称长度必须为 1-40 个字符");
                         }
 
-                        if (!configurationItemNames.Add(itemName))
-                        {
-                            return StoreWriteResult.Validation($"条目重复: {itemName}");
-                        }
-
+                        machineItemCounts[itemName] = machineItemCounts.GetValueOrDefault(itemName) + 1;
                         configurationItems.Add(itemName);
                     }
 
@@ -420,14 +498,207 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
             return StoreWriteResult.Validation("至少需要一个分类");
         }
 
-        var normalized = JsonSerializer.SerializeToElement(groups);
-        return await UpsertAsync($"entity-groups:{normalizedKind}", normalized, ct);
+        if (!isCustomer)
+        {
+            var previousCounts = MachineNameCounts(previousJson);
+            foreach (var (name, count) in machineItemCounts)
+            {
+                if (count > 1 && count > previousCounts.GetValueOrDefault(name))
+                {
+                    return StoreWriteResult.Validation($"条目重复: {name}");
+                }
+            }
+        }
+
+        var normalized = JsonSerializer.Serialize(groups);
+        return StoreWriteResult.Ok(normalized);
     }
 
-    /// <summary>删除单个 key，返回是否实际存在。</summary>
-    public async Task<StoreDeleteResult> DeleteAsync(string key, CancellationToken ct = default)
+    private static Dictionary<string, int> MachineNameCounts(string? json)
     {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(json)) return counts;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array) return counts;
+            foreach (var group in document.RootElement.EnumerateArray())
+            {
+                AddItems(group, "items", counts);
+                if (!group.TryGetProperty("configurations", out var configurations) ||
+                    configurations.ValueKind != JsonValueKind.Array) continue;
+                foreach (var configuration in configurations.EnumerateArray())
+                {
+                    AddItems(configuration, "items", counts);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // 损坏的旧目录不放宽新写入；新值仍按严格唯一规则处理。
+        }
+        return counts;
+
+        static void AddItems(
+            JsonElement owner,
+            string propertyName,
+            Dictionary<string, int> result)
+        {
+            if (owner.ValueKind != JsonValueKind.Object ||
+                !owner.TryGetProperty(propertyName, out var items) ||
+                items.ValueKind != JsonValueKind.Array) return;
+            foreach (var item in items.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) continue;
+                var name = item.GetString()?.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                result[name] = result.GetValueOrDefault(name) + 1;
+            }
+        }
+    }
+
+    public async Task<StoreBatchResult> ApplyBatchAsync(
+        IReadOnlyList<StoreBatchChange> changes,
+        CancellationToken ct = default)
+    {
+        if (changes.Count == 0)
+        {
+            return StoreBatchResult.Validation("changes 不能为空");
+        }
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var change in changes)
+        {
+            if (change.Key.Length == 0 || change.Key.Length > 200)
+            {
+                return StoreBatchResult.Validation("key 非法");
+            }
+            if (!keys.Add(change.Key))
+            {
+                return StoreBatchResult.Validation($"批次中 key 重复: {change.Key}");
+            }
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var entries = await db.StoreEntries
+            .Where(entry => keys.Contains(entry.Key))
+            .ToDictionaryAsync(entry => entry.Key, StringComparer.Ordinal, ct);
+
+        foreach (var change in changes)
+        {
+            entries.TryGetValue(change.Key, out var entry);
+            if (!MatchesExpected(change.Expected, entry?.Json, entry is not null))
+            {
+                return StoreBatchResult.Conflict(change.Key);
+            }
+        }
+
+        var prepared = new List<PreparedBatchChange>(changes.Count);
+        foreach (var change in changes)
+        {
+            entries.TryGetValue(change.Key, out var entry);
+            if (change.Value is null)
+            {
+                if (change.Key.StartsWith("entity-groups:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return StoreBatchResult.Validation("实体目录不能通过批次删除");
+                }
+                prepared.Add(new PreparedBatchChange(change.Key, null, [], entry?.Json));
+                continue;
+            }
+
+            var detached = PrepareValue(change.Key, change.Value.Value, entry?.Json);
+            if (!detached.Success)
+            {
+                return StoreBatchResult.Validation(detached.Error!);
+            }
+
+            var json = detached.Json!;
+            json = ApplySensorDates(change.Key, json, entry?.Json);
+            prepared.Add(new PreparedBatchChange(change.Key, json, detached.Files, entry?.Json));
+        }
+
+        var droppedFileIds = new HashSet<Guid>();
+        var now = DateTime.UtcNow;
+        foreach (var change in prepared)
+        {
+            droppedFileIds.UnionWith(StoredFileService.ReferencedFileIds(change.PreviousJson));
+            db.StoredFiles.AddRange(change.Files);
+            entries.TryGetValue(change.Key, out var entry);
+            if (change.Json is null)
+            {
+                if (entry is not null) db.StoreEntries.Remove(entry);
+                continue;
+            }
+
+            if (entry is null)
+            {
+                db.StoreEntries.Add(new StoreEntry
+                {
+                    Key = change.Key,
+                    Json = change.Json,
+                    UpdatedAt = now,
+                });
+            }
+            else
+            {
+                entry.Json = change.Json;
+                entry.UpdatedAt = now;
+            }
+        }
+
+
+        var missingFiles = await storedFiles.FindMissingReferencesAsync(
+            prepared.Where(change => change.Json is not null).Select(change => change.Json!),
+            ct);
+        if (missingFiles.Count > 0)
+        {
+            db.ChangeTracker.Clear();
+            return StoreBatchResult.Validation("引用的文件不存在或已被删除");
+        }
+
+        await db.SaveChangesAsync(ct);
+        await storedFiles.ReleaseAsync(droppedFileIds, ct);
+        await transaction.CommitAsync(ct);
+
+        return StoreBatchResult.Ok(
+            prepared.ToDictionary(
+                change => change.Key,
+                change => change.Json,
+                StringComparer.Ordinal),
+            prepared.ToDictionary(
+                change => change.Key,
+                change => change.PreviousJson,
+                StringComparer.Ordinal));
+    }
+
+    private static bool MatchesExpected(JsonElement? expected, string? currentJson, bool found)
+    {
+        if (expected is null) return !found;
+        if (!found) return false;
+        return JsonNode.DeepEquals(
+            JsonNode.Parse(expected.Value.GetRawText()),
+            JsonNode.Parse(currentJson!));
+    }
+
+    private sealed record PreparedBatchChange(
+        string Key,
+        string? Json,
+        IReadOnlyList<StoredFile> Files,
+        string? PreviousJson);
+
+    /// <summary>删除单个 key，返回是否实际存在。</summary>
+    public async Task<StoreDeleteResult> DeleteAsync(
+        string key,
+        string expectedEntityTag,
+        CancellationToken ct = default)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var entry = await db.StoreEntries.FirstOrDefaultAsync(e => e.Key == key, ct);
+        if (!MatchesEntityTag(expectedEntityTag, entry?.Json, entry is not null))
+        {
+            return StoreDeleteResult.Precondition("数据已被其他用户修改，请刷新后重试");
+        }
         if (entry == null)
         {
             return new StoreDeleteResult(false);
@@ -438,27 +709,70 @@ public class StoreService(AppDbContext db, StoredFileService storedFiles)
         db.StoreEntries.Remove(entry);
         await db.SaveChangesAsync(ct);
         await storedFiles.ReleaseAsync(droppedFileIds, ct);
+        await transaction.CommitAsync(ct);
         return new StoreDeleteResult(true, previousJson);
     }
 }
 
 /// <summary>单个 key 的读取结果。</summary>
-public record StoreReadResult(bool Found, string? Json);
+public record StoreReadResult(bool Found, string? Json, string EntityTag);
 
 /// <summary>
 /// 写操作结果：Success=false 且 Error 非空表示校验失败。
 /// PreviousJson 是写入前的值（新 key 为 null），供操作日志比较改了什么。
 /// </summary>
-public record StoreWriteResult(bool Success, string? Error, string? Json, string? PreviousJson = null)
+public record StoreWriteResult(
+    bool Success,
+    string? Error,
+    string? Json,
+    string? PreviousJson = null,
+    bool PreconditionFailed = false)
 {
     public static StoreWriteResult Ok(string? json = null, string? previousJson = null) =>
         new(true, null, json, previousJson);
 
     public static StoreWriteResult Validation(string message) => new(false, message, null);
+
+    public static StoreWriteResult Precondition(string message) =>
+        new(false, message, null, PreconditionFailed: true);
 }
 
 /// <summary>删除结果：Found=false 表示 key 不存在；PreviousJson 是删掉的值。</summary>
-public record StoreDeleteResult(bool Found, string? PreviousJson = null);
+public record StoreDeleteResult(
+    bool Found,
+    string? PreviousJson = null,
+    bool PreconditionFailed = false,
+    string? Error = null)
+{
+    public static StoreDeleteResult Precondition(string message) =>
+        new(false, PreconditionFailed: true, Error: message);
+}
+
+public sealed record StoreBatchChange(string Key, JsonElement? Expected, JsonElement? Value);
+
+public sealed record StoreBatchResult(
+    bool Success,
+    string? Error,
+    string? ConflictKey,
+    IReadOnlyDictionary<string, string?> Values,
+    IReadOnlyDictionary<string, string?> PreviousValues)
+{
+    public static StoreBatchResult Ok(
+        IReadOnlyDictionary<string, string?> values,
+        IReadOnlyDictionary<string, string?> previousValues) =>
+        new(true, null, null, values, previousValues);
+
+    public static StoreBatchResult Validation(string message) =>
+        new(false, message, null, new Dictionary<string, string?>(), new Dictionary<string, string?>());
+
+    public static StoreBatchResult Conflict(string key) =>
+        new(
+            false,
+            "数据已被其他用户修改，请刷新后重试",
+            key,
+            new Dictionary<string, string?>(),
+            new Dictionary<string, string?>());
+}
 
 /// <summary>实体分类排序的后端存储形状。</summary>
 public sealed record EntityGroupPayload(

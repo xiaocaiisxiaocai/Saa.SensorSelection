@@ -35,14 +35,18 @@ pnpm run build
 pnpm run test:backend
 ```
 
-端到端回归需要前端（`5178`）与后端（`5080`）都已启动，会在运行结束时清理自己创建的全部数据：
+端到端回归只允许连接独立、可丢弃的测试服务和测试数据库。脚本不再提供 localhost 默认值，必须显式设置地址：
 
 ```powershell
-pnpm run test:api   # 后端 API 全量增删改查 + 权限矩阵
-pnpm run test:ui    # 浏览器端全量增删改查 + 字体/间距/点击热区/无障碍审计
+$env:API_BASE = 'http://127.0.0.1:5081/api'
+pnpm run test:api
+
+$env:E2E_BASE_URL = 'http://127.0.0.1:5179'
+$env:API_BASE = 'http://127.0.0.1:5081/api'
+pnpm run test:ui
 ```
 
-`test:ui` 依赖 Playwright 的 Chromium：首次运行前执行 `pnpm exec playwright install chromium`。加 `--headed` 可观察浏览器操作，失败截图落在 `scripts/e2e/artifacts/`。
+`test:ui` 会写入并清理测试数据，不能指向日常开发库或生产环境。Windows 浏览器测试遵守全局 CORE-19：本机已知 Edge／Playwright Chromium 版本曾触发 SAC 认证锁定，未经隔离验证修复或规避方案，不得以 SAC 新启动这些版本；复用获授权会话，出现新的 4625／4740 立即停止。失败截图落在 `scripts/e2e/artifacts/`。
 
 ## 目录
 
@@ -56,8 +60,8 @@ backend/                              后端（ASP.NET Core + SQLite）
   Saa.SensorSelection.Api/            Web API
   Saa.SensorSelection.Api.Tests/      集成测试
   scripts/backup-db.mjs               数据库备份
-scripts/deploy-iis.ps1                IIS 前后端未压缩发布目录打包
+scripts/deploy-iis.ps1                IIS 前后端安全暂存、校验并生成无数据库发布制品
 scripts/selection-contract-test.cjs   领域合同回归
 ```
 
-业务数据在线以 SQLite 为准，并快照到浏览器 `localStorage` 键 `symtek_crud_store`。
+业务数据在线以 SQLite 为唯一数据源，浏览器不缓存业务数据，也不会在空库时自动回灌本地数据或前端种子。Store 写入使用服务端 CAS：读取取得 ETag，旧单键写必须携带 `If-Match`，跨 key 修改通过原子 `POST /api/store/batch` 提交；界面只在服务端实际确认成功后提示保存完成。

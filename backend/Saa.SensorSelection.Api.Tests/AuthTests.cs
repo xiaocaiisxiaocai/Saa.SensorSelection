@@ -103,6 +103,10 @@ public class AuthTests
             new { currentPassword = "admin123", newPassword = "admin456" });
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
 
+        // 密码已进入会话指纹，改密后旧 token 必须立即失效。
+        var oldSession = await client.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, oldSession.StatusCode);
+
         using var after = factory.CreateClient();
         var oldLogin = await LoginAsync(after, "admin", "admin123");
         Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);

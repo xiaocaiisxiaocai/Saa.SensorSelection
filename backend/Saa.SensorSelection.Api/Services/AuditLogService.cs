@@ -233,7 +233,7 @@ public class AuditLogService(
     {
         try
         {
-            username ??= http.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            username ??= http.HttpContext?.User.FindFirstValue(JwtService.UsernameClaim);
             var operationId = ResolveOperationId(username);
             var operationLabel = ResolveOperationLabel();
             ip = NormalizeIp(ip ?? http.HttpContext?.Connection.RemoteIpAddress?.ToString());

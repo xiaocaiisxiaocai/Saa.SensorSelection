@@ -125,6 +125,7 @@ function entityKindDefinition(kind: string) {
 
 export function createSelectionRepository({
   storage,
+  crudDefaults,
   sensorData,
   demoData = true,
 }: {
@@ -756,6 +757,19 @@ export function createSelectionRepository({
     const current = items[index];
     if (current && sensorCurrentGuardsAlternates(items, current)) {
       return { ok: false, reason: 'not-empty', message: SENSOR_HAS_ALTERNATES };
+    }
+    if (
+      items.some(
+        (item) =>
+          item.id !== id &&
+          (item.replacesId === id || item.replacedById === id),
+      )
+    ) {
+      return {
+        ok: false,
+        reason: 'in-use',
+        message: '该型号属于替换历史，需保留，不能删除',
+      };
     }
     const snapshot = cloneStore(store);
     items.splice(index, 1);
@@ -3261,18 +3275,6 @@ export function createSelectionRepository({
       : targetGroup.items;
     if (!targetItems) return { ok: false, reason: 'validation' };
 
-    // 编辑时自己不算重复——但只有留在原分组里才是「自己」；
-    // 移到另一个分组时，那里的同名条目就是真重复。
-    const sourceCategory = payload.previousCategory ?? category;
-    const duplicate = targetItems.some(
-      (item) =>
-        sameLocaleName(item, name) &&
-        !(editName && item === editName && sourceCategory === category),
-    );
-    if (duplicate) return { ok: false, reason: 'duplicate' };
-
-    const snapshot = cloneStore(store);
-    const dataName = entityDataName(kind, category, name);
     const location = editName
       ? findEntityLocation(
           groups,
@@ -3282,6 +3284,33 @@ export function createSelectionRepository({
         )
       : null;
     if (editName && !location) return { ok: false, reason: 'stale' };
+
+    // 客户厂区只在本客户内唯一；机型数据和兼容键按机型名存，
+    // 因此新增/改名必须在全目录唯一。已有历史重名项由归一化保留，
+    // 这里只排除当前正在编辑的那个节点，便于用户将冲突名称改成唯一值。
+    const duplicate =
+      kind === 'machine'
+        ? groups.some((group) =>
+            [
+              group.items,
+              ...(group.configurations ?? []).map((item) => item.items),
+            ].some((items) =>
+              items.some(
+                (item, index) =>
+                  sameLocaleName(item, name) &&
+                  !(location?.items === items && location.index === index),
+              ),
+            ),
+          )
+        : targetItems.some(
+            (item) =>
+              sameLocaleName(item, name) &&
+              !(location?.items === targetItems && item === editName),
+          );
+    if (duplicate) return { ok: false, reason: 'duplicate' };
+
+    const snapshot = cloneStore(store);
+    const dataName = entityDataName(kind, category, name);
     // 目标分组 / 配置已有二级 Tab，下一层就不能再有机型（留在原处改名不算）
     const parentNode = {
       category,
@@ -3922,6 +3951,44 @@ export function createSelectionRepository({
     });
   }
 
+  /**
+   * 在当前快照的内存副本上执行字典还原，供界面先展示差异。
+   * baseline 是预览所依据的原始快照；store 是套用同一输入后的预期快照。
+   * 这里不使用真实 storage，因此不会入队后端写入。
+   */
+  function previewDictionaries(sheets: DictionaryRestoreSheet[]) {
+    const baseline = snapshotStore();
+    let previewValue: null | string = JSON.stringify(baseline);
+    const previewRepository = createSelectionRepository({
+      crudDefaults,
+      sensorData,
+      demoData: false,
+      storage: {
+        getItem: () => previewValue,
+        setItem: (_key, value) => {
+          previewValue = value;
+        },
+      },
+    });
+    const result = previewRepository.restoreDictionaries(sheets);
+    return {
+      baseline,
+      result,
+      store: previewRepository.snapshotStore(),
+    };
+  }
+
+  /** 只有当前数据仍与预览基准相同时才落实字典还原。 */
+  function restoreDictionariesIfUnchanged(
+    sheets: DictionaryRestoreSheet[],
+    baseline: PersistedStore,
+  ): DictionaryRestoreResult {
+    if (JSON.stringify(snapshotStore()) !== JSON.stringify(baseline)) {
+      return { ok: false, reason: 'stale' };
+    }
+    return restoreDictionaries(sheets);
+  }
+
   function replaceFromStorage(rawValue: null | string) {
     store = parsePersistedStore(rawValue);
   }
@@ -3976,7 +4043,9 @@ export function createSelectionRepository({
     moveMachineTabPage,
     replaceFromStorage,
     importSensors,
+    previewDictionaries,
     restoreDictionaries,
+    restoreDictionariesIfUnchanged,
     reorderEntityGroups,
     reorderEntityItems,
     saveControlledFile,

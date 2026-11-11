@@ -19,10 +19,12 @@ public sealed class ReportsController(MachineSchematicReportService reportServic
     /// </summary>
     [HttpPost("machine-schematic")]
     [Authorize]
-    [RequestSizeLimit(100_000_000)]
-    public IActionResult BuildMachineSchematic([FromBody] MachineSchematicReportRequest request)
+    [RequestSizeLimit(30_000_000)]
+    public async Task<IActionResult> BuildMachineSchematic(
+        [FromBody] MachineSchematicReportRequest request,
+        CancellationToken ct)
     {
-        var result = reportService.Build(request);
+        var result = await reportService.BuildAsync(request, ct);
         if (!result.Success)
         {
             return BadRequest(new { ok = false, reason = "validation", message = result.Error });

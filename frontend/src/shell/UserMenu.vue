@@ -11,11 +11,14 @@ import {
 } from '@/pages/shared/column-widths';
 import { fieldError } from '@/pages/shared/form';
 import { useAuthStore } from '@/stores/auth';
+import { useSelectionStore } from '@/stores/selection';
 
 const auth = useAuthStore();
+const selection = useSelectionStore();
 const router = useRouter();
 
 const passwordOpen = ref(false);
+const loggingOut = ref(false);
 const saving = ref(false);
 const validationAttempted = ref(false);
 const form = reactive({
@@ -90,8 +93,21 @@ async function onMenuClick({ key: id }: { key: string | number }) {
     return;
   }
   if (id !== 'logout') return;
-  auth.logout();
-  await router.replace('/selection/customer');
+  if (loggingOut.value) return;
+  loggingOut.value = true;
+  try {
+    if (selection.hasPendingWrites) {
+      const saved = await selection.waitForPendingWrites();
+      if (!saved) {
+        message.error('仍有更改保存失败，已取消退出登录');
+        return;
+      }
+    }
+    auth.logout();
+    await router.replace('/selection/customer');
+  } finally {
+    loggingOut.value = false;
+  }
 }
 </script>
 
@@ -124,9 +140,12 @@ async function onMenuClick({ key: id }: { key: string | number }) {
             <template #icon><KeyRound :size="14" /></template>
             修改密码
           </a-menu-item>
-          <a-menu-item key="logout" danger>
-            <template #icon><LogOut :size="14" /></template>
-            退出登录
+          <a-menu-item key="logout" danger :disabled="loggingOut">
+            <template #icon>
+              <a-spin v-if="loggingOut" size="small" />
+              <LogOut v-else :size="14" />
+            </template>
+            {{ loggingOut ? '正在退出…' : '退出登录' }}
           </a-menu-item>
         </a-menu>
       </template>

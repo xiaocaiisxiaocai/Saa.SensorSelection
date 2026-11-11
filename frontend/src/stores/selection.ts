@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
-import { api } from '@/api';
+import { api, ApiError, getStoredToken } from '@/api';
 import { currentOperation, type AuditOperation } from '@/api/audit-operation';
 import { labelOperations } from '@/stores/operation-labels';
 import {
@@ -25,6 +25,7 @@ import {
   type MachineTab,
   type MachineNodeRef,
   type ProcessStepItem,
+  type PersistedStore,
   type SaveFailure,
   type SearchItem,
   type SensorImportRequest,
@@ -64,6 +65,8 @@ export const useSelectionStore = defineStore('selection', () => {
   const lastFailure = ref<null | SaveFailure>(null);
   const backendStatus = ref<BackendSyncStatus>('connecting');
   const backendMessage = ref('');
+  const pendingWriteCount = ref(0);
+  const hasPendingWrites = computed(() => pendingWriteCount.value > 0);
   // 是否曾经成功连上过后端。之后的重连期间页面保持挂载（继续显示已加载的数据），
   // 只有首次连接才用加载态替换页面，避免重连把编辑到一半的表单和弹窗卸载掉。
   const hasConnected = ref(false);
@@ -260,10 +263,27 @@ export const useSelectionStore = defineStore('selection', () => {
       backendMessage.value = '';
       // 先让旧 bridge 队列里已提交的写入落地，再拉取新快照；否则这些写入可能
       // 晚于 fetchStore 到达后端，新仓库读到的是旧值，下一次编辑就会把它们覆盖掉。
-      if (activeBridge) await activeBridge.queue;
+      if (activeBridge) {
+        activeBridge.status = 'connecting';
+        await activeBridge.queue;
+      }
       const bridge: BackendStorage = new BackendStorage({
         transport: {
           fetchStore: () => api.getStore(),
+          writeBatch: (changes, captured) => {
+            const context = captured as {
+              operation: AuditOperation | null;
+              token: string | null;
+            };
+            if (context.token !== getStoredToken()) {
+              throw new ApiError(
+                'error',
+                '登录账号已变更，未提交的修改已取消，请刷新后重试',
+                409,
+              );
+            }
+            return api.writeStoreBatch(changes, context.operation);
+          },
           writeKey: (key, value, operation) => {
             const entityGroupsMatch = /^entity-groups:(customer|machine)$/.exec(
               key,
@@ -284,7 +304,19 @@ export const useSelectionStore = defineStore('selection', () => {
         // 不传 local：浏览器不缓存业务数据，后端为空时也不能用本地内容回灌。
         migrateOnEmpty: false,
         // 写入入队时记下属于哪一次操作，操作日志据此把它们归成一行
-        captureContext: currentOperation,
+        captureContext: () => ({
+          operation: currentOperation(),
+          token: getStoredToken(),
+        }),
+        onPendingChange: (count) => {
+          if (bridge === activeBridge) pendingWriteCount.value = count;
+        },
+        onWriteSuccess: (snapshot) => {
+          if (bridge !== activeBridge) return;
+          repository.replaceFromStorage(snapshot);
+          backendMessage.value = '';
+          touch();
+        },
         onStatus: (status) => {
           if (bridge !== activeBridge) return;
           backendStatus.value = status;
@@ -324,8 +356,11 @@ export const useSelectionStore = defineStore('selection', () => {
       touch();
     })();
     return running
-      .catch(() => {
-        /* status is reported via callbacks */
+      .catch((error: unknown) => {
+        backendStatus.value = 'offline';
+        backendMessage.value =
+          error instanceof Error ? error.message : '数据初始化失败';
+        scheduleReconnect();
       })
       .finally(() => {
         initInFlight = false;
@@ -360,11 +395,17 @@ export const useSelectionStore = defineStore('selection', () => {
     return initPromise;
   }
 
+  function waitForPendingWrites(): Promise<boolean> {
+    return activeBridge?.waitForPendingWrites() ?? Promise.resolve(true);
+  }
+
   // 每个写方法在一次「操作」里执行，操作日志按它归组并显示名称
   return labelOperations({
     backendMessage,
     batchRead: <T>(run: () => T): T => repository.batchRead(run),
     backendStatus,
+    hasPendingWrites,
+    waitForPendingWrites,
     controlledDocuments,
     crudItems,
     deleteControlledFile: (entityName: string, id: number) =>
@@ -478,6 +519,13 @@ export const useSelectionStore = defineStore('selection', () => {
     ) => mutate(() => repository.saveCrud(listId, entityName, payload, editId)),
     restoreDictionaries: (sheets: DictionaryRestoreSheet[]) =>
       mutate(() => repository.restoreDictionaries(sheets)),
+    previewDictionaries: (sheets: DictionaryRestoreSheet[]) =>
+      repository.previewDictionaries(sheets),
+    restoreDictionariesIfUnchanged: (
+      sheets: DictionaryRestoreSheet[],
+      baseline: PersistedStore,
+    ) =>
+      mutate(() => repository.restoreDictionariesIfUnchanged(sheets, baseline)),
     saveDictionaryItem: (
       code: string,
       payload: Partial<DictionaryItem>,

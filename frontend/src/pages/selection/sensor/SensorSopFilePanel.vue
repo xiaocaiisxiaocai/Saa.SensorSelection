@@ -67,7 +67,7 @@ async function uploadPicked(picked: File[]) {
       title: file.name.replace(/\.pdf$/i, ''),
       uploadedAt: new Date().toISOString(),
     });
-    notifyResult(result, 'SOP 已上传', {
+    await notifyResult(result, 'SOP 已上传', {
       size: '文件大小超出 8 MB 限制',
       type: '仅支持 PDF 文档',
       storage: '数据保存失败，文件未保存',
@@ -79,8 +79,9 @@ async function remove(item: SensorSopFileItem) {
   const ok = await confirmDelete('删除 SOP', `确认删除“${item.title}”吗？`);
   if (!ok) return;
   const result = store.deleteSensorSopFile(item.id);
-  notifyResult(result, 'SOP 已删除');
-  if (preview.value?.id === item.id) preview.value = null;
+  if (await notifyResult(result, 'SOP 已删除')) {
+    if (preview.value?.id === item.id) preview.value = null;
+  }
 }
 
 // 列表分页：分页条固定在底部、始终显示；筛选变化回到第一页
@@ -151,7 +152,9 @@ const { listPagination } = useTablePagination(
             </a-tooltip>
             <a-tooltip
               v-if="canDownload"
-              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+              :title="
+                fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'
+              "
             >
               <span class="tooltip-host">
                 <a-button

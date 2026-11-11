@@ -170,9 +170,9 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Me(CancellationToken ct)
     {
-        // JWT 的 sub 声明经默认映射为 ClaimTypes.NameIdentifier（Identity.Name 是 name 声明=显示名）
-        var username = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
-        var user = await db.Users.FirstOrDefaultAsync(item => item.Username == username, ct);
+        // JWT 的 sub 使用不可复用的用户主键，经默认映射为 ClaimTypes.NameIdentifier。
+        var userId = CurrentUserId();
+        var user = await db.Users.FirstOrDefaultAsync(item => item.Id == userId, ct);
         if (user == null || !user.IsActive)
         {
             return Unauthorized(new { message = "登录已失效，请重新登录" });
@@ -192,9 +192,10 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
-        var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var userId = CurrentUserId();
+        var username = User.FindFirstValue(JwtService.UsernameClaim) ?? string.Empty;
         var result = await users.ChangeOwnPasswordAsync(
-            username,
+            userId,
             request.CurrentPassword,
             request.NewPassword,
             ct);
@@ -209,4 +210,13 @@ public class AuthController(
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
     }
+
+    private int CurrentUserId() =>
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var id)
+            ? id
+            : 0;
 }

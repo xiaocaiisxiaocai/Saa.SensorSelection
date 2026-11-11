@@ -28,7 +28,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request, CancellationToken ct)
     {
-        var result = await users.CreateAsync(request, ct);
+        var result = await users.CreateAsync(request, CurrentUserId(), ct);
         await audit.WriteAsync(
             "user.create",
             target: result.Value?.Username ?? request.Username,
@@ -52,7 +52,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request, CancellationToken ct)
     {
         var before = await FindAsync(id, ct);
-        var result = await users.UpdateAsync(id, request, ct);
+        var result = await users.UpdateAsync(id, request, CurrentUserId(), ct);
         await audit.WriteAsync(
             "user.update",
             target: result.Value?.Username ?? $"#{id}",
@@ -79,7 +79,7 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
         var name = await users.FindUsernameAsync(id, ct);
-        var result = await users.ResetPasswordAsync(id, request.Password, ct);
+        var result = await users.ResetPasswordAsync(id, request.Password, CurrentUserId(), ct);
         await audit.WriteAsync(
             "user.reset-password",
             target: name ?? $"#{id}",
@@ -99,9 +99,8 @@ public class UsersController(UserService users, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var username = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var before = await FindAsync(id, ct);
-        var result = await users.DeleteAsync(id, username, ct);
+        var result = await users.DeleteAsync(id, CurrentUserId(), ct);
         await audit.WriteAsync(
             "user.delete",
             target: before?.Username ?? $"#{id}",
@@ -119,6 +118,15 @@ public class UsersController(UserService users, AuditLogService audit) : Control
 
     private async Task<UserListItem?> FindAsync(int id, CancellationToken ct) =>
         (await users.ListAsync(ct)).FirstOrDefault(user => user.Id == id);
+
+    private int CurrentUserId() =>
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var id)
+            ? id
+            : 0;
 
     private static string FormatDetail(UserListItem user)
     {

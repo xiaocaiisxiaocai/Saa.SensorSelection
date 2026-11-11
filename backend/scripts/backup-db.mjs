@@ -1,48 +1,91 @@
 #!/usr/bin/env node
 /**
- * 备份 SQLite 数据文件（Saa.SensorSelection.Api/App_Data/symtek.db）到仓库根 backups/，
- * 保留最近 KEEP 份（默认 10）。
- *
- * 数据库启用了 WAL：最近提交的数据可能还在 symtek.db-wal 中，直接复制 symtek.db
- * 会丢数据甚至得到不一致的库。因此优先用 SQLite 的 VACUUM INTO 生成一致快照
- * （Node 22.13+ 内置 node:sqlite，后端运行中也可安全执行）；更旧的 Node 退回为
- * 同时复制主库与 -wal 文件，打开备份时 SQLite 会自动回放 WAL。
- *
- * 用法：
- *   pnpm run backup:db
- *   KEEP=30 pnpm run backup:db
- *   BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
+ * Use SQLite VACUUM INTO to create a consistent, verified database snapshot.
+ * No file-copy fallback is permitted because a live database and its WAL can
+ * change between independent copies.
  */
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const backendRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
+const scriptPath = fileURLToPath(import.meta.url);
+const backendRoot = resolve(dirname(scriptPath), '..');
 const repoRoot = resolve(backendRoot, '..');
-const dbPath = join(backendRoot, 'Saa.SensorSelection.Api', 'App_Data', 'symtek.db');
-const backupDir = resolve(process.env.BACKUP_DIR || join(repoRoot, 'backups'));
-const keep = Number(process.env.KEEP || 10);
+const apiRoot = join(backendRoot, 'Saa.SensorSelection.Api');
+const DEFAULT_DB_PATH = join(apiRoot, 'App_Data', 'symtek.db');
+const BACKUP_PATTERN = /^saa-sensor-selection-\d{8}-\d{6}(?:-\d{3}-\d{4})?\.db$/;
+const LOCK_FILE_NAME = '.saa-sensor-selection-backup.lock';
 
-if (!Number.isSafeInteger(keep) || keep <= 0) {
-  console.error(`KEEP 必须是正整数，当前: ${process.env.KEEP}`);
-  process.exit(1);
+export function parseSqliteDataSource(connectionString) {
+  if (!connectionString?.trim()) return null;
+  for (const segment of connectionString.split(';')) {
+    const separator = segment.indexOf('=');
+    if (separator < 0) continue;
+    const key = segment.slice(0, separator).trim().toLowerCase();
+    if (key !== 'data source' && key !== 'datasource' && key !== 'filename') continue;
+    const value = segment.slice(separator + 1).trim();
+    if (!value || value === ':memory:' || value.startsWith('file:')) {
+      throw new Error('备份仅支持本地 SQLite 文件路径');
+    }
+    return value;
+  }
+  throw new Error('连接串缺少 SQLite Data Source');
 }
 
-if (!existsSync(dbPath)) {
-  console.error(`未找到数据库文件：${dbPath}`);
-  process.exit(1);
+export function resolveDatabasePath(environment = process.env) {
+  const explicit = environment.DB_PATH?.trim();
+  const configured = explicit || parseSqliteDataSource(environment.ConnectionStrings__Default);
+  if (!configured) return DEFAULT_DB_PATH;
+  return isAbsolute(configured) ? resolve(configured) : resolve(apiRoot, configured);
 }
 
-mkdirSync(backupDir, { recursive: true });
+function timestamp(date) {
+  const pad = (value, length = 2) => String(value).padStart(length, '0');
+  return (
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}` +
+    `-${pad(date.getMilliseconds(), 3)}`
+  );
+}
 
-const now = new Date();
-const pad = (value) => String(value).padStart(2, '0');
-const stamp =
-  `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
-  `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-const target = join(backupDir, `saa-sensor-selection-${stamp}.db`);
+export function nextBackupPath(backupDir, date = new Date()) {
+  const stem = `saa-sensor-selection-${timestamp(date)}`;
+  let suffix = 0;
+  let candidate = join(backupDir, `${stem}-${String(suffix).padStart(4, '0')}.db`);
+  while (existsSync(candidate)) {
+    suffix += 1;
+    if (suffix > 9999) throw new Error('同一毫秒产生的备份数量超出限制');
+    candidate = join(backupDir, `${stem}-${String(suffix).padStart(4, '0')}.db`);
+  }
+  return candidate;
+}
 
-async function loadSqlite() {
+function quoteSqlite(value) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function assertIntegrity(sqlite, target) {
+  const snapshot = new sqlite.DatabaseSync(target, { readOnly: true });
+  try {
+    const rows = snapshot.prepare('PRAGMA integrity_check').all();
+    if (rows.length !== 1 || Object.values(rows[0] ?? {})[0] !== 'ok') {
+      throw new Error('SQLite integrity_check 未通过');
+    }
+  } finally {
+    snapshot.close();
+  }
+}
+
+export async function loadSqlite() {
   try {
     return await import('node:sqlite');
   } catch {
@@ -50,38 +93,95 @@ async function loadSqlite() {
   }
 }
 
-const sqlite = await loadSqlite();
-if (sqlite) {
-  const db = new sqlite.DatabaseSync(dbPath);
-  try {
-    db.exec('PRAGMA busy_timeout = 30000');
-    db.exec(`VACUUM INTO '${target.replaceAll("'", "''")}'`);
-  } finally {
-    db.close();
+export async function runBackup({
+  environment = process.env,
+  now = new Date(),
+  sqlite: injectedSqlite,
+} = {}) {
+  const keep = Number(environment.KEEP || 10);
+  if (!Number.isSafeInteger(keep) || keep <= 0) {
+    throw new Error(`KEEP 必须是正整数，当前: ${environment.KEEP ?? ''}`);
   }
-  console.log(`已备份到 ${target}`);
-} else {
-  copyFileSync(dbPath, target);
-  if (existsSync(`${dbPath}-wal`)) copyFileSync(`${dbPath}-wal`, `${target}-wal`);
-  console.warn(
-    '当前 Node 不支持 node:sqlite，已同时复制主库与 WAL 文件；' +
-      '备份期间若有写入仍可能不一致，建议升级到 Node 22.13+ 或先停止后端。',
-  );
-  console.log(`已备份到 ${target}`);
+
+  const dbPath = resolveDatabasePath(environment);
+  if (!existsSync(dbPath)) throw new Error(`未找到数据库文件：${dbPath}`);
+
+  const sqlite = injectedSqlite === undefined ? await loadSqlite() : injectedSqlite;
+  if (!sqlite?.DatabaseSync) {
+    throw new Error(
+      '当前 Node.js 不支持 node:sqlite，已拒绝不一致的文件复制备份；' +
+        '请使用 Node.js 22.13+，或由 SQLite 备份工具生成一致快照。',
+    );
+  }
+
+  const backupDir = resolve(environment.BACKUP_DIR || join(repoRoot, 'backups'));
+  mkdirSync(backupDir, { recursive: true });
+  const lockPath = join(backupDir, LOCK_FILE_NAME);
+  let lockDescriptor;
+  try {
+    lockDescriptor = openSync(lockPath, 'wx');
+    writeFileSync(
+      lockDescriptor,
+      JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }),
+    );
+  } catch (error) {
+    if (lockDescriptor !== undefined) {
+      try {
+        closeSync(lockDescriptor);
+      } finally {
+        rmSync(lockPath, { force: true });
+      }
+    }
+    throw new Error(`备份目录已有运行中或待人工确认的锁：${lockPath}`, { cause: error });
+  }
+
+  try {
+    const target = nextBackupPath(backupDir, now);
+    const source = new sqlite.DatabaseSync(dbPath);
+    try {
+      source.exec('PRAGMA busy_timeout = 30000');
+      source.exec(`VACUUM INTO ${quoteSqlite(target)}`);
+      assertIntegrity(sqlite, target);
+    } catch (error) {
+      rmSync(target, { force: true });
+      throw error;
+    } finally {
+      source.close();
+    }
+
+    const backups = readdirSync(backupDir)
+      .filter((name) => BACKUP_PATTERN.test(name))
+      .map((name) => ({ name, modified: statSync(join(backupDir, name)).mtimeMs }))
+      .sort((left, right) => right.modified - left.modified || right.name.localeCompare(left.name));
+    for (const stale of backups.slice(keep)) rmSync(join(backupDir, stale.name));
+
+    return {
+      backupCount: Math.min(backups.length, keep),
+      dbPath,
+      removed: Math.max(0, backups.length - keep),
+      target,
+    };
+  } finally {
+    try {
+      closeSync(lockDescriptor);
+    } finally {
+      rmSync(lockPath, { force: true });
+    }
+  }
 }
 
-const pattern = /^saa-sensor-selection-\d{8}-\d{6}\.db$/;
-const backups = readdirSync(backupDir)
-  .filter((name) => pattern.test(name))
-  .sort()
-  .reverse();
-
-for (const stale of backups.slice(keep)) {
-  rmSync(join(backupDir, stale));
-  rmSync(join(backupDir, `${stale}-wal`), { force: true });
+async function main() {
+  try {
+    const result = await runBackup();
+    console.log(`已通过 SQLite 一致快照备份到 ${result.target}`);
+    console.log(`当前共 ${result.backupCount} 份备份（上限 ${process.env.KEEP || 10} 份）`);
+    if (result.removed > 0) console.log(`已清理 ${result.removed} 份旧备份`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
-if (backups.length > keep) {
-  console.log(`已清理 ${backups.length - keep} 份旧备份（保留 ${keep} 份）`);
-} else {
-  console.log(`当前共 ${backups.length} 份备份（上限 ${keep} 份）`);
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  await main();
 }

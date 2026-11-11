@@ -117,7 +117,16 @@ function legacyRows(listId: string, entityName: string): unknown[] {
 
   if (listId.startsWith('machine-')) {
     const sensorItems = createSensorCatalogDefaults(SENSOR_DATA);
-    const normalized = normalizeMachineSectionRows(rows, {
+    // v1 曾把种子行的空 sensorIds 当成「尚未迁移」，再按
+    // sensorType/spec 自动绑定型号。现行业务语义已把显式 [] 视为
+    // 「已解除关联」，不能在通用 normalize 里恢复旧行为；只在清理
+    // v1 演示数据时去掉该字段，构造当时可能持久化的兼容形态。
+    const legacyInferredRows = rows.map((row) => {
+      const legacyRow: Record<string, unknown> = { ...row };
+      delete legacyRow.sensorIds;
+      return legacyRow;
+    });
+    const normalized = normalizeMachineSectionRows(legacyInferredRows, {
       allowImage: listId !== 'machine-notes',
       sensorItems,
     });

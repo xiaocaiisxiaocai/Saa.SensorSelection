@@ -226,6 +226,45 @@ describe('LoginPage', () => {
     wrapper.unmount();
   });
 
+  it('reconnects the backend after a stale-token preload failed', async () => {
+    const { ApiError } = await import('@/api');
+    window.localStorage.setItem('symtek_token', 'stale-token');
+    const getStore = vi
+      .spyOn(api, 'getStore')
+      .mockRejectedValueOnce(new ApiError('unauthorized', '登录已失效'))
+      .mockResolvedValueOnce({
+        'meta:seed-version': [{ version: SEED_VERSION }],
+      });
+    vi.spyOn(api, 'login').mockResolvedValue({
+      displayName: '管理员',
+      expiresAt: '2099-01-01T00:00:00Z',
+      orgUnit: null,
+      permissions: ['selection:read', 'selection:write'],
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      token: 'new-token',
+      username: 'admin',
+    });
+    vi.spyOn(api, 'me').mockRejectedValue(
+      new ApiError('unauthorized', '登录已失效'),
+    );
+    const wrapper = await mountLogin();
+    await vi.waitFor(() => expect(getStore).toHaveBeenCalledTimes(1));
+
+    const inputs = wrapper.findAll('input');
+    await inputs[0].setValue('admin');
+    await inputs[1].setValue('admin123');
+    await wrapper.get('form').trigger('submit');
+
+    await vi.waitFor(() => {
+      expect(getStore).toHaveBeenCalledTimes(2);
+      expect(wrapper.vm.$router.currentRoute.value.path).toBe(
+        '/selection/customer',
+      );
+    });
+    expect(window.localStorage.getItem('symtek_token')).toBe('new-token');
+    wrapper.unmount();
+  });
+
   it('shows no error banner when an expired session lands on the login page', async () => {
     window.localStorage.setItem('symtek_token', 'stale-token');
     vi.spyOn(api, 'me').mockRejectedValue(

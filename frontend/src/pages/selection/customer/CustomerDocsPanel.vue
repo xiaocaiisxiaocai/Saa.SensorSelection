@@ -80,7 +80,7 @@ async function uploadPicked(picked: File[]) {
       size: file.size,
       uploadedAt: new Date().toISOString(),
     });
-    notifyResult(result, '文件已上传', {
+    await notifyResult(result, '文件已上传', {
       size: '文件大小超出限制',
       type: '文件类型不受支持',
     });
@@ -90,10 +90,14 @@ async function uploadPicked(picked: File[]) {
 async function remove(item: ControlledFileItem) {
   const ok = await confirmDelete('删除文件', `确认删除“${item.fileName}”吗？`);
   if (!ok) return;
-  notifyResult(
-    store.deleteControlledFile(props.entityName, item.id),
-    '文件已删除',
-  );
+  if (
+    await notifyResult(
+      store.deleteControlledFile(props.entityName, item.id),
+      '文件已删除',
+    )
+  ) {
+    if (preview.value?.id === item.id) preview.value = null;
+  }
 }
 
 // 列表分页：分页条固定在底部、始终显示；筛选变化回到第一页
@@ -163,7 +167,9 @@ const { listPagination } = useTablePagination(
             </a-tooltip>
             <a-tooltip
               v-if="canDownload"
-              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+              :title="
+                fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'
+              "
             >
               <span class="tooltip-host">
                 <a-button

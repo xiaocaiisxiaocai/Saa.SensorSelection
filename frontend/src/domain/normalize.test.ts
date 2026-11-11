@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { STORAGE_KEY, keyFor, machineSectionImagesKey, machineSectionRowsKey } from './keys';
+import {
+  STORAGE_KEY,
+  keyFor,
+  machineSectionImagesKey,
+  machineSectionRowsKey,
+} from './keys';
 import {
   CONTROLLED_FILE_RULES,
   SENSOR_3D_FILE_RULES,
@@ -80,7 +85,9 @@ describe('normalizeCrudItems', () => {
     const first = normalized[0];
     expect(first && 'type' in first ? first.type : undefined).toBe('7');
     expect(first && 'note' in first ? first.note : undefined).toBe('');
-    expect(first && 'name' in first ? first.name : undefined).toBe('<img src=x>');
+    expect(first && 'name' in first ? first.name : undefined).toBe(
+      '<img src=x>',
+    );
   });
 
   it('maps feedback status aliases and fills default type', () => {
@@ -99,7 +106,9 @@ describe('normalizeCrudItems', () => {
     expect(item && 'type' in item ? item.type : undefined).toBe(
       createDictionaryDefaults('customer-feedback')[0]?.name,
     );
-    expect(item && 'measureHistory' in item ? item.measureHistory : undefined).toEqual([
+    expect(
+      item && 'measureHistory' in item ? item.measureHistory : undefined,
+    ).toEqual([
       {
         date: '2026-08-20',
         measure: '调整吸盘位置',
@@ -135,7 +144,9 @@ describe('normalizeCrudItems', () => {
       },
     ]);
 
-    expect(item && 'measureHistory' in item ? item.measureHistory : undefined).toEqual([
+    expect(
+      item && 'measureHistory' in item ? item.measureHistory : undefined,
+    ).toEqual([
       {
         date: '2026-08-18',
         measure: '调整真空参数',
@@ -218,14 +229,19 @@ describe('normalizeSensorItems', () => {
         mimeType: 'image/gif',
         size: 12,
       },
-      { dataUrl: 'notaurl', fileName: 'x.png', mimeType: 'image/png', size: 12 },
+      {
+        dataUrl: 'notaurl',
+        fileName: 'x.png',
+        mimeType: 'image/png',
+        size: 12,
+      },
     ];
     expect(normalizeSensorImages(images).map((item) => item.fileName)).toEqual(
       Array.from({ length: SENSOR_IMAGE_LIMIT }, (_, index) => `p${index}.png`),
     );
-    expect(normalizeSensorItems([{ id: 1, model: 'X', images }])[0]?.images).toHaveLength(
-      SENSOR_IMAGE_LIMIT,
-    );
+    expect(
+      normalizeSensorItems([{ id: 1, model: 'X', images }])[0]?.images,
+    ).toHaveLength(SENSOR_IMAGE_LIMIT);
   });
 });
 
@@ -336,7 +352,11 @@ describe('normalizeMachineSections', () => {
 describe('machine row images', () => {
   it('rejects oversized or disallowed files', () => {
     expect(
-      validateMachineRowImage('a.png', 'image/png', MACHINE_ROW_IMAGE_RULES.maxBytes + 1),
+      validateMachineRowImage(
+        'a.png',
+        'image/png',
+        MACHINE_ROW_IMAGE_RULES.maxBytes + 1,
+      ),
     ).toEqual({ ok: false, reason: 'size' });
     expect(validateMachineRowImage('a.gif', 'image/gif', 12)).toEqual({
       ok: false,
@@ -456,6 +476,72 @@ describe('normalizeMachineSectionRows', () => {
     expect(row?.sensorIds).toEqual([9]);
   });
 
+  it('does not infer a replacement sensor when sensorIds is explicitly empty', () => {
+    const [legacy] = normalizeMachineSectionRows(
+      [{ id: 1, role: '历史记录', sensorType: '漫反射', spec: 'E3Z-D61' }],
+      {
+        allowImage: true,
+        sensorItems: [
+          {
+            id: 9,
+            status: '现用',
+            partNumber: '',
+            sensorType: '漫反射',
+            brand: 'OMRON',
+            model: 'E3Z-D61',
+            spec: '0~300mm',
+            actualCondition: '',
+            feature: '',
+            scene: '',
+            images: [],
+            sopId: null,
+            model3dId: null,
+            replacesId: null,
+            replacedById: null,
+            problemNote: '',
+            usedAt: '',
+            disabledAt: '',
+            enteredAt: '',
+            replacedAt: '',
+          },
+        ],
+      },
+    );
+    const [unlinked] = normalizeMachineSectionRows(
+      [{ ...legacy, sensorIds: [] }],
+      {
+        allowImage: true,
+        sensorItems: [
+          {
+            id: 9,
+            status: '现用',
+            partNumber: '',
+            sensorType: '漫反射',
+            brand: 'OMRON',
+            model: 'E3Z-D61',
+            spec: '0~300mm',
+            actualCondition: '',
+            feature: '',
+            scene: '',
+            images: [],
+            sopId: null,
+            model3dId: null,
+            replacesId: null,
+            replacedById: null,
+            problemNote: '',
+            usedAt: '',
+            disabledAt: '',
+            enteredAt: '',
+            replacedAt: '',
+          },
+        ],
+      },
+    );
+
+    expect(legacy?.sensorIds).toEqual([9]);
+    expect(unlinked?.sensorIds).toEqual([]);
+  });
+
   it('keeps notes rows that have role and name', () => {
     const rows = normalizeMachineSectionRows(
       [{ id: 1, role: '安装注意', name: '角度' }],
@@ -495,11 +581,11 @@ describe('controlled files', () => {
       ),
     ).toBe('ppt');
     expect(
-      detectControlledFileKind(
-        'legacy.PPT',
-        'application/vnd.ms-powerpoint',
-        ['pdf', 'word', 'ppt'],
-      ),
+      detectControlledFileKind('legacy.PPT', 'application/vnd.ms-powerpoint', [
+        'pdf',
+        'word',
+        'ppt',
+      ]),
     ).toBe('ppt');
     expect(detectControlledFileKind('briefing.pptx', '')).toBe(null);
     expect(
@@ -513,14 +599,23 @@ describe('controlled files', () => {
   });
 
   it('validates size and type against kind rules', () => {
-    expect(validateControlledUpload('excel' as 'pdf', 'a.pdf', 'application/pdf', 1)).toEqual({
+    expect(
+      validateControlledUpload('excel' as 'pdf', 'a.pdf', 'application/pdf', 1),
+    ).toEqual({
       ok: false,
       reason: 'validation',
     });
     expect(
-      validateControlledUpload('pdf', 'a.pdf', 'application/pdf', CONTROLLED_FILE_RULES.pdf.maxBytes + 1),
+      validateControlledUpload(
+        'pdf',
+        'a.pdf',
+        'application/pdf',
+        CONTROLLED_FILE_RULES.pdf.maxBytes + 1,
+      ),
     ).toEqual({ ok: false, reason: 'size' });
-    expect(validateControlledUpload('pdf', 'a.doc', 'application/msword', 10)).toEqual({
+    expect(
+      validateControlledUpload('pdf', 'a.doc', 'application/msword', 10),
+    ).toEqual({
       ok: false,
       reason: 'type',
     });
@@ -621,5 +716,23 @@ describe('normalizeEntityGroups', () => {
       },
       { name: '专案机型', items: ['CSL(U)R-802（插框机）'] },
     ]);
+  });
+
+  it('preserves legacy duplicate names in an explicit machine catalog', () => {
+    const groups = normalizeEntityGroups(
+      [
+        { name: '分类甲', items: ['重名机型'] },
+        {
+          name: '分类乙',
+          items: ['重名机型'],
+          configurations: [{ name: '配置乙', items: ['重名机型'] }],
+        },
+      ],
+      'machine',
+    );
+
+    expect(groups[0]?.items).toEqual(['重名机型']);
+    expect(groups[1]?.items).toEqual(['重名机型']);
+    expect(groups[1]?.configurations?.[0]?.items).toEqual(['重名机型']);
   });
 });

@@ -1,6 +1,7 @@
 import { message } from 'ant-design-vue';
 
 import type { SaveFailure } from '@/domain';
+import { useSelectionStore } from '@/stores/selection';
 
 import { dialogs } from './confirm';
 
@@ -19,17 +20,17 @@ export function failureMessage(
   return overrides[reason] || DEFAULT_FAILURE[reason] || '保存失败，请重试';
 }
 
-export function notifyResult(
-  result:
-    | { ok: true }
-    | { ok: false; reason: SaveFailure; message?: string },
+export async function notifyResult(
+  result: { ok: true } | { ok: false; reason: SaveFailure; message?: string },
   success: string,
   overrides: Partial<Record<SaveFailure, string>> = {},
-): boolean {
+): Promise<boolean> {
   if (!result.ok) {
     message.error(result.message || failureMessage(result.reason, overrides));
     return false;
   }
+  const saved = await useSelectionStore().waitForPendingWrites();
+  if (!saved) return false;
   if (success) message.success(success);
   return true;
 }

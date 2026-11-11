@@ -16,19 +16,20 @@ function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function parseStoreJson(value: string): Record<string, unknown[]> {
+function parseStoreJson(value: string): Record<string, unknown[]> | null {
   const store = Object.create(null) as Record<string, unknown[]>;
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
   } catch {
-    return store;
+    return null;
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return store;
+    return null;
   }
   for (const [key, item] of Object.entries(parsed)) {
-    if (Array.isArray(item)) store[key] = item;
+    if (!Array.isArray(item)) return null;
+    store[key] = item;
   }
   return store;
 }
@@ -37,8 +38,7 @@ function isUnauthorized(error: unknown): boolean {
   return Boolean(
     error &&
     typeof error === 'object' &&
-    ((error as { kind?: string }).kind === 'unauthorized' ||
-      (error as { kind?: string }).kind === 'forbidden'),
+    (error as { kind?: string }).kind === 'unauthorized',
   );
 }
 
@@ -48,8 +48,11 @@ function isUnauthorized(error: unknown): boolean {
 function isTransient(error: unknown): boolean {
   if (!error || typeof error !== 'object') return true;
   const { kind, status } = error as { kind?: string; status?: number };
+  if (kind === 'forbidden') return false;
   if (kind === 'offline') return true;
-  if (kind === 'error' && typeof status === 'number') return status >= 500;
+  if (kind === 'error' && typeof status === 'number') {
+    return status >= 500 || status === 409 || status === 412;
+  }
   return true;
 }
 
@@ -61,11 +64,14 @@ export class BackendStorage implements StorageLike {
   lastError: null | string = null;
   status: BackendSyncStatus = 'connecting';
   queue: Promise<void> = Promise.resolve();
+  pendingWrites = 0;
 
   private readonly transport: BackendStoreTransport;
   private readonly local?: StorageLike;
   private readonly onStatus?: (status: BackendSyncStatus) => void;
   private readonly onWriteFailure?: (message: string) => void;
+  private readonly onWriteSuccess?: (snapshot: string) => void;
+  private readonly onPendingChange?: (count: number) => void;
   private readonly captureContext?: () => unknown;
   private readonly migrateOnEmpty: boolean;
   private readonly seedDefaults?: Record<string, unknown[]>;
@@ -73,12 +79,15 @@ export class BackendStorage implements StorageLike {
   private cache = new Map<string, unknown[]>();
   private localSnapshotDisabled = false;
   private synced = new Map<string, unknown[]>();
+  private generation = 0;
 
   constructor(options: BackendStorageOptions) {
     this.transport = options.transport;
     this.local = options.local;
     this.onStatus = options.onStatus;
     this.onWriteFailure = options.onWriteFailure;
+    this.onWriteSuccess = options.onWriteSuccess;
+    this.onPendingChange = options.onPendingChange;
     this.captureContext = options.captureContext;
     this.migrateOnEmpty = options.migrateOnEmpty !== false;
     this.seedDefaults = options.seedDefaults;
@@ -89,46 +98,68 @@ export class BackendStorage implements StorageLike {
     this.onStatus?.(this.status);
   }
 
-  private enqueueDelete(key: string) {
-    if (!this.transport.deleteKey) {
-      this.synced.delete(key);
-      this.snapshotLocal();
-      return;
-    }
+  private enqueueChanges(values: Map<string, unknown[] | null>) {
     const context = this.captureContext?.();
+    const generation = this.generation;
+    this.pendingWrites += 1;
+    this.onPendingChange?.(this.pendingWrites);
     this.queue = this.queue.then(async () => {
       try {
-        await this.transport.deleteKey?.(key, context);
-        this.synced.delete(key);
-        this.markWriteSucceeded();
-      } catch (error) {
-        this.handleFailure(key, undefined, error);
-      }
-    });
-  }
-
-  private enqueueWrite(key: string, value: unknown[]) {
-    const context = this.captureContext?.();
-    this.queue = this.queue.then(async () => {
-      try {
-        const returned = await this.transport.writeKey(key, value, context);
-        const persisted = Array.isArray(returned) ? returned : value;
-        this.synced.set(key, persisted);
-        // 若排队期间没有更新的本地编辑，用后端剥离文件正文后的值替换缓存；
-        // 若已有后续编辑，保留较新的乐观值，等待后续队列项返回。
-        if (sameValue(this.cache.get(key), value)) {
-          this.cache.set(key, persisted);
+        // 后续操作以失败操作的乐观状态为基础，不能继续提交或删除其依赖的数据。
+        if (generation !== this.generation) return;
+        let returned: Record<string, unknown[] | null>;
+        if (this.transport.writeBatch) {
+          returned = await this.transport.writeBatch(
+            [...values].map(([key, value]) => ({
+              key,
+              expected: this.synced.get(key) ?? null,
+              value,
+            })),
+            context,
+          );
+        } else {
+          // 兼容旧的单键测试/存储适配器；多键变更在入队前明确拒绝。
+          const [key, value] = [...values][0]!;
+          if (value === null) {
+            if (!this.transport.deleteKey) throw new Error('存储不支持删除');
+            await this.transport.deleteKey(key, context);
+            returned = { [key]: null };
+          } else {
+            const result = await this.transport.writeKey(key, value, context);
+            returned = { [key]: Array.isArray(result) ? result : value };
+          }
+        }
+        for (const [key, attempted] of values) {
+          if (!Object.hasOwn(returned, key))
+            throw new Error('保存响应缺少数据键');
+          const persisted = returned[key];
+          if (persisted !== null && !Array.isArray(persisted))
+            throw new Error('保存响应格式错误');
+          if (persisted === null) this.synced.delete(key);
+          else this.synced.set(key, persisted);
+          if (sameValue(this.cache.get(key) ?? null, attempted)) {
+            if (persisted === null) this.cache.delete(key);
+            else this.cache.set(key, persisted);
+          }
         }
         this.markWriteSucceeded();
+        this.onWriteSuccess?.(this.readStoreJson());
       } catch (error) {
-        this.handleFailure(key, value, error);
+        this.handleFailure(error);
+      } finally {
+        this.pendingWrites -= 1;
+        this.onPendingChange?.(this.pendingWrites);
       }
     });
   }
 
-  // 只有仍在线时才清掉错误。一次失败之后，排在它后面的写入照常落地（不丢更新），
-  // 但不能把状态静默改回 online：页面已据 offline 安排了重连，旧 bridge 一旦
-  // 重新接受写入，这些写入就会和重建出来的新 bridge 交错。
+  async waitForPendingWrites(): Promise<boolean> {
+    const generation = this.generation;
+    await this.queue;
+    return generation === this.generation && this.lastError === null;
+  }
+
+  // 重连只能通过重新读取服务端快照恢复在线，不能由旧队列回调恢复。
   private markWriteSucceeded() {
     if (this.status !== 'online') return;
     this.lastError = null;
@@ -162,28 +193,9 @@ export class BackendStorage implements StorageLike {
     return JSON.stringify(value);
   }
 
-  private handleFailure(
-    key: string,
-    attempted: unknown[] | undefined,
-    error: unknown,
-  ) {
-    // 回滚目标必须是失败处理时刻后端已确认的最新值（this.synced 此时已反映
-    // 队列中所有更早写入的结果），而不是入队时快照的值——入队之后、失败处理
-    // 之前，队列里更早的写入可能已经成功并推进了后端状态。
-    const prev = this.synced.get(key);
-    // 只回滚仍然代表本次失败写入的乐观值；如果队列中已有更新编辑，
-    // 必须保留更新值，避免后续成功写入后缓存停留在旧快照。
-    const stillRepresentsAttempt =
-      attempted === undefined
-        ? this.cache.get(key) === undefined
-        : sameValue(this.cache.get(key), attempted);
-    if (stillRepresentsAttempt) {
-      if (prev === undefined) {
-        this.cache.delete(key);
-      } else {
-        this.cache.set(key, prev);
-      }
-    }
+  private handleFailure(error: unknown) {
+    this.generation += 1;
+    this.cache = cloneMap(this.synced);
     const message = errorMessage(error, '写入后端失败');
     this.lastError = message;
     // 先切换状态再回调：回调方会按回滚后的缓存重建仓库内存态，需要看到最终状态。
@@ -199,7 +211,7 @@ export class BackendStorage implements StorageLike {
 
   /** 当前缓存的完整快照（不论在线状态），写入失败回滚后供仓库重建内存态。 */
   readStoreJson(): string {
-    const full: Record<string, unknown[]> = {};
+    const full = Object.create(null) as Record<string, unknown[]>;
     for (const [key, value] of this.cache) full[key] = value;
     return JSON.stringify(full);
   }
@@ -330,7 +342,8 @@ export class BackendStorage implements StorageLike {
       return false;
     }
     if (key === STORAGE_KEY) {
-      return this.syncStore(parseStoreJson(value));
+      const next = parseStoreJson(value);
+      return next !== null && this.syncStore(next);
     }
     let parsed: unknown;
     try {
@@ -342,7 +355,7 @@ export class BackendStorage implements StorageLike {
     if (!this.cache.has(key) && parsed.length === 0) return true;
     if (sameValue(this.cache.get(key), parsed)) return true;
     this.cache.set(key, parsed);
-    this.enqueueWrite(key, parsed);
+    this.enqueueChanges(new Map([[key, parsed]]));
     return true;
   }
 
@@ -360,7 +373,7 @@ export class BackendStorage implements StorageLike {
     }
   }
 
-  private syncStore(nextStore: Record<string, unknown[]>): true {
+  private syncStore(nextStore: Record<string, unknown[]>): boolean {
     const changedKeys = new Set<string>();
     const removedKeys: string[] = [];
 
@@ -377,13 +390,13 @@ export class BackendStorage implements StorageLike {
       if (!sameValue(this.cache.get(key), value)) changedKeys.add(key);
     }
 
+    const changes = new Map<string, unknown[] | null>();
+    for (const key of changedKeys)
+      changes.set(key, nextStore[key] as unknown[]);
+    for (const key of removedKeys) changes.set(key, null);
+    if (changes.size > 1 && !this.transport.writeBatch) return false;
     this.cache = nextCache;
-    for (const key of changedKeys) {
-      this.enqueueWrite(key, nextStore[key] as unknown[]);
-    }
-    for (const key of removedKeys) {
-      this.enqueueDelete(key);
-    }
+    if (changes.size > 0) this.enqueueChanges(changes);
     return true;
   }
 }

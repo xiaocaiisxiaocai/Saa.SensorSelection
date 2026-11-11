@@ -153,7 +153,7 @@ function editItem(item: CustomerReqItem) {
 async function deleteItem(item: CustomerReqItem) {
   const ok = await confirmDelete('删除要求', `确认删除“${item.content}”吗？`);
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteCrud('customer-req', props.entityName, item.id),
     '要求已删除',
     { stale: '该要求已被其他页面删除' },

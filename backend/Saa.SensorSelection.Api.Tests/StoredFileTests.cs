@@ -6,12 +6,41 @@ using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
 
+using Saa.SensorSelection.Api.Services;
+
 namespace Saa.SensorSelection.Api.Tests;
 
 public class StoredFileTests
 {
     private static string StoreRoute(string key) =>
         $"/api/store/by-key?key={Uri.EscapeDataString(key)}";
+
+    private static async Task<string> EntityTagAsync(HttpClient client, string route)
+    {
+        using var response = await client.GetAsync(route);
+        return response.Headers.ETag?.ToString()
+            ?? throw new InvalidOperationException("Store GET 缺少 ETag");
+    }
+
+    private static async Task<HttpResponseMessage> PutStoreAsync<T>(
+        HttpClient client,
+        string route,
+        T value)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, route)
+        {
+            Content = JsonContent.Create(value),
+        };
+        request.Headers.TryAddWithoutValidation("If-Match", await EntityTagAsync(client, route));
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> DeleteStoreAsync(HttpClient client, string route)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, route);
+        request.Headers.TryAddWithoutValidation("If-Match", await EntityTagAsync(client, route));
+        return await client.SendAsync(request);
+    }
 
     private static async Task<HttpClient> CreateLoggedInClientAsync(ApiFactory factory)
     {
@@ -38,7 +67,7 @@ public class StoredFileTests
         var key = "sensor-sop:detached-file-test";
         var route = StoreRoute(key);
 
-        var saved = await client.PutAsJsonAsync(route, new[]
+        var saved = await PutStoreAsync(client, route, new[]
         {
             new
             {
@@ -70,9 +99,10 @@ public class StoredFileTests
         Assert.Equal("application/pdf", content.Content.Headers.ContentType?.MediaType);
         Assert.Equal(originalBytes, await content.Content.ReadAsByteArrayAsync());
 
-        var replaced = await client.PutAsJsonAsync(route, Array.Empty<object>());
+        var replaced = await PutStoreAsync(client, route, Array.Empty<object>());
         Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(contentUrl)).StatusCode);
+        // 删除引用后进入回收保护期；后续 Sweep 会在保护期结束后清理正文。
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
     }
 
     private static async Task<HttpResponseMessage> UploadAsync(
@@ -130,9 +160,10 @@ public class StoredFileTests
     }
 
     [Fact]
-    public async Task Upload_PendingFileSurvivesUnrelatedWritesUntilReferencedAndReleased()
+    public async Task Upload_PendingFileSurvivesUnrelatedWritesAndReleasedFileUsesGracePeriod()
     {
-        await using var factory = new ApiFactory();
+        var dbPath = Path.Combine(Path.GetTempPath(), $"saa-stored-file-release-{Guid.NewGuid():N}.db");
+        await using var factory = new ApiFactory(dbPath);
         using var client = await CreateLoggedInClientAsync(factory);
         var bytes = Encoding.UTF8.GetBytes("%PDF-1.7\npending-upload");
         var uploaded = await (await UploadAsync(client, bytes)).Content.ReadFromJsonAsync<JsonElement>();
@@ -143,7 +174,7 @@ public class StoredFileTests
         // 上传完成、尚未写入 Store 之前的其他写入，不能把这个文件当孤儿删掉。
         Assert.Equal(
             HttpStatusCode.OK,
-            (await client.PutAsJsonAsync(StoreRoute("sensor-sop:unrelated"), Array.Empty<object>())).StatusCode);
+            (await PutStoreAsync(client, StoreRoute("sensor-sop:unrelated"), Array.Empty<object>())).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
 
         var item = new
@@ -157,15 +188,27 @@ public class StoredFileTests
         };
         var first = StoreRoute("customer-sop:共享A");
         var second = StoreRoute("customer-sop:共享B");
-        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(first, new[] { item })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(second, new[] { item })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutStoreAsync(client, first, new[] { item })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutStoreAsync(client, second, new[] { item })).StatusCode);
 
         // 仍被另一个 key 引用时不能删除。
-        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync(first)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await DeleteStoreAsync(client, first)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
 
-        // 最后一个引用移除后立即清理。
-        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(second, Array.Empty<object>())).StatusCode);
+        // 最后一个引用移除后先进入保护期，避免并发写入正在建立新引用时误删。
+        Assert.Equal(HttpStatusCode.OK, (await PutStoreAsync(client, second, Array.Empty<object>())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(contentUrl)).StatusCode);
+
+        await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "UPDATE StoredFiles SET CreatedAt = $createdAt WHERE Id = $id";
+            command.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.AddHours(-2));
+            command.Parameters.AddWithValue("$id", fileId.ToUpperInvariant());
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        await UploadAsync(client, Encoding.UTF8.GetBytes("trigger-sweep"));
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(contentUrl)).StatusCode);
     }
 
@@ -249,7 +292,7 @@ public class StoredFileTests
         using var client = await CreateLoggedInClientAsync(factory);
         var route = StoreRoute("sensor-sop:invalid-file");
 
-        var response = await client.PutAsJsonAsync(route, new[]
+        var response = await PutStoreAsync(client, route, new[]
         {
             new
             {
@@ -261,6 +304,54 @@ public class StoredFileTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(route)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Store_NonStringFileName_IsRejectedAsValidationError()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var route = StoreRoute("sensor-sop:invalid-file-name");
+
+        var response = await PutStoreAsync(client, route, new object[]
+        {
+            new
+            {
+                fileName = new { unexpected = true },
+                dataUrl = "data:application/pdf;base64,QQ==",
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            "文件名必须是字符串",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(route)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Store_MissingFileReference_IsRejectedWithoutCreatingTheKey()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var route = StoreRoute("sensor-sop:missing-file-reference");
+        var missingId = Guid.NewGuid();
+
+        var response = await PutStoreAsync(client, route, new[]
+        {
+            new
+            {
+                fileId = missingId.ToString("D"),
+                dataUrl = StoredFileService.ContentUrl(missingId),
+                fileName = "不存在.pdf",
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            "引用的文件不存在或已被删除",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(route)).StatusCode);
     }
 
@@ -350,6 +441,43 @@ public class StoredFileTests
         Assert.Equal("file.download", entry.GetProperty("action").GetString());
         Assert.Contains("文件名：下载 测试.pdf", entry.GetProperty("detail").GetString());
         Assert.Contains($"大小：{bytes.Length} B", entry.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task Content_NonPreviewAttachment_RequiresDownloadPermissionAndWritesAudit()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateLoggedInClientAsync(factory);
+        var bytes = Encoding.UTF8.GetBytes("office-document-content");
+        var uploaded = await (await UploadAsync(
+                admin,
+                bytes,
+                "作业说明.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var contentRoute = uploaded.GetProperty("dataUrl").GetString()!;
+        var fileId = uploaded.GetProperty("fileId").GetString()!;
+
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(contentRoute)).StatusCode);
+        using var viewer = await CreateRoleClientAsync(factory, "viewer", "content-viewer");
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync(contentRoute)).StatusCode);
+
+        var response = await admin.GetAsync(contentRoute);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(bytes, await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal("application/octet-stream", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.StartsWith(
+            "attachment;",
+            response.Content.Headers.GetValues("Content-Disposition").Single(),
+            StringComparison.Ordinal);
+
+        var logs = await admin.GetFromJsonAsync<JsonElement>("/api/audit-logs?action=file.download");
+        var entry = logs.GetProperty("items").EnumerateArray().Single(item =>
+            item.GetProperty("result").GetBoolean() &&
+            item.GetProperty("target").GetString() == fileId);
+        Assert.Contains("入口：content", entry.GetProperty("detail").GetString());
     }
 
     [Fact]

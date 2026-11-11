@@ -11,6 +11,7 @@ import { useSelectionStore } from '@/stores/selection';
 const store = useSelectionStore();
 
 const visible = ref(false);
+const saving = ref(false);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const form = reactive({
@@ -55,12 +56,14 @@ function open(item?: ProcessStepItem) {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const result = store.saveProcessStep(
     {
@@ -72,12 +75,19 @@ function save() {
     },
     editId.value,
   );
-  if (
-    notifyResult(result, editId.value ? '工艺制程已更新' : '工艺制程已新增', {
-      duplicate: '该工艺制程已存在',
-    })
-  ) {
-    visible.value = false;
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(
+        result,
+        editId.value ? '工艺制程已更新' : '工艺制程已新增',
+        { duplicate: '该工艺制程已存在' },
+      )
+    ) {
+      visible.value = false;
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -92,7 +102,7 @@ defineExpose({ open });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-row :gutter="16">
         <a-col :span="24">
           <a-form-item
@@ -171,8 +181,8 @@ defineExpose({ open });
       </a-row>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

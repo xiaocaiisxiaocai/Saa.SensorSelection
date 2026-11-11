@@ -83,6 +83,20 @@ function xml(value: string) {
   return encoder.encode(value);
 }
 
+function declareCentralEntrySizes(bytes: Uint8Array, sizes: number[]) {
+  const copy = new Uint8Array(bytes);
+  const view = new DataView(copy.buffer);
+  let sizeIndex = 0;
+  for (let offset = 0; offset + 46 <= copy.length; offset += 1) {
+    if (view.getUint32(offset, true) !== 0x02014b50) continue;
+    if (sizeIndex < sizes.length) {
+      view.setUint32(offset + 24, sizes[sizeIndex]!, true);
+    }
+    sizeIndex += 1;
+  }
+  return copy;
+}
+
 const excelLikeFiles = [
   {
     name: 'xl/workbook.xml',
@@ -179,5 +193,33 @@ describe('excel workbook', () => {
     await expect(readWorkbook(unsupported)).rejects.toThrow(
       '无法读取该 Excel 文件',
     );
+  });
+
+  it('rejects sheets whose sparse coordinates would create an unsafe dense grid', async () => {
+    const unsafe = await zipArchive(
+      excelLikeFiles.map((file) =>
+        file.name === 'xl/worksheets/sheet1.xml'
+          ? {
+              ...file,
+              data: xml(
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1048576"><c r="XFD1048576"><v>1</v></c></row></sheetData></worksheet>',
+              ),
+            }
+          : file,
+      ),
+      0,
+    );
+
+    await expect(readWorkbook(unsafe)).rejects.toThrow('无法读取该 Excel 文件');
+  });
+
+  it('rejects archives whose declared entries exceed the total inflate budget', async () => {
+    const archive = await zipArchive(excelLikeFiles, 0);
+    const unsafe = declareCentralEntrySizes(
+      archive,
+      [22_000_000, 22_000_000, 22_000_000],
+    );
+
+    await expect(readWorkbook(unsafe)).rejects.toThrow('无法读取该 Excel 文件');
   });
 });

@@ -4,6 +4,7 @@ import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { storeToken } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import type { BackendSyncStatus } from '@/domain/types';
@@ -19,6 +20,7 @@ async function mountShell(backendStatus?: BackendSyncStatus) {
       { path: '/selection/sensor', component: { template: '<div />' } },
       { path: '/selection/dictionary', component: { template: '<div />' } },
       { path: '/selection/search', component: { template: '<div />' } },
+      { path: '/login', component: { template: '<div />' } },
     ],
   });
   const pinia = createPinia();
@@ -44,6 +46,13 @@ async function mountShell(backendStatus?: BackendSyncStatus) {
   });
   await nextTick();
   return { router, wrapper };
+}
+
+function setPendingWrites(value: boolean) {
+  Object.defineProperty(useSelectionStore(), 'hasPendingWrites', {
+    configurable: true,
+    value,
+  });
 }
 
 describe('AppShell', () => {
@@ -190,6 +199,52 @@ describe('AppShell', () => {
     expect(wrapper.text()).toContain('未加载演示数据');
     expect(wrapper.text()).toContain('重新连接');
 
+    wrapper.unmount();
+  });
+
+  it('expires a cached profile before redirecting an unauthorized session', async () => {
+    const { router, wrapper } = await mountShell();
+    storeToken('tok');
+    const auth = useAuthStore();
+    auth.applyProfile({
+      displayName: '管理员',
+      orgUnit: null,
+      permissions: ['rbac:view'],
+      roles: [{ code: 'admin', id: 1, name: '系统管理员' }],
+      username: 'admin',
+    });
+
+    useSelectionStore().backendStatus = 'unauthorized';
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/login');
+    });
+
+    expect(auth.profile).toBeNull();
+    expect(auth.sessionExpired).toBe(true);
+    expect(window.localStorage.getItem('symtek_token')).toBe('tok');
+    wrapper.unmount();
+  });
+
+  it('shows pending writes and protects them from page unload', async () => {
+    const { wrapper } = await mountShell();
+    setPendingWrites(true);
+    wrapper.vm.$forceUpdate();
+    await nextTick();
+
+    expect(wrapper.get('[role="status"]').text()).toContain(
+      '正在保存，请勿关闭页面',
+    );
+    const pendingUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(pendingUnload);
+    expect(pendingUnload.defaultPrevented).toBe(true);
+
+    setPendingWrites(false);
+    wrapper.vm.$forceUpdate();
+    await nextTick();
+    expect(wrapper.find('[role="status"]').exists()).toBe(false);
+    const cleanUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(cleanUnload);
+    expect(cleanUnload.defaultPrevented).toBe(false);
     wrapper.unmount();
   });
 });

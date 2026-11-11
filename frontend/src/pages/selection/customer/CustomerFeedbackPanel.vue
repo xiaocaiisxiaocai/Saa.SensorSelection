@@ -171,7 +171,7 @@ function activateRow(item: TimelineItem) {
 async function deleteItem(item: TimelineItem) {
   const ok = await confirmDelete('删除反馈', `确认删除“${item.problem}”吗？`);
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteCrud('customer-feedback', props.entityName, item.id),
     '反馈已删除',
   );

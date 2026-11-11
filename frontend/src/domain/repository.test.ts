@@ -135,7 +135,6 @@ describe('createSelectionRepository persist', () => {
     expect(repo.snapshotStore()['customer-req:健鼎/华东']).toBeUndefined();
   });
 });
-
 describe('entity-scoped business data', () => {
   it('seeds only the configured customers and keeps other customers empty', () => {
     const repo = createRepo();
@@ -428,7 +427,10 @@ describe('sensors', () => {
       size: 4,
     };
     const savedCurrent = repo.saveSensor(
-      { ...current, images: [currentPhoto, { ...currentPhoto, fileName: 'dup.png' }] },
+      {
+        ...current,
+        images: [currentPhoto, { ...currentPhoto, fileName: 'dup.png' }],
+      },
       current.id,
     );
     const savedAlternate = repo.saveSensor(
@@ -466,7 +468,9 @@ describe('sensors', () => {
     expect(replaced.ok).toBe(true);
     const next = repo.getSensors();
     expect(
-      next.find((item) => item.id === current.id)?.images.map((image) => image.fileName),
+      next
+        .find((item) => item.id === current.id)
+        ?.images.map((image) => image.fileName),
     ).toEqual(['current.png']);
     expect(
       next
@@ -493,7 +497,9 @@ describe('sensors', () => {
     expect(imported.updated).toBe(1);
     const after = repo.getSensors().find((item) => item.id === current.id);
     expect(after?.brand).toBe('AFTER-IMPORT');
-    expect(after?.images.map((image) => image.fileName)).toEqual(['current.png']);
+    expect(after?.images.map((image) => image.fileName)).toEqual([
+      'current.png',
+    ]);
 
     const cleared = repo.saveSensor({ ...after!, images: [] }, current.id);
     expect(cleared.ok).toBe(true);
@@ -776,7 +782,9 @@ describe('sensors', () => {
 
   it('removes sensorIds references from machine section rows when sensor is deleted', () => {
     const repo = createRepo();
-    const sensor = repo.getSensors().find((item) => item.model === 'LV-H62');
+    const sensor = repo
+      .getSensors()
+      .find((item) => item.model === 'WL12-2B530');
     const guarded = repo.getSensors().find((item) => item.model === 'E3Z-D61');
     if (!sensor || !guarded) throw new Error('seed sensor missing');
 
@@ -794,9 +802,9 @@ describe('sensors', () => {
     const deleted = repo.deleteSensor(sensor.id);
     expect(deleted).toEqual({ ok: true });
     const rowsAfter = repo.getMachineSectionRows(1, '中间翻板机');
-    expect(rowsAfter.every((row) => !row.sensorIds.includes(sensor.id))).toBe(
-      true,
-    );
+    const savedAfter = rowsAfter.find((row) => row.id === saved.item.id);
+    expect(savedAfter?.sensorIds).toEqual([]);
+    expect(savedAfter?.spec).toBe(sensor.spec);
 
     const guardedRow = repo.saveMachineSectionRow(1, '中间翻板机', {
       role: '现用仍被备选占用',
@@ -814,6 +822,30 @@ describe('sensors', () => {
         .some((row) => row.sensorIds.includes(guarded.id)),
     ).toBe(true);
     expect(repo.getSensors().some((item) => item.id === guarded.id)).toBe(true);
+  });
+
+  it('blocks deleting a sensor that remains in replacement history', () => {
+    const repo = createRepo();
+    const current = repo.getSensors().find((item) => item.model === 'E3Z-D61');
+    const alternate = repo
+      .getSensors()
+      .find((item) => item.model === 'WL12-2B530');
+    if (!current || !alternate) throw new Error('seed sensors missing');
+
+    expect(
+      repo.replaceSensorCurrent(alternate.id, current.id, '停产替换'),
+    ).toMatchObject({ ok: true });
+    const expected = {
+      ok: false,
+      reason: 'in-use',
+      message: '该型号属于替换历史，需保留，不能删除',
+    };
+    expect(repo.deleteSensor(current.id)).toEqual(expected);
+    expect(repo.deleteSensor(alternate.id)).toEqual({
+      ok: false,
+      reason: 'not-empty',
+      message: '该现用型号下还有备选，请先用「替换」处理',
+    });
   });
 
   it('requires a current model before an alternate, and rejects a manual disabled status', () => {
@@ -1046,6 +1078,73 @@ describe('entity tree and dictionary', () => {
       machineType: 'mechanism',
       configurations: [{ name: '标准配置', items: ['01 单段', '02 多段'] }],
     });
+  });
+
+  it('rejects duplicate machine names across configurations', () => {
+    const repo = createRepo();
+    expect(repo.saveEntityGroup('machine', { name: '重名分类' }).ok).toBe(true);
+    expect(
+      repo.saveMachineConfiguration('重名分类', { name: '配置甲' }).ok,
+    ).toBe(true);
+    expect(
+      repo.saveMachineConfiguration('重名分类', { name: '配置乙' }).ok,
+    ).toBe(true);
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '重名分类',
+        configuration: '配置甲',
+        name: '唯一机型',
+      }).ok,
+    ).toBe(true);
+
+    expect(
+      repo.saveEntityItem('machine', {
+        category: '重名分类',
+        configuration: '配置乙',
+        name: '唯一机型',
+      }),
+    ).toEqual({ ok: false, reason: 'duplicate' });
+  });
+
+  it('previews and conditionally restores dictionaries without stale writes', () => {
+    let value: null | string = null;
+    let writes = 0;
+    const repo = createRepo({
+      getItem: () => value,
+      setItem: (_key, nextValue) => {
+        value = nextValue;
+        writes += 1;
+      },
+    });
+    const sheets = [
+      {
+        name: '要求分类',
+        hasNameColumn: true,
+        rows: [{ rowNumber: 2, name: '预览分类', sort: '1' }],
+      },
+    ];
+    const before = repo.snapshotStore();
+    const preview = repo.previewDictionaries(sheets);
+
+    if (!preview.result.ok) throw new Error(preview.result.reason);
+    expect(preview.result.categories[0]).toMatchObject({
+      code: 'customer-req',
+      created: 1,
+    });
+    expect(preview.baseline).toEqual(before);
+    expect(preview.store['dict:customer-req']).toEqual([
+      expect.objectContaining({ name: '预览分类' }),
+    ]);
+    expect(repo.snapshotStore()).toEqual(before);
+    expect(writes).toBe(0);
+
+    expect(
+      repo.saveDictionaryItem('customer-req', { name: '并行编辑' }).ok,
+    ).toBe(true);
+    expect(
+      repo.restoreDictionariesIfUnchanged(sheets, preview.baseline),
+    ).toEqual({ ok: false, reason: 'stale' });
+    expect(writes).toBe(1);
   });
 
   it('keeps conflicting legacy and direct machine pages reachable across writes', () => {

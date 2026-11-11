@@ -125,7 +125,7 @@ async function removeConfiguration(payload: {
     `确认删除“${payload.configuration}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteMachineConfiguration(payload.category, payload.configuration),
     '配置已删除',
     { 'not-empty': '请先清空该配置下的全部机型和二级 Tab' },
@@ -138,7 +138,7 @@ async function removeGroup(name: string) {
     `确认删除“${name}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteEntityGroup(props.kind, name),
     `${groupLabel.value}已删除`,
     {
@@ -161,7 +161,7 @@ async function removeItem(payload: {
     `确认删除“${payload.item}”吗？此操作不可恢复。`,
   );
   if (!ok) return;
-  notifyResult(
+  await notifyResult(
     store.deleteEntityItem(
       props.kind,
       payload.item,
@@ -179,7 +179,10 @@ async function removeItem(payload: {
   );
 }
 
-function onReorderGroups(payload: { oldIndex: number; newIndex: number }) {
+async function onReorderGroups(payload: {
+  oldIndex: number;
+  newIndex: number;
+}) {
   // 机型目录按类型过滤后展示，下标要换算回全部分组里的位置
   const all = store.entityGroups(props.kind);
   const oldName = treeGroups.value[payload.oldIndex]?.name;
@@ -188,10 +191,13 @@ function onReorderGroups(payload: { oldIndex: number; newIndex: number }) {
   const oldIndex = all.findIndex((group) => group.name === oldName);
   const newIndex = all.findIndex((group) => group.name === newName);
   if (oldIndex < 0 || newIndex < 0) return;
-  notifyResult(store.reorderEntityGroups(props.kind, oldIndex, newIndex), '');
+  await notifyResult(
+    store.reorderEntityGroups(props.kind, oldIndex, newIndex),
+    '',
+  );
 }
 
-function onReorderConfigurations(payload: {
+async function onReorderConfigurations(payload: {
   category: string;
   oldIndex: number;
   newIndex: number;
@@ -201,7 +207,7 @@ function onReorderConfigurations(payload: {
   )?.configurations?.[payload.oldIndex];
   if (!configuration) return;
 
-  notifyResult(
+  await notifyResult(
     store.saveMachineConfiguration(
       payload.category,
       { name: configuration.name, sort: payload.newIndex + 1 },
@@ -211,13 +217,13 @@ function onReorderConfigurations(payload: {
   );
 }
 
-function onReorderItems(payload: {
+async function onReorderItems(payload: {
   category: string;
   configuration: string | null;
   oldIndex: number;
   newIndex: number;
 }) {
-  notifyResult(
+  await notifyResult(
     store.reorderEntityItems(
       props.kind,
       payload.category,

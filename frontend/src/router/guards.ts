@@ -19,6 +19,13 @@ function redirectQuery(to: RouteLocationNormalized) {
 export function installGuards(router: Router) {
   router.beforeEach(async (to) => {
     const auth = useAuthStore();
+    if (getStoredToken() && auth.sessionExpired) {
+      if (to.path === '/login') return true;
+      return {
+        path: '/login',
+        query: redirectQuery(to),
+      };
+    }
     await auth.ensureProfile();
 
     if (to.path === '/login') {

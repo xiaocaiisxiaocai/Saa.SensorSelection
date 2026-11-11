@@ -19,9 +19,15 @@ var builder = WebApplication.CreateBuilder(args);
 // JWT 配置：Options 模式绑定 + 启动时快速失败（缺密钥/生产用默认开发密钥直接拒绝启动）
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? new JwtOptions();
-if (string.IsNullOrWhiteSpace(jwtOptions.Key))
+if (!JwtOptions.HasValidSigningKey(jwtOptions.Key))
 {
-    throw new InvalidOperationException("缺少配置 Jwt:Key");
+    throw new InvalidOperationException($"Jwt:Key 必须至少 {JwtOptions.MinimumKeyBytes} 字节");
+}
+if (string.IsNullOrWhiteSpace(jwtOptions.Issuer) ||
+    string.IsNullOrWhiteSpace(jwtOptions.Audience) ||
+    jwtOptions.ExpireHours <= 0)
+{
+    throw new InvalidOperationException("Jwt:Issuer、Jwt:Audience 必须填写，Jwt:ExpireHours 必须大于 0");
 }
 
 ProductionConfigurationGuard.Validate(
@@ -30,7 +36,13 @@ ProductionConfigurationGuard.Validate(
 
 builder.Services
     .AddOptions<JwtOptions>()
-    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName));
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .Validate(options => JwtOptions.HasValidSigningKey(options.Key),
+        $"Jwt:Key 必须至少 {JwtOptions.MinimumKeyBytes} 字节")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer), "Jwt:Issuer 不能为空")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Audience), "Jwt:Audience 不能为空")
+    .Validate(options => options.ExpireHours > 0, "Jwt:ExpireHours 必须大于 0")
+    .ValidateOnStart();
 builder.Services.AddSingleton<JwtService>();
 
 builder.Services
@@ -62,17 +74,20 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
         };
-        // 每个请求都回查账号是否还存在、还启用。
-        //
-        // 权限是签进 token 的，而 token 有 12 小时有效期：只在登录时查 IsActive
-        // 的话，管理员「停用」或「删除」一个账号后，那张已签发的 token 仍然能
-        // 继续操作到过期为止——停用等于没停。所以这里必须逐请求校验。
+        // 每个请求都回查不可复用的用户主键、启用状态和会话指纹。
+        // 改密、角色/权限变化、停用、删除或同名重建都会立即使旧 token 失效。
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = async context =>
             {
-                var username = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrWhiteSpace(username))
+                var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                var fingerprint = context.Principal?.FindFirstValue(JwtService.SessionFingerprintClaim);
+                if (!int.TryParse(
+                        subject,
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var userId) ||
+                    string.IsNullOrWhiteSpace(fingerprint))
                 {
                     context.Fail("token 缺少身份声明");
                     return;
@@ -80,13 +95,28 @@ builder.Services
 
                 var db = context.HttpContext.RequestServices
                     .GetRequiredService<AppDbContext>();
-                var active = await db.Users
+                var user = await db.Users
                     .AsNoTracking()
-                    .AnyAsync(user => user.Username == username && user.IsActive,
+                    .AsSplitQuery()
+                    .Include(item => item.Roles)
+                    .ThenInclude(role => role.Permissions)
+                    .FirstOrDefaultAsync(
+                        item => item.Id == userId && item.IsActive,
                         context.HttpContext.RequestAborted);
-                if (!active)
+                if (user is null)
                 {
                     context.Fail("账号已停用或已删除");
+                    return;
+                }
+
+                var roles = user.Roles.Select(role => role.Code);
+                var permissions = user.Roles
+                    .SelectMany(role => role.Permissions)
+                    .Select(permission => permission.Code);
+                var jwt = context.HttpContext.RequestServices.GetRequiredService<JwtService>();
+                if (!jwt.IsSessionFingerprintValid(fingerprint, user, roles, permissions))
+                {
+                    context.Fail("账号权限或凭据已变更");
                 }
             },
         };
@@ -118,18 +148,18 @@ builder.Services.AddSingleton<
 
 // CORS：优先使用配置的 Cors:AllowedOrigins（逗号分隔）；生产环境由启动保护强制配置。
 // 前端使用 Bearer Token、无 Cookie 依赖，跨域直连仅需 Origin/Header/Method 放行。
-var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
-    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+var corsOrigins = ProductionConfigurationGuard.ParseAllowedOrigins(
+    builder.Configuration["Cors:AllowedOrigins"]);
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         if (corsOrigins.Length > 0)
         {
-            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod();
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("ETag");
         }
         else
         {
-            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("ETag");
         }
     }));
 

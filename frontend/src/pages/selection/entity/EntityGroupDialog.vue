@@ -19,6 +19,7 @@ const emit = defineEmits<{ renamed: [previous: string, name: string] }>();
 const store = useSelectionStore();
 const labels = computed(() => entityLabels(props.kind));
 const visible = ref(false);
+const saving = ref(false);
 const editing = ref<string>();
 const validationAttempted = ref(false);
 const form = reactive({ name: '', sort: 1 });
@@ -46,12 +47,14 @@ function openEdit(name: string) {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const previous = editing.value;
   const name = form.name.trim();
@@ -67,14 +70,23 @@ function save() {
     },
     previous,
   );
-  if (
-    notifyResult(result, previous ? `${group}已更新` : `${group}已新增`, {
-      duplicate: `该${group}已存在`,
-      'not-empty': `请先清空该${group}下的全部${item}`,
-    })
-  ) {
-    visible.value = false;
-    if (previous && previous !== name) emit('renamed', previous, name);
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(
+        result,
+        previous ? `${group}已更新` : `${group}已新增`,
+        {
+          duplicate: `该${group}已存在`,
+          'not-empty': `请先清空该${group}下的全部${item}`,
+        },
+      )
+    ) {
+      visible.value = false;
+      if (previous && previous !== name) emit('renamed', previous, name);
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -89,7 +101,7 @@ defineExpose({ openCreate, openEdit });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-form-item
         html-for="entity-source-name"
         :label="`${labels.group}名称`"
@@ -119,8 +131,8 @@ defineExpose({ openCreate, openEdit });
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

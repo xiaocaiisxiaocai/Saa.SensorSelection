@@ -15,6 +15,7 @@ const emit = defineEmits<{ replaced: [] }>();
 const store = useSelectionStore();
 
 const visible = ref(false);
+const saving = ref(false);
 const source = ref<SensorItem | null>(null);
 const fixedTarget = ref<SensorItem | null>(null);
 const validationAttempted = ref(false);
@@ -79,12 +80,14 @@ function open(item: SensorItem, target?: SensorItem) {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   const current = source.value;
   if (!current) return;
   validationAttempted.value = true;
@@ -96,9 +99,14 @@ function save() {
     form.targetId,
     form.note,
   );
-  if (notifyResult(result, '已替换现用型号，原型号已停用')) {
-    visible.value = false;
-    emit('replaced');
+  saving.value = true;
+  try {
+    if (await notifyResult(result, '已替换现用型号，原型号已停用')) {
+      visible.value = false;
+      emit('replaced');
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -113,7 +121,7 @@ defineExpose({ open });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form v-if="source" layout="vertical">
+    <a-form v-if="source" layout="vertical" :disabled="saving">
       <div class="replace-compare">
         <article class="replace-card">
           <div class="replace-card__head">
@@ -189,8 +197,8 @@ defineExpose({ open });
       }} 转为现用{{ inheritClause }}。
     </p>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">替换</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">替换</a-button>
     </template>
   </a-modal>
 </template>

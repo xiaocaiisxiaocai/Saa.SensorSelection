@@ -23,13 +23,34 @@
 
 ## Windows PowerShell 5.1 直接跑 deploy-iis.ps1 会解析失败
 
-- 现象：`.\scripts\deploy-iis.ps1` 报 `Unexpected token` / `The string is missing the terminator`，中文字符串变成乱码；用 `*>&1` 捕获输出时又会在检查 pnpm 版本那一步直接中止。
-- 根因：脚本是无 BOM 的 UTF-8，PS 5.1 按 ANSI 代码页读源码；本机没装 `pwsh`。另外 PS 5.1 下重定向原生命令的 stderr 会把 corepack 的 Node 弃用警告包成错误记录，脚本设了 `$ErrorActionPreference = 'Stop'`，于是直接中止。
-- 规避：用 PowerShell 7 跑；没有 PS 7 时，在 `scripts/` 下写一份带 BOM 的临时副本执行（`$PSScriptRoot` 仍指向仓库），跑完删除，并且不要加 `*>&1` / `2>&1`。
-- 日期：2026-10-26
+- 现象：无 BOM 的中文 PowerShell 脚本在 PS 5.1 会报 `Unexpected token` / `The string is missing the terminator`；用 `*>&1` 捕获原生命令输出还可能把警告升级为终止错误。
+- 根因：PS 5.1 按 ANSI 代码页读取无 BOM UTF-8，且 `$ErrorActionPreference = 'Stop'` 会处理重定向后的原生命令错误记录。
+- 规避：`scripts/deploy-iis.ps1` 已改为 UTF-8 BOM 并通过 PS 5.1 解析；后续编辑必须保留 BOM，调用时不要额外加 `*>&1` / `2>&1`。
+- 日期：2026-11-10
 
 ## E2E 里收起点击触发的 a-dropdown 要再点一次触发按钮
 
 - 现象：`a-dropdown :trigger="['click']"` 打开后按 Escape 不收起，后面的检查被残留的下拉菜单挡住。
 - 规避：在 `scripts/e2e` 里再点一次触发按钮收起，然后等 `.ant-dropdown:visible` 隐藏。
 - 日期：2026-10-25
+
+## Store 跨 key 写入不能拆成独立请求
+
+- 现象：改名等操作在“写新 key”失败后仍可能继续删除旧 key；两个页面基于旧快照保存会覆盖先提交的数据。
+- 根因：客户端乐观事务不等于数据库事务，旧接口也没有并发前置条件。
+- 规避：跨 key 修改只走 `POST /api/store/batch`，每项携带最后确认的 `expected`，服务端在一个 SQLite 事务中 CAS；兼容旧写接口必须使用 GET 的 ETag 和 `If-Match`。UI 等服务端实际成功后再反馈。
+- 日期：2026-11-10
+
+## 身份变更必须立即使旧 JWT 失效
+
+- 现象：按用户名校验会让降权、改密后的旧 token 保留权限，同名账号重建还可能复活旧身份；启动种子也可能恢复已撤权限。
+- 根因：token 未绑定不可复用用户身份与当前授权状态，Seeder 混合了首次引导和日常启动修复。
+- 规避：JWT 使用用户 ID 和 HMAC 会话指纹绑定密码、角色、权限；Seeder 只在首次身份初始化创建账号/普通角色，后续不复活已删账号或恢复已撤普通权限。
+- 日期：2026-11-10
+
+## E2E 与发布脚本必须隔离真实数据目录
+
+- 现象：带写入/清理的 E2E 若依赖 localhost 默认值可能命中日常库；发布脚本若把现有站点当输出目录可能删除 `App_Data`。
+- 根因：目标地址和目录所有权不明确。
+- 规避：E2E 强制显式 `API_BASE` / `E2E_BASE_URL` 指向可丢弃服务，并遵守 CORE-19；IIS 制品只在 staging 构建并替换带所有权标记且不含 `App_Data` 的制品。备份只用 SQLite 一致快照，校验通过后再轮替。
+- 日期：2026-11-10

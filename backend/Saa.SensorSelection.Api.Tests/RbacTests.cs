@@ -521,8 +521,7 @@ public class RbacTests
             new { displayName = "用户-revoke_target", isActive = false, roleIds = new[] { editorRoleId } });
         Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
 
-        // 权限签在 token 里、token 有 12 小时有效期：如果只在登录时查 IsActive，
-        // 这张已签发的 token 还能继续用到过期，「停用」就形同虚设。
+        // 每个请求都会回查账号状态，停用后旧 token 必须立即失效。
         var afterMe = await victim.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, afterMe.StatusCode);
         var afterWrite = await victim.PutAsJsonAsync(
@@ -553,11 +552,201 @@ public class RbacTests
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await victim.GetAsync("/api/auth/me")).StatusCode);
-        // /api/auth/me 本来就会回查用户，所以只断言它证明不了什么：真正的
-        // 缺口在业务接口——它们只认 token 里的 perm 声明，不回查账号。
+        // 业务接口同样必须经过逐请求身份与会话指纹校验。
         var afterWrite = await victim.PutAsJsonAsync(
             StoreRoute("customer-req:删除后写入"),
             JsonSerializer.Deserialize<JsonElement>("[{\"id\":1}]"));
         Assert.Equal(HttpStatusCode.Unauthorized, afterWrite.StatusCode);
+    }
+
+    [Fact]
+    public async Task DemotingUser_ImmediatelyRejectsTokenWithOldPermissions()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var editorRoleId = await GetRoleIdAsync(admin, "editor");
+        var viewerRoleId = await GetRoleIdAsync(admin, "viewer");
+        var userId = await CreateUserAsync(admin, "demote_target", roleIds: [editorRoleId]);
+
+        using var login = factory.CreateClient();
+        var token = await LoginTokenAsync(login, "demote_target", "pass123456");
+        using var oldSession = CreateAuthorizedClient(factory, token);
+
+        var demote = await admin.PutAsJsonAsync(
+            $"/api/rbac/users/{userId}",
+            new
+            {
+                displayName = "用户-demote_target",
+                isActive = true,
+                roleIds = new[] { viewerRoleId },
+            });
+        Assert.Equal(HttpStatusCode.OK, demote.StatusCode);
+
+        var staleWrite = await oldSession.PutAsJsonAsync(
+            StoreRoute("customer-req:降权后写入"),
+            JsonSerializer.Deserialize<JsonElement>("[]"));
+        Assert.Equal(HttpStatusCode.Unauthorized, staleWrite.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangingAssignedRolePermissions_RejectsExistingToken()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var editorRoleId = await GetRoleIdAsync(admin, "editor");
+        await CreateUserAsync(admin, "role-change-target", roleIds: [editorRoleId]);
+        using var login = factory.CreateClient();
+        var token = await LoginTokenAsync(login, "role-change-target", "pass123456");
+        using var oldSession = CreateAuthorizedClient(factory, token);
+
+        var permissions = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+        var readPermissionId = permissions.EnumerateArray()
+            .Single(permission => permission.GetProperty("code").GetString() == "selection:read")
+            .GetProperty("id").GetInt32();
+        var revokeWrite = await admin.PutAsJsonAsync(
+            $"/api/rbac/roles/{editorRoleId}",
+            new
+            {
+                name = "业务维护员",
+                description = "仅查看业务数据",
+                permissionIds = new[] { readPermissionId },
+            });
+        Assert.Equal(HttpStatusCode.OK, revokeWrite.StatusCode);
+
+        var staleWrite = await oldSession.PutAsJsonAsync(
+            StoreRoute("customer-req:角色撤权后写入"),
+            JsonSerializer.Deserialize<JsonElement>("[]"));
+        Assert.Equal(HttpStatusCode.Unauthorized, staleWrite.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecreatingSameUsername_DoesNotReviveDeletedUsersToken()
+    {
+        await using var factory = new ApiFactory();
+        using var originalAdmin = await CreateAdminClientAsync(factory);
+        var adminRoleId = await GetRoleIdAsync(originalAdmin, "admin");
+        var secondAdminId = await CreateUserAsync(
+            originalAdmin,
+            "second-admin",
+            roleIds: [adminRoleId]);
+        Assert.True(secondAdminId > 0);
+
+        using var secondLogin = factory.CreateClient();
+        var secondToken = await LoginTokenAsync(secondLogin, "second-admin", "pass123456");
+        using var secondAdmin = CreateAuthorizedClient(factory, secondToken);
+        var users = await secondAdmin.GetFromJsonAsync<JsonElement>("/api/rbac/users");
+        var originalAdminId = users.EnumerateArray()
+            .Single(user => user.GetProperty("username").GetString() == "admin")
+            .GetProperty("id").GetInt32();
+
+        var delete = await secondAdmin.DeleteAsync($"/api/rbac/users/{originalAdminId}");
+        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        var recreate = await secondAdmin.PostAsJsonAsync(
+            "/api/rbac/users",
+            new
+            {
+                username = "admin",
+                password = "replacement-pass",
+                displayName = "同名普通用户",
+                roleIds = Array.Empty<int>(),
+            });
+        Assert.Equal(HttpStatusCode.OK, recreate.StatusCode);
+
+        var oldAdminAccess = await originalAdmin.GetAsync("/api/rbac/users");
+        Assert.Equal(HttpStatusCode.Unauthorized, oldAdminAccess.StatusCode);
+    }
+
+    [Fact]
+    public async Task RestrictedManagers_CannotGrantOrTakeOverHigherPrivileges()
+    {
+        await using var factory = new ApiFactory();
+        using var admin = await CreateAdminClientAsync(factory);
+        var permissions = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+        int PermissionId(string code) => permissions.EnumerateArray()
+            .Single(item => item.GetProperty("code").GetString() == code)
+            .GetProperty("id").GetInt32();
+
+        var userManagerRoleResponse = await admin.PostAsJsonAsync(
+            "/api/rbac/roles",
+            new
+            {
+                code = "limited-user-manager",
+                name = "受限用户管理员",
+                permissionIds = new[]
+                {
+                    PermissionId("rbac:view"),
+                    PermissionId("rbac:user:write"),
+                },
+            });
+        userManagerRoleResponse.EnsureSuccessStatusCode();
+        var userManagerRoleId = (await userManagerRoleResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt32();
+        var managerId = await CreateUserAsync(
+            admin,
+            "limited-user-manager",
+            roleIds: [userManagerRoleId]);
+
+        using var managerLogin = factory.CreateClient();
+        var managerToken = await LoginTokenAsync(
+            managerLogin,
+            "limited-user-manager",
+            "pass123456");
+        using var manager = CreateAuthorizedClient(factory, managerToken);
+        var listedUsers = await manager.GetFromJsonAsync<JsonElement>("/api/rbac/users");
+        var adminId = listedUsers.EnumerateArray()
+            .Single(user => user.GetProperty("username").GetString() == "admin")
+            .GetProperty("id").GetInt32();
+        var adminRoleId = await GetRoleIdAsync(manager, "admin");
+
+        var resetAdmin = await manager.PutAsJsonAsync(
+            $"/api/rbac/users/{adminId}/password",
+            new { password = "taken-over" });
+        Assert.Equal(HttpStatusCode.BadRequest, resetAdmin.StatusCode);
+        var selfPromote = await manager.PutAsJsonAsync(
+            $"/api/rbac/users/{managerId}",
+            new
+            {
+                displayName = "受限用户管理员",
+                isActive = true,
+                roleIds = new[] { adminRoleId },
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, selfPromote.StatusCode);
+
+        var roleManagerResponse = await admin.PostAsJsonAsync(
+            "/api/rbac/roles",
+            new
+            {
+                code = "limited-role-manager",
+                name = "受限角色管理员",
+                permissionIds = new[]
+                {
+                    PermissionId("rbac:view"),
+                    PermissionId("rbac:role:write"),
+                },
+            });
+        roleManagerResponse.EnsureSuccessStatusCode();
+        var roleManagerRoleId = (await roleManagerResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt32();
+        await CreateUserAsync(admin, "limited-role-manager", roleIds: [roleManagerRoleId]);
+
+        using var roleManagerLogin = factory.CreateClient();
+        var roleManagerToken = await LoginTokenAsync(
+            roleManagerLogin,
+            "limited-role-manager",
+            "pass123456");
+        using var roleManager = CreateAuthorizedClient(factory, roleManagerToken);
+        var selfEscalateRole = await roleManager.PutAsJsonAsync(
+            $"/api/rbac/roles/{roleManagerRoleId}",
+            new
+            {
+                name = "受限角色管理员",
+                permissionIds = new[]
+                {
+                    PermissionId("rbac:view"),
+                    PermissionId("rbac:role:write"),
+                    PermissionId("selection:write"),
+                },
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, selfEscalateRole.StatusCode);
     }
 }

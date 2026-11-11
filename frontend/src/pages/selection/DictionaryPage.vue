@@ -5,9 +5,13 @@ import {
   type TablePaginationConfig,
 } from 'ant-design-vue';
 import { Download, Pencil, RotateCcw, Trash2, Upload } from 'lucide-vue-next';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
-import { DICTIONARY_DEFINITIONS, type DictionaryItem } from '@/domain';
+import {
+  DICTIONARY_DEFINITIONS,
+  type DictionaryItem,
+  type DictionaryRestoreResult,
+} from '@/domain';
 import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
 import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
 import { useDirtyGuard } from '@/pages/shared/dirty-guard';
@@ -18,6 +22,7 @@ import {
   readWorkbook,
 } from '@/pages/shared/excel';
 import ImportResultDialog from '@/pages/shared/ImportResultDialog.vue';
+import type { ImportResultPayload } from '@/pages/shared/ImportResultDialog.vue';
 import { confirmDelete, notifyResult } from '@/pages/shared/save-feedback';
 import {
   type ColumnFilterMap,
@@ -45,9 +50,16 @@ const canExport = computed(() => has('data:transfer'));
 const canImport = computed(() => canExport.value && writable.value);
 const importResult = ref<InstanceType<typeof ImportResultDialog>>();
 const importInput = ref<HTMLInputElement>();
+const importing = ref(false);
+let importTask = 0;
+
+onBeforeUnmount(() => {
+  importTask += 1;
+});
 
 const activeCode = ref(DICTIONARY_DEFINITIONS[0]?.code || '');
 const dialogOpen = ref(false);
+const saving = ref(false);
 const editId = ref<number>();
 const validationAttempted = ref(false);
 const form = reactive({
@@ -150,24 +162,32 @@ function editItem(item: DictionaryItem) {
 }
 
 async function cancelDialog() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) dialogOpen.value = false;
 }
 
-function saveItem() {
-  if (!activeCode.value) return;
+async function saveItem() {
+  if (!activeCode.value || saving.value) return;
   validationAttempted.value = true;
-  const result = store.saveDictionaryItem(
-    activeCode.value,
-    { name: form.name.trim(), sort: form.sort },
-    editId.value,
-  );
-  if (
-    notifyResult(result, editId.value ? '字典项已更新' : '字典项已新增', {
-      duplicate: '该字典项名称已存在',
-    })
-  ) {
-    dialogOpen.value = false;
-    resetForm();
+  saving.value = true;
+  try {
+    const result = store.saveDictionaryItem(
+      activeCode.value,
+      { name: form.name.trim(), sort: form.sort },
+      editId.value,
+    );
+    if (
+      await notifyResult(
+        result,
+        editId.value ? '字典项已更新' : '字典项已新增',
+        { duplicate: '该字典项名称已存在' },
+      )
+    ) {
+      dialogOpen.value = false;
+      resetForm();
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -202,7 +222,7 @@ async function deleteItem(item: DictionaryItem) {
   if (!ok) return;
   const result = store.deleteDictionaryItem(activeCode.value, item.id);
   if (
-    notifyResult(result, '字典项已删除', {
+    await notifyResult(result, '字典项已删除', {
       validation: '至少保留一个字典项',
     })
   ) {
@@ -233,28 +253,20 @@ function exportExcel() {
 }
 
 function openImport() {
+  if (importing.value) return;
   importInput.value?.click();
 }
 
-async function onImportFile(event: Event) {
-  const input = event.target;
-  if (!(input instanceof HTMLInputElement)) return;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file) return;
-  let sheets: Awaited<ReturnType<typeof readWorkbook>>;
-  try {
-    sheets = await readWorkbook(new Uint8Array(await file.arrayBuffer()));
-  } catch {
-    message.error('无法读取该 Excel 文件');
-    return;
-  }
-  const result = store.restoreDictionaries(mapDictionaryWorkbook(sheets));
-  if (!result.ok) {
-    message.error('数据保存失败，本次修改未保存');
-    return;
-  }
-  importResult.value?.open({
+type SuccessfulDictionaryRestore = Extract<
+  DictionaryRestoreResult,
+  { ok: true }
+>;
+
+function dictionaryImportPayload(
+  result: SuccessfulDictionaryRestore,
+  title: string,
+): ImportResultPayload {
+  return {
     categories: result.categories.map((item) => ({
       created: item.created,
       deleted: item.deleted,
@@ -266,7 +278,7 @@ async function onImportFile(event: Event) {
     })),
     notes: [
       ...result.missingSheets.map(
-        (title) => `「${title}」未包含在文件中，未改动`,
+        (sheetTitle) => `「${sheetTitle}」未包含在文件中，未改动`,
       ),
       ...result.unknownSheets.map((name) => `未识别的工作表「${name}」`),
     ],
@@ -276,8 +288,63 @@ async function onImportFile(event: Event) {
         reason: item.reason,
       })),
     ),
-    title: '还原数据字典',
-  });
+    title,
+  };
+}
+
+async function onImportFile(event: Event) {
+  if (importing.value) return;
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const task = ++importTask;
+  importing.value = true;
+  try {
+    let sheets: Awaited<ReturnType<typeof readWorkbook>>;
+    try {
+      const bytes = await file.arrayBuffer();
+      if (task !== importTask) return;
+      sheets = await readWorkbook(new Uint8Array(bytes));
+    } catch {
+      if (task === importTask) message.error('无法读取该 Excel 文件');
+      return;
+    }
+    if (task !== importTask) return;
+    const mapped = mapDictionaryWorkbook(sheets);
+    const preview = store.previewDictionaries(mapped);
+    if (!preview.result.ok) {
+      message.error('无法生成还原预览，请重新选择 Excel 文件');
+      return;
+    }
+    const confirmed = await importResult.value?.confirm(
+      dictionaryImportPayload(preview.result, '预览数据字典还原'),
+    );
+    if (task !== importTask || !confirmed) return;
+    const result = store.restoreDictionariesIfUnchanged(
+      mapped,
+      preview.baseline,
+    );
+    if (task !== importTask) return;
+    if (!result.ok) {
+      message.error(
+        result.reason === 'stale'
+          ? '数据已发生变化，请重新选择 Excel 并预览后再还原'
+          : '数据保存失败，本次修改未保存',
+      );
+      return;
+    }
+    if (!(await store.waitForPendingWrites())) {
+      return;
+    }
+    if (task !== importTask) return;
+    importResult.value?.open(
+      dictionaryImportPayload(result, '还原数据字典结果'),
+    );
+  } finally {
+    if (task === importTask) importing.value = false;
+  }
 }
 
 // 分页条始终显示；筛选变化回到第一页
@@ -309,9 +376,7 @@ function onTableChange(
       <a-segmented v-model:value="activeCode" :options="tabs" />
       <div class="dictionary-header__actions">
         <a-tooltip
-          :title="
-            nameFilters.length ? '清除表头筛选' : '当前没有可清除的筛选'
-          "
+          :title="nameFilters.length ? '清除表头筛选' : '当前没有可清除的筛选'"
         >
           <span class="tooltip-host">
             <a-button
@@ -339,7 +404,12 @@ function onTableChange(
           </a-button>
         </a-tooltip>
         <a-tooltip v-if="canImport" title="导入 Excel">
-          <a-button aria-label="导入 Excel" @click="openImport">
+          <a-button
+            aria-label="导入 Excel"
+            :disabled="importing"
+            :loading="importing"
+            @click="openImport"
+          >
             <template #icon><Upload :size="14" /></template>
             导入 Excel
           </a-button>
@@ -349,6 +419,7 @@ function onTableChange(
           ref="importInput"
           class="visually-hidden"
           type="file"
+          :disabled="importing"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           aria-label="选择数据字典 Excel"
           @change="onImportFile"
@@ -387,9 +458,7 @@ function onTableChange(
               </a-button>
             </a-tooltip>
             <a-tooltip
-              :title="
-                deleteReason(record as DictionaryItem) ?? '删除字典项'
-              "
+              :title="deleteReason(record as DictionaryItem) ?? '删除字典项'"
             >
               <span class="tooltip-host">
                 <a-button
@@ -448,8 +517,15 @@ function onTableChange(
         </a-form-item>
       </a-form>
       <template #footer>
-        <a-button @click="cancelDialog">取消</a-button>
-        <a-button type="primary" @click="saveItem">保存</a-button>
+        <a-button :disabled="saving" @click="cancelDialog">取消</a-button>
+        <a-button
+          type="primary"
+          :disabled="saving"
+          :loading="saving"
+          @click="saveItem"
+        >
+          保存
+        </a-button>
       </template>
     </a-modal>
     <ImportResultDialog ref="importResult" />

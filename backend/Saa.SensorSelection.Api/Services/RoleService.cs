@@ -68,8 +68,14 @@ public class RoleService(AppDbContext db)
 
     public async Task<RbacResult<RoleListItem>> CreateAsync(
         CreateRoleRequest request,
+        int actorUserId,
         CancellationToken ct = default)
     {
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult<RoleListItem>.Fail("登录已失效，请重新登录");
+        }
         var code = request.Code.Trim();
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(request.Name))
         {
@@ -84,6 +90,10 @@ public class RoleService(AppDbContext db)
         if (permissions.Count != (request.PermissionIds ?? []).Distinct().Count())
         {
             return RbacResult<RoleListItem>.Fail("所选权限不存在");
+        }
+        if (!CanGrantPermissions(actor, permissions))
+        {
+            return RbacResult<RoleListItem>.Fail("不能授予超出自身范围的权限");
         }
 
         var role = new Role
@@ -110,8 +120,14 @@ public class RoleService(AppDbContext db)
     public async Task<RbacResult<RoleListItem>> UpdateAsync(
         int id,
         UpdateRoleRequest request,
+        int actorUserId,
         CancellationToken ct = default)
     {
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult<RoleListItem>.Fail("登录已失效，请重新登录");
+        }
         var role = await db.Roles
             .Include(item => item.Permissions)
             .FirstOrDefaultAsync(item => item.Id == id, ct);
@@ -127,11 +143,19 @@ public class RoleService(AppDbContext db)
         {
             return RbacResult<RoleListItem>.Fail("系统内置角色不可修改");
         }
+        if (!CanManageRole(actor, role))
+        {
+            return RbacResult<RoleListItem>.Fail("不能管理权限高于自身的角色");
+        }
 
         var permissions = await ResolvePermissionsAsync(request.PermissionIds ?? [], ct);
         if (permissions.Count != (request.PermissionIds ?? []).Distinct().Count())
         {
             return RbacResult<RoleListItem>.Fail("所选权限不存在");
+        }
+        if (!CanGrantPermissions(actor, permissions))
+        {
+            return RbacResult<RoleListItem>.Fail("不能授予超出自身范围的权限");
         }
 
         role.Name = request.Name.Trim();
@@ -143,10 +167,19 @@ public class RoleService(AppDbContext db)
         return RbacResult<RoleListItem>.Ok(await BuildListItemAsync(role.Id, ct));
     }
 
-    public async Task<RbacResult> DeleteAsync(int id, CancellationToken ct = default)
+    public async Task<RbacResult> DeleteAsync(
+        int id,
+        int actorUserId,
+        CancellationToken ct = default)
     {
+        var actor = await LoadActorAsync(actorUserId, ct);
+        if (actor is null)
+        {
+            return RbacResult.Fail("登录已失效，请重新登录");
+        }
         var role = await db.Roles
             .Include(item => item.Users)
+            .Include(item => item.Permissions)
             .FirstOrDefaultAsync(item => item.Id == id, ct);
         if (role is null)
         {
@@ -155,6 +188,10 @@ public class RoleService(AppDbContext db)
         if (role.IsSystem)
         {
             return RbacResult.Fail("系统内置角色不可删除");
+        }
+        if (!CanManageRole(actor, role))
+        {
+            return RbacResult.Fail("不能管理权限高于自身的角色");
         }
         if (role.Users.Count > 0)
         {
@@ -165,6 +202,37 @@ public class RoleService(AppDbContext db)
         await db.SaveChangesAsync(ct);
         return RbacResult.Ok();
     }
+
+    private sealed record ActorScope(bool IsSystemAdmin, HashSet<string> Permissions);
+
+    private async Task<ActorScope?> LoadActorAsync(int actorUserId, CancellationToken ct)
+    {
+        var actor = await db.Users
+            .AsNoTracking()
+            .AsSplitQuery()
+            .Include(user => user.Roles)
+            .ThenInclude(role => role.Permissions)
+            .FirstOrDefaultAsync(user => user.Id == actorUserId && user.IsActive, ct);
+        if (actor is null)
+        {
+            return null;
+        }
+
+        return new ActorScope(
+            actor.Roles.Any(role => role.Code == RbacDefaults.SystemAdminRoleCode),
+            actor.Roles
+                .SelectMany(role => role.Permissions)
+                .Select(permission => permission.Code)
+                .ToHashSet(StringComparer.Ordinal));
+    }
+
+    private static bool CanGrantPermissions(
+        ActorScope actor,
+        IEnumerable<Permission> permissions) =>
+        actor.IsSystemAdmin || permissions.All(permission => actor.Permissions.Contains(permission.Code));
+
+    private static bool CanManageRole(ActorScope actor, Role role) =>
+        actor.IsSystemAdmin || role.Permissions.All(permission => actor.Permissions.Contains(permission.Code));
 
     private async Task<List<Permission>> ResolvePermissionsAsync(
         IReadOnlyCollection<int> permissionIds,

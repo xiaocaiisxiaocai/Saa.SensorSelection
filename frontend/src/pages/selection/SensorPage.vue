@@ -56,9 +56,7 @@ useSyncedQuery(() => {
     };
   }
   return {
-    tab: statusFilters.value.length
-      ? statusFilters.value.join(',')
-      : undefined,
+    tab: statusFilters.value.length ? statusFilters.value.join(',') : undefined,
     model: query.value.trim() || undefined,
     sensorTypes: sensorTypeFilters.value.length
       ? sensorTypeFilters.value.map(String).join(',')
@@ -67,37 +65,40 @@ useSyncedQuery(() => {
 });
 
 watch(
-  () => String(route.query.model || ''),
-  (model) => {
-    // 搜索框输入会经 useSyncedQuery 回写 ?model=，那次变化与当前搜索词相同，
-    // 不能当成外部深链接把状态筛选清掉。
-    if (!model || model === query.value.trim()) return;
-    statusFilters.value = [];
-    query.value = model;
-  },
-);
-watch(
-  () => String(route.query.sensorTypes || ''),
-  (sensorTypes) => {
-    const next = parseSensorTypeFilters(sensorTypes);
-    if (next.join(',') !== sensorTypeFilters.value.map(String).join(',')) {
-      sensorTypeFilters.value = next;
-    }
-  },
-);
-watch(
-  () => [route.query.tab, route.query.sopId, route.query.model3dId] as const,
-  ([tab, sopId, model3dId]) => {
+  () =>
+    [
+      route.query.tab,
+      route.query.model,
+      route.query.sensorTypes,
+      route.query.sopId,
+      route.query.model3dId,
+    ] as const,
+  ([tab, modelValue, sensorTypes, sopId, model3dId]) => {
     const nextTab = String(tab || '');
     if (nextTab === 'sop-library') {
       section.value = 'sop-library';
     } else if (nextTab === 'sop') {
       section.value = 'sop';
       focusSopId.value = positiveId(sopId);
-    }
-    if (nextTab === '3d') {
+    } else if (nextTab === '3d') {
       section.value = '3d';
       focusModel3dId.value = positiveId(model3dId);
+    } else {
+      section.value = 'models';
+      const model = String(modelValue || '');
+      // 搜索框输入经 useSyncedQuery 回写时，model 已等于本地值，要保留用户
+      // 同时选中的状态；真正的外部型号深链则按既有规则清空状态筛选。
+      statusFilters.value =
+        model && model !== query.value.trim()
+          ? []
+          : parseStatusFilters(nextTab);
+      query.value = model;
+      const nextTypes = parseSensorTypeFilters(String(sensorTypes || ''));
+      if (
+        nextTypes.join(',') !== sensorTypeFilters.value.map(String).join(',')
+      ) {
+        sensorTypeFilters.value = nextTypes;
+      }
     }
   },
 );

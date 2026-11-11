@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import {
   SENSOR_HAS_ALTERNATES,
@@ -80,6 +80,12 @@ const canImport = computed(() => canExport.value && writable.value);
 const formDialog = ref<InstanceType<typeof SensorFormDialog>>();
 const importResult = ref<InstanceType<typeof ImportResultDialog>>();
 const importInput = ref<HTMLInputElement>();
+const importing = ref(false);
+let importTask = 0;
+
+onBeforeUnmount(() => {
+  importTask += 1;
+});
 const replaceDialog = ref<InstanceType<typeof SensorReplaceDialog>>();
 const linkedPreview = ref<{
   file: SensorFileItem;
@@ -317,41 +323,55 @@ function exportExcel() {
 }
 
 function openImport() {
+  if (importing.value) return;
   importInput.value?.click();
 }
 
 async function onImportFile(event: Event) {
+  if (importing.value) return;
   const input = event.target;
   if (!(input instanceof HTMLInputElement)) return;
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
-  // 只有读文件失败才算「无法读取」；写入阶段的异常照常抛出，不被误报
-  let first: Awaited<ReturnType<typeof readWorkbook>>[number] | undefined;
+  const task = ++importTask;
+  importing.value = true;
   try {
-    first = (await readWorkbook(new Uint8Array(await file.arrayBuffer())))[0];
-  } catch {
-    first = undefined;
+    // 只有读文件失败才算「无法读取」；写入阶段的异常照常抛出，不被误报
+    let first: Awaited<ReturnType<typeof readWorkbook>>[number] | undefined;
+    try {
+      const bytes = await file.arrayBuffer();
+      if (task !== importTask) return;
+      first = (await readWorkbook(new Uint8Array(bytes)))[0];
+    } catch {
+      first = undefined;
+    }
+    if (task !== importTask) return;
+    if (!first) {
+      message.error('无法读取该 Excel 文件');
+      return;
+    }
+    const result = store.importSensors(mapSensorImportSheet(first.rows));
+    if (task !== importTask) return;
+    if (!result.ok) {
+      message.error(result.message || '数据保存失败，本次修改未保存');
+      return;
+    }
+    if (!(await store.waitForPendingWrites())) return;
+    if (task !== importTask) return;
+    importResult.value?.open({
+      categories: [],
+      notes: [],
+      skips: result.skipped.map((item) => ({
+        location: `第 ${item.rowNumber} 行`,
+        reason: item.reason,
+      })),
+      summary: `新增 ${result.created} / 更新 ${result.updated} / 跳过 ${result.skipped.length}`,
+      title: '导入 Sensor 型号',
+    });
+  } finally {
+    if (task === importTask) importing.value = false;
   }
-  if (!first) {
-    message.error('无法读取该 Excel 文件');
-    return;
-  }
-  const result = store.importSensors(mapSensorImportSheet(first.rows));
-  if (!result.ok) {
-    message.error(result.message || '数据保存失败，本次修改未保存');
-    return;
-  }
-  importResult.value?.open({
-    categories: [],
-    notes: [],
-    skips: result.skipped.map((item) => ({
-      location: `第 ${item.rowNumber} 行`,
-      reason: item.reason,
-    })),
-    summary: `新增 ${result.created} / 更新 ${result.updated} / 跳过 ${result.skipped.length}`,
-    title: '导入 Sensor 型号',
-  });
 }
 
 function editItem(item: SensorItem) {
@@ -372,7 +392,7 @@ async function deleteItem(item: SensorItem) {
   }
   const ok = await confirmDelete('删除型号', `确认删除“${item.model}”吗？`);
   if (!ok) return;
-  notifyResult(store.deleteSensor(item.id), '型号已删除');
+  await notifyResult(store.deleteSensor(item.id), '型号已删除');
 }
 
 function openLinked(kind: '3D' | '型录', id: null | number) {
@@ -462,7 +482,12 @@ function openReplace(row: SensorTableRow) {
           </a-button>
         </a-tooltip>
         <a-tooltip v-if="canImport" title="导入 Excel">
-          <a-button aria-label="导入 Excel" @click="openImport">
+          <a-button
+            aria-label="导入 Excel"
+            :disabled="importing"
+            :loading="importing"
+            @click="openImport"
+          >
             <template #icon><Upload :size="14" /></template>
             导入 Excel
           </a-button>
@@ -472,6 +497,7 @@ function openReplace(row: SensorTableRow) {
           ref="importInput"
           class="visually-hidden"
           type="file"
+          :disabled="importing"
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           aria-label="选择 Sensor 型号 Excel"
           @change="onImportFile"

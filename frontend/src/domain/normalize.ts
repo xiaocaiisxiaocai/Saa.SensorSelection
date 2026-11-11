@@ -722,13 +722,14 @@ function normalizeSensorIds(
   item: Record<string, unknown>,
   sensorItems: SensorItem[] = [],
 ): number[] {
+  const hasStoredIds = Object.hasOwn(item, 'sensorIds');
   const requested = Array.isArray(item.sensorIds)
     ? item.sensorIds
         .map(Number)
         .filter((value) => Number.isSafeInteger(value) && value > 0)
     : [];
   const unique = [...new Set(requested)];
-  if (unique.length > 0) {
+  if (hasStoredIds) {
     if (sensorItems.length === 0) return unique;
     const validIds = new Set(sensorItems.map((sensor) => sensor.id));
     return unique.filter((id) => validIds.has(id));
@@ -782,8 +783,8 @@ export function normalizeMachineSectionRows(
 ): MachineSectionRow[] {
   const usedIds = new Set<number>();
   const nextIdRef = { value: 1 };
-  return asList(source)
-    .filter(isRecord)
+  const records = asList(source).filter(isRecord);
+  return records
     .map((item) => {
       const id = allocateId(item.id, usedIds, nextIdRef);
       const machineModelId = Number(item.machineModelId);
@@ -825,10 +826,13 @@ export function normalizeMachineSectionRows(
       }
       return row;
     })
-    .filter((item) =>
+    .filter((item, index) =>
       allowImage
         ? item.role.trim() &&
-          (item.sensorIds.length > 0 || item.sensorType.trim())
+          (item.sensorIds.length > 0 ||
+            item.sensorType.trim() ||
+            (Array.isArray(records[index]?.sensorIds) &&
+              records[index]!.sensorIds.length === 0))
         : item.role.trim() && item.name.trim(),
     );
 }
@@ -1023,8 +1027,10 @@ export function normalizeEntityGroups(
       if (usedGroupNames.has(nameKey)) return null;
       usedGroupNames.add(nameKey);
 
-      // 机型名全局唯一（数据按机型名存）；客户下的厂区只需在本客户内唯一
-      const itemNames = kind === 'customer' ? new Set<string>() : usedItemNames;
+      // 已有机型目录可能含历史重名项：读取时不能静默删除业务节点。
+      // 新增和改名的全局唯一约束由 repository 写入路径保证。
+      // 未指定 kind 的通用归一化保持旧行为，客户/机型目录则只在同一列表内去重。
+      const itemNames = kind ? new Set<string>() : usedItemNames;
       const items: string[] = [];
       for (const rawItem of asList(group.items)) {
         const item = storedText(rawItem).trim().slice(0, 40);

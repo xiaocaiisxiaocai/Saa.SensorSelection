@@ -50,10 +50,17 @@ function prepareBackend() {
   return backendReady;
 }
 
+async function refreshBackend() {
+  const previous = backendReady;
+  backendReady = null;
+  if (previous) await previous;
+  return prepareBackend();
+}
+
 async function enterAsGuest() {
   if (loading.value) return;
   auth.clearSession();
-  await prepareBackend();
+  await refreshBackend();
   await enter();
 }
 
@@ -86,7 +93,7 @@ async function submit() {
       return;
     }
     // 进入主页本身就说明登录成功了，不再弹提示
-    await prepareBackend();
+    await refreshBackend();
     await enter();
   } finally {
     loading.value = false;

@@ -394,7 +394,7 @@ describe('MachinePage', () => {
     await openReportMenu(wrapper);
     expect(reportMenuItems()).toEqual([
       '全选',
-      '清空',
+      '清空（请先勾选）',
       '生成并下载报告（请先勾选）',
       '预览 / 打印 PDF（请先勾选）',
     ]);

@@ -139,11 +139,13 @@ describe('BackendStorage', () => {
     const fileUrl = '/api/files/11111111-1111-1111-1111-111111111111/content';
     const transport = createFakeTransport({});
     transport.writeKey = async (key, value) => {
-      const normalized = (value as Array<Record<string, unknown>>).map((item) => ({
-        ...item,
-        dataUrl: fileUrl,
-        fileId: '11111111-1111-1111-1111-111111111111',
-      }));
+      const normalized = (value as Array<Record<string, unknown>>).map(
+        (item) => ({
+          ...item,
+          dataUrl: fileUrl,
+          fileId: '11111111-1111-1111-1111-111111111111',
+        }),
+      );
       transport.remote.set(key, normalized);
       transport.calls.writes.push(key);
       return normalized;
@@ -190,7 +192,7 @@ describe('BackendStorage', () => {
     expect(writeFailureMsg).toMatch(/write blocked/);
   });
 
-  it('keeps the newest optimistic value when an earlier queued write fails', async () => {
+  it('cancels the newer dependent value when an earlier queued write fails', async () => {
     let releaseFirst!: () => void;
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirst = resolve;
@@ -217,11 +219,11 @@ describe('BackendStorage', () => {
     releaseFirst();
     await bridge.queue;
 
-    // The later write still lands, but a failure is not silently undone: the
-    // page was told 'offline' and the rebuilt bridge restores 'online'.
+    // A newer optimistic edit may depend on the failed operation, so it must
+    // not be persisted after that failure.
     expect(bridge.status).toBe('offline');
-    expect(JSON.parse(bridge.readStoreJson()).a).toEqual([{ v: 3 }]);
-    expect(transport.remote.get('a')).toEqual([{ v: 3 }]);
+    expect(JSON.parse(bridge.readStoreJson()).a).toEqual([{ v: 1 }]);
+    expect(transport.remote.get('a')).toEqual([{ v: 1 }]);
   });
 
   it('rolls back to the last backend-confirmed value when two queued writes to the same key both fail', async () => {
@@ -245,7 +247,7 @@ describe('BackendStorage', () => {
     await bridge.queue;
 
     expect(bridge.status).toBe('offline');
-    expect(transport.remote.get('other')).toEqual([1]);
+    expect(transport.remote.get('other')).toEqual([0]);
     // Must roll back to the value the backend actually has ([{v:1}]), not to
     // [{v:2}] — the first write's optimistic value, which never persisted.
     expect(JSON.parse(bridge.readStoreJson()).a).toEqual([{ v: 1 }]);

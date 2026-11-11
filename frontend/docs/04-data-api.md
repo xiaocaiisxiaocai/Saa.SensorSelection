@@ -1,12 +1,12 @@
 # 04 · 数据层与后端接口契约
 
-后端**不做任何改动**。这份文档是新前端必须遵守的契约。
+这份文档描述当前前端、后端共同遵守的数据与接口契约。
 
 ---
 
-## 1. 领域层：TypeScript 从零重写
+## 1. 领域层
 
-后端**不做任何改动**。领域层**行为必须与现有实现等价**，但禁止拷贝 `domain.js` / `data.js` / `backend-storage.js` 进新目录。对照规格见 `07-domain-spec.md`。
+领域规则位于 TypeScript 领域层；后端负责并发前置条件、原子批次、目录结构和文件引用完整性等信任边界校验。对照规格见 `07-domain-spec.md`。
 
 | 旧文件 | 新文件（拟定） |
 | --- | --- |
@@ -23,22 +23,20 @@
 createSelectionRepository({ crudDefaults, sensorData, storage })
 ```
 
-`storage` 是 `StorageLike`（`getItem` / `setItem`）。在线时传 `BackendStorage` 实例，离线时传 `window.localStorage`。
+`storage` 是 `StorageLike`（`getItem` / `setItem`）。运行中的应用只传 `BackendStorage`；`window.localStorage` 和前端种子只用于旧数据兼容及可控测试夹具，不作为在线业务数据源。
 
 ### 关键语义（重写时不能破坏）
 
-1. **写入失败必须回滚。** `persist()` 里 `setItem()` 返回 `false` 视为拒绝（未登录 / 离线写失败），内存快照回滚，返回 `{ ok: false, reason: 'storage' }`。UI 必须把这个失败提示给用户。
-2. **在线数据要快照到本地。** `BackendStorage.snapshotLocal()` 每次成功写入后把完整 store 写进 `localStorage`，后端挂掉后刷新页面仍可只读。
+1. **写入失败必须回滚。** 领域修改先形成乐观内存状态；服务端原子批次失败时，`BackendStorage` 恢复最后确认快照并提示冲突或错误。页面必须等待 `waitForPendingWrites()` 确认服务端实际成功后再提示保存完成或关闭编辑界面。
+2. **SQLite 是唯一在线数据源。** 浏览器不缓存业务数据；后端不可达时保留当前页面已加载内容但禁止继续写入，刷新后必须重新从后端读取。
 3. **机型结构行以 `sensorIds` 为准。** `sensorType` / `spec` 是旧数据兼容字段，读取时容忍，新增/编辑时不作为数据源。
-4. **种子版本化回填。** `SEED_VERSION`（当前 `10`）落后时按迁移规则补种缺失数据，不覆盖用户业务记录。版本 8 移除历史全局机型 Tab 定义；版本 9 将机型目录拆分为结构与专案机型；版本 10 以 `01–04` 编号状态为厂外反馈唯一标准，并迁移历史同义状态。改动默认数据时必须递增它。
+4. **前端种子只用于测试与显式迁移工具。** 生产页面不在空库时自动灌入本地快照或前端种子；账号、角色和可选演示 Store 的首次初始化由后端 `DbSeeder` 负责。
 
 ---
 
 ## 2. 存储键约定
 
-单一 `localStorage` 主键：**`symtek_crud_store`**（常量 `STORAGE_KEY`，不可改，旧数据依赖它）。
-
-其内容是 `{ [业务key]: 数组 }`。后端 `/api/store` 存的是同一套业务 key。
+历史浏览器主键为 **`symtek_crud_store`**（常量 `STORAGE_KEY`，不可改，旧数据兼容和测试夹具仍依赖它）；当前在线应用不再读写该键作为业务缓存。后端 `/api/store` 保存 `{ [业务key]: 数组 }`。
 
 | 业务 key 模式 | 内容 |
 | --- | --- |
@@ -60,7 +58,7 @@ createSelectionRepository({ crudDefaults, sensorData, storage })
 | `machine-section-rows:{sectionId}:{机型名}` | 旧模型的结构/注意事项行（`sectionId` 为上一行旧 Tab 的 id） |
 | `machine-section-images:{sectionId}:{机型名}` | 旧的分区示意图（最多 2 张，已不再写入）：读到时挂到该分区的记录上并清空。示意图现在是记录的 `image` 字段（`machine-section-rows` 里每行一张，相邻同图在表格里合并） |
 
-文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF、图片和 3D 文件仅在预览或下载时按需请求，避免登录阶段传输文件正文。
+文件字段沿用 `dataUrl` 名称以兼容既有领域模型，但持久化后的值是 `/api/files/{id}/content`。页面初始化只下载轻量 Store JSON；PDF 与图片可匿名内联预览，Word、PPT 等其他附件的 `/content` 和 `/download` 都要求 `file:download` 并记录下载审计。正文仅在预览或下载时按需请求。
 | `meta:seed-version` | 种子版本号 |
 
 历史遗留 key（只在读取或种子迁移时处理，不再作为活动配置写入）：`machine-conveyor:*` → `machine-section-rows:1:*`、`machine-arm:*` → `:2:`、`machine-platform:*` → `:3:`、`machine-notes:*` → `:4:`、`dict-feedback-type:all` → `dict:customer-feedback`。版本 8 删除 `dict:machine-section`、`machine-global-sections:all`、`general-structure-labels:all` 定义键，但保留旧 `machine-section-rows/images:*` 内容。版本 10 保留编号反馈状态的既有 id，删除四个无编号同义项，并将 `customer-feedback:*` 历史状态映射为编号名称；无关自定义状态保持不变。
@@ -111,12 +109,13 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 | --- | --- | --- |
 | GET | `/store` | **匿名可读** |
 | GET | `/store/by-key?key={key}` | 匿名可读（代理安全的单 key 契约） |
-| PUT | `/store` | `selection:write`（全量替换，迁移用） |
-| PUT | `/store/by-key?key={key}` | `selection:write`（前端增量同步使用） |
-| PUT | `/store/entity-groups/{customer\|machine}` | `selection:write`（分组顺序专用契约） |
-| DELETE | `/store/by-key?key={key}` | `selection:write`（前端增量同步使用） |
+| POST | `/store/batch` | `selection:write`（跨 key 原子 CAS，前端常规写入） |
+| PUT | `/store` | `selection:write`（全量替换，必须带全库 `If-Match`） |
+| PUT | `/store/by-key?key={key}` | `selection:write`（兼容单 key 写，必须带 `If-Match`） |
+| PUT | `/store/entity-groups/{customer\|machine}` | `selection:write`（目录专用校验，必须带 `If-Match`） |
+| DELETE | `/store/by-key?key={key}` | `selection:write`（兼容单 key删除，必须带 `If-Match`） |
 
-写入成功返回 `{ ok: true }`；校验失败 `400` + `{ ok: false, reason: 'validation', message }`。
+GET 响应带强 ETag，单 key 不存在时也返回固定 missing ETag。旧写接口缺少 `If-Match` 返回 428，ETag 陈旧返回 412。批次请求为 `{ changes: [{ key, expected, value }] }`：`expected` 必须显式为上次确认的数组或 `null`，`value` 为目标数组或删除用 `null`；任一 expected 冲突返回 409 且整个 SQLite 事务不写入。成功返回 `{ ok: true, values: { [key]: array | null } }`；校验失败为 400。
 
 **报告**
 
@@ -151,7 +150,7 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 
 `/audit-logs/operations` 按操作分页：返回 `{ items: [{ operationId, label, timestamp, username, displayName, ip, result, entryCount, entries: [日志…] }], total }`，`total` 是操作数。筛选落在单条日志上，任一条命中，整组都返回；`result` 只有组内全部成功才为 true，筛选 `result=true` 也只返回全部成功的操作，`result=false` 返回有任一条失败的操作；`entries` 最多 200 条。
 
-**操作编号**：业务写入（`PUT/DELETE /store/by-key`、`PUT /store/entity-groups/{kind}`）可带请求头 `X-Operation-Id`（8–64 位字母数字和 `-`）与 `X-Operation-Label`（URL 编码的操作名称，最长 120 字）。同一编号的日志归为一次操作；服务端存成「用户名:编号」，别的用户无法串组。不带时每条日志自成一次操作。前端由 `api/audit-operation.ts` 的 `runAsOperation` 设置，`BackendStorage` 在写入入队时用 `captureContext` 取走。
+**操作编号**：业务写入（优先 `POST /store/batch`，兼容旧 `PUT/DELETE`）可带请求头 `X-Operation-Id`（8–64 位字母数字和 `-`）与 `X-Operation-Label`（URL 编码的操作名称，最长 120 字）。同一编号的日志归为一次操作；服务端存成「用户名:编号」，别的用户无法串组。不带时每条日志自成一次操作。前端由 `api/audit-operation.ts` 的 `runAsOperation` 设置，`BackendStorage` 在写入入队时用 `captureContext` 取走。
 
 **操作类型**（`OperationKind`）：写入时由操作名称截到第一个「「」或「 · 」之前得到（「新增选型记录 · 机型A」→「新增选型记录」）；`kind` 筛选匹配 `OperationKind ?? Action`，所以没有名称的日志可以按操作码筛。
 
@@ -187,7 +186,7 @@ type ApiErrorKind = 'unauthorized' | 'forbidden' | 'offline' | 'error'
 
 默认账号 `admin` / `admin123`（后端 `Seed:*` 配置可覆盖）。
 
-JWT 里权限码在 `perm` 声明，后端授权策略按它校验。前端把 `permissions` 存进 auth store 供 `useAccess()` 使用。
+JWT 的 `sub` 是不可复用的用户 ID，权限码位于 `perm` 声明；额外 HMAC 会话指纹绑定用户 ID、密码哈希和当前角色/权限，JWT 不暴露密码哈希。改密、停用、删除、降权或角色权限变化后，旧 token 会在下一次请求校验时失效；同名账号重建不能复活旧 token。前端把 `permissions` 存进 auth store 供 `useAccess()` 使用。
 
 ---
 
@@ -199,21 +198,20 @@ JWT 里权限码在 `perm` 声明，后端授权策略按它校验。前端把 `
 | --- | --- | --- |
 | `connecting` | 初始化中 | 内容区骨架/loading |
 | `online` | 后端可达 | 正常读写 |
-| `offline` | 启动时后端不可达 | 橙色横幅「后端服务不可用，当前为本地模式」+「重连」按钮；本地可读写 |
-| `unauthorized` | token 缺失/失效 | 红色横幅；可读本地缓存，**禁止写入**；若持有 token 则自动跳登录页，匿名态不跳 |
+| `offline` | 后端不可达或写入冲突后等待重连 | 橙色横幅；保持当前已加载页面，只读并自动退避重连 |
+| `unauthorized` | token 缺失/失效 | 红色横幅，清理失效身份并跳登录页；禁止写入 |
 
 初始化流程（`BackendStorage.init()`，已实现，UI 只需展示结果）：
 1. 拉 `/store`。失败 → 降级 `offline` 或 `unauthorized`。
-2. 远端为空 + 本地有数据 → 全量上传迁移，提示「已将本地数据导入后端（迁移完成）」。
-3. 远端为空 + 本地也空 → 上传内置种子，提示「已将内置基础数据初始化到后端」。
-4. 种子版本落后 → 补种缺失 key。
-5. 成功 → `online` + 快照到本地。
+2. 成功 → 以远端快照重建领域仓库并进入 `online`；远端为空就显示为空。
+3. 后续保存计算相对最后确认快照的 change 集合，通过 `/store/batch` 原子提交；只有服务端返回成功才更新确认快照并反馈成功。
+4. 401 进入 `unauthorized`；403 只回滚该次写入并提示无权限，不改变登录状态。
 
 ---
 
-## 6. 内置种子数据
+## 6. 测试与显式迁移种子
 
-来自 `data.js`，新前端原样沿用。
+以下数据只供 Vitest/合同测试夹具和显式迁移工具使用，运行中的前端不会向空后端自动写入。后端账号、角色、默认组织及可选演示 Store 只在全新数据库首次初始化；后续启动不恢复已删除账号或管理员主动撤销的普通角色权限。
 
 **客户分组**：华东（庆鼎、健鼎、沪士、胜宏、景旺）、华南（宏恒胜、崇达、深南、兴森、博敏）、SAT（维信、依顿、奥士康、华通、定颖）。
 
@@ -253,5 +251,9 @@ JWT 里权限码在 `perm` 声明，后端授权策略按它校验。前端把 `
 | `VITE_BASE` | `/` | 部署子路径 |
 | `VITE_ROUTER_HISTORY` | 开发 `history`，生产 `hash` | 生产用 hash，IIS 无需 URL Rewrite |
 | `VITE_PORT` | `5178` | 开发端口，**与旧前端 5777 错开**，方便新旧并行对照 |
+| `E2E_BASE_URL` | 无 | UI／文件 E2E 必须显式指定的隔离前端地址 |
+| `API_BASE` | 无 | API／UI E2E 必须显式指定的隔离 API 地址 |
+
+E2E 地址没有 localhost 默认值，必须指向独立、可丢弃的服务和数据库。Windows 浏览器自动化还必须遵守全局 CORE-19，不得在 SAC 身份下启动已知会触发认证失败与锁定的 Edge／Playwright Chromium 版本。
 
 实施计划见 `05-implementation-plan.md`。

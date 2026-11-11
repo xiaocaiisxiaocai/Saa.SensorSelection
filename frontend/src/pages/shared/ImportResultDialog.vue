@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue';
-import { ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 
 import AdminColumnSettingsMenu from '@/pages/shared/AdminColumnSettingsMenu.vue';
 import { useManagedTableColumns } from '@/pages/shared/managed-table-columns';
@@ -30,6 +30,8 @@ export interface ImportResultPayload {
 }
 
 const openState = ref(false);
+const confirmMode = ref(false);
+let resolveConfirmation: ((confirmed: boolean) => void) | undefined;
 const payload = ref<ImportResultPayload>({
   categories: [],
   notes: [],
@@ -72,12 +74,34 @@ function categoryLine(item: ImportResultCategory) {
 }
 
 function open(next: ImportResultPayload) {
+  settleConfirmation(false);
   payload.value = next;
   revision.value += 1;
+  confirmMode.value = false;
   openState.value = true;
 }
 
-defineExpose({ open });
+function confirm(next: ImportResultPayload): Promise<boolean> {
+  settleConfirmation(false);
+  payload.value = next;
+  revision.value += 1;
+  confirmMode.value = true;
+  openState.value = true;
+  return new Promise<boolean>((resolve) => {
+    resolveConfirmation = resolve;
+  });
+}
+
+function settleConfirmation(confirmed: boolean) {
+  openState.value = false;
+  const resolve = resolveConfirmation;
+  resolveConfirmation = undefined;
+  resolve?.(confirmed);
+}
+
+onBeforeUnmount(() => settleConfirmation(false));
+
+defineExpose({ confirm, open });
 </script>
 
 <template>
@@ -86,7 +110,7 @@ defineExpose({ open });
     :title="payload.title"
     :width="720"
     destroy-on-close
-    @cancel="openState = false"
+    @cancel="settleConfirmation(false)"
   >
     <div class="import-result">
       <p v-if="payload.summary" class="import-result__summary">
@@ -127,7 +151,15 @@ defineExpose({ open });
       />
     </div>
     <template #footer>
-      <a-button type="primary" @click="openState = false">关闭</a-button>
+      <template v-if="confirmMode">
+        <a-button @click="settleConfirmation(false)">取消</a-button>
+        <a-button type="primary" danger @click="settleConfirmation(true)">
+          确认还原
+        </a-button>
+      </template>
+      <a-button v-else type="primary" @click="settleConfirmation(false)">
+        关闭
+      </a-button>
     </template>
   </a-modal>
 </template>

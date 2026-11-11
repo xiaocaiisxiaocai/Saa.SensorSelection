@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api, type UserProfile } from '@/api';
 import { isSensorStatus } from '@/domain';
+import { buildExcelWorkbook } from '@/pages/shared/excel';
 import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 import type { SensorTableRow } from './sensor/sensor-table';
@@ -54,10 +55,7 @@ function statusFilter(wrapper: VueWrapper) {
 function searchInput(wrapper: VueWrapper) {
   return wrapper
     .findAllComponents({ name: 'AInput' })
-    .find(
-      (input) =>
-        input.props('placeholder') === '搜索型号',
-    )!;
+    .find((input) => input.props('placeholder') === '搜索型号')!;
 }
 
 function tableRows(wrapper: VueWrapper) {
@@ -88,6 +86,77 @@ describe('SensorPage', () => {
     const both = await mountPage({}, writer);
     expect(both.find('button[aria-label="导入 Excel"]').exists()).toBe(true);
     both.unmount();
+  });
+
+  it('locks imports and ignores a file read that finishes after unmount', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    const importSensors = vi.spyOn(store, 'importSensors');
+    let finishRead!: (value: ArrayBuffer) => void;
+    const reading = new Promise<ArrayBuffer>((resolve) => {
+      finishRead = resolve;
+    });
+    const file = new File([''], 'Sensor.xlsx');
+    Object.defineProperty(file, 'arrayBuffer', { value: () => reading });
+    const input = wrapper.get<HTMLInputElement>(
+      'input[aria-label="选择 Sensor 型号 Excel"]',
+    );
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [file],
+    });
+
+    input.element.dispatchEvent(new Event('change'));
+    await nextTick();
+    expect(
+      wrapper.get('button[aria-label="导入 Excel"]').attributes('disabled'),
+    ).toBeDefined();
+
+    wrapper.unmount();
+    finishRead(new ArrayBuffer(0));
+    await flushPromises();
+    expect(importSensors).not.toHaveBeenCalled();
+  });
+
+  it('shows no import result before pending writes succeed', async () => {
+    const wrapper = await mountPage({}, writer);
+    const store = useSelectionStore();
+    let finishWrites!: (saved: boolean) => void;
+    const pendingWrites = new Promise<boolean>((resolve) => {
+      finishWrites = resolve;
+    });
+    vi.spyOn(store, 'waitForPendingWrites').mockReturnValue(pendingWrites);
+    const imported = vi.spyOn(store, 'importSensors');
+    const bytes = buildExcelWorkbook({
+      sheets: [
+        {
+          headers: ['状态', '感应器类型', '型号'],
+          name: '全部',
+          rows: [['现用', '漫反射', '待写入型号']],
+        },
+      ],
+    });
+    const file = new File([''], 'Sensor.xlsx');
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => Promise.resolve(new Uint8Array(bytes).buffer),
+    });
+    const input = wrapper.get<HTMLInputElement>(
+      'input[aria-label="选择 Sensor 型号 Excel"]',
+    );
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [file],
+    });
+
+    input.element.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(imported).toHaveBeenCalledOnce());
+    expect(document.body.textContent).not.toContain('导入 Sensor 型号');
+
+    finishWrites(false);
+    await flushPromises();
+    expect(document.body.textContent).not.toContain('导入 Sensor 型号');
+
+    wrapper.unmount();
   });
 
   beforeEach(() => {
@@ -1049,6 +1118,34 @@ describe('SensorPage', () => {
     await flushPromises();
     expect(statusFilter(wrapper).filteredValue).toBeNull();
     expect(searchInput(wrapper).props('value')).toBe('WL12');
+
+    wrapper.unmount();
+  });
+
+  it('honours external tab changes while the page instance is reused', async () => {
+    const wrapper = await mountPage({ tab: '3d' });
+    const router = wrapper.vm.$router;
+    expect(activeTabText(wrapper)).toBe('3D');
+
+    await router.push({
+      path: '/selection/sensor',
+      query: { tab: '备选' },
+    });
+    await flushPromises();
+    expect(activeTabText(wrapper)).toBe('型号');
+    expect(statusFilter(wrapper).filteredValue).toEqual(['备选']);
+
+    await router.push({
+      path: '/selection/sensor',
+      query: { tab: 'sop' },
+    });
+    await flushPromises();
+    expect(activeTabText(wrapper)).toBe('型录');
+
+    await router.push('/selection/sensor');
+    await flushPromises();
+    expect(activeTabText(wrapper)).toBe('型号');
+    expect(statusFilter(wrapper).filteredValue).toBeNull();
 
     wrapper.unmount();
   });

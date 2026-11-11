@@ -93,7 +93,7 @@ async function uploadPicked(picked: File[]) {
       title: file.name.replace(/\.pdf$/i, ''),
       uploadedAt: new Date().toISOString(),
     });
-    notifyResult(result, '型录已上传', {
+    await notifyResult(result, '型录已上传', {
       size: '文件大小超出 8 MB 限制',
       type: '仅支持 PDF 文档',
       storage: '数据保存失败，文件未保存',
@@ -105,10 +105,13 @@ async function remove(item: SensorSopItem) {
   const ok = await confirmDelete('删除型录', `确认删除“${item.title}”吗？`);
   if (!ok) return;
   const result = store.deleteSensorSop(item.id);
-  notifyResult(result, '型录已删除', {
-    'in-use': '仍有型号关联该型录，请先取消关联后再删除',
-  });
-  if (preview.value?.id === item.id) preview.value = null;
+  if (
+    await notifyResult(result, '型录已删除', {
+      'in-use': '仍有型号关联该型录，请先取消关联后再删除',
+    })
+  ) {
+    if (preview.value?.id === item.id) preview.value = null;
+  }
 }
 </script>
 
@@ -175,7 +178,9 @@ async function remove(item: SensorSopItem) {
             </a-tooltip>
             <a-tooltip
               v-if="canDownload"
-              :title="fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'"
+              :title="
+                fileIdFromReference(item.dataUrl) ? '下载' : '该文件无法下载'
+              "
             >
               <span class="tooltip-host">
                 <a-button

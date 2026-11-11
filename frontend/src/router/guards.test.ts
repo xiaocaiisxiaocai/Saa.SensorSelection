@@ -84,6 +84,20 @@ describe('router guards', () => {
     );
   });
 
+  it('allows an explicitly expired cached session to enter login', async () => {
+    storeToken('stale');
+    const me = vi.spyOn(api, 'me').mockResolvedValue(admin);
+    const auth = useAuthStore();
+    auth.applyProfile(admin);
+    auth.expireSession();
+
+    const router = createTestRouter();
+    await router.push('/login');
+
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(me).not.toHaveBeenCalled();
+  });
+
   it('keeps a stored token on the page when the backend is merely offline', async () => {
     const { ApiError } = await import('@/api');
     storeToken('ok');

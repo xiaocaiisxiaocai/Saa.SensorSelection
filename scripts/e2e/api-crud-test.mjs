@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// Full CRUD + permission-matrix regression against a running API (default http://localhost:5080).
+// Full CRUD + permission-matrix regression against an explicitly selected disposable API.
 // Every artifact it creates is prefixed with E2E_PREFIX and removed in the cleanup phase.
 
-const BASE = process.env.API_BASE ?? 'http://localhost:5080/api'
+const BASE = process.env.API_BASE
+if (!BASE) {
+  throw new Error('API_BASE is required; point it at an isolated disposable API database')
+}
 const E2E_PREFIX = 'e2e_'
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
@@ -50,10 +53,40 @@ function cleanupOperationHeaders(label) {
 
 let requestOperationHeaders = {}
 
-async function request(method, path, { token, body, raw, headers: extraHeaders } = {}) {
+function storePreconditionProbe(method, path) {
+  if (!['PUT', 'DELETE'].includes(method)) return null
+  if (path === '/store' && method === 'PUT') return '/store'
+  if (path.startsWith('/store/by-key?')) return path
+  const match = /^\/store\/entity-groups\/([^/?]+)$/.exec(path)
+  return match
+    ? storeRoute(`entity-groups:${decodeURIComponent(match[1])}`)
+    : null
+}
+
+async function readStoreEntityTag(method, path, token) {
+  const probe = storePreconditionProbe(method, path)
+  if (!probe) return null
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const response = await fetch(`${BASE}${probe}`, { headers })
+  const etag = response.headers.get('etag')
+  if (!etag) {
+    throw new Error(`store precondition probe did not return ETag: ${response.status} ${probe}`)
+  }
+  return etag
+}
+
+async function request(
+  method,
+  path,
+  { token, body, raw, headers: extraHeaders, storePrecondition = true } = {},
+) {
   const headers = { ...requestOperationHeaders, ...extraHeaders }
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (storePrecondition && !headers['If-Match']) {
+    const etag = await readStoreEntityTag(method, path, token)
+    if (etag) headers['If-Match'] = etag
+  }
   const response = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -167,6 +200,16 @@ async function main() {
     assertEqual(res.status, 401, 'status')
   })
 
+  await check('PUT /store/by-key requires If-Match for authenticated writers', async () => {
+    const res = await request('PUT', storeRoute(storeKey), {
+      token: adminToken,
+      body: [{ id: 1 }],
+      storePrecondition: false,
+    })
+    assertEqual(res.status, 428, 'status')
+    assertEqual(res.data.reason, 'precondition-required', 'reason')
+  })
+
   await check('PUT /store/by-key creates a new key', async () => {
     const res = await request('PUT', storeRoute(storeKey), {
       token: adminToken,
@@ -210,6 +253,53 @@ async function main() {
   await check('GET /store/by-key returns 404 for an unknown key', async () => {
     const res = await request('GET', storeRoute(`${E2E_PREFIX}missing:key`))
     assertEqual(res.status, 404, 'status')
+  })
+
+  await check('PUT /store/by-key rejects a stale ETag without overwriting newer data', async () => {
+    const key = `${E2E_PREFIX}stale:auto`
+    const route = storeRoute(key)
+    cleanup.push(async () => request('DELETE', route, { token: adminToken }))
+    const missing = await request('GET', route)
+    const staleEtag = missing.headers.get('etag')
+    assertEqual(missing.status, 404, 'initial status')
+    assert(staleEtag, 'missing ETag absent')
+    const first = await request('PUT', route, {
+      token: adminToken,
+      body: [{ id: 1, content: 'newer' }],
+      headers: { 'If-Match': staleEtag },
+      storePrecondition: false,
+    })
+    assertEqual(first.status, 200, 'first write status')
+    const stale = await request('PUT', route, {
+      token: adminToken,
+      body: [{ id: 1, content: 'stale overwrite' }],
+      headers: { 'If-Match': staleEtag },
+      storePrecondition: false,
+    })
+    assertEqual(stale.status, 412, 'stale status')
+    const read = await request('GET', route)
+    assertEqual(read.data[0].content, 'newer', 'newer value preserved')
+  })
+
+  await check('POST /store/batch rejects one stale key atomically', async () => {
+    const firstKey = `${E2E_PREFIX}batch-a:auto`
+    const secondKey = `${E2E_PREFIX}batch-b:auto`
+    cleanup.push(async () => request('DELETE', storeRoute(firstKey), { token: adminToken }))
+    cleanup.push(async () => request('DELETE', storeRoute(secondKey), { token: adminToken }))
+    await request('PUT', storeRoute(firstKey), { token: adminToken, body: [{ id: 1 }] })
+    const conflict = await request('POST', '/store/batch', {
+      token: adminToken,
+      body: {
+        changes: [
+          { key: firstKey, expected: null, value: [{ id: 2 }] },
+          { key: secondKey, expected: null, value: [{ id: 1 }] },
+        ],
+      },
+    })
+    assertEqual(conflict.status, 409, 'status')
+    assertEqual(conflict.data.key, firstKey, 'conflict key')
+    const second = await request('GET', storeRoute(secondKey))
+    assertEqual(second.status, 404, 'second key must not be partially created')
   })
 
   await check('DELETE /store/by-key removes the key', async () => {

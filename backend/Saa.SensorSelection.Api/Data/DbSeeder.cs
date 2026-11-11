@@ -9,20 +9,32 @@ namespace Saa.SensorSelection.Api.Data;
 public static class DbSeeder
 {
     /// <summary>
-    /// 启动时应用 EF Core Migrations 建库/升级架构，并幂等写入：
+    /// 启动时应用 EF Core Migrations 建库/升级架构；RBAC 首次引导时写入：
     /// 1. 权限清单（RbacDefaults）
     /// 2. 内置角色（admin/editor/viewer，admin 为系统角色）
     /// 3. 默认组织架构（制造事业部 → 标准件组 → 选型课）
-    /// 4. 默认管理员账号（appsettings Seed 节），并授予 admin 角色
+    /// 4. 默认管理员账号（appsettings Seed 节），并授予 admin 角色。
+    /// 后续启动只补权限目录和系统管理员角色的新权限，不恢复已删除账号或已撤授权。
     /// </summary>
     public static void EnsureSeeded(AppDbContext db, IConfiguration configuration)
     {
         db.Database.Migrate();
 
+        // 账号、默认角色与组织只在全新 RBAC 数据库（或旧版首次迁入 RBAC）引导一次。
+        // 后续重启不得复活已删除的种子管理员、角色或恢复管理员主动撤销的权限。
+        var bootstrapIdentity = !db.Roles.Any() && !db.Permissions.Any();
         EnsurePermissions(db);
-        EnsureRoles(db);
-        EnsureOrganizationHierarchy(db);
-        EnsureAdminUser(db, configuration);
+        if (bootstrapIdentity)
+        {
+            EnsureRoles(db);
+            EnsureOrganizationHierarchy(db);
+            EnsureAdminUser(db, configuration);
+        }
+        else
+        {
+            // 系统管理员角色由 API 保护为不可编辑；新增权限目录项时只补给该系统角色。
+            EnsureSystemAdminPermissions(db);
+        }
         EnsureDemoStore(db, configuration);
     }
 
@@ -124,47 +136,46 @@ public static class DbSeeder
         var permissionsByCode = db.Permissions.ToDictionary(permission => permission.Code);
         foreach (var (code, name, description, isSystem, permissionCodes) in RbacDefaults.Roles)
         {
-            // 必须加载 Permissions 集合：否则已存在的角色会被当作无权限，
-            // 补种时重复插入 RolePermission 关联 → UNIQUE 冲突
-            var role = db.Roles
-                .Include(item => item.Permissions)
-                .FirstOrDefault(item => item.Code == code);
-            if (role is null)
+            // 本方法只在首次引导调用；若迁移数据中已有同名角色则保留它，不覆盖授权。
+            if (db.Roles.Any(item => item.Code == code))
             {
-                role = new Role
-                {
-                    Code = code,
-                    Name = name,
-                    Description = description,
-                    IsSystem = isSystem,
-                };
-                role.Permissions.AddRange(
-                    permissionCodes
-                        .Select(permissionCode => permissionsByCode[permissionCode]));
-                db.Roles.Add(role);
                 continue;
             }
 
-            // 已存在的内置角色：名称/描述同步更新；权限只补不删（系统角色除外——admin 始终保持全部权限）
-            role.Name = name;
-            role.Description = description;
-            var existingCodes = role.Permissions.Select(permission => permission.Code).ToHashSet();
-            var missing = permissionCodes
-                .Where(permissionCode => !existingCodes.Contains(permissionCode))
-                .Select(permissionCode => permissionsByCode[permissionCode])
-                .ToList();
-            role.Permissions.AddRange(missing);
-            if (isSystem)
+            var role = new Role
             {
-                var removed = role.Permissions
-                    .Where(permission => !permissionCodes.Contains(permission.Code))
-                    .ToList();
-                foreach (var permission in removed)
-                {
-                    role.Permissions.Remove(permission);
-                }
-            }
+                Code = code,
+                Name = name,
+                Description = description,
+                IsSystem = isSystem,
+            };
+            role.Permissions.AddRange(
+                permissionCodes.Select(permissionCode => permissionsByCode[permissionCode]));
+            db.Roles.Add(role);
         }
+        db.SaveChanges();
+    }
+
+    private static void EnsureSystemAdminPermissions(AppDbContext db)
+    {
+        var role = db.Roles
+            .Include(item => item.Permissions)
+            .FirstOrDefault(item =>
+                item.IsSystem && item.Code == RbacDefaults.SystemAdminRoleCode);
+        if (role is null)
+        {
+            return;
+        }
+
+        var existing = role.Permissions.Select(permission => permission.Code).ToHashSet();
+        var missing = db.Permissions
+            .Where(permission => !existing.Contains(permission.Code))
+            .ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+        role.Permissions.AddRange(missing);
         db.SaveChanges();
     }
 

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -34,7 +36,7 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateRoleRequest request, CancellationToken ct)
     {
-        var result = await roles.CreateAsync(request, ct);
+        var result = await roles.CreateAsync(request, CurrentUserId(), ct);
         await audit.WriteAsync(
             "role.create",
             target: result.Value?.Code ?? request.Code,
@@ -60,7 +62,7 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     public async Task<IActionResult> Update(int id, [FromBody] UpdateRoleRequest request, CancellationToken ct)
     {
         var before = (await roles.ListAsync(ct)).FirstOrDefault(role => role.Id == id);
-        var result = await roles.UpdateAsync(id, request, ct);
+        var result = await roles.UpdateAsync(id, request, CurrentUserId(), ct);
         await audit.WriteAsync(
             "role.update",
             target: result.Value?.Code ?? $"#{id}",
@@ -89,7 +91,7 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var before = (await roles.ListAsync(ct)).FirstOrDefault(role => role.Id == id);
-        var result = await roles.DeleteAsync(id, ct);
+        var result = await roles.DeleteAsync(id, CurrentUserId(), ct);
         await audit.WriteAsync(
             "role.delete",
             target: before?.Code ?? $"#{id}",
@@ -104,4 +106,13 @@ public class RolesController(RoleService roles, AuditLogService audit) : Control
             ? Ok(new { ok = true })
             : BadRequest(new { message = result.Error });
     }
+
+    private int CurrentUserId() =>
+        int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var id)
+            ? id
+            : 0;
 }

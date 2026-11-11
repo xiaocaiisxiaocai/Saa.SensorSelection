@@ -9,18 +9,27 @@ namespace Saa.SensorSelection.Api.Services;
 /// 在服务端生成独立的机型结构报告文档。
 /// HTML 是可归档的文档格式，也可通过文档内的打印入口保存为 PDF。
 /// </summary>
-public sealed class MachineSchematicReportService
+public sealed class MachineSchematicReportService(StoredFileService storedFiles)
 {
     private const int MaxMachines = 50;
     private const int MaxSections = 30;
     private const int MaxBlocksPerSection = 50;
     private const int MaxRowsPerBlock = 500;
+    private const int MaxTotalBlocks = 200;
+    private const int MaxTotalRows = 5_000;
+    private const int MaxImagesPerBlock = 100;
+    private const int MaxTotalImages = 200;
+    private const int MaxSensorsPerBlock = 1_000;
+    private const int MaxSensorIdsPerRow = 50;
     private const int MaxTextLength = 2000;
     // 机型名是完整的选单路径（分类 / 配置 / 机型 / 二级 Tab，每级最多 40 字）
     private const int MaxMachineNameLength = 200;
-    private const int MaxImageDataLength = 3_000_000;
+    private const int MaxImageBytes = 3_000_000;
+    private const int MaxTotalEmbeddedImageBytes = 20_000_000;
 
-    public ReportBuildResult Build(MachineSchematicReportRequest? request)
+    public async Task<ReportBuildResult> BuildAsync(
+        MachineSchematicReportRequest? request,
+        CancellationToken ct = default)
     {
         if (request?.MachineNames is not { Count: > 0 } machineNames)
         {
@@ -32,7 +41,6 @@ public sealed class MachineSchematicReportService
             return ReportBuildResult.Validation($"最多选择 {MaxMachines} 个机型");
         }
 
-        var normalizedMachines = new List<string>(machineNames.Count);
         var machineSet = new HashSet<string>(StringComparer.Ordinal);
         foreach (var machineName in machineNames)
         {
@@ -46,8 +54,6 @@ public sealed class MachineSchematicReportService
             {
                 return ReportBuildResult.Validation($"机型重复: {normalized}");
             }
-
-            normalizedMachines.Add(normalized);
         }
 
         var sections = request.Sections ?? Array.Empty<MachineSchematicReportSection>();
@@ -57,6 +63,11 @@ public sealed class MachineSchematicReportService
         }
 
         var normalizedSections = new List<NormalizedSection>(sections.Count);
+        var totalBlocks = 0;
+        var totalRows = 0;
+        var totalImages = 0;
+        var totalImageBytes = 0;
+        var imageCache = new Dictionary<string, ResolvedImage>(StringComparer.Ordinal);
         foreach (var section in sections.OrderBy(item => item.Sort).ThenBy(item => item.Id))
         {
             var displayName = Normalize(section.DisplayName ?? section.Name, 80);
@@ -73,6 +84,11 @@ public sealed class MachineSchematicReportService
             {
                 return ReportBuildResult.Validation($"结构模块「{displayName}」的机型数量超出限制");
             }
+            totalBlocks += blocks.Count;
+            if (totalBlocks > MaxTotalBlocks)
+            {
+                return ReportBuildResult.Validation($"报告最多包含 {MaxTotalBlocks} 个机型区块");
+            }
 
             var normalizedBlocks = new List<NormalizedBlock>(blocks.Count);
             foreach (var block in blocks)
@@ -88,14 +104,69 @@ public sealed class MachineSchematicReportService
                 {
                     return ReportBuildResult.Validation($"机型「{machineName}」的记录数量超出限制");
                 }
+                totalRows += rows.Count;
+                if (totalRows > MaxTotalRows)
+                {
+                    return ReportBuildResult.Validation($"报告最多包含 {MaxTotalRows} 条记录");
+                }
+
+                if (rows.Any(row => (row.SensorIds?.Count ?? 0) > MaxSensorIdsPerRow))
+                {
+                    return ReportBuildResult.Validation(
+                        $"机型「{machineName}」的单条记录最多关联 {MaxSensorIdsPerRow} 个 Sensor");
+                }
+
+                var images = block.Images ?? Array.Empty<MachineSchematicReportImage>();
+                if (images.Count > MaxImagesPerBlock)
+                {
+                    return ReportBuildResult.Validation(
+                        $"机型「{machineName}」最多包含 {MaxImagesPerBlock} 张示意图");
+                }
+                totalImages += images.Count;
+                if (totalImages > MaxTotalImages)
+                {
+                    return ReportBuildResult.Validation($"报告最多包含 {MaxTotalImages} 张示意图");
+                }
+
+                var normalizedImages = new List<NormalizedImage>(images.Count);
+                foreach (var image in images)
+                {
+                    var resolved = await ResolveImageAsync(image, imageCache, ct);
+                    if (!resolved.Success)
+                    {
+                        return ReportBuildResult.Validation(
+                            $"机型「{machineName}」的示意图无效：{resolved.Error}");
+                    }
+                    if (resolved.Image is null) continue;
+                    totalImageBytes += resolved.Image.ByteCount;
+                    if (totalImageBytes > MaxTotalEmbeddedImageBytes)
+                    {
+                        return ReportBuildResult.Validation(
+                            $"报告图片总大小不能超过 {MaxTotalEmbeddedImageBytes / 1_000_000} MB");
+                    }
+                    normalizedImages.Add(new NormalizedImage(
+                        resolved.Image.DataUrl,
+                        Normalize(image.FileName, 120).Length > 0
+                            ? Normalize(image.FileName, 120)
+                            : resolved.Image.FileName));
+                }
+
+                var sensors = block.Sensors ?? Array.Empty<MachineSchematicReportSensor>();
+                if (sensors.Count > MaxSensorsPerBlock)
+                {
+                    return ReportBuildResult.Validation(
+                        $"机型「{machineName}」最多包含 {MaxSensorsPerBlock} 个 Sensor");
+                }
+                var normalizedSensors = sensors
+                    .Select(NormalizeSensor)
+                    .GroupBy(sensor => sensor.Id)
+                    .ToDictionary(group => group.Key, group => group.Last());
 
                 normalizedBlocks.Add(new NormalizedBlock(
                     machineName,
                     rows.Select(row => NormalizeRow(row)).ToArray(),
-                    NormalizeImages(block.Images),
-                    (block.Sensors ?? Array.Empty<MachineSchematicReportSensor>())
-                        .Select(NormalizeSensor)
-                        .ToArray()));
+                    normalizedImages,
+                    normalizedSensors));
             }
 
             normalizedSections.Add(new NormalizedSection(
@@ -111,11 +182,6 @@ public sealed class MachineSchematicReportService
 
     private static NormalizedRow NormalizeRow(MachineSchematicReportRow row)
     {
-        var image = row.Image;
-        var imageData = image is not null && IsSafeImageSource(image.DataUrl)
-            && image.DataUrl!.Length <= MaxImageDataLength
-            ? image.DataUrl
-            : null;
         return new NormalizedRow(
             Normalize(row.Role, MaxTextLength),
             Normalize(row.ProcessStepName, MaxTextLength),
@@ -125,9 +191,7 @@ public sealed class MachineSchematicReportService
             Normalize(row.Name, MaxTextLength),
             Normalize(row.Desc, MaxTextLength),
             Normalize(row.Note, MaxTextLength),
-            (row.SensorIds ?? Array.Empty<int>()).Distinct().ToArray(),
-            imageData,
-            Normalize(image?.FileName, 120));
+            (row.SensorIds ?? Array.Empty<int>()).Distinct().ToArray());
     }
 
     private static NormalizedSensor NormalizeSensor(MachineSchematicReportSensor sensor) =>
@@ -138,30 +202,60 @@ public sealed class MachineSchematicReportService
             Normalize(sensor.Model, 120),
             Normalize(sensor.Spec, MaxTextLength));
 
-    private static IReadOnlyList<NormalizedImage> NormalizeImages(
-        IReadOnlyList<MachineSchematicReportImage>? images) =>
-        (images ?? Array.Empty<MachineSchematicReportImage>())
-            .Select(image => NormalizeImage(image))
-            .Where(image => image is not null)
-            .Cast<NormalizedImage>()
-            .Take(2)
-            .ToArray();
-
-    private static NormalizedImage? NormalizeImage(MachineSchematicReportImage image)
+    private async Task<ImageResolveResult> ResolveImageAsync(
+        MachineSchematicReportImage image,
+        IDictionary<string, ResolvedImage> cache,
+        CancellationToken ct)
     {
-        var data = IsSafeImageSource(image.DataUrl) && image.DataUrl!.Length <= MaxImageDataLength
-            ? image.DataUrl
-            : null;
-        return data is null ? null : new NormalizedImage(data, Normalize(image.FileName, 120));
+        var source = image.DataUrl?.Trim();
+        if (string.IsNullOrEmpty(source)) return ImageResolveResult.Validation("图片地址为空");
+        if (cache.TryGetValue(source, out var cached)) return ImageResolveResult.Ok(cached);
+
+        if (source.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var separator = source.IndexOf(',');
+            if (separator <= 5 || separator == source.Length - 1)
+                return ImageResolveResult.Validation("data URL 格式无效");
+            var header = source[5..separator];
+            var headerParts = header.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            var mimeType = headerParts.FirstOrDefault();
+            if (!IsInlineImageMimeType(mimeType) ||
+                !headerParts.Skip(1).Any(part =>
+                    part.Equals("base64", StringComparison.OrdinalIgnoreCase)))
+                return ImageResolveResult.Validation("仅支持 PNG、JPEG 或 WebP 图片");
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(source[(separator + 1)..]); }
+            catch (FormatException) { return ImageResolveResult.Validation("Base64 内容无效"); }
+            if (bytes.Length == 0 || bytes.Length > MaxImageBytes)
+                return ImageResolveResult.Validation($"单张图片不能超过 {MaxImageBytes / 1_000_000} MB");
+            var resolved = new ResolvedImage(source, Normalize(image.FileName, 120), bytes.Length);
+            cache[source] = resolved;
+            return ImageResolveResult.Ok(resolved);
+        }
+
+        if (!StoredFileService.TryParseContentUrl(source, out var id))
+            return ImageResolveResult.Validation("图片引用无效");
+        var stored = await storedFiles.OpenReadAsync(id, ct);
+        if (stored is null) return ImageResolveResult.Validation("图片不存在或已删除");
+        await using var connection = stored.Connection;
+        await using var content = stored.Content;
+        if (!IsInlineImageMimeType(stored.MimeType))
+            return ImageResolveResult.Validation("引用的文件不是支持的图片格式");
+        if (content.CanSeek && (content.Length == 0 || content.Length > MaxImageBytes))
+            return ImageResolveResult.Validation($"单张图片不能超过 {MaxImageBytes / 1_000_000} MB");
+        await using var output = new MemoryStream();
+        await content.CopyToAsync(output, ct);
+        if (output.Length == 0 || output.Length > MaxImageBytes)
+            return ImageResolveResult.Validation($"单张图片不能超过 {MaxImageBytes / 1_000_000} MB");
+        var embedded = $"data:{stored.MimeType};base64,{Convert.ToBase64String(output.ToArray())}";
+        var storedImage = new ResolvedImage(embedded, Normalize(stored.FileName, 120), checked((int)output.Length));
+        cache[source] = storedImage;
+        return ImageResolveResult.Ok(storedImage);
     }
 
-    private static bool IsSafeImageSource(string? value) =>
-        value is not null &&
-        (value.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase) ||
-         value.StartsWith("data:image/jpeg;base64,", StringComparison.OrdinalIgnoreCase) ||
-         value.StartsWith("data:image/jpg;base64,", StringComparison.OrdinalIgnoreCase) ||
-         value.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase) ||
-         (StoredFileService.TryParseContentUrl(value, out _)));
+    private static bool IsInlineImageMimeType(string? value) =>
+        value is not null && value.ToLowerInvariant() is
+            "image/png" or "image/jpeg" or "image/jpg" or "image/webp";
 
     private static string Normalize(string? value, int maxLength) =>
         (value ?? string.Empty).Trim().Length <= maxLength
@@ -288,7 +382,7 @@ public sealed class MachineSchematicReportService
         {
             var row = block.Rows[index];
             var sensors = row.SensorIds
-                .Select(id => block.Sensors.FirstOrDefault(sensor => sensor.Id == id))
+                .Select(id => block.Sensors.GetValueOrDefault(id))
                 .Where(sensor => sensor is not null)
                 .Cast<NormalizedSensor>()
                 .ToArray();
@@ -321,10 +415,16 @@ public sealed class MachineSchematicReportService
     private static string Value(string value) => string.IsNullOrWhiteSpace(value) ? "-" : H(value);
 
     private sealed record NormalizedSection(string DisplayName, int Sort, string Kind, IReadOnlyList<NormalizedBlock> Blocks);
-    private sealed record NormalizedBlock(string MachineName, IReadOnlyList<NormalizedRow> Rows, IReadOnlyList<NormalizedImage> Images, IReadOnlyList<NormalizedSensor> Sensors);
+    private sealed record NormalizedBlock(string MachineName, IReadOnlyList<NormalizedRow> Rows, IReadOnlyList<NormalizedImage> Images, IReadOnlyDictionary<int, NormalizedSensor> Sensors);
     private sealed record NormalizedImage(string DataUrl, string FileName);
     private sealed record NormalizedSensor(int Id, string SensorType, string Brand, string Model, string Spec);
-    private sealed record NormalizedRow(string Role, string ProcessStepName, string SensorType, string Spec, string Purpose, string Name, string Desc, string Note, IReadOnlyList<int> SensorIds, string? ImageDataUrl, string ImageFileName);
+    private sealed record NormalizedRow(string Role, string ProcessStepName, string SensorType, string Spec, string Purpose, string Name, string Desc, string Note, IReadOnlyList<int> SensorIds);
+    private sealed record ResolvedImage(string DataUrl, string FileName, int ByteCount);
+    private sealed record ImageResolveResult(bool Success, ResolvedImage? Image, string? Error)
+    {
+        public static ImageResolveResult Ok(ResolvedImage image) => new(true, image, null);
+        public static ImageResolveResult Validation(string error) => new(false, null, error);
+    }
 }
 
 public sealed record ReportBuildResult(bool Success, string? Html, string? Error)

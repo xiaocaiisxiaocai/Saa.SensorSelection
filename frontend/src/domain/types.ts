@@ -86,7 +86,7 @@ export type DictionaryRestoreResult =
       ok: true;
       unknownSheets: string[];
     }
-  | { ok: false; reason: 'storage' };
+  | { ok: false; reason: 'storage' | 'stale' };
 
 export type EntityKind = 'customer' | 'machine';
 export type MachineCatalogKind = 'mechanism' | 'project';
@@ -352,8 +352,19 @@ export interface StorageLike {
 export type BackendSyncStatus =
   'connecting' | 'offline' | 'online' | 'unauthorized';
 
+export interface BackendStoreChange {
+  key: string;
+  expected: unknown[] | null;
+  value: unknown[] | null;
+}
+
 export interface BackendStoreTransport {
   fetchStore(): Promise<Record<string, unknown[]>>;
+  /** 一个业务操作中的全部键必须在同一服务端事务中比较并提交。 */
+  writeBatch?(
+    changes: BackendStoreChange[],
+    context?: unknown,
+  ): Promise<Record<string, unknown[] | null>>;
   /** context：入队时 captureContext 取到的值（如操作日志的操作编号），原样带给后端 */
   writeKey(
     key: string,
@@ -370,6 +381,8 @@ export interface BackendStorageOptions {
   local?: StorageLike;
   onStatus?: (status: BackendSyncStatus) => void;
   onWriteFailure?: (message: string) => void;
+  onWriteSuccess?: (snapshot: string) => void;
+  onPendingChange?: (count: number) => void;
   /**
    * 写入入队时同步调用，返回值随这次写入交给 transport。写入是排队异步发出的，
    * 必须在入队那一刻取，才能知道它属于哪一次界面操作。

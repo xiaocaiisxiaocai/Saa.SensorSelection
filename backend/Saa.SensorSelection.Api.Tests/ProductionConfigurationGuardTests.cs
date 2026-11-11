@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 
 using Saa.SensorSelection.Api.Configuration;
+using Saa.SensorSelection.Api.Services;
 
 namespace Saa.SensorSelection.Api.Tests;
 
@@ -46,6 +47,29 @@ public class ProductionConfigurationGuardTests
             ProductionConfigurationGuard.Validate("Production", configuration));
 
         Assert.Contains("Cors__AllowedOrigins", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(",")]
+    [InlineData(" , , ")]
+    public void Production_RejectsCorsOriginsWithoutAnyEntry(string allowedOrigins)
+    {
+        var configuration = BuildConfiguration(
+            jwtKey: "strong-jwt-key-0123456789abcdef",
+            adminPassword: "strong-admin-password",
+            allowedOrigins: allowedOrigins);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ProductionConfigurationGuard.Validate("Production", configuration));
+
+        Assert.Contains("Cors__AllowedOrigins", exception.Message);
+    }
+
+    [Fact]
+    public void JwtSigningKey_RequiresAtLeast256Bits()
+    {
+        Assert.False(JwtOptions.HasValidSigningKey("short-key"));
+        Assert.True(JwtOptions.HasValidSigningKey("jwt-key-with-at-least-thirty-two-bytes"));
     }
 
     [Fact]

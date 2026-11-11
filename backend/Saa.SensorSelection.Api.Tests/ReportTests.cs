@@ -22,6 +22,17 @@ public class ReportTests
         return client;
     }
 
+    private static async Task<JsonElement> UploadImageAsync(HttpClient client, byte[] bytes)
+    {
+        using var form = new MultipartFormDataContent();
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        form.Add(content, "file", "持久化示意图.png");
+        using var response = await client.PostAsync("/api/files", form);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
     [Fact]
     public async Task MachineSchematicReport_WithoutLogin_Returns401()
     {
@@ -224,6 +235,100 @@ public class ReportTests
             "/api/reports/machine-schematic",
             Request(new string('长', 201)));
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+    }
+
+    [Fact]
+    public async Task MachineSchematicReport_EmbedsStoredImagesAndKeepsMoreThanTwo()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var storedBytes = new byte[] { 137, 80, 78, 71, 1, 2, 3, 4 };
+        var uploaded = await UploadImageAsync(client, storedBytes);
+        var storedUrl = uploaded.GetProperty("dataUrl").GetString()!;
+        var second = Convert.ToBase64String(new byte[] { 137, 80, 78, 71, 5 });
+        var third = Convert.ToBase64String(new byte[] { 137, 80, 78, 71, 6 });
+
+        var response = await client.PostAsJsonAsync(
+            "/api/reports/machine-schematic",
+            new
+            {
+                machineNames = new[] { "测试机型" },
+                sections = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "结构",
+                        displayName = "结构",
+                        sort = 1,
+                        kind = "structure",
+                        blocks = new[]
+                        {
+                            new
+                            {
+                                machineName = "测试机型",
+                                rows = Array.Empty<object>(),
+                                images = new object[]
+                                {
+                                    new { dataUrl = storedUrl, fileName = "持久化.png", mimeType = "image/png", size = storedBytes.Length },
+                                    new { dataUrl = $"data:image/png;base64,{second}", fileName = "第二张.png", mimeType = "image/png", size = 5 },
+                                    new { dataUrl = $"data:image/png;base64,{third}", fileName = "第三张.png", mimeType = "image/png", size = 5 },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(storedUrl, html, StringComparison.Ordinal);
+        Assert.Contains($"data:image/png;base64,{Convert.ToBase64String(storedBytes)}", html);
+        Assert.Contains($"data:image/png;base64,{second}", html);
+        Assert.Contains($"data:image/png;base64,{third}", html);
+        Assert.Equal(3, CountOccurrences(html, "class=\"report-structure-image\""));
+    }
+
+    [Fact]
+    public async Task MachineSchematicReport_RejectsExcessiveSensorLinks()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+        var response = await client.PostAsJsonAsync(
+            "/api/reports/machine-schematic",
+            new
+            {
+                machineNames = new[] { "测试机型" },
+                sections = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "结构",
+                        displayName = "结构",
+                        sort = 1,
+                        kind = "structure",
+                        blocks = new[]
+                        {
+                            new
+                            {
+                                machineName = "测试机型",
+                                images = Array.Empty<object>(),
+                                rows = new[]
+                                {
+                                    new { id = 1, sensorIds = Enumerable.Range(1, 51).ToArray() },
+                                },
+                                sensors = Array.Empty<object>(),
+                            },
+                        },
+                    },
+                },
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            "最多关联 50 个 Sensor",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
     }
 
     [Fact]

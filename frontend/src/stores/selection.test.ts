@@ -21,6 +21,9 @@ describe('selection store', () => {
     vi.spyOn(api, 'putEntityGroups').mockResolvedValue(undefined);
     vi.spyOn(api, 'replaceAll').mockResolvedValue(undefined);
     vi.spyOn(api, 'deleteKey').mockResolvedValue(undefined);
+    vi.spyOn(api, 'writeStoreBatch').mockImplementation(async (changes) =>
+      Object.fromEntries(changes.map(({ key, value }) => [key, value])),
+    );
   });
 
   afterEach(async () => {
@@ -188,7 +191,7 @@ describe('selection store', () => {
     vi.spyOn(api, 'getStore')
       .mockResolvedValueOnce({ 'entity-groups:customer': [] })
       .mockResolvedValueOnce({ 'entity-groups:customer': [] });
-    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+    vi.spyOn(api, 'writeStoreBatch').mockRejectedValueOnce(
       new ApiError('offline', '无法连接后端服务'),
     );
     const store = useSelectionStore();
@@ -209,7 +212,7 @@ describe('selection store', () => {
     vi.spyOn(api, 'getStore').mockResolvedValue({
       'entity-groups:customer': [],
     });
-    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+    vi.spyOn(api, 'writeStoreBatch').mockRejectedValueOnce(
       new ApiError('error', '数据格式无效', 400),
     );
     const store = useSelectionStore();
@@ -230,7 +233,7 @@ describe('selection store', () => {
     const getStore = vi
       .spyOn(api, 'getStore')
       .mockResolvedValue({ 'entity-groups:customer': [] });
-    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
+    vi.spyOn(api, 'writeStoreBatch').mockRejectedValueOnce(
       new ApiError('unauthorized', '登录已失效'),
     );
     const store = useSelectionStore();
@@ -250,20 +253,13 @@ describe('selection store', () => {
     expect(store.saveEntityGroup('customer', { name: '测试区' }).ok).toBe(true);
   });
 
-  it('lets queued writes land before reconnecting, and keeps the page mounted', async () => {
+  it('cancels dependent queued writes before reconnecting, and keeps the page mounted', async () => {
     const getStore = vi
       .spyOn(api, 'getStore')
       .mockResolvedValue({ 'entity-groups:customer': [] });
-    vi.spyOn(api, 'putEntityGroups').mockRejectedValueOnce(
-      new ApiError('offline', '无法连接后端服务'),
-    );
-    let finishPut!: () => void;
-    vi.spyOn(api, 'putKey').mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishPut = () => resolve([]);
-        }),
-    );
+    const commit = vi
+      .spyOn(api, 'writeStoreBatch')
+      .mockRejectedValueOnce(new ApiError('offline', '无法连接后端服务'));
     const store = useSelectionStore();
     await store.ensureBackendInit();
     expect(store.hasConnected).toBe(true);
@@ -272,14 +268,11 @@ describe('selection store', () => {
     store.saveDictionaryItem('sensor-type', { name: '漫反射' });
     await vi.advanceTimersByTimeAsync(0);
     expect(store.backendStatus).toBe('offline');
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(store.hasPendingWrites).toBe(false);
 
     await vi.advanceTimersByTimeAsync(3000);
-    expect(store.backendStatus).toBe('connecting');
-    expect(getStore).toHaveBeenCalledTimes(1);
     expect(store.hasConnected).toBe(true);
-
-    finishPut();
-    await vi.advanceTimersByTimeAsync(0);
     expect(getStore).toHaveBeenCalledTimes(2);
     expect(store.backendStatus).toBe('online');
   });
@@ -299,13 +292,50 @@ describe('selection store', () => {
     expect(getStore).toHaveBeenCalledTimes(1);
   });
 
+  it('does not dispatch queued edits under a different login identity', async () => {
+    window.localStorage.setItem('symtek_token', 'account-a');
+    vi.spyOn(api, 'getStore').mockResolvedValue({
+      'entity-groups:customer': [],
+    });
+    let finish!: () => void;
+    const commit = vi.spyOn(api, 'writeStoreBatch').mockImplementationOnce(
+      (changes) =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve(
+              Object.fromEntries(changes.map(({ key, value }) => [key, value])),
+            );
+        }),
+    );
+    const store = useSelectionStore();
+    await store.initBackend();
+    const initialNames = store
+      .entityGroups('customer')
+      .map((group) => group.name);
+    store.saveEntityGroup('customer', { name: '已发送' });
+    await vi.advanceTimersByTimeAsync(0);
+    store.saveEntityGroup('customer', { name: '尚未发送' });
+    const saved = store.waitForPendingWrites();
+    expect(store.hasPendingWrites).toBe(true);
+    window.localStorage.setItem('symtek_token', 'account-b');
+    finish();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await saved).toBe(false);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(store.hasPendingWrites).toBe(false);
+    expect(store.entityGroups('customer').map((group) => group.name)).toEqual([
+      ...initialNames,
+      '已发送',
+    ]);
+  });
+
   it('sends every write of one action under one operation id and label', async () => {
     vi.spyOn(api, 'getStore').mockResolvedValue({
       'entity-groups:customer': [{ name: '演示客户', items: ['华东'] }],
     });
     const store = useSelectionStore();
     await store.initBackend();
-    const putGroups = vi.mocked(api.putEntityGroups);
+    const putGroups = vi.mocked(api.writeStoreBatch);
     putGroups.mockClear();
 
     // 新建厂区、新建客户都要写目录（putEntityGroups）
@@ -320,7 +350,7 @@ describe('selection store', () => {
     // 新建客户会连带归一化机型目录，写入次数不止两次；按名称找各自的操作
     const operationNamed = (label: string) =>
       putGroups.mock.calls
-        .map((call) => call[2])
+        .map((call) => call[1])
         .find((op) => op?.label === label);
     await vi.waitFor(() =>
       expect(operationNamed('新建客户「新客户」')).toBeTruthy(),

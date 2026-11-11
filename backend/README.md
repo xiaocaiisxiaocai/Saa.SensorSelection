@@ -1,6 +1,6 @@
 # Saa.SensorSelection.Api — 感应器选型后端
 
-ASP.NET Core 8 + EF Core + SQLite + JWT 的轻量后端，为前端 `frontend/` 提供数据仓库持久化与登录鉴权。业务校验由前端 `frontend/src/domain` 完成，后端只负责按 `key → JSON 数组` 的通用结构存取数据。
+ASP.NET Core 8 + EF Core + SQLite + JWT 的轻量后端，为前端 `frontend/` 提供数据仓库持久化与登录鉴权。业务规则由前端 `frontend/src/domain` 负责；后端在 `key → JSON 数组` 边界执行目录契约、CAS 前置条件、原子批次和文件引用完整性校验。
 
 ## 技术栈
 
@@ -37,7 +37,7 @@ dotnet run    # 默认 http://localhost:5080（launchSettings 的 http profile�
 
 - Swagger：http://localhost:5080/swagger（**仅 Development 环境启用**，生产不暴露 API 文档）
 - 前端开发代理：`frontend/vite.config.ts` 把 `/api` 转发到 `http://localhost:5080`（端口被占用时可用 `VITE_API_TARGET=http://localhost:5081 pnpm --dir frontend dev` 覆盖）
-- 首次启动自动完成：创建 SQLite 数据目录 → 应用 EF Migrations → 种子权限/内置角色（admin/editor/viewer）→ 种子 admin 用户并授予系统管理员角色
+- 首次初始化自动完成：创建 SQLite 数据目录 → 应用 EF Migrations → 写入权限目录、内置角色、默认组织和种子 admin。后续启动只补权限目录及系统管理员角色需要的新权限，不复活已删除账号，也不恢复管理员主动撤销的普通角色权限。
 
 ## 配置项（appsettings.json）
 
@@ -107,7 +107,7 @@ dotnet tool run dotnet-ef migrations remove --project Saa.SensorSelection.Api
 dotnet tool run dotnet-ef migrations script --project Saa.SensorSelection.Api
 ```
 
-> 注意：旧版本用 `EnsureCreated` 建库（无 `__EFMigrationsHistory` 表），直接 `Migrate()` 会因表已存在而失败。升级路径：先备份 `App_Data`，删除旧库让迁移重建，或手工向 `__EFMigrationsHistory` 补记录。本次迁移已把 `App_Data.bak-ensurecreated` 保留作备份示例。
+> 旧版本用 `EnsureCreated` 建库且没有 `__EFMigrationsHistory` 时，不得删除业务库重建，也不得手工伪造迁移历史。先生成一致备份，在隔离的离线副本上执行专用转换并完成完整性、业务数据与恢复演练；确认转换脚本和回退路径后，再单独审批生产部署。本轮安全修复没有新增数据库 schema 迁移，也没有执行真实部署。
 
 ## 测试
 
@@ -140,6 +140,8 @@ ConnectionStrings__Default="Data Source=/data/saa-sensor-selection/symtek.db"
 Saa.SensorSelection.Api.exe          # Windows
 ```
 
+IIS 合并制品使用仓库根目录的 `scripts/deploy-iis.ps1`。脚本先在同盘暂存目录完成构建和内容检查，成功后才替换带本项目所有权标记的旧制品。它会拒绝源码目录、磁盘根、未知既有目录，以及任何包含 `App_Data` 的目录。不要把正在使用的 IIS 站点目录作为 `-OutputDir`；更新站点时应先备份数据库，保留站点原有 `App_Data`，再复制新制品。
+
 部署形态二选一：
 - **内网直连 Kestrel**：`--urls http://0.0.0.0:5080`，前端把 `VITE_API_BASE` 指向该地址；
 - **反向代理**：IIS / nginx / systemd 代理到 Kestrel，适合统一 443/域名入口。
@@ -152,9 +154,10 @@ Saa.SensorSelection.Api.exe          # Windows
 pnpm run backup:db              # 默认保留最近 10 份到 backups/
 KEEP=30 pnpm run backup:db      # 保留 30 份
 BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
+DB_PATH=/data/saa-sensor-selection/symtek.db pnpm run backup:db
 ```
 
-脚本直接拷贝主库文件；若后端处于写操作中（WAL 模式），拷贝可能不含未 checkpoint 的尾部数据，对一致性要求高时建议停服备份或用 `sqlite3` 的 `VACUUM INTO`。
+脚本要求 Node.js 22.13+ 的 `node:sqlite`，只使用 SQLite `VACUUM INTO` 生成一致快照，并在轮替旧备份前执行 `PRAGMA integrity_check`。不支持 `node:sqlite` 时会直接失败，不会退回到分别复制主库和 WAL。数据库路径优先取 `DB_PATH`，其次解析 `ConnectionStrings__Default` 的 `Data Source`，均未设置时使用项目默认库；相对连接串路径以 API 内容根解析。
 
 ## SQLite 并发说明
 
@@ -176,7 +179,7 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | `rbac:org:write` | 管理组织架构 | 系统 |
 | `audit:view` | 查看操作日志 | 系统 |
 
-### 内置角色（种子，启动幂等补齐）
+### 内置角色（仅首次身份初始化）
 
 | 角色 | 权限 | 说明 |
 | --- | --- | --- |
@@ -184,7 +187,7 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | `editor` 业务维护员 | `selection:read` + `selection:write` | 可读写业务数据，无系统管理权限 |
 | `viewer` 只读用户 | `selection:read` | 仅可查看 |
 
-默认账号 `admin / admin123`（`Seed` 节可改）自动获得系统管理员角色；**登录后建议立刻创建自己的账号并修改种子密码**。
+全新开发库默认账号为 `admin / admin123`（`Seed` 节可改），首次初始化时获得系统管理员角色；生产制品默认生成随机初始密码。初始化完成后，服务重启不会恢复已删除种子账号或管理员主动撤销的普通角色权限。
 
 ### 组织架构
 
@@ -194,14 +197,14 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 
 ### 鉴权流程
 
-1. 登录（`POST /api/auth/login`）→ 返回 JWT + 角色 + 权限码 + 组织；JWT 携带 `role`/`perm`/`org` 声明。
+1. 登录（`POST /api/auth/login`）→ 返回 JWT + 角色 + 权限码 + 组织；JWT 以不可复用的用户 ID 为主体，并携带 HMAC 会话指纹、`role`/`perm`/`org` 声明。指纹绑定用户 ID、密码哈希和当前角色/权限，但 JWT 不暴露密码哈希。
 2. 前端启动/首次导航 → `GET /api/auth/me` 拉取资料 → 权限码写入前端 access store，路由与菜单按 `meta.authority`（权限码）过滤，业务页面写操作按钮按 `selection:write` 显示/隐藏。
 3. 后端所有写接口带 `selection:write` 策略、RBAC 管理接口带 `rbac:*` 策略；**已登录但无权限返回 403 + `{"message":"无权限执行此操作"}`**（与 401 登录失效区分，前端不会误跳转登录页）。
-4. 权限/角色变更后无需重新部署——下次登录（或重新签发 token）即生效。
+4. 改密、停用、删除、降权或角色权限变化会使旧 token 的指纹立即失效；同名账号重建也不能复用旧身份。前端收到 401 清理会话并重新登录，403 只表示当前身份无权限，不作为登录失效处理。
 
 ### 匿名只读预览与登录页
 
-- **业务数据读接口对匿名开放**（`GET /api/store` 等不带 token 也可读），未登录用户可以**只读预览**客户管理、制程管理、机型结构、Sensor型号——前端隐藏所有写操作按钮，后端写接口仍要求 `selection:write`（匿名写返回 401）。
+- **业务数据读接口对匿名开放**（`GET /api/store` 等不带 token 也可读），未登录用户可以**只读预览**客户管理、制程管理、机型结构、Sensor型号——前端隐藏所有写操作按钮，后端写接口仍要求 `selection:write`（匿名写返回 401）。PDF 和图片正文允许匿名内联预览；Word、PPT 等其他附件的 `/content` 与 `/download` 都要求 `file:download`，并记录下载审计。
 - 前端提供独立登录页 `/login`（退出登录、token 失效、匿名用户点右上角「登录」都会进入）：可账号密码登录，或选「以游客身份预览（只读）」跳过登录直接浏览业务数据。
 - 系统管理（用户/角色/组织/操作日志）仅登录后按权限码显示，游客不可见、直接访问 URL 404、调接口 403。
 
@@ -221,12 +224,9 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 
 ## 数据存储结构
 
-存储结构 `key → JSON 数组`，key 形如 `customer-req:客户/厂区`、`sensor-catalog:all`、`dict:xxx`，与前端 `symtek_crud_store` 一一对应。PDF、图片等文件正文独立保存在 SQLite 的 `StoredFiles.Content` BLOB 中，Store JSON 只保留 `/api/files/{id}/content` 引用；启动时会幂等迁移历史 Base64 data URL，并清理失去引用的文件。前端首次连接后端（空库）时，桥接层会自动处理：
+存储结构 `key → JSON 数组`，key 形如 `customer-req:客户/厂区`、`sensor-catalog:all`、`dict:xxx`。PDF、图片等文件正文独立保存在 SQLite 的 `StoredFiles.Content` BLOB 中，Store JSON 只保留 `/api/files/{id}/content` 引用。SQLite 是在线业务数据的唯一来源；浏览器不保存业务快照，空库也不会由前端自动导入本地数据或前端种子。
 
-1. 本地有旧数据 → 整体导入（`PUT /api/store`）；
-2. 本地也无数据（全新环境）→ 把前端内置基础数据（数据字典、客户/机型分组、制程步骤、机型结构、Sensor 型号目录）种子导入后端，保证任何客户端看到一致的基础数据；
-
-此后按 key 增量同步（`PUT/DELETE /api/store/by-key?key={key}`）。key 统一放在查询参数中，避免 IIS 或反向代理将 `%2F` 等业务文本再次解码成路径分隔符；不再提供路径参数形式的单 key 接口。
+`GET /api/store` 和单 key GET 返回强 ETag。旧 `PUT/DELETE` 写接口必须携带上次读取的 `If-Match`：缺失返回 428，陈旧返回 412。一次领域操作涉及多个 key 时，前端提交 `POST /api/store/batch`，每个 change 都携带显式 `expected`；服务端在一个 SQLite 事务中完成比较、校验、文件引用处理和全部写删，任一冲突返回 409 且整批不写入。页面等待服务端确认后才显示保存成功。
 
 ## API 一览
 
@@ -235,12 +235,15 @@ BACKUP_DIR=/data/saa-sensor-selection-backups pnpm run backup:db
 | `POST` | `/api/auth/login` | 匿名 | 账号密码登录，返回 JWT + 角色/权限/组织 |
 | `GET` | `/api/auth/me` | Bearer | 当前用户资料（角色/权限/组织） |
 | `GET` | `/api/health` | 匿名 | 健康检查（含数据库连通性，DB 不可用返回 503） |
-| `GET` | `/api/store` | 匿名 | 全部 key → JSON 数组（匿名只读预览） |
-| `GET` | `/api/store/by-key?key={key}` | 匿名 | 单个 key（代理安全契约） |
-| `PUT` | `/api/store` | `selection:write` | 整体替换（迁移导入） |
-| `PUT` | `/api/store/by-key?key={key}` | `selection:write` | 写入/覆盖单个 key（前端使用） |
-| `DELETE` | `/api/store/by-key?key={key}` | `selection:write` | 删除单个 key（前端使用） |
-| `GET` | `/api/files/{id}/content` | 匿名 | 按需读取文件正文，支持缓存与 Range 请求 |
+| `GET` | `/api/store` | 匿名 | 全部 key → JSON 数组并返回全库 ETag |
+| `GET` | `/api/store/by-key?key={key}` | 匿名 | 单个 key 并返回该 key 的 ETag；不存在也返回 missing ETag |
+| `POST` | `/api/store/batch` | `selection:write` | `{ changes: [{ key, expected, value }] }` 原子 CAS；`value:null` 删除 |
+| `PUT` | `/api/store` | `selection:write` | 整体替换；必须带全库 `If-Match` |
+| `PUT` | `/api/store/by-key?key={key}` | `selection:write` | 单 key 兼容接口；必须带 `If-Match` |
+| `PUT` | `/api/store/entity-groups/{kind}` | `selection:write` | 目录专用校验；必须带 `If-Match` |
+| `DELETE` | `/api/store/by-key?key={key}` | `selection:write` | 单 key 删除；必须带 `If-Match`，目录不能由此删除 |
+| `GET` | `/api/files/{id}/content` | PDF/图片匿名预览；其他类型需 `file:download` | 按需读取正文，支持 Range；受保护附件不公开缓存 |
+| `GET` | `/api/files/{id}/download` | `file:download` | 附件下载并记录审计 |
 | `GET` | `/api/rbac/users` | `rbac:view` | 用户列表（含角色/组织） |
 | `POST` | `/api/rbac/users` | `rbac:user:write` | 创建用户 |
 | `PUT` | `/api/rbac/users/{id}` | `rbac:user:write` | 更新用户 |

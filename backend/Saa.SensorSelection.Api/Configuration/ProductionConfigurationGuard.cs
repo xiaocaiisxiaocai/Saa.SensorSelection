@@ -13,6 +13,10 @@ public static class ProductionConfigurationGuard
 
     public const string DefaultAdminPassword = "admin123";
 
+    public static string[] ParseAllowedOrigins(string? value) =>
+        (value ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
     public static void Validate(string environmentName, IConfiguration configuration)
     {
         if (!string.Equals(environmentName, Environments.Production, StringComparison.OrdinalIgnoreCase))
@@ -37,7 +41,7 @@ public static class ProductionConfigurationGuard
                 "生产环境必须配置 Seed__AdminPassword，或显式允许首次部署默认密码");
         }
 
-        if (string.IsNullOrWhiteSpace(configuration["Cors:AllowedOrigins"]))
+        if (ParseAllowedOrigins(configuration["Cors:AllowedOrigins"]).Length == 0)
         {
             throw new InvalidOperationException(
                 "生产环境必须配置 Cors__AllowedOrigins，禁止允许任意来源");

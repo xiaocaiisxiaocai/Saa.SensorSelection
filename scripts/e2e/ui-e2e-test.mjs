@@ -10,8 +10,13 @@
 import { mkdirSync } from 'node:fs'
 import { chromium } from 'playwright'
 
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5178'
-const API = process.env.API_BASE ?? 'http://localhost:5080/api'
+const BASE_URL = process.env.E2E_BASE_URL
+const API = process.env.API_BASE
+if (!BASE_URL || !API) {
+  throw new Error(
+    'E2E_BASE_URL and API_BASE are required; point them at isolated disposable services',
+  )
+}
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
 const ARTIFACT_DIR = new URL('./artifacts/', import.meta.url).pathname.replace(/^\//, '')
@@ -1766,10 +1771,31 @@ function cleanupOperationHeaders(label) {
 
 let apiOperationHeaders = {}
 
+function storePreconditionProbe(method, path) {
+  if (!['PUT', 'DELETE'].includes(method)) return null
+  if (path === '/store' && method === 'PUT') return '/store'
+  if (path.startsWith('/store/by-key?')) return path
+  const match = /^\/store\/entity-groups\/([^/?]+)$/.exec(path)
+  return match
+    ? storeRoute(`entity-groups:${decodeURIComponent(match[1])}`)
+    : null
+}
+
 async function api(method, path, token, body) {
   const headers = { ...apiOperationHeaders }
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const probe = storePreconditionProbe(method, path)
+  if (probe) {
+    const precondition = await fetch(`${API}${probe}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const etag = precondition.headers.get('etag')
+    if (!etag) {
+      throw new Error(`store precondition probe did not return ETag: ${precondition.status} ${probe}`)
+    }
+    headers['If-Match'] = etag
+  }
   const response = await fetch(`${API}${path}`, {
     method,
     headers,

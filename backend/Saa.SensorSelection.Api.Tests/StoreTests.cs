@@ -3,6 +3,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Saa.SensorSelection.Api.Data;
+using Saa.SensorSelection.Api.Models;
+using Saa.SensorSelection.Api.Services;
+
 namespace Saa.SensorSelection.Api.Tests;
 
 public class StoreTests
@@ -32,6 +39,49 @@ public class StoreTests
     {
         using var login = factory.CreateClient();
         return CreateAuthorizedClient(factory, await LoginTokenAsync(login));
+    }
+
+    private static async Task<HttpClient> CreateRawLoggedInClientAsync(ApiFactory factory)
+    {
+        using var login = factory.CreateRawClient();
+        var client = factory.CreateRawClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await LoginTokenAsync(login));
+        return client;
+    }
+
+    private static async Task ExecuteSqlAsync(ApiFactory factory, string sql)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    private static async Task<int> StoredFileCountAsync(ApiFactory factory)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.StoredFiles.CountAsync();
+    }
+
+    private static async Task SetStoreEntryAsync(
+        ApiFactory factory,
+        string key,
+        string json)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var entry = await db.StoreEntries.FindAsync(key);
+        if (entry is null)
+        {
+            db.StoreEntries.Add(new StoreEntry { Key = key, Json = json, UpdatedAt = DateTime.UtcNow });
+        }
+        else
+        {
+            entry.Json = json;
+            entry.UpdatedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -315,5 +365,315 @@ public class StoreTests
         all = await client.GetFromJsonAsync<JsonElement>("/api/store");
         Assert.Single(all.EnumerateObject());
         Assert.Equal(JsonValueKind.Array, all.GetProperty("k3").ValueKind);
+    }
+
+    [Fact]
+    public async Task Store_LegacyWrites_RequireCurrentStrongEntityTag()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateRawLoggedInClientAsync(factory);
+        var route = StoreRoute("customer-req:etag-contract");
+
+        var missing = await client.GetAsync(route);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(StoreService.MissingEntityTag, missing.Headers.ETag?.Tag);
+
+        var withoutPrecondition = await client.PutAsJsonAsync(route, new[] { new { id = 1 } });
+        Assert.Equal((HttpStatusCode)428, withoutPrecondition.StatusCode);
+
+        using var create = new HttpRequestMessage(HttpMethod.Put, route)
+        {
+            Content = JsonContent.Create(new[] { new { id = 1 } }),
+        };
+        create.Headers.IfMatch.ParseAdd(StoreService.MissingEntityTag);
+        var created = await client.SendAsync(create);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var originalTag = created.Headers.ETag?.Tag;
+        Assert.NotNull(originalTag);
+
+        using var firstUpdate = new HttpRequestMessage(HttpMethod.Put, route)
+        {
+            Content = JsonContent.Create(new[] { new { id = 1 }, new { id = 2 } }),
+        };
+        firstUpdate.Headers.IfMatch.ParseAdd(originalTag);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(firstUpdate)).StatusCode);
+
+        using var staleUpdate = new HttpRequestMessage(HttpMethod.Put, route)
+        {
+            Content = JsonContent.Create(new[] { new { id = 3 } }),
+        };
+        staleUpdate.Headers.IfMatch.ParseAdd(originalTag);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, (await client.SendAsync(staleUpdate)).StatusCode);
+
+        var stored = await client.GetFromJsonAsync<JsonElement>(route);
+        Assert.Equal(2, stored.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Store_Batch_IsAtomic_AndRejectsMissingOrStaleExpectedValues()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateRawLoggedInClientAsync(factory);
+
+        var missingExpected = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new { changes = new[] { new { key = "batch:a", value = new[] { 1 } } } });
+        Assert.Equal((HttpStatusCode)428, missingExpected.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await client.PostAsJsonAsync("/api/store/batch", new { changes = Array.Empty<object>() })).StatusCode);
+
+        var create = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new { key = "batch:a", expected = (object?)null, value = new[] { 1 } },
+                    new { key = "batch:b", expected = (object?)null, value = new[] { 2 } },
+                },
+            });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, created.GetProperty("values").GetProperty("batch:a")[0].GetInt32());
+
+        var conflict = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new { key = "batch:a", expected = new[] { 999 }, value = new[] { 10 } },
+                    new { key = "batch:b", expected = new[] { 2 }, value = new[] { 20 } },
+                },
+            });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        var conflictBody = await conflict.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("batch:a", conflictBody.GetProperty("key").GetString());
+        Assert.Equal(1, (await client.GetFromJsonAsync<JsonElement>(StoreRoute("batch:a")))[0].GetInt32());
+        Assert.Equal(2, (await client.GetFromJsonAsync<JsonElement>(StoreRoute("batch:b")))[0].GetInt32());
+
+        var update = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new { key = "batch:a", expected = new[] { 1 }, value = new[] { 10 } },
+                    new { key = "batch:b", expected = new[] { 2 }, value = (object?)null },
+                },
+            });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        Assert.Equal(10, (await client.GetFromJsonAsync<JsonElement>(StoreRoute("batch:a")))[0].GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(StoreRoute("batch:b"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Store_MachineEntityGroups_RejectsDuplicateNamesAcrossConfigurations()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateLoggedInClientAsync(factory);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/machine",
+            JsonSerializer.Deserialize<JsonElement>(
+                "[{\"name\":\"结构\",\"items\":[\"重复机型\"],\"configurations\":[{\"name\":\"配置甲\",\"items\":[\"重复机型\"]}]}]"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Store_MachineEntityGroups_AllowsReducingLegacyDuplicates_ButNotExpandingAgain()
+    {
+        await using var factory = new ApiFactory();
+        const string key = "entity-groups:machine";
+        await SetStoreEntryAsync(
+            factory,
+            key,
+            """
+            [
+              {"name":"分类甲","items":["历史重名"],"configurations":[{"name":"配置甲","items":["历史重名"]}]},
+              {"name":"分类乙","items":[],"configurations":[{"name":"配置乙","items":["历史重名"]}]}
+            ]
+            """);
+        using var client = await CreateLoggedInClientAsync(factory);
+
+        var reordered = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/machine",
+            JsonSerializer.Deserialize<JsonElement>(
+                """
+                [
+                  {"name":"分类乙","items":[],"configurations":[{"name":"配置乙","items":["历史重名"]}]},
+                  {"name":"分类甲","items":["历史重名"],"configurations":[{"name":"配置甲","items":["历史重名"]}]}
+                ]
+                """));
+        Assert.Equal(HttpStatusCode.OK, reordered.StatusCode);
+
+        var repaired = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/machine",
+            JsonSerializer.Deserialize<JsonElement>(
+                """
+                [
+                  {"name":"分类乙","items":[],"configurations":[{"name":"配置乙","items":["历史重名"]}]},
+                  {"name":"分类甲","items":["已修复机型"],"configurations":[{"name":"配置甲","items":["历史重名"]}]}
+                ]
+                """));
+        Assert.Equal(HttpStatusCode.OK, repaired.StatusCode);
+
+        var expandedAgain = await client.PutAsJsonAsync(
+            "/api/store/entity-groups/machine",
+            JsonSerializer.Deserialize<JsonElement>(
+                """
+                [
+                  {"name":"分类乙","items":[],"configurations":[{"name":"配置乙","items":["历史重名"]}]},
+                  {"name":"分类甲","items":["已修复机型","历史重名"],"configurations":[{"name":"配置甲","items":["历史重名"]}]}
+                ]
+                """));
+        Assert.Equal(HttpStatusCode.BadRequest, expandedAgain.StatusCode);
+
+        var stored = await client.GetFromJsonAsync<JsonElement>(StoreRoute(key));
+        var duplicateCount = stored.EnumerateArray().Sum(group =>
+            group.GetProperty("items").EnumerateArray().Count(item => item.GetString() == "历史重名") +
+            (group.TryGetProperty("configurations", out var configurations)
+                ? configurations.EnumerateArray().Sum(configuration =>
+                    configuration.GetProperty("items").EnumerateArray()
+                        .Count(item => item.GetString() == "历史重名"))
+                : 0));
+        Assert.Equal(2, duplicateCount);
+    }
+
+    [Fact]
+    public async Task Store_ReplaceAll_RollsBackDeletedKeys_WhenFinalSaveFails()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateRawLoggedInClientAsync(factory);
+        var seeded = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new { key = "rollback:old-a", expected = (object?)null, value = new[] { 1 } },
+                    new { key = "rollback:old-b", expected = (object?)null, value = new[] { 2 } },
+                },
+            });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+
+        await ExecuteSqlAsync(
+            factory,
+            """
+            CREATE TRIGGER fail_replace_all_insert
+            BEFORE INSERT ON StoreEntries
+            WHEN NEW.Key = 'rollback:new'
+            BEGIN
+                SELECT RAISE(ABORT, 'injected replace-all failure');
+            END;
+            """);
+
+        using var snapshot = await client.GetAsync("/api/store");
+        var entityTag = snapshot.Headers.ETag?.Tag;
+        Assert.NotNull(entityTag);
+        using var replace = new HttpRequestMessage(HttpMethod.Put, "/api/store")
+        {
+            Content = JsonContent.Create(new Dictionary<string, int[]>
+            {
+                ["rollback:new"] = [3],
+            }),
+        };
+        replace.Headers.IfMatch.ParseAdd(entityTag);
+        Assert.Equal(HttpStatusCode.InternalServerError, (await client.SendAsync(replace)).StatusCode);
+
+        var after = await client.GetFromJsonAsync<JsonElement>("/api/store");
+        Assert.Equal(1, after.GetProperty("rollback:old-a")[0].GetInt32());
+        Assert.Equal(2, after.GetProperty("rollback:old-b")[0].GetInt32());
+        Assert.False(after.TryGetProperty("rollback:new", out _));
+    }
+
+    [Fact]
+    public async Task Store_Batch_RollsBackKeysAndDetachedFiles_WhenFinalSaveFails()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await CreateRawLoggedInClientAsync(factory);
+        var originalBytes = System.Text.Encoding.UTF8.GetBytes("original-file");
+        var originalDataUrl = $"data:application/pdf;base64,{Convert.ToBase64String(originalBytes)}";
+        var seeded = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new
+                    {
+                        key = "rollback:file",
+                        expected = (object?)null,
+                        value = new[]
+                        {
+                            new
+                            {
+                                id = 1,
+                                fileName = "original.pdf",
+                                mimeType = "application/pdf",
+                                size = originalBytes.Length,
+                                dataUrl = originalDataUrl,
+                            },
+                        },
+                    },
+                    new { key = "rollback:delete", expected = (object?)null, value = new[] { 2 } },
+                },
+            });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var original = await client.GetFromJsonAsync<JsonElement>(StoreRoute("rollback:file"));
+        var originalContentUrl = original[0].GetProperty("dataUrl").GetString();
+        Assert.NotNull(originalContentUrl);
+        var filesBefore = await StoredFileCountAsync(factory);
+
+        await ExecuteSqlAsync(
+            factory,
+            """
+            CREATE TRIGGER fail_batch_insert
+            BEFORE INSERT ON StoreEntries
+            WHEN NEW.Key = 'rollback:trigger'
+            BEGIN
+                SELECT RAISE(ABORT, 'injected batch failure');
+            END;
+            """);
+
+        var replacementBytes = System.Text.Encoding.UTF8.GetBytes("replacement-file");
+        var replacementDataUrl =
+            $"data:application/pdf;base64,{Convert.ToBase64String(replacementBytes)}";
+        var failed = await client.PostAsJsonAsync(
+            "/api/store/batch",
+            new
+            {
+                changes = new object[]
+                {
+                    new
+                    {
+                        key = "rollback:file",
+                        expected = original,
+                        value = new[]
+                        {
+                            new
+                            {
+                                id = 1,
+                                fileName = "replacement.pdf",
+                                mimeType = "application/pdf",
+                                size = replacementBytes.Length,
+                                dataUrl = replacementDataUrl,
+                            },
+                        },
+                    },
+                    new { key = "rollback:delete", expected = new[] { 2 }, value = (object?)null },
+                    new { key = "rollback:trigger", expected = (object?)null, value = new[] { 3 } },
+                },
+            });
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+
+        var afterFile = await client.GetFromJsonAsync<JsonElement>(StoreRoute("rollback:file"));
+        Assert.Equal(originalContentUrl, afterFile[0].GetProperty("dataUrl").GetString());
+        Assert.Equal(originalBytes, await client.GetByteArrayAsync(originalContentUrl));
+        Assert.Equal(2, (await client.GetFromJsonAsync<JsonElement>(StoreRoute("rollback:delete")))[0].GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(StoreRoute("rollback:trigger"))).StatusCode);
+        Assert.Equal(filesBefore, await StoredFileCountAsync(factory));
     }
 }

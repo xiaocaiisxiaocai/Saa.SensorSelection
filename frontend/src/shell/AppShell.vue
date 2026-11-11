@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { getStoredToken } from '@/api';
 import AppNav from '@/shell/AppNav.vue';
 import UserMenu from '@/shell/UserMenu.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useSelectionStore } from '@/stores/selection';
 
 // 宽屏侧栏常驻、不可折叠；只有 960px 以下的窄屏把导航收进抽屉。
@@ -14,6 +15,7 @@ const COMPACT_MEDIA_QUERY = '(width <= 960px)';
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const selection = useSelectionStore();
 
 const compactViewport = ref(false);
@@ -43,6 +45,12 @@ function onCompactMediaChange(event: MediaQueryListEvent) {
   updateCompactViewport(event.matches);
 }
 
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (!selection.hasPendingWrites) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 function submitSearch() {
   const value = searchQuery.value.trim();
   if (!value) {
@@ -66,10 +74,12 @@ onMounted(() => {
     updateCompactViewport(compactMedia.matches);
     compactMedia.addEventListener('change', onCompactMediaChange);
   }
+  window.addEventListener('beforeunload', onBeforeUnload);
 });
 
 onBeforeUnmount(() => {
   compactMedia?.removeEventListener('change', onCompactMediaChange);
+  window.removeEventListener('beforeunload', onBeforeUnload);
 });
 
 watch(
@@ -91,6 +101,7 @@ watch(
       getStoredToken() &&
       route.path !== '/login'
     ) {
+      auth.expireSession();
       router.replace({ path: '/login', query: { redirect: route.fullPath } });
     }
   },
@@ -157,6 +168,13 @@ watch(
           </a-input>
         </form>
         <div class="app-shell__header-end">
+          <span
+            v-if="selection.hasPendingWrites"
+            role="status"
+            aria-live="polite"
+          >
+            <a-tag color="processing">正在保存，请勿关闭页面</a-tag>
+          </span>
           <UserMenu />
         </div>
       </a-layout-header>

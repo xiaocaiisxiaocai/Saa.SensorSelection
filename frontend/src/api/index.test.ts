@@ -11,10 +11,13 @@ import {
   TOKEN_STORAGE_KEY,
 } from './index';
 
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body: unknown, status = 200, etag?: string) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(etag ? { ETag: etag } : {}),
+    },
   });
 }
 
@@ -116,11 +119,12 @@ describe('api client', () => {
     storeToken('tok');
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        jsonResponse({ ok: true }),
+        jsonResponse({ ok: true }, 200, '"version-one"'),
     );
     vi.stubGlobal('fetch', fetchMock);
     const key = 'machine-section-rows:2:06 入料输送（平板%2FBOX）';
 
+    await api.getKey(key);
     await api.putKey(key, [{ id: 1 }]);
     await api.deleteKey(key);
 
@@ -130,6 +134,30 @@ describe('api client', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       `/store/by-key?key=${encodeURIComponent(key)}`,
     );
+    expect(
+      new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('If-Match'),
+    ).toBe('"version-one"');
+  });
+
+  it('submits a complete compare-and-set batch without rereading stale values', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ values: { old: null, next: [1] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const changes = [
+      { key: 'old', expected: [1], value: null },
+      { key: 'next', expected: null, value: [1] },
+    ];
+    await expect(api.writeStoreBatch(changes)).resolves.toEqual({
+      old: null,
+      next: [1],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${API_BASE}/store/batch`);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      changes,
+    });
   });
 
   it('extracts a file id only from a stored content reference', () => {
@@ -139,7 +167,9 @@ describe('api client', () => {
       fileIdFromReference(`${API_BASE}/files/${id.toUpperCase()}/content`),
     ).toBe(id);
     expect(fileIdFromReference(`${API_BASE}/files/${id}/download`)).toBeNull();
-    expect(fileIdFromReference(`${API_BASE}/files/not-a-guid/content`)).toBeNull();
+    expect(
+      fileIdFromReference(`${API_BASE}/files/not-a-guid/content`),
+    ).toBeNull();
     expect(fileIdFromReference('data:application/pdf;base64,QQ==')).toBeNull();
     expect(fileIdFromReference('')).toBeNull();
     expect(fileIdFromReference(null)).toBeNull();

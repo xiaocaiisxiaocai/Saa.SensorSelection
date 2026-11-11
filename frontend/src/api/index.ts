@@ -1,4 +1,5 @@
 import { type AuditOperation, operationHeaders } from './audit-operation';
+import type { BackendStoreChange } from '@/domain/types';
 
 export const TOKEN_STORAGE_KEY = 'symtek_token';
 
@@ -250,7 +251,11 @@ async function readMessage(
   return fallback;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  receive?: (response: Response) => void,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   // FormData 必须由浏览器自带 multipart 边界设置 Content-Type。
   if (init?.body != null && !(init.body instanceof FormData)) {
@@ -275,6 +280,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError('offline', '无法连接后端服务');
   }
 
+  receive?.(response);
   if (response.status === 401) {
     throw new ApiError(
       'unauthorized',
@@ -337,6 +343,24 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   return response.blob();
 }
 
+// 兼容单键API的前置条件来自先前读取，绝不在写前重新GET来掩盖陈旧编辑。
+const storeEtags = new Map<string, string>();
+let allStoreEtag: string | null = null;
+function rememberEtag(key: string, response: Response) {
+  const etag = response.headers.get('ETag');
+  if (etag) storeEtags.set(key, etag);
+  else storeEtags.delete(key);
+}
+function conditionalHeaders(
+  etag: string | null | undefined,
+  operation?: AuditOperation | null,
+) {
+  if (!etag) throw new ApiError('error', '请先重新读取数据，再提交修改', 428);
+  const headers = new Headers(operationHeaders(operation));
+  headers.set('If-Match', etag);
+  return headers;
+}
+
 export const api = {
   login(username: string, password: string): Promise<LoginResult> {
     return request<LoginResult>('/auth/login', {
@@ -357,25 +381,62 @@ export const api = {
   },
 
   getStore(): Promise<Record<string, unknown[]>> {
-    return request<Record<string, unknown[]>>('/store');
+    return request<Record<string, unknown[]>>(
+      '/store',
+      undefined,
+      (response) => {
+        allStoreEtag = response.headers.get('ETag');
+      },
+    );
   },
 
   getKey(key: string): Promise<unknown[]> {
-    return request<unknown[]>(`/store/by-key?key=${encodeURIComponent(key)}`);
+    return request<unknown[]>(
+      `/store/by-key?key=${encodeURIComponent(key)}`,
+      undefined,
+      (response) => rememberEtag(key, response),
+    );
+  },
+
+  async writeStoreBatch(
+    changes: BackendStoreChange[],
+    operation?: AuditOperation | null,
+  ): Promise<Record<string, unknown[] | null>> {
+    const result = await request<{ values: Record<string, unknown[] | null> }>(
+      '/store/batch',
+      {
+        method: 'POST',
+        body: JSON.stringify({ changes }),
+        headers: operationHeaders(operation),
+      },
+    );
+    return result.values;
   },
 
   async putKey(
     key: string,
     value: unknown[],
     operation?: AuditOperation | null,
+    expected?: unknown[] | null,
   ): Promise<unknown[]> {
+    if (expected !== undefined) {
+      const values = await api.writeStoreBatch(
+        [{ key, expected, value }],
+        operation,
+      );
+      const result = values[key];
+      if (!Array.isArray(result))
+        throw new ApiError('error', '保存响应格式错误');
+      return result;
+    }
     const result = await request<{ value: unknown[] }>(
       `/store/by-key?key=${encodeURIComponent(key)}`,
       {
         method: 'PUT',
         body: JSON.stringify(value),
-        headers: operationHeaders(operation),
+        headers: conditionalHeaders(storeEtags.get(key), operation),
       },
+      (response) => rememberEtag(key, response),
     );
     return result.value;
   },
@@ -385,11 +446,18 @@ export const api = {
     groups: unknown[],
     operation?: AuditOperation | null,
   ): Promise<void> {
-    await request(`/store/entity-groups/${kind}`, {
-      method: 'PUT',
-      body: JSON.stringify(groups),
-      headers: operationHeaders(operation),
-    });
+    await request(
+      `/store/entity-groups/${kind}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(groups),
+        headers: conditionalHeaders(
+          storeEtags.get(`entity-groups:${kind}`),
+          operation,
+        ),
+      },
+      (response) => rememberEtag(`entity-groups:${kind}`, response),
+    );
   },
 
   uploadFile(file: File): Promise<UploadedFile> {
@@ -412,14 +480,28 @@ export const api = {
     key: string,
     operation?: AuditOperation | null,
   ): Promise<void> {
-    await request(`/store/by-key?key=${encodeURIComponent(key)}`, {
-      method: 'DELETE',
-      headers: operationHeaders(operation),
-    });
+    await request(
+      `/store/by-key?key=${encodeURIComponent(key)}`,
+      {
+        method: 'DELETE',
+        headers: conditionalHeaders(storeEtags.get(key), operation),
+      },
+      (response) => rememberEtag(key, response),
+    );
   },
 
   async replaceAll(store: Record<string, unknown[]>): Promise<void> {
-    await request('/store', { method: 'PUT', body: JSON.stringify(store) });
+    await request(
+      '/store',
+      {
+        method: 'PUT',
+        body: JSON.stringify(store),
+        headers: conditionalHeaders(allStoreEtag),
+      },
+      (response) => {
+        allStoreEtag = response.headers.get('ETag');
+      },
+    );
   },
 
   downloadMachineSchematicReport(payload: {

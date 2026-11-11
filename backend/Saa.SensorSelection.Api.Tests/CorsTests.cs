@@ -6,6 +6,18 @@ namespace Saa.SensorSelection.Api.Tests;
 
 public class CorsTests
 {
+    [Fact]
+    public async Task Cors_ExposesStoreEtagForConditionalCrossOriginWrites()
+    {
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateRawClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/store");
+        request.Headers.Add("Origin", "http://localhost:5188");
+        using var response = await client.SendAsync(request);
+        Assert.NotNull(response.Headers.ETag);
+        Assert.Contains("ETag", response.Headers.GetValues("Access-Control-Expose-Headers"));
+    }
+
     private static HttpRequestMessage Preflight(string origin)
     {
         var request = new HttpRequestMessage(HttpMethod.Options, "/api/health");

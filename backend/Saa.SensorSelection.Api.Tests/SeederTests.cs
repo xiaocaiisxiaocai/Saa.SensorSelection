@@ -276,4 +276,118 @@ public class SeederTests
             }
         }
     }
+
+    [Fact]
+    public async Task Restart_DoesNotRestoreDeletedSeedAdminOrRevokedEditorPermission()
+    {
+        var dbPath = Path.Combine(
+            Path.GetTempPath(),
+            $"saa-sensor-selection-api-seed-lifecycle-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using (var first = new ApiFactory(dbPath))
+            {
+                using var admin = first.CreateClient();
+                var login = await admin.PostAsJsonAsync(
+                    "/api/auth/login",
+                    new { username = "admin", password = "admin123" });
+                login.EnsureSuccessStatusCode();
+                var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+                admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                    "Bearer",
+                    loginBody.GetProperty("token").GetString());
+
+                var roles = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+                var adminRoleId = roles.EnumerateArray()
+                    .Single(role => role.GetProperty("code").GetString() == "admin")
+                    .GetProperty("id").GetInt32();
+                var editorRoleId = roles.EnumerateArray()
+                    .Single(role => role.GetProperty("code").GetString() == "editor")
+                    .GetProperty("id").GetInt32();
+                var permissions = await admin.GetFromJsonAsync<JsonElement>("/api/rbac/roles/permissions");
+                var readPermissionId = permissions.EnumerateArray()
+                    .Single(permission => permission.GetProperty("code").GetString() == "selection:read")
+                    .GetProperty("id").GetInt32();
+
+                var revokeEditorWrite = await admin.PutAsJsonAsync(
+                    $"/api/rbac/roles/{editorRoleId}",
+                    new
+                    {
+                        name = "业务维护员",
+                        description = "已撤销写入权限",
+                        permissionIds = new[] { readPermissionId },
+                    });
+                revokeEditorWrite.EnsureSuccessStatusCode();
+
+                var createSecond = await admin.PostAsJsonAsync(
+                    "/api/rbac/users",
+                    new
+                    {
+                        username = "persistent-admin",
+                        password = "persistent-password",
+                        displayName = "持久管理员",
+                        roleIds = new[] { adminRoleId },
+                    });
+                createSecond.EnsureSuccessStatusCode();
+
+                using var secondAdmin = first.CreateClient();
+                var secondLogin = await secondAdmin.PostAsJsonAsync(
+                    "/api/auth/login",
+                    new { username = "persistent-admin", password = "persistent-password" });
+                secondLogin.EnsureSuccessStatusCode();
+                var secondBody = await secondLogin.Content.ReadFromJsonAsync<JsonElement>();
+                secondAdmin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                    "Bearer",
+                    secondBody.GetProperty("token").GetString());
+                var users = await secondAdmin.GetFromJsonAsync<JsonElement>("/api/rbac/users");
+                var seedAdminId = users.EnumerateArray()
+                    .Single(user => user.GetProperty("username").GetString() == "admin")
+                    .GetProperty("id").GetInt32();
+                var deleteSeedAdmin = await secondAdmin.DeleteAsync($"/api/rbac/users/{seedAdminId}");
+                deleteSeedAdmin.EnsureSuccessStatusCode();
+            }
+
+            await using var restarted = new ApiFactory(dbPath);
+            using var client = restarted.CreateClient();
+            var deletedAdminLogin = await client.PostAsJsonAsync(
+                "/api/auth/login",
+                new { username = "admin", password = "admin123" });
+            Assert.Equal(HttpStatusCode.Unauthorized, deletedAdminLogin.StatusCode);
+
+            var persistentLogin = await client.PostAsJsonAsync(
+                "/api/auth/login",
+                new { username = "persistent-admin", password = "persistent-password" });
+            persistentLogin.EnsureSuccessStatusCode();
+            var persistentBody = await persistentLogin.Content.ReadFromJsonAsync<JsonElement>();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                persistentBody.GetProperty("token").GetString());
+            var rolesAfterRestart = await client.GetFromJsonAsync<JsonElement>("/api/rbac/roles");
+            var editorPermissions = rolesAfterRestart.EnumerateArray()
+                .Single(role => role.GetProperty("code").GetString() == "editor")
+                .GetProperty("permissions")
+                .EnumerateArray()
+                .Select(permission => permission.GetProperty("code").GetString())
+                .ToArray();
+            Assert.Contains("selection:read", editorPermissions);
+            Assert.DoesNotContain("selection:write", editorPermissions);
+        }
+        finally
+        {
+            foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
+            {
+                try
+                {
+                    if (File.Exists(dbPath + suffix))
+                    {
+                        File.Delete(dbPath + suffix);
+                    }
+                }
+                catch (IOException)
+                {
+                    // 文件可能仍被进程短暂占用，忽略即可
+                }
+            }
+        }
+    }
 }

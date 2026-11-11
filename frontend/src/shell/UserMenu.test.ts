@@ -11,6 +11,7 @@ import {
   useResizableColumns,
 } from '@/pages/shared/column-widths';
 import { useAuthStore } from '@/stores/auth';
+import { useSelectionStore } from '@/stores/selection';
 import UserMenu from './UserMenu.vue';
 
 async function mountMenu() {
@@ -47,6 +48,13 @@ function fill(placeholder: string, value: string) {
   expect(input).not.toBeNull();
   input!.value = value;
   input!.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function setPendingWrites(value: boolean) {
+  Object.defineProperty(useSelectionStore(), 'hasPendingWrites', {
+    configurable: true,
+    value,
+  });
 }
 
 describe('UserMenu', () => {
@@ -116,6 +124,61 @@ describe('UserMenu', () => {
       expect(wrapper.text()).toContain('登录');
     });
     expect(getStore).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('waits for pending writes before logging out and ignores repeated clicks', async () => {
+    const wrapper = await mountMenu();
+    const selection = useSelectionStore();
+    setPendingWrites(true);
+    let finish!: (saved: boolean) => void;
+    const waitForPendingWrites = vi
+      .spyOn(selection, 'waitForPendingWrites')
+      .mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+    await wrapper.get('.user-menu__trigger').trigger('click');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    );
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (node) => node.textContent?.includes('退出登录'),
+    );
+
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await nextTick();
+    expect(waitForPendingWrites).toHaveBeenCalledTimes(1);
+    expect(useAuthStore().isAuthenticated).toBe(true);
+
+    finish(true);
+    await vi.waitFor(() => expect(useAuthStore().isAuthenticated).toBe(false));
+    wrapper.unmount();
+  });
+
+  it('keeps the session when pending writes fail before logout', async () => {
+    const error = vi.spyOn(message, 'error');
+    const wrapper = await mountMenu();
+    const selection = useSelectionStore();
+    setPendingWrites(true);
+    vi.spyOn(selection, 'waitForPendingWrites').mockResolvedValue(false);
+    await wrapper.get('.user-menu__trigger').trigger('click');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    );
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (node) => node.textContent?.includes('退出登录'),
+    );
+
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(error).toHaveBeenCalledWith('仍有更改保存失败，已取消退出登录');
+    });
+
+    expect(useAuthStore().isAuthenticated).toBe(true);
     wrapper.unmount();
   });
 

@@ -577,7 +577,7 @@ async function removeTab(tabId: number): Promise<boolean> {
       : `确认删除“${tab.name}”吗？`,
   );
   if (!ok) return false;
-  return notifyResult(store.deleteMachineTab(tabId), 'Tab 已删除', {
+  return await notifyResult(store.deleteMachineTab(tabId), 'Tab 已删除', {
     stale: '该 Tab 已被删除，请刷新后重试',
   });
 }

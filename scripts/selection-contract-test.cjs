@@ -48,6 +48,7 @@ async function run() {
   const server = await createServer({
     appType: 'custom',
     configFile: path.join(root, 'frontend/vite.config.ts'),
+    optimizeDeps: { noDiscovery: true, include: [] },
     root: path.join(root, 'frontend'),
     server: { hmr: false, middlewareMode: true },
   })
@@ -1737,6 +1738,25 @@ async function run() {
         if (opts.fetchError) throw opts.fetchError
         return Object.fromEntries(remote)
       },
+      async writeBatch(changes) {
+        const before = new Map(remote)
+        for (const change of changes) {
+          assert.deepEqual(remote.get(change.key) ?? null, change.expected)
+        }
+        const values = {}
+        try {
+          for (const { key, value } of changes) {
+            if (value === null) await this.deleteKey(key)
+            else await this.writeKey(key, value)
+            values[key] = remote.get(key) ?? null
+          }
+        } catch (error) {
+          remote.clear()
+          for (const [key, value] of before) remote.set(key, value)
+          throw error
+        }
+        return values
+      },
       async writeKey(key, value) {
         if (opts.failKeys && opts.failKeys.includes(key)) {
           throw opts.failError || new Error(`write blocked: ${key}`)
@@ -1998,10 +2018,9 @@ async function run() {
   assert.equal(bridge9b.setItem('a', JSON.stringify([{ v: 3 }])), true)
   assert.equal(bridge9b.setItem('other', JSON.stringify([1])), true)
   await bridge9b.queue
-  // 队列里排在失败之后的写入照常落地，但不能把已掉线的状态静默改回 online：
-  // 页面已经收到 offline 并安排了重连，状态必须由重建后的新 bridge 恢复。
+  // 后续操作可能依赖失败操作的乐观状态，取消未提交队列并重新拉取服务端。
   assert.equal(bridge9b.status, 'offline')
-  assert.deepEqual(transport9b.remote.get('other'), [1])
+  assert.deepEqual(transport9b.remote.get('other'), [0])
   assert.deepEqual(JSON.parse(bridge9b.readStoreJson()).a, [{ v: 1 }])
 
   // 后端 4xx 校验拒绝：只回滚该 key 并上报，不当作掉线（重连无意义，提示也不对）
@@ -2061,7 +2080,16 @@ async function run() {
     JSON.stringify({ a: [2], b: [2] }),
   )
   await bridgeRollback.queue
-  assert.deepEqual(cacheAtFailure, { a: [1], b: [2] })
+  assert.deepEqual(cacheAtFailure, { a: [1], b: [1] })
+  assert.deepEqual(Object.fromEntries(transportRollback.remote), { a: [1], b: [1] })
+
+  // 缺少原子批次能力的适配器不能把改名拆成多个独立请求。
+  const legacyTransport = createFakeTransport({ old: [1] })
+  delete legacyTransport.writeBatch
+  const legacyBridge = new BackendStorage({ transport: legacyTransport })
+  await legacyBridge.init()
+  assert.equal(legacyBridge.setItem(domain.STORAGE_KEY, JSON.stringify({ next: [1] })), false)
+  assert.deepEqual(Object.fromEntries(legacyTransport.remote), { old: [1] })
 
   // 全量写回时，远端不存在且值为空数组的 key 不推送（不存在与空数组等价）；
   // 已存在的 key 被清空时仍要推送
@@ -2988,6 +3016,91 @@ async function run() {
       index.some((item) => item.type === 'sensor' && item.sub.includes('keep.png')),
       true,
     )
+  }
+
+  {
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveDictionaryItem('sensor-type', { name: '漫反射', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '现用', sort: 1 }).ok, true)
+    assert.equal(repo.saveDictionaryItem('sensor-status', { name: '备选', sort: 2 }).ok, true)
+    const current = repo.saveSensor({ model: 'CHAIN-CURRENT', sensorType: '漫反射', status: '现用' })
+    const alternate = repo.saveSensor({ model: 'CHAIN-ALT', sensorType: '漫反射', status: '备选' })
+    assert.equal(current.ok, true)
+    assert.equal(alternate.ok, true)
+    const row = repo.saveMachineSectionRow(1, 'CHAIN-MACHINE', {
+      role: '删除关联复现',
+      sensorIds: [alternate.item.id],
+    })
+    assert.equal(row.ok, true)
+    assert.equal(repo.deleteSensor(alternate.item.id).ok, true)
+    assert.deepEqual(
+      repo.getMachineSectionRows(1, 'CHAIN-MACHINE').find((item) => item.id === row.item.id).sensorIds,
+      [],
+    )
+
+    const replacement = repo.saveSensor({ model: 'CHAIN-ALT-2', sensorType: '漫反射', status: '备选' })
+    assert.equal(replacement.ok, true)
+    assert.equal(repo.replaceSensorCurrent(replacement.item.id, current.item.id, '替换链复现').ok, true)
+    assert.deepEqual(repo.deleteSensor(current.item.id), {
+      ok: false,
+      reason: 'in-use',
+      message: '该型号属于替换历史，需保留，不能删除',
+    })
+  }
+
+  {
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveEntityGroup('machine', { name: '重名分类' }).ok, true)
+    assert.equal(repo.saveMachineConfiguration('重名分类', { name: '配置甲' }).ok, true)
+    assert.equal(repo.saveMachineConfiguration('重名分类', { name: '配置乙' }).ok, true)
+    assert.equal(repo.saveEntityItem('machine', {
+      category: '重名分类',
+      configuration: '配置甲',
+      name: '唯一机型',
+    }).ok, true)
+    assert.deepEqual(repo.saveEntityItem('machine', {
+      category: '重名分类',
+      configuration: '配置乙',
+      name: '唯一机型',
+    }), { ok: false, reason: 'duplicate' })
+    const machineSearch = domain.buildSearchIndex({
+      customerGroups: [],
+      machineDetails: {},
+      machineGroups: repo.getEntityGroups('machine'),
+      processSteps: [],
+      sensors: [],
+    })
+    assert.equal(
+      machineSearch.find((item) => item.title === '唯一机型').query.configuration,
+      '配置甲',
+    )
+  }
+
+  {
+    const fx = transferFixture()
+    const { repo } = fx
+    assert.equal(repo.saveDictionaryItem('customer-req', { name: '原始分类', sort: 1 }).ok, true)
+    const sheets = [{
+      name: '要求分类',
+      hasNameColumn: true,
+      rows: [{ rowNumber: 2, name: '预览分类', sort: '1' }],
+    }]
+    const writes = fx.writes
+    const before = repo.snapshotStore()
+    const preview = repo.previewDictionaries(sheets)
+    assert.equal(preview.result.ok, true)
+    assert.equal(preview.result.categories[0].created, 1)
+    assert.deepEqual(preview.baseline, before)
+    assert.equal(preview.store['dict:customer-req'][0].name, '预览分类')
+    assert.deepEqual(repo.snapshotStore(), before)
+    assert.equal(fx.writes, writes)
+    assert.equal(repo.saveDictionaryItem('customer-req', { name: '并行编辑', sort: 2 }).ok, true)
+    assert.deepEqual(repo.restoreDictionariesIfUnchanged(sheets, preview.baseline), {
+      ok: false,
+      reason: 'stale',
+    })
   }
 
   {

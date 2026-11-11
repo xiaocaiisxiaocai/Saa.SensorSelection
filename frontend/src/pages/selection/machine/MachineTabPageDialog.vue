@@ -15,6 +15,7 @@ const emit = defineEmits<{ saved: [pageId: number] }>();
 const store = useSelectionStore();
 
 const visible = ref(false);
+const saving = ref(false);
 const tab = ref<MachineTab | null>(null);
 const node = ref<MachineNodeRef | null>(null);
 const editId = ref<number>();
@@ -42,12 +43,14 @@ const openEdit = (target: MachineTab, page: MachineTabPage) =>
   show(target, page.node, page);
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   if (!tab.value || !node.value) return;
   validationAttempted.value = true;
   if (!form.name.trim()) return;
@@ -56,15 +59,20 @@ function save() {
     { name: form.name.trim(), node: node.value },
     editId.value,
   );
-  if (
-    notifyResult(result, editId.value ? '已改名' : '二级 Tab 已新建', {
-      duplicate: '这里已有同名的二级 Tab',
-      'not-empty': '这个选单下已有子选单，不能再新建二级 Tab',
-      stale: '该 Tab 或选单已被删除，请刷新后重试',
-    })
-  ) {
-    visible.value = false;
-    if (result.ok) emit('saved', result.item.id);
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, editId.value ? '已改名' : '二级 Tab 已新建', {
+        duplicate: '这里已有同名的二级 Tab',
+        'not-empty': '这个选单下已有子选单，不能再新建二级 Tab',
+        stale: '该 Tab 或选单已被删除，请刷新后重试',
+      })
+    ) {
+      visible.value = false;
+      if (result.ok) emit('saved', result.item.id);
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -74,14 +82,12 @@ defineExpose({ openAdd, openEdit });
 <template>
   <a-modal
     :open="visible"
-    :title="
-      editId ? '二级 Tab 改名' : `在「${tab?.name ?? ''}」下新建二级 Tab`
-    "
+    :title="editId ? '二级 Tab 改名' : `在「${tab?.name ?? ''}」下新建二级 Tab`"
     :width="420"
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical" @submit="save">
+    <a-form layout="vertical" :disabled="saving" @submit="save">
       <a-form-item
         html-for="machine-tab-page-name"
         label="名称"
@@ -103,8 +109,8 @@ defineExpose({ openAdd, openEdit });
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

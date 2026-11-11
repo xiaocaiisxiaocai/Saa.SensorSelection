@@ -14,6 +14,7 @@ const props = defineProps<{ machineType?: MachineCatalogKind }>();
 
 const store = useSelectionStore();
 const visible = ref(false);
+const saving = ref(false);
 const editing = ref<string>();
 const validationAttempted = ref(false);
 const form = reactive({ category: '', name: '', sort: 1 });
@@ -53,25 +54,32 @@ function openEdit(payload: { category: string; configuration: string }) {
 }
 
 async function cancel() {
+  if (saving.value) return;
   if (await dirtyGuard.confirmClose()) {
     visible.value = false;
   }
 }
 
-function save() {
+async function save() {
+  if (saving.value) return;
   validationAttempted.value = true;
   const result = store.saveMachineConfiguration(
     form.category,
     { name: form.name.trim(), sort: form.sort },
     editing.value,
   );
-  if (
-    notifyResult(result, editing.value ? '配置已更新' : '配置已新增', {
-      duplicate: '该配置已存在',
-      'not-empty': '该分类已有二级 Tab，不能再添加配置',
-    })
-  ) {
-    visible.value = false;
+  saving.value = true;
+  try {
+    if (
+      await notifyResult(result, editing.value ? '配置已更新' : '配置已新增', {
+        duplicate: '该配置已存在',
+        'not-empty': '该分类已有二级 Tab，不能再添加配置',
+      })
+    ) {
+      visible.value = false;
+    }
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -86,7 +94,7 @@ defineExpose({ openCreate, openEdit });
     destroy-on-close
     @cancel="cancel"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" :disabled="saving">
       <a-form-item
         html-for="entity-source-category"
         label="分类"
@@ -135,8 +143,8 @@ defineExpose({ openCreate, openEdit });
       </a-form-item>
     </a-form>
     <template #footer>
-      <a-button @click="cancel">取消</a-button>
-      <a-button type="primary" @click="save">保存</a-button>
+      <a-button :disabled="saving" @click="cancel">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存</a-button>
     </template>
   </a-modal>
 </template>

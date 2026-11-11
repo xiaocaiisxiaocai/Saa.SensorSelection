@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import ProcessIntroPanel from '@/pages/selection/process/ProcessIntroPanel.vue';
@@ -20,6 +20,16 @@ useSyncedQuery(() => ({
   tab: activeTab.value === 'steps' ? 'steps' : undefined,
   q: query.value.trim() || undefined,
 }));
+
+// 路由组件会在同一路径只改变 query 时复用。地址栏、浏览历史或其它页面
+// 导航过来的状态也要落回本地，否则旧状态会被 useSyncedQuery 再写回 URL。
+watch(
+  () => [route.query.tab, route.query.q] as const,
+  ([tab, q]) => {
+    activeTab.value = String(tab || '') === 'steps' ? 'steps' : 'intro';
+    query.value = String(q || '');
+  },
+);
 </script>
 
 <template>

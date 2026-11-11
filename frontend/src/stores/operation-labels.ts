@@ -83,6 +83,7 @@ export const OPERATION_LABELS = {
     `调整${itemLabel(kind)}顺序 · ${groupName}`,
   replaceSensorCurrent: () => '用备选替换现用型号',
   restoreDictionaries: () => '还原数据字典',
+  restoreDictionariesIfUnchanged: () => '还原数据字典',
   saveControlledFile: () => '上传文件',
   saveCrud: (
     listId: string,

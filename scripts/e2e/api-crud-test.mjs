@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Full CRUD + permission-matrix regression against an explicitly selected disposable API.
-// Every artifact it creates is prefixed with E2E_PREFIX and removed in the cleanup phase.
+// Per-case artifacts use E2E_PREFIX and are removed during cleanup. With explicit
+// E2E_PREPARE_BASELINE=1, an empty disposable store also retains a shared UI fixture.
 
 const BASE = process.env.API_BASE
 if (!BASE) {
@@ -9,8 +10,14 @@ if (!BASE) {
 const E2E_PREFIX = 'e2e_'
 const ADMIN_USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'admin'
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'admin123'
+const PREPARE_BASELINE = process.env.E2E_PREPARE_BASELINE === '1'
+const CUSTOMER_DIRECTORY_FIXTURE = [
+  { name: '回归客户', items: ['厂区A'], regions: { 厂区A: '华东' } },
+  { name: '回归客户二', items: ['厂区B'], regions: { 厂区B: '华南' } },
+]
 
 let passed = 0
+let skipped = 0
 const failures = []
 const cleanup = []
 
@@ -29,8 +36,19 @@ async function check(name, fn) {
     await fn()
     ok(name)
   } catch (error) {
+    if (error instanceof SkipCheck) {
+      skipped += 1
+      console.log(`  ↷ ${name} (skipped: ${error.message})`)
+      return
+    }
     fail(name, error && error.message ? error.message : String(error))
   }
+}
+
+class SkipCheck extends Error {}
+
+function skipCheck(reason) {
+  throw new SkipCheck(reason)
 }
 
 function assert(condition, message) {
@@ -380,7 +398,19 @@ async function main() {
   })
 
   await check('PUT /store/entity-groups/{kind} reorders groups without data loss', async () => {
-    const before = await request('GET', storeRoute('entity-groups:customer'))
+    let before = await request('GET', storeRoute('entity-groups:customer'))
+    if (before.status === 404) {
+      if (!PREPARE_BASELINE) {
+        skipCheck('isolated Store has no pre-existing customer directory to reorder safely')
+      }
+      const prepared = await request('PUT', '/store/entity-groups/customer', {
+        token: adminToken,
+        body: CUSTOMER_DIRECTORY_FIXTURE,
+      })
+      assertEqual(prepared.status, 200, 'baseline directory create status')
+      console.log('  Prepared shared customer fixture in the explicitly selected disposable API; retained for later UI checks.')
+      before = await request('GET', storeRoute('entity-groups:customer'))
+    }
     assertEqual(before.status, 200, 'status of current groups')
     const groups = before.data
     assert(Array.isArray(groups) && groups.length > 0, 'no seeded customer groups')
@@ -1037,7 +1067,7 @@ async function main() {
 
   // ---------------------------------------------------------------- report
   console.log(`\n${'-'.repeat(60)}`)
-  console.log(`passed: ${passed}   failed: ${failures.length}`)
+  console.log(`passed: ${passed}   skipped: ${skipped}   failed: ${failures.length}`)
   if (failures.length > 0) {
     console.log('\nFailures:')
     for (const failure of failures) {
